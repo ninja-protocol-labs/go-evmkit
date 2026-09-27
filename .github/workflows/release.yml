@@ -1,0 +1,107 @@
+name: Release
+
+on:
+    push:
+        tags: ["v*"]
+
+env:
+    CGO_ENABLED: "0"
+
+permissions:
+    contents: read
+
+jobs:
+    verify:
+        name: Verify the tagged commit
+        runs-on: ubuntu-24.04
+
+        # A Go module tag cannot be taken back. Once proxy.golang.org has
+        # served v1.2.3 its content is recorded in the checksum database,
+        # and re-tagging changes nothing a caller sees — the only remedy is
+        # a new version. So the tag is verified before anything publishes
+        # it, on the exact commit the tag points at rather than on whatever
+        # master looked like when CI last ran.
+        steps:
+            - uses: actions/checkout@v7
+
+            - uses: actions/setup-go@v7
+              with:
+                  go-version-file: go.mod
+                  cache: true
+
+            - name: Check the tag is a valid module version
+              run: |
+                  v="${GITHUB_REF_NAME}"
+                  if ! [[ "$v" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+                      echo "::error::$v is not a semantic version"
+                      exit 1
+                  fi
+                  # A major version above 1 needs a /vN suffix on the module
+                  # path, or the proxy serves it under the unsuffixed path
+                  # and every import breaks.
+                  major="${v%%.*}"
+                  path="$(go list -m)"
+                  if [[ "$major" != v0 && "$major" != v1 && "$path" != */"$major" ]]; then
+                      echo "::error::$v needs module path $path/$major"
+                      exit 1
+                  fi
+
+            - name: Check formatting
+              run: test -z "$(gofmt -l $(git ls-files '*.go'))"
+
+            - name: Vet
+              run: go vet ./...
+
+            - name: Test
+              run: go test -count=1 ./...
+
+            - name: Check the module is tidy
+              run: |
+                  cp go.mod go.mod.bak && cp go.sum go.sum.bak 2>/dev/null || true
+                  go mod tidy
+                  diff go.mod go.mod.bak
+                  [ -f go.sum.bak ] && diff go.sum go.sum.bak || true
+
+    publish:
+        name: Publish
+        needs: verify
+        runs-on: ubuntu-24.04
+        permissions:
+            contents: write
+
+        steps:
+            - uses: actions/checkout@v7
+              with:
+                  fetch-depth: 0
+
+            - uses: actions/setup-go@v7
+              with:
+                  go-version-file: go.mod
+
+            # There is no upload step: pushing the tag is the release. This
+            # asks the proxy for the version, which is what makes it fetch
+            # and cache the module, and is what pkg.go.dev indexes from.
+            # It needs the repository to be public.
+            - name: Warm the module proxy
+              env:
+                  GOPROXY: proxy.golang.org
+                  GOFLAGS: -mod=mod
+              run: |
+                  for i in 1 2 3 4 5; do
+                      if go list -m "$(go list -m)@${GITHUB_REF_NAME}"; then
+                          exit 0
+                      fi
+                      echo "proxy has not seen the tag yet; retrying in ${i}0s"
+                      sleep "${i}0"
+                  done
+                  echo "::error::the proxy did not serve ${GITHUB_REF_NAME}"
+                  exit 1
+
+            - name: Create the GitHub release
+              env:
+                  GH_TOKEN: ${{ github.token }}
+              run: |
+                  gh release create "${GITHUB_REF_NAME}" \
+                      --title "${GITHUB_REF_NAME}" \
+                      --generate-notes \
+                      --verify-tag

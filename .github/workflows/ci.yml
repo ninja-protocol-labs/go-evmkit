@@ -1,0 +1,49 @@
+name: CI
+
+on:
+    pull_request:
+        branches: [develop, master]
+    push:
+        branches: [develop, master]
+
+env:
+    CGO_ENABLED: "0"
+
+jobs:
+    test:
+        name: Verify
+        runs-on: ubuntu-24.04
+
+        steps:
+            - uses: actions/checkout@v7
+
+            - uses: actions/setup-go@v7
+              with:
+                  go-version-file: go.mod
+                  cache: true
+
+            - name: Check formatting
+              run: test -z "$(gofmt -l $(git ls-files '*.go'))"
+
+            - name: Vet
+              run: go vet ./...
+
+            - name: Build
+              run: go build -v ./...
+
+            - name: Test
+              run: go test -v -count=1 ./...
+
+            - name: Fuzz
+              run: |
+                  set -euo pipefail
+                  status=0
+                  while read -r pkg; do
+                      names="$(go test -list '^Fuzz' "$pkg" | grep '^Fuzz' || true)"
+                      for name in $names; do
+                          echo "::group::fuzz $pkg $name"
+                          go test -run '^$' -fuzz "^${name}\$" -fuzztime=10s "$pkg" || status=1
+                          echo "::endgroup::"
+                      done
+                  done < <(go list ./...)
+                  exit "$status"
