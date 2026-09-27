@@ -28,6 +28,17 @@ jobs:
             - name: Vet
               run: go vet ./...
 
+            # go-ethereum is an implementation detail of abi/ and rlp/ only.
+            - name: Check go-ethereum import boundary
+              run: |
+                  offenders="$(grep -rl '"github.com/ethereum/go-ethereum' --include='*.go' . \
+                      | grep -vE '^\./(abi|rlp)/' || true)"
+                  if [ -n "$offenders" ]; then
+                      echo "::error::go-ethereum must only be imported from abi/ or rlp/:"
+                      echo "$offenders"
+                      exit 1
+                  fi
+
             - name: Build
               run: go build -v ./...
 
