@@ -79,3 +79,127 @@ func TestFunctionSelectorIsCached(t *testing.T) {
 	second := fn.Selector()
 	require.Equal(t, first, second)
 }
+
+func TestFunctionDecodeReturn(t *testing.T) {
+	fn := NewFunction("balanceOf", Types{Address}, Types{Uint256})
+
+	returnData, err := Pack(fn.Outputs, big.NewInt(42))
+	require.NoError(t, err)
+
+	got, err := fn.DecodeReturn(returnData)
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	require.Zero(t, big.NewInt(42).Cmp(got[0].(*big.Int)))
+}
+
+func TestFunctionDecodeReturnMultipleOutputs(t *testing.T) {
+	fn := NewFunction("getReserves", Types{}, Types{Uint256, Uint256})
+
+	returnData, err := Pack(fn.Outputs, big.NewInt(100), big.NewInt(200))
+	require.NoError(t, err)
+
+	got, err := fn.DecodeReturn(returnData)
+	require.NoError(t, err)
+	require.Zero(t, big.NewInt(100).Cmp(got[0].(*big.Int)))
+	require.Zero(t, big.NewInt(200).Cmp(got[1].(*big.Int)))
+}
+
+func TestFunctionDecodeReturnNoOutputs(t *testing.T) {
+	fn := NewFunction("doSomething", Types{}, Types{})
+	got, err := fn.DecodeReturn(nil)
+	require.NoError(t, err)
+	require.Empty(t, got)
+}
+
+func TestFunctionDecodeReturnError(t *testing.T) {
+	fn := NewFunction("balanceOf", Types{Address}, Types{Uint256})
+	_, err := fn.DecodeReturn(make([]byte, 16))
+	require.ErrorIs(t, err, ErrByteLengthMismatch)
+}
+
+func TestFunctionEncodeCallDecodeReturnFullRoundTrip(t *testing.T) {
+	addr, err := types.NewAddressFromHex("0x833e1D0b8Bc979D49d57b65dCF18364694B16D52")
+	require.NoError(t, err)
+	amount := big.NewInt(1000000000000000000)
+
+	transfer := NewFunction("transfer", Types{Address, Uint256}, Types{Bool})
+	calldata, err := transfer.EncodeCall(addr, amount)
+	require.NoError(t, err)
+	require.Equal(t, []byte{0xa9, 0x05, 0x9c, 0xbb}, calldata[:4])
+
+	decodedArgs, err := transfer.DecodeCall(calldata)
+	require.NoError(t, err)
+	require.Equal(t, addr, decodedArgs[0])
+	require.Zero(t, amount.Cmp(decodedArgs[1].(*big.Int)))
+
+	returnData, err := transfer.EncodeReturn(true)
+	require.NoError(t, err)
+	decodedReturn, err := transfer.DecodeReturn(returnData)
+	require.NoError(t, err)
+	require.Equal(t, true, decodedReturn[0])
+}
+
+func TestFunctionEncodeReturnMatchesPack(t *testing.T) {
+	fn := NewFunction("balanceOf", Types{Address}, Types{Uint256})
+
+	got, err := fn.EncodeReturn(big.NewInt(42))
+	require.NoError(t, err)
+
+	want, err := Pack(fn.Outputs, big.NewInt(42))
+	require.NoError(t, err)
+	require.Equal(t, want, got)
+}
+
+func TestFunctionEncodeReturnDecodeReturnRoundTrip(t *testing.T) {
+	fn := NewFunction("getReserves", Types{}, Types{Uint256, Uint256})
+
+	data, err := fn.EncodeReturn(big.NewInt(100), big.NewInt(200))
+	require.NoError(t, err)
+
+	got, err := fn.DecodeReturn(data)
+	require.NoError(t, err)
+	require.Zero(t, big.NewInt(100).Cmp(got[0].(*big.Int)))
+	require.Zero(t, big.NewInt(200).Cmp(got[1].(*big.Int)))
+}
+
+func TestFunctionEncodeReturnArgCountMismatch(t *testing.T) {
+	fn := NewFunction("balanceOf", Types{Address}, Types{Uint256})
+	_, err := fn.EncodeReturn()
+	require.ErrorIs(t, err, ErrArgCountMismatch)
+}
+
+func TestFunctionEncodeReturnNoOutputs(t *testing.T) {
+	fn := NewFunction("doSomething", Types{}, Types{})
+	got, err := fn.EncodeReturn()
+	require.NoError(t, err)
+	require.Empty(t, got)
+}
+
+func TestFunctionDecodeCallWrongSelectorRejected(t *testing.T) {
+	transfer := NewFunction("transfer", Types{Address, Uint256}, Types{Bool})
+	approve := NewFunction("approve", Types{Address, Uint256}, Types{Bool})
+
+	addr, err := types.NewAddressFromHex("0x833e1D0b8Bc979D49d57b65dCF18364694B16D52")
+	require.NoError(t, err)
+	calldata, err := approve.EncodeCall(addr, big.NewInt(1))
+	require.NoError(t, err)
+
+	_, err = transfer.DecodeCall(calldata)
+	require.ErrorIs(t, err, ErrSelectorMismatch)
+}
+
+func TestFunctionDecodeCallTooShortRejected(t *testing.T) {
+	fn := NewFunction("transfer", Types{Address, Uint256}, Types{Bool})
+	_, err := fn.DecodeCall([]byte{0x01, 0x02})
+	require.ErrorIs(t, err, ErrByteLengthMismatch)
+}
+
+func TestFunctionDecodeCallNoArgs(t *testing.T) {
+	fn := NewFunction("totalSupply", Types{}, Types{Uint256})
+	calldata, err := fn.EncodeCall()
+	require.NoError(t, err)
+
+	got, err := fn.DecodeCall(calldata)
+	require.NoError(t, err)
+	require.Empty(t, got)
+}

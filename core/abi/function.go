@@ -62,3 +62,43 @@ func (f *Function) EncodeCall(args ...any) ([]byte, error) {
 	sel := f.Selector()
 	return append(sel[:], packed...), nil
 }
+
+// EncodeReturn encodes a function's return values according to Outputs,
+// e.g. to build synthetic eth_call return data for mocking or simulation
+// — the inverse of DecodeReturn.
+func (f *Function) EncodeReturn(args ...any) ([]byte, error) {
+	packed, err := Pack(f.Outputs, args...)
+	if err != nil {
+		return nil, fmt.Errorf("abi: encode return from %s: %w", f.Name, err)
+	}
+	return packed, nil
+}
+
+// DecodeCall decodes a full function call (as produced by EncodeCall):
+// its leading 4-byte selector must match f.Selector(), and the remaining
+// bytes are decoded according to Inputs.
+func (f *Function) DecodeCall(calldata []byte) ([]any, error) {
+	if len(calldata) < 4 {
+		return nil, fmt.Errorf("%w: calldata must be at least 4 bytes, got %d", ErrByteLengthMismatch, len(calldata))
+	}
+	var got Selector
+	copy(got[:], calldata[:4])
+	if want := f.Selector(); got != want {
+		return nil, fmt.Errorf("%w: expected %x, got %x", ErrSelectorMismatch, want, got)
+	}
+
+	vals, err := Unpack(f.Inputs, calldata[4:])
+	if err != nil {
+		return nil, fmt.Errorf("abi: decode call to %s: %w", f.Name, err)
+	}
+	return vals, nil
+}
+
+// DecodeReturn decodes a function's return data according to Outputs.
+func (f *Function) DecodeReturn(data []byte) ([]any, error) {
+	vals, err := Unpack(f.Outputs, data)
+	if err != nil {
+		return nil, fmt.Errorf("abi: decode return from %s: %w", f.Name, err)
+	}
+	return vals, nil
+}
