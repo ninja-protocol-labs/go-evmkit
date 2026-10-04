@@ -405,3 +405,104 @@ func encodeTupleValue(t Type, v any) ([]byte, error) {
 	}
 	return packTuple(t.Components, args)
 }
+
+// decodeValue decodes a single static 32-byte ABI word into the same Go
+// type encodeValue expects for t. It only handles Kinds that are always
+// static and fit in one word: Bool, Uint, Int, Address, FixedBytes,
+// FunctionType.
+func decodeValue(t Type, word []byte) (any, error) {
+	if len(word) != 32 {
+		return nil, fmt.Errorf("%w: word must be 32 bytes, got %d", ErrByteLengthMismatch, len(word))
+	}
+	switch t.Kind {
+	case KindBool:
+		return decodeBool(word), nil
+	case KindAddress:
+		return decodeAddress(word), nil
+	case KindFixedBytes:
+		return decodeFixedBytes(t.Size, word), nil
+	case KindFunction:
+		return decodeFunction(word), nil
+	case KindUint:
+		return decodeUint(t.Size, word)
+	case KindInt:
+		return decodeInt(t.Size, word)
+	default:
+		return nil, fmt.Errorf("%w: %v is not a static scalar type", ErrUnsupportedKind, t.Kind)
+	}
+}
+
+func decodeBool(word []byte) bool {
+	return word[31] != 0
+}
+
+func decodeAddress(word []byte) *types.Address {
+	return types.NewAddressFromBytes(word[32-types.AddressLength:])
+}
+
+func decodeFixedBytes(size int, word []byte) []byte {
+	b := make([]byte, size)
+	copy(b, word[:size])
+	return b
+}
+
+func decodeFunction(word []byte) []byte {
+	b := make([]byte, 24)
+	copy(b, word[:24])
+	return b
+}
+
+// decodeUint decodes a 32-byte word into an unsigned integer, using the
+// same size<=64-native/size>64-*big.Int split as encodeUint.
+func decodeUint(size int, word []byte) (any, error) {
+	switch size {
+	case 8:
+		return word[31], nil
+	case 16:
+		return binary.BigEndian.Uint16(word[30:32]), nil
+	case 32:
+		return binary.BigEndian.Uint32(word[28:32]), nil
+	case 64:
+		return binary.BigEndian.Uint64(word[24:32]), nil
+	default:
+		bnd, ok := boundsFor(size)
+		if !ok {
+			return nil, fmt.Errorf("%w: uint%d is not a standard ABI width", ErrUnsupportedKind, size)
+		}
+		n := new(big.Int).SetBytes(word)
+		if n.Cmp(bnd.uintMax) >= 0 {
+			return nil, fmt.Errorf("%w: uint%d overflow: %s", ErrIntegerOutOfRange, size, n)
+		}
+		return n, nil
+	}
+}
+
+// decodeInt decodes a 32-byte two's complement word into a signed integer,
+// using the same size<=64-native/size>64-*big.Int split as encodeInt. An
+// int64's bit pattern is already two's complement, so the low 8 bytes can
+// be reinterpreted directly regardless of sign.
+func decodeInt(size int, word []byte) (any, error) {
+	switch size {
+	case 8:
+		return int8(word[31]), nil
+	case 16:
+		return int16(binary.BigEndian.Uint16(word[30:32])), nil
+	case 32:
+		return int32(binary.BigEndian.Uint32(word[28:32])), nil
+	case 64:
+		return int64(binary.BigEndian.Uint64(word[24:32])), nil
+	default:
+		bnd, ok := boundsFor(size)
+		if !ok {
+			return nil, fmt.Errorf("%w: int%d is not a standard ABI width", ErrUnsupportedKind, size)
+		}
+		n := new(big.Int).SetBytes(word)
+		if word[0]&0x80 != 0 {
+			n.Sub(n, twoPow256)
+		}
+		if n.Cmp(bnd.intMin) < 0 || n.Cmp(bnd.intMax) > 0 {
+			return nil, fmt.Errorf("%w: int%d overflow: %s", ErrIntegerOutOfRange, size, n)
+		}
+		return n, nil
+	}
+}

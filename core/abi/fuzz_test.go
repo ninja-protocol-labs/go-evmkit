@@ -365,3 +365,77 @@ func FuzzParseFunction(f *testing.F) {
 		require.Equal(t, fn.Selector(), fn2.Selector())
 	})
 }
+
+// go test -run '^$' -fuzz '^FuzzDecodeUintBigInt$' -fuzztime=10s ./core/abi
+func FuzzDecodeUintBigInt(f *testing.F) {
+	f.Add([]byte{}, uint8(0))
+	f.Add([]byte{0x01}, uint8(0))
+	f.Add(make([]byte, 32), uint8(255))
+
+	f.Fuzz(func(t *testing.T, raw []byte, sizeByte uint8) {
+		size := 65 + int(sizeByte)%192
+		x := new(big.Int).SetBytes(raw)
+
+		word, err := encodeUint(size, x)
+		if err != nil {
+			return
+		}
+
+		got, err := decodeUint(size, word)
+		require.NoError(t, err)
+		require.Zero(t, x.Cmp(got.(*big.Int)))
+	})
+}
+
+// go test -run '^$' -fuzz '^FuzzDecodeIntBigInt$' -fuzztime=10s ./core/abi
+func FuzzDecodeIntBigInt(f *testing.F) {
+	f.Add([]byte{}, false, uint8(0))
+	f.Add([]byte{0x01}, true, uint8(0))
+	f.Add(make([]byte, 32), true, uint8(255))
+
+	f.Fuzz(func(t *testing.T, raw []byte, neg bool, sizeByte uint8) {
+		size := 65 + int(sizeByte)%192
+		x := new(big.Int).SetBytes(raw)
+		if neg {
+			x.Neg(x)
+		}
+
+		word, err := encodeInt(size, x)
+		if err != nil {
+			return
+		}
+
+		got, err := decodeInt(size, word)
+		require.NoError(t, err)
+		require.Zero(t, x.Cmp(got.(*big.Int)))
+	})
+}
+
+// go test -run '^$' -fuzz '^FuzzDecodeValue$' -fuzztime=10s ./core/abi
+func FuzzDecodeValue(f *testing.F) {
+	f.Add(make([]byte, 32))
+	f.Add(make([]byte, 0))
+	f.Add(make([]byte, 31))
+	f.Add(make([]byte, 33))
+	allFFSeed := make([]byte, 32)
+	for i := range allFFSeed {
+		allFFSeed[i] = 0xff
+	}
+	f.Add(allFFSeed)
+
+	kinds := []Type{Bool, Address, Uint8, Uint256, Int8, Int256, Bytes4, Bytes32, FunctionType}
+
+	f.Fuzz(func(t *testing.T, raw []byte) {
+		for _, typ := range kinds {
+			// Must never panic, regardless of word length or content;
+			// an error is a perfectly fine outcome for garbage input.
+			_, _ = decodeValue(typ, raw)
+		}
+
+		word := make([]byte, 32)
+		copy(word, raw)
+		for _, typ := range kinds {
+			_, _ = decodeValue(typ, word)
+		}
+	})
+}
