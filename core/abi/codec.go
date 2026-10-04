@@ -292,6 +292,12 @@ func encodeArg(t Type, v any) ([]byte, error) {
 	}
 }
 
+// Pack encodes args according to types using the standard ABI head/tail
+// layout, e.g. for a function call's arguments.
+func Pack(types Types, args ...any) ([]byte, error) {
+	return packTuple(types, args)
+}
+
 // packTuple encodes a sequence of typed values using the ABI head/tail
 // layout: static values encode in place in the head, dynamic values leave
 // a 32-byte offset in the head and their encoding in the tail. It backs

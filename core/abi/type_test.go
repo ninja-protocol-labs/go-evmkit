@@ -8,7 +8,7 @@ import (
 
 func TestIsDynamicStaticScalars(t *testing.T) {
 	tests := []Type{
-		Bool, Address, Function,
+		Bool, Address, FunctionType,
 		Uint8, Uint16, Uint32, Uint64, Uint128, Uint256,
 		Int8, Int16, Int32, Int64, Int128, Int256,
 		Bytes1, Bytes20, Bytes32,
@@ -161,7 +161,7 @@ func TestTypeStringScalars(t *testing.T) {
 		{Address, "address"},
 		{String, "string"},
 		{Bytes, "bytes"},
-		{Function, "function"},
+		{FunctionType, "function"},
 		{Uint8, "uint8"},
 		{Uint256, "uint256"},
 		{Int8, "int8"},

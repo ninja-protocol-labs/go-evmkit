@@ -265,3 +265,103 @@ func FuzzEncodeTupleValueStrings(f *testing.F) {
 		require.Equal(t, want, got)
 	})
 }
+
+// go test -run '^$' -fuzz '^FuzzParseType$' -fuzztime=10s ./core/abi
+func FuzzParseType(f *testing.F) {
+	f.Add("uint256")
+	f.Add("address[]")
+	f.Add("(address,uint256)[]")
+	f.Add("")
+	f.Add("((((")
+	f.Add("uint256[][][3]")
+	f.Add("bytes33")
+	f.Add("uint7")
+	f.Add("bool")
+	f.Add("function")
+	f.Add("uint")
+	f.Add("int")
+	f.Add("bytes")
+	f.Add("bytes32")
+	f.Add("bytes0")
+	f.Add("uint256[0]")
+	f.Add("uint256[][]")
+	f.Add("(bool,(address,uint256[]),string)[]")
+	f.Add("()")
+	f.Add("(())")
+	f.Add("((),())")
+	f.Add("uint256[-1]")
+	f.Add("uint256]")
+	f.Add("[uint256]")
+	f.Add("uint256,uint256")
+	f.Add(",")
+	f.Add("(")
+	f.Add(")")
+	f.Add("uint256 ")
+	f.Add("  ")
+	f.Add("\t")
+	f.Add("uint25600000000000000")
+	f.Add("tuple(address,uint256)")
+
+	f.Fuzz(func(t *testing.T, s string) {
+		typ, err := ParseType(s)
+		if err != nil {
+			return
+		}
+
+		s2 := typ.String()
+		typ2, err := ParseType(s2)
+		require.NoError(t, err)
+		require.Equal(t, typ, typ2)
+	})
+}
+
+// go test -run '^$' -fuzz '^FuzzParseFunction$' -fuzztime=10s ./core/abi
+func FuzzParseFunction(f *testing.F) {
+	f.Add("transfer(address,uint256)")
+	f.Add("transfer(address to, uint256 amount) returns (bool)")
+	f.Add("function withdraw(uint256 amount) external onlyOwner returns (bool)")
+	f.Add("")
+	f.Add("garbage(((")
+	f.Add("function mul(uint256 a, uint256 b) internal constant returns (uint256, uint256)")
+	f.Add("swap(address[] memory path, uint256 amountIn, uint256 amountOutMin)")
+	f.Add("swap(bytes calldata data)")
+	f.Add("swap((address tokenIn, address tokenOut, uint256 amountIn, uint256 amountOutMin, address[] path, uint256 deadline) calldata params) external returns (uint256[] memory amounts)")
+	f.Add("getUser() returns ((address,uint256))")
+	f.Add("swap(address[] transient path)")
+	f.Add("totalSupply()")
+	f.Add("totalSupply() returns (uint256)")
+	f.Add("getReserves() returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast)")
+	f.Add("function noop() pure")
+	f.Add("function noop() public pure virtual override")
+	f.Add("foo((address,uint256)[] memory items) returns (bool[] memory)")
+	f.Add("foo((address a, (uint256 x, uint256 y) point)[] memory items)")
+	f.Add("f()")
+	f.Add("f(")
+	f.Add("f)")
+	f.Add("()")
+	f.Add("f(uint256")
+	f.Add("f(uint256,)")
+	f.Add("f(,uint256)")
+	f.Add("f(uint256 a uint256 b)")
+	f.Add("function()")
+	f.Add("returns(bool)")
+	f.Add("f() returns ()")
+	f.Add("f() returns")
+	f.Add("f() external external")
+	f.Add("")
+	f.Add("   ")
+	f.Add("f(uint256[][2][] memory x)")
+
+	f.Fuzz(func(t *testing.T, sig string) {
+		fn, err := ParseFunction(sig, nil)
+		if err != nil {
+			return
+		}
+
+		fn2, err := ParseFunction(fn.Signature(), nil)
+		require.NoError(t, err)
+		require.Equal(t, fn.Name, fn2.Name)
+		require.Equal(t, fn.Inputs, fn2.Inputs)
+		require.Equal(t, fn.Selector(), fn2.Selector())
+	})
+}

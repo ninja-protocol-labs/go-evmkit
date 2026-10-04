@@ -174,14 +174,14 @@ func TestEncodeFunction(t *testing.T) {
 	for i := range fn {
 		fn[i] = byte(i + 1)
 	}
-	got, err := encodeValue(Function, fn)
+	got, err := encodeValue(FunctionType, fn)
 	require.NoError(t, err)
 	require.Equal(t, fn, got[:24])
 	require.Equal(t, make([]byte, 8), got[24:])
 }
 
 func TestEncodeFunctionWrongLength(t *testing.T) {
-	_, err := encodeValue(Function, make([]byte, 20))
+	_, err := encodeValue(FunctionType, make([]byte, 20))
 	require.ErrorIs(t, err, ErrByteLengthMismatch)
 }
 
@@ -356,7 +356,7 @@ func TestEncodeFixedBytesSingleByte(t *testing.T) {
 }
 
 func TestEncodeFunctionEmptyRejected(t *testing.T) {
-	_, err := encodeValue(Function, []byte{})
+	_, err := encodeValue(FunctionType, []byte{})
 	require.ErrorIs(t, err, ErrByteLengthMismatch)
 }
 
@@ -799,4 +799,37 @@ func TestEncodeSliceOfTupleOfSlice(t *testing.T) {
 	require.NoError(t, err)
 	wantFull := append(append([]byte{}, encodeUint64Word(2)...), want...)
 	require.Equal(t, wantFull, got)
+}
+
+func TestPackMatchesPackTuple(t *testing.T) {
+	addr, err := types.NewAddressFromHex("0x833e1D0b8Bc979D49d57b65dCF18364694B16D52")
+	require.NoError(t, err)
+	amount := big.NewInt(1000000000000000000)
+
+	got, err := Pack(Types{Address, Uint256}, addr, amount)
+	require.NoError(t, err)
+
+	want, err := packTuple(Types{Address, Uint256}, []any{addr, amount})
+	require.NoError(t, err)
+	require.Equal(t, want, got)
+}
+
+func TestPackNoArgs(t *testing.T) {
+	got, err := Pack(Types{})
+	require.NoError(t, err)
+	require.Empty(t, got)
+}
+
+func TestPackArgCountMismatch(t *testing.T) {
+	_, err := Pack(Types{Bool, Bool}, true)
+	require.ErrorIs(t, err, ErrArgCountMismatch)
+}
+
+func TestPackDynamicArgs(t *testing.T) {
+	got, err := Pack(Types{Uint256, String}, big.NewInt(5), "hi")
+	require.NoError(t, err)
+
+	want, err := packTuple(Types{Uint256, String}, []any{big.NewInt(5), "hi"})
+	require.NoError(t, err)
+	require.Equal(t, want, got)
 }

@@ -16,6 +16,7 @@ var (
 	ErrByteLengthMismatch = errors.New("abi: byte length mismatch")
 	ErrIntegerOutOfRange  = errors.New("abi: integer out of range")
 	ErrArgCountMismatch   = errors.New("abi: argument count mismatch")
+	ErrInvalidTypeString  = errors.New("abi: invalid type string")
 )
 
 // Kind identifies which Solidity ABI type an Type represents.
@@ -56,6 +57,8 @@ type (
 	}
 
 	Types []Type
+
+	Selector [4]byte
 )
 
 // IsDynamic reports whether values of this type require head/tail encoding
@@ -121,11 +124,11 @@ func NewTypes(components ...Type) Types {
 // Canonical scalar Type values, so common types don't need to be
 // constructed by hand.
 var (
-	Bool     = Type{Kind: KindBool}
-	Address  = Type{Kind: KindAddress}
-	String   = Type{Kind: KindString}
-	Bytes    = Type{Kind: KindBytes}
-	Function = Type{Kind: KindFunction}
+	Bool         = Type{Kind: KindBool}
+	Address      = Type{Kind: KindAddress}
+	String       = Type{Kind: KindString}
+	Bytes        = Type{Kind: KindBytes}
+	FunctionType = Type{Kind: KindFunction}
 
 	Uint8   = Type{Kind: KindUint, Size: 8}
 	Uint16  = Type{Kind: KindUint, Size: 16}
