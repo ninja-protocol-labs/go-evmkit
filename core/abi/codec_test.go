@@ -833,3 +833,280 @@ func TestPackDynamicArgs(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, want, got)
 }
+
+func TestDecodeBool(t *testing.T) {
+	word, err := encodeValue(Bool, true)
+	require.NoError(t, err)
+	got, err := decodeValue(Bool, word)
+	require.NoError(t, err)
+	require.Equal(t, true, got)
+
+	word, err = encodeValue(Bool, false)
+	require.NoError(t, err)
+	got, err = decodeValue(Bool, word)
+	require.NoError(t, err)
+	require.Equal(t, false, got)
+}
+
+func TestDecodeAddress(t *testing.T) {
+	addr, err := types.NewAddressFromHex("0x833e1D0b8Bc979D49d57b65dCF18364694B16D52")
+	require.NoError(t, err)
+	word, err := encodeValue(Address, addr)
+	require.NoError(t, err)
+
+	got, err := decodeValue(Address, word)
+	require.NoError(t, err)
+	require.Equal(t, addr, got)
+}
+
+func TestDecodeFixedBytes(t *testing.T) {
+	data := []byte{0xde, 0xad, 0xbe, 0xef}
+	word, err := encodeValue(Bytes4, data)
+	require.NoError(t, err)
+
+	got, err := decodeValue(Bytes4, word)
+	require.NoError(t, err)
+	require.Equal(t, data, got)
+}
+
+func TestDecodeFunction(t *testing.T) {
+	fnSel := make([]byte, 24)
+	for i := range fnSel {
+		fnSel[i] = byte(i + 1)
+	}
+	word, err := encodeValue(FunctionType, fnSel)
+	require.NoError(t, err)
+
+	got, err := decodeValue(FunctionType, word)
+	require.NoError(t, err)
+	require.Equal(t, fnSel, got)
+}
+
+func TestDecodeUintNativeRoundTrip(t *testing.T) {
+	tests := []struct {
+		typ Type
+		v   any
+	}{
+		{Uint8, uint8(255)},
+		{Uint16, uint16(0x1234)},
+		{Uint32, uint32(0xdeadbeef)},
+		{Uint64, uint64(0x0123456789abcdef)},
+	}
+	for _, tt := range tests {
+		word, err := encodeValue(tt.typ, tt.v)
+		require.NoError(t, err)
+		got, err := decodeValue(tt.typ, word)
+		require.NoError(t, err)
+		require.Equal(t, tt.v, got)
+	}
+}
+
+func TestDecodeUintBigIntRoundTrip(t *testing.T) {
+	n, ok := new(big.Int).SetString("1000000000000000000", 10)
+	require.True(t, ok)
+	word, err := encodeValue(Uint256, n)
+	require.NoError(t, err)
+
+	got, err := decodeValue(Uint256, word)
+	require.NoError(t, err)
+	require.Equal(t, 0, n.Cmp(got.(*big.Int)))
+}
+
+func TestDecodeIntNativeRoundTrip(t *testing.T) {
+	tests := []struct {
+		typ Type
+		v   any
+	}{
+		{Int8, int8(-1)},
+		{Int8, int8(math.MinInt8)},
+		{Int16, int16(math.MinInt16)},
+		{Int32, int32(math.MinInt32)},
+		{Int64, int64(math.MinInt64)},
+		{Int64, int64(math.MaxInt64)},
+	}
+	for _, tt := range tests {
+		word, err := encodeValue(tt.typ, tt.v)
+		require.NoError(t, err)
+		got, err := decodeValue(tt.typ, word)
+		require.NoError(t, err)
+		require.Equal(t, tt.v, got)
+	}
+}
+
+func TestDecodeIntBigIntRoundTrip(t *testing.T) {
+	n := big.NewInt(-1000000000000000000)
+	word, err := encodeValue(Int256, n)
+	require.NoError(t, err)
+
+	got, err := decodeValue(Int256, word)
+	require.NoError(t, err)
+	require.Equal(t, 0, n.Cmp(got.(*big.Int)))
+}
+
+func TestDecodeIntBigIntPositiveRoundTrip(t *testing.T) {
+	n := new(big.Int).Lsh(big.NewInt(1), 100)
+	word, err := encodeValue(Uint128, n)
+	require.NoError(t, err)
+
+	got, err := decodeValue(Uint128, word)
+	require.NoError(t, err)
+	require.Equal(t, 0, n.Cmp(got.(*big.Int)))
+}
+
+func TestDecodeValueRejectsWrongWordLength(t *testing.T) {
+	_, err := decodeValue(Bool, []byte{0x01})
+	require.ErrorIs(t, err, ErrByteLengthMismatch)
+}
+
+func TestDecodeValueRejectsDynamicKind(t *testing.T) {
+	word := make([]byte, 32)
+	_, err := decodeValue(String, word)
+	require.ErrorIs(t, err, ErrUnsupportedKind)
+}
+
+func TestDecodeUintBigIntOverflowRejected(t *testing.T) {
+	word := make([]byte, 32)
+	for i := range word {
+		word[i] = 0xff
+	}
+	_, err := decodeValue(Uint128, word)
+	require.ErrorIs(t, err, ErrIntegerOutOfRange)
+}
+
+func TestDecodeUintOutOfRangeSizeRejected(t *testing.T) {
+	word := make([]byte, 32)
+	_, err := decodeValue(Type{Kind: KindUint, Size: 264}, word)
+	require.ErrorIs(t, err, ErrUnsupportedKind)
+}
+
+func TestDecodeIntOutOfRangeSizeRejected(t *testing.T) {
+	word := make([]byte, 32)
+	_, err := decodeValue(Type{Kind: KindInt, Size: 264}, word)
+	require.ErrorIs(t, err, ErrUnsupportedKind)
+}
+
+func rawUintWord(n *big.Int) []byte {
+	word := make([]byte, 32)
+	b := n.Bytes()
+	copy(word[32-len(b):], b)
+	return word
+}
+
+func rawIntWord(n *big.Int) []byte {
+	if n.Sign() >= 0 {
+		return rawUintWord(n)
+	}
+	twos := new(big.Int).Add(twoPow256, n)
+	word := make([]byte, 32)
+	b := twos.Bytes()
+	copy(word[32-len(b):], b)
+	for i := 0; i < 32-len(b); i++ {
+		word[i] = 0xff
+	}
+	return word
+}
+
+func TestDecodeUintNativeBoundaries(t *testing.T) {
+	tests := []struct {
+		typ Type
+		v   any
+	}{
+		{Uint8, uint8(0)},
+		{Uint8, uint8(math.MaxUint8)},
+		{Uint16, uint16(0)},
+		{Uint16, uint16(math.MaxUint16)},
+		{Uint32, uint32(0)},
+		{Uint32, uint32(math.MaxUint32)},
+		{Uint64, uint64(0)},
+		{Uint64, uint64(math.MaxUint64)},
+	}
+	for _, tt := range tests {
+		word, err := encodeValue(tt.typ, tt.v)
+		require.NoError(t, err)
+		got, err := decodeValue(tt.typ, word)
+		require.NoError(t, err)
+		require.Equal(t, tt.v, got)
+	}
+}
+
+func TestDecodeIntNativeBoundaries(t *testing.T) {
+	tests := []struct {
+		typ Type
+		v   any
+	}{
+		{Int8, int8(0)},
+		{Int8, int8(math.MaxInt8)},
+		{Int8, int8(math.MinInt8)},
+		{Int16, int16(math.MaxInt16)},
+		{Int16, int16(math.MinInt16)},
+		{Int32, int32(math.MaxInt32)},
+		{Int32, int32(math.MinInt32)},
+		{Int64, int64(math.MaxInt64)},
+		{Int64, int64(math.MinInt64)},
+	}
+	for _, tt := range tests {
+		word, err := encodeValue(tt.typ, tt.v)
+		require.NoError(t, err)
+		got, err := decodeValue(tt.typ, word)
+		require.NoError(t, err)
+		require.Equal(t, tt.v, got)
+	}
+}
+
+func TestDecodeUintBigIntBoundaries(t *testing.T) {
+	for _, size := range []int{65, 72, 128, 255, 256} {
+		bnd, ok := boundsFor(size)
+		require.True(t, ok)
+
+		got, err := decodeUint(size, rawUintWord(big.NewInt(0)))
+		require.NoError(t, err)
+		require.Zero(t, big.NewInt(0).Cmp(got.(*big.Int)))
+
+		maxValid := new(big.Int).Sub(bnd.uintMax, big.NewInt(1))
+		got, err = decodeUint(size, rawUintWord(maxValid))
+		require.NoError(t, err)
+		require.Zero(t, maxValid.Cmp(got.(*big.Int)))
+
+		if size == 256 {
+			continue
+		}
+
+		_, err = decodeUint(size, rawUintWord(bnd.uintMax))
+		require.ErrorIs(t, err, ErrIntegerOutOfRange)
+
+		overMax := new(big.Int).Add(bnd.uintMax, big.NewInt(1))
+		_, err = decodeUint(size, rawUintWord(overMax))
+		require.ErrorIs(t, err, ErrIntegerOutOfRange)
+	}
+}
+
+func TestDecodeIntBigIntBoundaries(t *testing.T) {
+	for _, size := range []int{65, 72, 128, 255, 256} {
+		bnd, ok := boundsFor(size)
+		require.True(t, ok)
+
+		got, err := decodeInt(size, rawIntWord(big.NewInt(0)))
+		require.NoError(t, err)
+		require.Zero(t, big.NewInt(0).Cmp(got.(*big.Int)))
+
+		got, err = decodeInt(size, rawIntWord(bnd.intMax))
+		require.NoError(t, err)
+		require.Zero(t, bnd.intMax.Cmp(got.(*big.Int)))
+
+		got, err = decodeInt(size, rawIntWord(bnd.intMin))
+		require.NoError(t, err)
+		require.Zero(t, bnd.intMin.Cmp(got.(*big.Int)))
+
+		if size == 256 {
+			continue
+		}
+
+		overMax := new(big.Int).Add(bnd.intMax, big.NewInt(1))
+		_, err = decodeInt(size, rawIntWord(overMax))
+		require.ErrorIs(t, err, ErrIntegerOutOfRange)
+
+		underMin := new(big.Int).Sub(bnd.intMin, big.NewInt(1))
+		_, err = decodeInt(size, rawIntWord(underMin))
+		require.ErrorIs(t, err, ErrIntegerOutOfRange)
+	}
+}
