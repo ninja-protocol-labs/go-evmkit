@@ -8,7 +8,7 @@ import (
 
 func TestIsDynamicStaticScalars(t *testing.T) {
 	tests := []Type{
-		Bool, Address, FunctionType,
+		Bool, Address, Function,
 		Uint8, Uint16, Uint32, Uint64, Uint128, Uint256,
 		Int8, Int16, Int32, Int64, Int128, Int256,
 		Bytes1, Bytes20, Bytes32,
@@ -150,4 +150,68 @@ func TestArrayElemAndSize(t *testing.T) {
 	require.NotNil(t, a.Elem)
 	require.Equal(t, KindFixedBytes, a.Elem.Kind)
 	require.Equal(t, 32, a.Elem.Size)
+}
+
+func TestTypeStringScalars(t *testing.T) {
+	tests := []struct {
+		typ  Type
+		want string
+	}{
+		{Bool, "bool"},
+		{Address, "address"},
+		{String, "string"},
+		{Bytes, "bytes"},
+		{Function, "function"},
+		{Uint8, "uint8"},
+		{Uint256, "uint256"},
+		{Int8, "int8"},
+		{Int256, "int256"},
+		{Bytes1, "bytes1"},
+		{Bytes32, "bytes32"},
+	}
+	for _, tt := range tests {
+		typ := tt.typ
+		require.Equal(t, tt.want, typ.String())
+	}
+}
+
+func TestTypeStringSlice(t *testing.T) {
+	typ := Slice(Uint256)
+	require.Equal(t, "uint256[]", typ.String())
+}
+
+func TestTypeStringArray(t *testing.T) {
+	typ, err := Array(Address, 3)
+	require.NoError(t, err)
+	require.Equal(t, "address[3]", typ.String())
+}
+
+func TestTypeStringTuple(t *testing.T) {
+	typ := Tuple(Address, Uint256)
+	require.Equal(t, "(address,uint256)", typ.String())
+}
+
+func TestTypeStringTupleIgnoresNames(t *testing.T) {
+	typ, err := NamedTuple([]string{"to", "amount"}, Address, Uint256)
+	require.NoError(t, err)
+	require.Equal(t, "(address,uint256)", typ.String())
+}
+
+func TestTypeStringEmptyTuple(t *testing.T) {
+	typ := Tuple()
+	require.Equal(t, "()", typ.String())
+}
+
+func TestTypeStringNestedSliceOfTuple(t *testing.T) {
+	inner := Tuple(Address, Slice(Uint256))
+	typ := Slice(inner)
+	require.Equal(t, "(address,uint256[])[]", typ.String())
+}
+
+func TestTypeStringArrayOfArray(t *testing.T) {
+	inner, err := Array(Uint8, 2)
+	require.NoError(t, err)
+	outer, err := Array(inner, 3)
+	require.NoError(t, err)
+	require.Equal(t, "uint8[2][3]", outer.String())
 }

@@ -47,14 +47,33 @@ jobs:
 
             - name: Fuzz
               run: |
-                  set -euo pipefail
-                  status=0
+                  set -uo pipefail
+                  logdir="$(mktemp -d)"
+                  pids=()
+                  descs=()
+
                   while read -r pkg; do
                       names="$(go test -list '^Fuzz' "$pkg" | grep '^Fuzz' || true)"
                       for name in $names; do
-                          echo "::group::fuzz $pkg $name"
-                          go test -run '^$' -fuzz "^${name}\$" -fuzztime=10s "$pkg" || status=1
-                          echo "::endgroup::"
+                          log="$logdir/$(echo "${pkg}_${name}" | tr '/' '_').log"
+                          go test -run '^$' -fuzz "^${name}\$" -fuzztime=10s -parallel=2 "$pkg" > "$log" 2>&1 &
+                          pids+=("$!")
+                          descs+=("$pkg $name|$log")
                       done
                   done < <(go list ./...)
+
+                  status=0
+                  for i in "${!pids[@]}"; do
+                      desc="${descs[$i]}"
+                      label="${desc%%|*}"
+                      log="${desc##*|}"
+                      if wait "${pids[$i]}"; then
+                          echo "::group::fuzz $label (ok)"
+                      else
+                          echo "::group::fuzz $label (FAILED)"
+                          status=1
+                      fi
+                      cat "$log"
+                      echo "::endgroup::"
+                  done
                   exit "$status"
