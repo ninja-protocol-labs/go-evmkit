@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math/big"
+	"reflect"
 
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 )
@@ -52,62 +53,73 @@ func boundsFor(size int) (b bounds, ok bool) {
 func encodeValue(t Type, v any) ([]byte, error) {
 	switch t.Kind {
 	case KindBool:
-		b, ok := v.(bool)
-		if !ok {
-			return nil, fmt.Errorf("%w: expected bool, got %T", ErrInvalidGoType, v)
-		}
-		word := make([]byte, 32)
-		if b {
-			word[31] = 1
-		}
-		return word, nil
-
+		return encodeBool(v)
 	case KindAddress:
-		addr, ok := v.(*types.Address)
-		if !ok {
-			return nil, fmt.Errorf("%w: expected *types.Address, got %T", ErrInvalidGoType, v)
-		}
-		if addr == nil {
-			return nil, ErrNilAddress
-		}
-		word := make([]byte, 32)
-		copy(word[32-types.AddressLength:], addr.Bytes())
-		return word, nil
-
+		return encodeAddress(v)
 	case KindFixedBytes:
-		// bytesN is right-padded, unlike the other static types.
-		b, ok := v.([]byte)
-		if !ok {
-			return nil, fmt.Errorf("%w: expected []byte, got %T", ErrInvalidGoType, v)
-		}
-		if len(b) != t.Size {
-			return nil, fmt.Errorf("%w: bytes%d expects %d bytes, got %d", ErrByteLengthMismatch, t.Size, t.Size, len(b))
-		}
-		word := make([]byte, 32)
-		copy(word, b)
-		return word, nil
-
+		return encodeFixedBytes(t.Size, v)
 	case KindFunction:
-		// 20-byte address + 4-byte selector, right-padded like bytes24.
-		b, ok := v.([]byte)
-		if !ok {
-			return nil, fmt.Errorf("%w: expected []byte, got %T", ErrInvalidGoType, v)
-		}
-		if len(b) != 24 {
-			return nil, fmt.Errorf("%w: function type expects 24 bytes, got %d", ErrByteLengthMismatch, len(b))
-		}
-		word := make([]byte, 32)
-		copy(word, b)
-		return word, nil
-
+		return encodeFunction(v)
 	case KindUint:
 		return encodeUint(t.Size, v)
 	case KindInt:
 		return encodeInt(t.Size, v)
-
 	default:
 		return nil, fmt.Errorf("%w: %v is not a static scalar type", ErrUnsupportedKind, t.Kind)
 	}
+}
+
+func encodeBool(v any) ([]byte, error) {
+	b, ok := v.(bool)
+	if !ok {
+		return nil, fmt.Errorf("%w: expected bool, got %T", ErrInvalidGoType, v)
+	}
+	word := make([]byte, 32)
+	if b {
+		word[31] = 1
+	}
+	return word, nil
+}
+
+func encodeAddress(v any) ([]byte, error) {
+	addr, ok := v.(*types.Address)
+	if !ok {
+		return nil, fmt.Errorf("%w: expected *types.Address, got %T", ErrInvalidGoType, v)
+	}
+	if addr == nil {
+		return nil, ErrNilAddress
+	}
+	word := make([]byte, 32)
+	copy(word[32-types.AddressLength:], addr.Bytes())
+	return word, nil
+}
+
+// encodeFixedBytes right-pads b into a 32-byte word, unlike the other static types.
+func encodeFixedBytes(size int, v any) ([]byte, error) {
+	b, ok := v.([]byte)
+	if !ok {
+		return nil, fmt.Errorf("%w: expected []byte, got %T", ErrInvalidGoType, v)
+	}
+	if len(b) != size {
+		return nil, fmt.Errorf("%w: bytes%d expects %d bytes, got %d", ErrByteLengthMismatch, size, size, len(b))
+	}
+	word := make([]byte, 32)
+	copy(word, b)
+	return word, nil
+}
+
+// encodeFunction encodes a 20-byte address + 4-byte selector, right-padded like bytes24.
+func encodeFunction(v any) ([]byte, error) {
+	b, ok := v.([]byte)
+	if !ok {
+		return nil, fmt.Errorf("%w: expected []byte, got %T", ErrInvalidGoType, v)
+	}
+	if len(b) != 24 {
+		return nil, fmt.Errorf("%w: function type expects 24 bytes, got %d", ErrByteLengthMismatch, len(b))
+	}
+	word := make([]byte, 32)
+	copy(word, b)
+	return word, nil
 }
 
 // encodeUint encodes an unsigned integer as a big-endian 32-byte word.
@@ -215,6 +227,27 @@ func encodeInt(size int, v any) ([]byte, error) {
 	}
 }
 
+// encodeDynamicBytes encodes a dynamic bytes or string value as its own
+// self-contained tail block: enc(len) ++ pad_right(data).
+func encodeDynamicBytes(t Type, v any) ([]byte, error) {
+	switch t.Kind {
+	case KindBytes:
+		b, ok := v.([]byte)
+		if !ok {
+			return nil, fmt.Errorf("%w: expected []byte, got %T", ErrInvalidGoType, v)
+		}
+		return packBytes(b), nil
+	case KindString:
+		s, ok := v.(string)
+		if !ok {
+			return nil, fmt.Errorf("%w: expected string, got %T", ErrInvalidGoType, v)
+		}
+		return packBytes([]byte(s)), nil
+	default:
+		return nil, fmt.Errorf("%w: %v is not a dynamic leaf type", ErrUnsupportedKind, t.Kind)
+	}
+}
+
 // encodeInt64Word sign-extends x into a 32-byte two's complement word.
 func encodeInt64Word(x int64) []byte {
 	word := make([]byte, 32)
@@ -230,4 +263,139 @@ func encodeUint64Word(x uint64) []byte {
 	word := make([]byte, 32)
 	binary.BigEndian.PutUint64(word[24:], x)
 	return word
+}
+
+// packBytes encodes b as enc(len) ++ pad_right(b), padded to a multiple of 32 bytes.
+func packBytes(b []byte) []byte {
+	padded := (len(b) + 31) &^ 31
+	out := make([]byte, 32+padded)
+	copy(out, encodeUint64Word(uint64(len(b))))
+	copy(out[32:], b)
+	return out
+}
+
+// encodeArg encodes a single value of type t, dispatching to the matching
+// encoder for scalars, dynamic leaves, or composite types (which recurse
+// into packTuple).
+func encodeArg(t Type, v any) ([]byte, error) {
+	switch t.Kind {
+	case KindBytes, KindString:
+		return encodeDynamicBytes(t, v)
+	case KindSlice:
+		return encodeSlice(t, v)
+	case KindArray:
+		return encodeArray(t, v)
+	case KindTuple:
+		return encodeTupleValue(t, v)
+	default:
+		return encodeValue(t, v)
+	}
+}
+
+// packTuple encodes a sequence of typed values using the ABI head/tail
+// layout: static values encode in place in the head, dynamic values leave
+// a 32-byte offset in the head and their encoding in the tail. It backs
+// Tuple, Array, and Slice encoding alike, since all three are "a typed
+// sequence of values" at the wire level.
+func packTuple(types Types, args []any) ([]byte, error) {
+	if len(types) != len(args) {
+		return nil, fmt.Errorf("%w: %d types but %d args", ErrArgCountMismatch, len(types), len(args))
+	}
+
+	heads := make([][]byte, len(types))
+	tails := make([][]byte, len(types))
+	headSize := 0
+
+	for i, t := range types {
+		if t.IsDynamic() {
+			tail, err := encodeArg(t, args[i])
+			if err != nil {
+				return nil, err
+			}
+			tails[i] = tail
+			headSize += 32
+			continue
+		}
+		head, err := encodeArg(t, args[i])
+		if err != nil {
+			return nil, err
+		}
+		heads[i] = head
+		headSize += len(head)
+	}
+
+	offset := headSize
+	for i, t := range types {
+		if !t.IsDynamic() {
+			continue
+		}
+		heads[i] = encodeUint64Word(uint64(offset))
+		offset += len(tails[i])
+	}
+
+	out := make([]byte, 0, offset)
+	for _, h := range heads {
+		out = append(out, h...)
+	}
+	for _, tl := range tails {
+		out = append(out, tl...)
+	}
+	return out, nil
+}
+
+// encodeSlice encodes a T[] value as enc(count) ++ packTuple(Elem repeated
+// count times, elements), accepting any Go slice via reflect.
+func encodeSlice(t Type, v any) ([]byte, error) {
+	rv := reflect.ValueOf(v)
+	if rv.Kind() != reflect.Slice {
+		return nil, fmt.Errorf("%w: expected a slice, got %T", ErrInvalidGoType, v)
+	}
+
+	n := rv.Len()
+	elemTypes := make(Types, n)
+	elemArgs := make([]any, n)
+	for i := range n {
+		elemTypes[i] = *t.Elem
+		elemArgs[i] = rv.Index(i).Interface()
+	}
+
+	body, err := packTuple(elemTypes, elemArgs)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]byte, 0, 32+len(body))
+	out = append(out, encodeUint64Word(uint64(n))...)
+	out = append(out, body...)
+	return out, nil
+}
+
+// encodeArray encodes a T[k] value as packTuple(Elem repeated k times,
+// elements): a fixed array is a tuple with no length prefix. Accepts any
+// Go slice or array via reflect.
+func encodeArray(t Type, v any) ([]byte, error) {
+	rv := reflect.ValueOf(v)
+	if rv.Kind() != reflect.Slice && rv.Kind() != reflect.Array {
+		return nil, fmt.Errorf("%w: expected a slice or array, got %T", ErrInvalidGoType, v)
+	}
+	if n := rv.Len(); n != t.Size {
+		return nil, fmt.Errorf("%w: array expects %d elements, got %d", ErrArgCountMismatch, t.Size, n)
+	}
+
+	elemTypes := make(Types, t.Size)
+	elemArgs := make([]any, t.Size)
+	for i := 0; i < t.Size; i++ {
+		elemTypes[i] = *t.Elem
+		elemArgs[i] = rv.Index(i).Interface()
+	}
+	return packTuple(elemTypes, elemArgs)
+}
+
+// encodeTupleValue encodes a tuple value, given positionally as []any
+// matching t.Components in order.
+func encodeTupleValue(t Type, v any) ([]byte, error) {
+	args, ok := v.([]any)
+	if !ok {
+		return nil, fmt.Errorf("%w: expected []any, got %T", ErrInvalidGoType, v)
+	}
+	return packTuple(t.Components, args)
 }

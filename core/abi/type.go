@@ -3,6 +3,7 @@ package abi
 import (
 	"errors"
 	"fmt"
+	"strings"
 )
 
 // Errors returned by the Type constructors.
@@ -14,6 +15,7 @@ var (
 	ErrNilAddress         = errors.New("abi: address is nil")
 	ErrByteLengthMismatch = errors.New("abi: byte length mismatch")
 	ErrIntegerOutOfRange  = errors.New("abi: integer out of range")
+	ErrArgCountMismatch   = errors.New("abi: argument count mismatch")
 )
 
 // Kind identifies which Solidity ABI type an Type represents.
@@ -76,6 +78,41 @@ func (t *Type) IsDynamic() bool {
 	}
 }
 
+// String returns t's canonical ABI type name, e.g. "uint256", "address[]",
+// or "(address,uint256)" for a tuple.
+func (t *Type) String() string {
+	switch t.Kind {
+	case KindBool:
+		return "bool"
+	case KindUint:
+		return fmt.Sprintf("uint%d", t.Size)
+	case KindInt:
+		return fmt.Sprintf("int%d", t.Size)
+	case KindAddress:
+		return "address"
+	case KindBytes:
+		return "bytes"
+	case KindFixedBytes:
+		return fmt.Sprintf("bytes%d", t.Size)
+	case KindString:
+		return "string"
+	case KindSlice:
+		return t.Elem.String() + "[]"
+	case KindArray:
+		return fmt.Sprintf("%s[%d]", t.Elem.String(), t.Size)
+	case KindTuple:
+		names := make([]string, len(t.Components))
+		for i := range t.Components {
+			names[i] = t.Components[i].String()
+		}
+		return "(" + strings.Join(names, ",") + ")"
+	case KindFunction:
+		return "function"
+	default:
+		return "unknown"
+	}
+}
+
 // NewTypes builds a Types list from individual Type values.
 func NewTypes(components ...Type) Types {
 	return components
@@ -84,11 +121,11 @@ func NewTypes(components ...Type) Types {
 // Canonical scalar Type values, so common types don't need to be
 // constructed by hand.
 var (
-	Bool         = Type{Kind: KindBool}
-	Address      = Type{Kind: KindAddress}
-	String       = Type{Kind: KindString}
-	Bytes        = Type{Kind: KindBytes}
-	FunctionType = Type{Kind: KindFunction}
+	Bool     = Type{Kind: KindBool}
+	Address  = Type{Kind: KindAddress}
+	String   = Type{Kind: KindString}
+	Bytes    = Type{Kind: KindBytes}
+	Function = Type{Kind: KindFunction}
 
 	Uint8   = Type{Kind: KindUint, Size: 8}
 	Uint16  = Type{Kind: KindUint, Size: 16}
