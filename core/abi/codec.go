@@ -274,6 +274,42 @@ func packBytes(b []byte) []byte {
 	return out
 }
 
+// decodeDynamicBytes decodes a dynamic bytes or string tail block
+// (enc(len) ++ pad_right(data)) back into the same Go type
+// encodeDynamicBytes expects for t.
+func decodeDynamicBytes(t Type, data []byte) (any, error) {
+	b, err := unpackBytes(data)
+	if err != nil {
+		return nil, err
+	}
+	switch t.Kind {
+	case KindBytes:
+		return b, nil
+	case KindString:
+		return string(b), nil
+	default:
+		return nil, fmt.Errorf("%w: %v is not a dynamic leaf type", ErrUnsupportedKind, t.Kind)
+	}
+}
+
+// unpackBytes decodes enc(len) ++ pad_right(b) back into b, bounds-checking
+// the length against the data actually available rather than trusting it
+// blindly (data often comes from untrusted contract output).
+func unpackBytes(data []byte) ([]byte, error) {
+	if len(data) < 32 {
+		return nil, fmt.Errorf("%w: dynamic data must be at least 32 bytes, got %d", ErrByteLengthMismatch, len(data))
+	}
+	length := new(big.Int).SetBytes(data[:32])
+	maxLen := big.NewInt(int64(len(data) - 32))
+	if length.Cmp(maxLen) > 0 {
+		return nil, fmt.Errorf("%w: dynamic length %s exceeds available data", ErrByteLengthMismatch, length)
+	}
+	n := int(length.Int64())
+	b := make([]byte, n)
+	copy(b, data[32:32+n])
+	return b, nil
+}
+
 // encodeArg encodes a single value of type t, dispatching to the matching
 // encoder for scalars, dynamic leaves, or composite types (which recurse
 // into packTuple).
@@ -296,6 +332,12 @@ func encodeArg(t Type, v any) ([]byte, error) {
 // layout, e.g. for a function call's arguments.
 func Pack(types Types, args ...any) ([]byte, error) {
 	return packTuple(types, args)
+}
+
+// Unpack decodes data according to types using the standard ABI head/tail
+// layout, e.g. for a function call's return values.
+func Unpack(types Types, data []byte) ([]any, error) {
+	return unpackTuple(types, data)
 }
 
 // packTuple encodes a sequence of typed values using the ABI head/tail
@@ -505,4 +547,133 @@ func decodeInt(size int, word []byte) (any, error) {
 		}
 		return n, nil
 	}
+}
+
+// unpackTuple decodes a sequence of typed values from the ABI head/tail
+// layout: the inverse of packTuple. Slice, Array, and Tuple decoding all
+// reuse it, since all three are "a typed sequence of values" at the wire
+// level.
+func unpackTuple(types Types, data []byte) ([]any, error) {
+	results := make([]any, len(types))
+	pos := 0
+	for i, t := range types {
+		val, newPos, err := decodeArg(t, data, pos)
+		if err != nil {
+			return nil, err
+		}
+		results[i] = val
+		pos = newPos
+	}
+	return results, nil
+}
+
+// decodeArg decodes the value of type t living at data[pos:] in the head,
+// returning the decoded value and the position just past it in the head:
+// past the static value itself, or past the 32-byte offset slot for a
+// dynamic type (whose actual bytes live at that offset, not at pos).
+func decodeArg(t Type, data []byte, pos int) (any, int, error) {
+	if t.IsDynamic() {
+		if pos+32 > len(data) {
+			return nil, pos, fmt.Errorf("%w: offset slot at %d exceeds data length %d", ErrByteLengthMismatch, pos, len(data))
+		}
+		offset, err := decodeOffset(data[pos:pos+32], len(data))
+		if err != nil {
+			return nil, pos, err
+		}
+		val, err := decodeDynamicValue(t, data[offset:])
+		if err != nil {
+			return nil, pos, err
+		}
+		return val, pos + 32, nil
+	}
+
+	switch t.Kind {
+	case KindArray:
+		elems := make([]any, t.Size)
+		p := pos
+		for i := 0; i < t.Size; i++ {
+			var val any
+			var err error
+			val, p, err = decodeArg(*t.Elem, data, p)
+			if err != nil {
+				return nil, pos, err
+			}
+			elems[i] = val
+		}
+		return elems, p, nil
+	case KindTuple:
+		elems := make([]any, len(t.Components))
+		p := pos
+		for i, ct := range t.Components {
+			var val any
+			var err error
+			val, p, err = decodeArg(ct, data, p)
+			if err != nil {
+				return nil, pos, err
+			}
+			elems[i] = val
+		}
+		return elems, p, nil
+	default:
+		if pos+32 > len(data) {
+			return nil, pos, fmt.Errorf("%w: value at %d exceeds data length %d", ErrByteLengthMismatch, pos, len(data))
+		}
+		val, err := decodeValue(t, data[pos:pos+32])
+		if err != nil {
+			return nil, pos, err
+		}
+		return val, pos + 32, nil
+	}
+}
+
+// decodeDynamicValue decodes a dynamic value's own self-contained blob,
+// given tail (the data starting at its offset, running to the end of the
+// enclosing buffer — only as much of it as the value's own encoding needs
+// gets consumed, since each shape is self-delimiting).
+func decodeDynamicValue(t Type, tail []byte) (any, error) {
+	switch t.Kind {
+	case KindBytes, KindString:
+		return decodeDynamicBytes(t, tail)
+	case KindSlice:
+		if len(tail) < 32 {
+			return nil, fmt.Errorf("%w: slice length word exceeds data length %d", ErrByteLengthMismatch, len(tail))
+		}
+		count := new(big.Int).SetBytes(tail[:32])
+		// Every element needs at least one 32-byte head word (a static
+		// scalar's value or a dynamic value's offset slot), so this is a
+		// safe lower-bound sanity check against an absurd count without
+		// needing to know each element's exact width up front.
+		minBytes := new(big.Int).Mul(count, big.NewInt(32))
+		if minBytes.Cmp(big.NewInt(int64(len(tail)-32))) > 0 {
+			return nil, fmt.Errorf("%w: slice count %s exceeds available data", ErrByteLengthMismatch, count)
+		}
+		n := int(count.Int64())
+
+		elemTypes := make(Types, n)
+		for i := range elemTypes {
+			elemTypes[i] = *t.Elem
+		}
+		return unpackTuple(elemTypes, tail[32:])
+	case KindArray:
+		elemTypes := make(Types, t.Size)
+		for i := range elemTypes {
+			elemTypes[i] = *t.Elem
+		}
+		return unpackTuple(elemTypes, tail)
+	case KindTuple:
+		return unpackTuple(t.Components, tail)
+	default:
+		return nil, fmt.Errorf("%w: %v is not a dynamic type", ErrUnsupportedKind, t.Kind)
+	}
+}
+
+// decodeOffset decodes a 32-byte head offset/length word, bounds-checking
+// it against limit (the data actually available) instead of trusting it
+// blindly, since it often comes from untrusted contract output.
+func decodeOffset(word []byte, limit int) (int, error) {
+	n := new(big.Int).SetBytes(word)
+	if n.Cmp(big.NewInt(int64(limit))) > 0 {
+		return 0, fmt.Errorf("%w: offset %s exceeds available data (%d)", ErrByteLengthMismatch, n, limit)
+	}
+	return int(n.Int64()), nil
 }

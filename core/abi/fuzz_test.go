@@ -439,3 +439,89 @@ func FuzzDecodeValue(f *testing.F) {
 		}
 	})
 }
+
+// go test -run '^$' -fuzz '^FuzzUnpackBytes$' -fuzztime=10s ./core/abi
+func FuzzUnpackBytes(f *testing.F) {
+	f.Add([]byte{})
+	f.Add(make([]byte, 16))
+	f.Add(make([]byte, 32))
+	f.Add(make([]byte, 64))
+	hugeLen := make([]byte, 32)
+	for i := range hugeLen {
+		hugeLen[i] = 0xff
+	}
+	f.Add(hugeLen)
+
+	f.Fuzz(func(t *testing.T, data []byte) {
+		got, err := unpackBytes(data)
+		if err != nil {
+			return
+		}
+		require.LessOrEqual(t, len(got), len(data))
+	})
+}
+
+// go test -run '^$' -fuzz '^FuzzPackUnpackBytesRoundTrip$' -fuzztime=10s ./core/abi
+func FuzzPackUnpackBytesRoundTrip(f *testing.F) {
+	f.Add([]byte{})
+	f.Add([]byte("hello"))
+	f.Add(make([]byte, 64))
+
+	f.Fuzz(func(t *testing.T, data []byte) {
+		packed := packBytes(data)
+		got, err := unpackBytes(packed)
+		require.NoError(t, err)
+		require.Equal(t, data, got)
+	})
+}
+
+// go test -run '^$' -fuzz '^FuzzPackUnpackTupleMixedRoundTrip$' -fuzztime=10s ./core/abi
+func FuzzPackUnpackTupleMixedRoundTrip(f *testing.F) {
+	f.Add(uint64(0), []byte(""), []byte{})
+	f.Add(uint64(123456789), []byte("hello"), []byte{0xde, 0xad})
+	f.Add(uint64(1)<<63, make([]byte, 40), make([]byte, 70))
+
+	f.Fuzz(func(t *testing.T, amount uint64, strBytes []byte, dynBytes []byte) {
+		types := Types{Uint64, String, Bytes}
+		str := string(strBytes)
+		args := []any{amount, str, dynBytes}
+
+		data, err := packTuple(types, args)
+		require.NoError(t, err)
+
+		got, err := unpackTuple(types, data)
+		require.NoError(t, err)
+		require.Equal(t, amount, got[0])
+		require.Equal(t, str, got[1])
+		require.Equal(t, dynBytes, got[2])
+	})
+}
+
+// go test -run '^$' -fuzz '^FuzzDecodeArgCrashSafety$' -fuzztime=10s ./core/abi
+func FuzzDecodeArgCrashSafety(f *testing.F) {
+	f.Add(make([]byte, 0))
+	f.Add(make([]byte, 32))
+	f.Add(make([]byte, 64))
+	allFFSeed := make([]byte, 64)
+	for i := range allFFSeed {
+		allFFSeed[i] = 0xff
+	}
+	f.Add(allFFSeed)
+
+	innerTuple := Tuple(Uint8, String)
+	kinds := []Type{
+		Bool, Address, Uint256, Int256, Bytes32, String, Bytes,
+		Slice(Uint256), Slice(String), Slice(innerTuple),
+	}
+	arrType, err := Array(Uint8, 3)
+	if err != nil {
+		f.Fatal(err)
+	}
+	kinds = append(kinds, arrType, innerTuple)
+
+	f.Fuzz(func(t *testing.T, data []byte) {
+		for _, typ := range kinds {
+			_, _, _ = decodeArg(typ, data, 0)
+		}
+	})
+}

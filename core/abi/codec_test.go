@@ -1110,3 +1110,304 @@ func TestDecodeIntBigIntBoundaries(t *testing.T) {
 		require.ErrorIs(t, err, ErrIntegerOutOfRange)
 	}
 }
+
+func TestDecodeDynamicBytesRoundTrip(t *testing.T) {
+	tests := [][]byte{
+		{},
+		{0x01},
+		[]byte("hello"),
+		make([]byte, 32),
+		make([]byte, 33),
+		make([]byte, 64),
+	}
+	for _, data := range tests {
+		encoded, err := encodeDynamicBytes(Bytes, data)
+		require.NoError(t, err)
+		got, err := decodeDynamicBytes(Bytes, encoded)
+		require.NoError(t, err)
+		require.Equal(t, data, got)
+	}
+}
+
+func TestDecodeDynamicStringRoundTrip(t *testing.T) {
+	tests := []string{"", "hello", "the quick brown fox jumps over the lazy dog"}
+	for _, s := range tests {
+		encoded, err := encodeDynamicBytes(String, s)
+		require.NoError(t, err)
+		got, err := decodeDynamicBytes(String, encoded)
+		require.NoError(t, err)
+		require.Equal(t, s, got)
+	}
+}
+
+func TestDecodeDynamicBytesRejectsStaticKind(t *testing.T) {
+	encoded, err := encodeDynamicBytes(Bytes, []byte("x"))
+	require.NoError(t, err)
+	_, err = decodeDynamicBytes(Bool, encoded)
+	require.ErrorIs(t, err, ErrUnsupportedKind)
+}
+
+func TestUnpackBytesTooShortRejected(t *testing.T) {
+	_, err := unpackBytes(make([]byte, 16))
+	require.ErrorIs(t, err, ErrByteLengthMismatch)
+}
+
+func TestUnpackBytesEmptyRejected(t *testing.T) {
+	_, err := unpackBytes(nil)
+	require.ErrorIs(t, err, ErrByteLengthMismatch)
+}
+
+func TestUnpackBytesLengthExceedsAvailableDataRejected(t *testing.T) {
+	data := make([]byte, 64)
+	copy(data[:32], encodeUint64Word(1000))
+	_, err := unpackBytes(data)
+	require.ErrorIs(t, err, ErrByteLengthMismatch)
+}
+
+func TestUnpackBytesHugeLengthDoesNotPanic(t *testing.T) {
+	data := make([]byte, 32)
+	for i := range data {
+		data[i] = 0xff
+	}
+	_, err := unpackBytes(data)
+	require.ErrorIs(t, err, ErrByteLengthMismatch)
+}
+
+func TestUnpackBytesExactLength(t *testing.T) {
+	data := make([]byte, 32+32)
+	copy(data[:32], encodeUint64Word(32))
+	for i := 32; i < 64; i++ {
+		data[i] = byte(i)
+	}
+	got, err := unpackBytes(data)
+	require.NoError(t, err)
+	require.Equal(t, data[32:64], got)
+}
+
+func TestUnpackTupleAllStatic(t *testing.T) {
+	addr, err := types.NewAddressFromHex("0x833e1D0b8Bc979D49d57b65dCF18364694B16D52")
+	require.NoError(t, err)
+	amount := big.NewInt(1000000000000000000)
+
+	data, err := packTuple(Types{Address, Uint256}, []any{addr, amount})
+	require.NoError(t, err)
+
+	got, err := unpackTuple(Types{Address, Uint256}, data)
+	require.NoError(t, err)
+	require.Equal(t, addr, got[0])
+	require.Zero(t, amount.Cmp(got[1].(*big.Int)))
+}
+
+func TestUnpackTupleDynamicOffset(t *testing.T) {
+	data, err := packTuple(Types{Uint256, String}, []any{big.NewInt(5), "hi"})
+	require.NoError(t, err)
+
+	got, err := unpackTuple(Types{Uint256, String}, data)
+	require.NoError(t, err)
+	require.Zero(t, big.NewInt(5).Cmp(got[0].(*big.Int)))
+	require.Equal(t, "hi", got[1])
+}
+
+func TestUnpackTupleMultipleDynamicOffsets(t *testing.T) {
+	data, err := packTuple(Types{String, String}, []any{"ab", "cdef"})
+	require.NoError(t, err)
+
+	got, err := unpackTuple(Types{String, String}, data)
+	require.NoError(t, err)
+	require.Equal(t, "ab", got[0])
+	require.Equal(t, "cdef", got[1])
+}
+
+func TestUnpackSliceStaticElements(t *testing.T) {
+	data, err := encodeArg(Slice(Uint8), []uint8{1, 2, 3})
+	require.NoError(t, err)
+
+	got, err := decodeDynamicValue(Slice(Uint8), data)
+	require.NoError(t, err)
+	require.Equal(t, []any{uint8(1), uint8(2), uint8(3)}, got)
+}
+
+func TestUnpackSliceOfBigInt(t *testing.T) {
+	vals := []*big.Int{big.NewInt(1), big.NewInt(2)}
+	data, err := encodeArg(Slice(Uint256), vals)
+	require.NoError(t, err)
+
+	got, err := decodeDynamicValue(Slice(Uint256), data)
+	require.NoError(t, err)
+	elems := got.([]any)
+	require.Len(t, elems, 2)
+	require.Zero(t, vals[0].Cmp(elems[0].(*big.Int)))
+	require.Zero(t, vals[1].Cmp(elems[1].(*big.Int)))
+}
+
+func TestUnpackSliceEmpty(t *testing.T) {
+	data, err := encodeArg(Slice(Uint8), []uint8{})
+	require.NoError(t, err)
+
+	got, err := decodeDynamicValue(Slice(Uint8), data)
+	require.NoError(t, err)
+	require.Equal(t, []any{}, got)
+}
+
+func TestUnpackArrayFixed(t *testing.T) {
+	typ, err := Array(Uint8, 3)
+	require.NoError(t, err)
+	data, err := encodeArg(typ, []uint8{1, 2, 3})
+	require.NoError(t, err)
+
+	val, pos, err := decodeArg(typ, data, 0)
+	require.NoError(t, err)
+	require.Equal(t, len(data), pos)
+	require.Equal(t, []any{uint8(1), uint8(2), uint8(3)}, val)
+}
+
+func TestUnpackArrayOfDynamicElements(t *testing.T) {
+	typ, err := Array(String, 2)
+	require.NoError(t, err)
+	data, err := encodeArg(typ, []string{"a", "bb"})
+	require.NoError(t, err)
+
+	got, err := decodeDynamicValue(typ, data)
+	require.NoError(t, err)
+	require.Equal(t, []any{"a", "bb"}, got)
+}
+
+func TestUnpackTupleValue(t *testing.T) {
+	addr, err := types.NewAddressFromHex("0x833e1D0b8Bc979D49d57b65dCF18364694B16D52")
+	require.NoError(t, err)
+	amount := big.NewInt(1000000000000000000)
+
+	typ := Tuple(Address, Uint256)
+	data, err := encodeArg(typ, []any{addr, amount})
+	require.NoError(t, err)
+
+	got, err := decodeDynamicValue(typ, data)
+	require.NoError(t, err)
+	elems := got.([]any)
+	require.Equal(t, addr, elems[0])
+	require.Zero(t, amount.Cmp(elems[1].(*big.Int)))
+}
+
+func TestUnpackNestedDynamicTuple(t *testing.T) {
+	addr, err := types.NewAddressFromHex("0x833e1D0b8Bc979D49d57b65dCF18364694B16D52")
+	require.NoError(t, err)
+
+	inner := Tuple(Uint8, String)
+	outer := Tuple(Address, Slice(inner))
+
+	data, err := encodeArg(outer, []any{addr, []any{
+		[]any{uint8(1), "hi"},
+		[]any{uint8(2), "yo"},
+	}})
+	require.NoError(t, err)
+
+	got, err := decodeDynamicValue(outer, data)
+	require.NoError(t, err)
+	elems := got.([]any)
+	require.Equal(t, addr, elems[0])
+
+	innerSlice := elems[1].([]any)
+	require.Len(t, innerSlice, 2)
+	require.Equal(t, []any{uint8(1), "hi"}, innerSlice[0])
+	require.Equal(t, []any{uint8(2), "yo"}, innerSlice[1])
+}
+
+func TestUnpackArrayOfArray(t *testing.T) {
+	inner, err := Array(Uint8, 2)
+	require.NoError(t, err)
+	outer, err := Array(inner, 3)
+	require.NoError(t, err)
+
+	val := [][]uint8{{1, 2}, {3, 4}, {5, 6}}
+	data, err := encodeArg(outer, val)
+	require.NoError(t, err)
+
+	got, _, err := decodeArg(outer, data, 0)
+	require.NoError(t, err)
+	require.Equal(t, []any{
+		[]any{uint8(1), uint8(2)},
+		[]any{uint8(3), uint8(4)},
+		[]any{uint8(5), uint8(6)},
+	}, got)
+}
+
+func TestUnpackSliceOfSlice(t *testing.T) {
+	inner := Slice(Uint8)
+	outer := Slice(inner)
+
+	val := [][]uint8{{1, 2, 3}, {4, 5}}
+	data, err := encodeArg(outer, val)
+	require.NoError(t, err)
+
+	got, err := decodeDynamicValue(outer, data)
+	require.NoError(t, err)
+	require.Equal(t, []any{
+		[]any{uint8(1), uint8(2), uint8(3)},
+		[]any{uint8(4), uint8(5)},
+	}, got)
+}
+
+func TestDecodeArgRejectsTruncatedStaticData(t *testing.T) {
+	_, _, err := decodeArg(Uint256, make([]byte, 16), 0)
+	require.ErrorIs(t, err, ErrByteLengthMismatch)
+}
+
+func TestDecodeArgRejectsTruncatedOffsetSlot(t *testing.T) {
+	_, _, err := decodeArg(String, make([]byte, 16), 0)
+	require.ErrorIs(t, err, ErrByteLengthMismatch)
+}
+
+func TestDecodeArgRejectsOffsetBeyondData(t *testing.T) {
+	data := make([]byte, 32)
+	for i := range data {
+		data[i] = 0xff
+	}
+	_, _, err := decodeArg(String, data, 0)
+	require.ErrorIs(t, err, ErrByteLengthMismatch)
+}
+
+func TestDecodeDynamicValueRejectsHugeSliceCount(t *testing.T) {
+	tail := make([]byte, 64)
+	for i := 0; i < 32; i++ {
+		tail[i] = 0xff
+	}
+	_, err := decodeDynamicValue(Slice(Uint8), tail)
+	require.ErrorIs(t, err, ErrByteLengthMismatch)
+}
+
+func TestDecodeDynamicValueRejectsUnsupportedKind(t *testing.T) {
+	_, err := decodeDynamicValue(Bool, make([]byte, 32))
+	require.ErrorIs(t, err, ErrUnsupportedKind)
+}
+
+func TestUnpackMatchesUnpackTuple(t *testing.T) {
+	addr, err := types.NewAddressFromHex("0x833e1D0b8Bc979D49d57b65dCF18364694B16D52")
+	require.NoError(t, err)
+	amount := big.NewInt(1000000000000000000)
+
+	data, err := Pack(Types{Address, Uint256}, addr, amount)
+	require.NoError(t, err)
+
+	got, err := Unpack(Types{Address, Uint256}, data)
+	require.NoError(t, err)
+
+	want, err := unpackTuple(Types{Address, Uint256}, data)
+	require.NoError(t, err)
+	require.Equal(t, want, got)
+}
+
+func TestUnpackNoArgs(t *testing.T) {
+	got, err := Unpack(Types{}, nil)
+	require.NoError(t, err)
+	require.Empty(t, got)
+}
+
+func TestUnpackDynamicArgs(t *testing.T) {
+	data, err := Pack(Types{Uint256, String}, big.NewInt(5), "hi")
+	require.NoError(t, err)
+
+	got, err := Unpack(Types{Uint256, String}, data)
+	require.NoError(t, err)
+	require.Zero(t, big.NewInt(5).Cmp(got[0].(*big.Int)))
+	require.Equal(t, "hi", got[1])
+}

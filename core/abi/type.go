@@ -6,7 +6,8 @@ import (
 	"strings"
 )
 
-// Errors returned by the Type constructors.
+// Sentinel errors returned across the abi package: by the Type
+// constructors, by encoding/decoding, and by the signature-string parser.
 var (
 	ErrInvalidArraySize   = errors.New("abi: array size must be non-negative")
 	ErrTupleNameMismatch  = errors.New("abi: tuple names and components length mismatch")
@@ -17,49 +18,50 @@ var (
 	ErrIntegerOutOfRange  = errors.New("abi: integer out of range")
 	ErrArgCountMismatch   = errors.New("abi: argument count mismatch")
 	ErrInvalidTypeString  = errors.New("abi: invalid type string")
+	ErrSelectorMismatch   = errors.New("abi: selector mismatch")
 )
 
 // Kind identifies which Solidity ABI type an Type represents.
 type Kind int
 
 const (
-	KindBool Kind = iota
-	KindUint
-	KindInt
-	KindAddress
-	KindBytes      // dynamic bytes
-	KindFixedBytes // bytesN
-	KindString
-	KindArray    // T[k], fixed length
-	KindSlice    // T[], dynamic length
-	KindTuple    // (T1, T2, ...)
-	KindFunction // address (20 bytes) + selector (4 bytes), encoded as bytes24
+	KindBool       Kind = iota // bool
+	KindUint                   // uintN, 8-256 bits
+	KindInt                    // intN, 8-256 bits
+	KindAddress                // address
+	KindBytes                  // dynamic bytes
+	KindFixedBytes             // bytesN
+	KindString                 // dynamic string
+	KindArray                  // T[k], fixed length
+	KindSlice                  // T[], dynamic length
+	KindTuple                  // (T1, T2, ...)
+	KindFunction               // address (20 bytes) + selector (4 bytes), encoded as bytes24
 )
 
 // Type describes a Solidity ABI type, recursively for arrays and tuples.
-type (
-	Type struct {
-		Kind Kind
+type Type struct {
+	Kind Kind
 
-		// Size is the bit width for Uint/Int (8-256, multiples of 8), the byte
-		// length for FixedBytes (1-32), or the element count for Array.
-		Size int
+	// Size is the bit width for Uint/Int (8-256, multiples of 8), the byte
+	// length for FixedBytes (1-32), or the element count for Array.
+	Size int
 
-		// Elem is the element type for Array and Slice. Nil otherwise.
-		Elem *Type
+	// Elem is the element type for Array and Slice. Nil otherwise.
+	Elem *Type
 
-		// Components is the field types for Tuple, in order. Nil otherwise.
-		Components Types
+	// Components is the field types for Tuple, in order. Nil otherwise.
+	Components Types
 
-		// Names holds Tuple field names parallel to Components. Empty when the
-		// tuple's fields are unnamed.
-		Names []string
-	}
+	// Names holds Tuple field names parallel to Components. Empty when the
+	// tuple's fields are unnamed.
+	Names []string
+}
 
-	Types []Type
+// Types is a list of Type, e.g. a function's parameter types.
+type Types []Type
 
-	Selector [4]byte
-)
+// Selector is a 4-byte ABI function selector: keccak256(signature)[:4].
+type Selector [4]byte
 
 // IsDynamic reports whether values of this type require head/tail encoding
 // (bytes, string, T[], or anything containing one of those).
