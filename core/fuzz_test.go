@@ -116,3 +116,73 @@ func FuzzEIP1014Address(f *testing.F) {
 		require.Equal(t, got1, got2)
 	})
 }
+
+// go test -run '^$' -fuzz '^FuzzPubkeyToAddressFromRawKey$' -fuzztime=10s ./core
+func FuzzPubkeyToAddressFromRawKey(f *testing.F) {
+	f.Add(make([]byte, 32))
+	one := make([]byte, 32)
+	one[31] = 1
+	f.Add(one)
+
+	f.Fuzz(func(t *testing.T, raw []byte) {
+		key, err := types.NewPrivateKeyFromBytes(raw)
+		if err != nil {
+			return
+		}
+
+		addr := PubkeyToAddress(key.PublicKey())
+		require.Len(t, addr.Bytes(), 20)
+
+		digest := Keccak256([]byte("hello"))
+		sig, err := key.Sign(digest)
+		require.NoError(t, err)
+
+		ok, err := VerifyAddress(digest, sig, addr)
+		require.NoError(t, err)
+		require.True(t, ok)
+	})
+}
+
+// go test -run '^$' -fuzz '^FuzzVerifyAddressRoundTrip$' -fuzztime=10s ./core
+func FuzzVerifyAddressRoundTrip(f *testing.F) {
+	key, err := types.GeneratePrivateKey()
+	if err != nil {
+		f.Fatal(err)
+	}
+	address := PubkeyToAddress(key.PublicKey())
+
+	f.Add([]byte("hello"))
+	f.Add([]byte{})
+
+	f.Fuzz(func(t *testing.T, msg []byte) {
+		digest := Keccak256(msg)
+		sig, err := key.Sign(digest)
+		require.NoError(t, err)
+
+		ok, err := VerifyAddress(digest, sig, address)
+		require.NoError(t, err)
+		require.True(t, ok)
+	})
+}
+
+// go test -run '^$' -fuzz '^FuzzVerifyAddressWrongAddress$' -fuzztime=10s ./core
+func FuzzVerifyAddressWrongAddress(f *testing.F) {
+	key, err := types.GeneratePrivateKey()
+	if err != nil {
+		f.Fatal(err)
+	}
+	digest := Keccak256([]byte("hello"))
+	sig, err := key.Sign(digest)
+	if err != nil {
+		f.Fatal(err)
+	}
+
+	f.Add(make([]byte, 20))
+	f.Add([]byte{0xff})
+
+	f.Fuzz(func(t *testing.T, addrBytes []byte) {
+		addr := types.NewAddressFromBytes(addrBytes)
+		_, err := VerifyAddress(digest, sig, addr)
+		require.NoError(t, err)
+	})
+}
