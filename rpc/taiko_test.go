@@ -11,7 +11,7 @@ import (
 
 type taikoNetwork struct {
 	name      string
-	client    *Client
+	client    Client
 	address   string
 	blockHash string
 	txHash    string

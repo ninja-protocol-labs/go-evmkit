@@ -11,10 +11,20 @@ import (
 	"time"
 )
 
-// Client is a stateless JSON-RPC client over HTTP. The caller supplies the
-// request ID on each Element, so a Client holds no per-request state and is
-// safe for concurrent use.
-type Client struct {
+// Client is a JSON-RPC client. *DefaultClient satisfies it directly; other
+// implementations (a retrying/load-balancing wrapper, a test double) can
+// stand in for it without depending on this package's HTTP transport.
+type Client interface {
+	Call(ctx context.Context, e Element) error
+	Batch(ctx context.Context, elems Elements) error
+}
+
+var _ Client = (*DefaultClient)(nil)
+
+// DefaultClient is a stateless JSON-RPC client over HTTP. The caller
+// supplies the request ID on each Element, so a DefaultClient holds no
+// per-request state and is safe for concurrent use.
+type DefaultClient struct {
 	url        string
 	cli        *http.Client
 	headers    http.Header
@@ -22,12 +32,12 @@ type Client struct {
 	backoff    func(attempt int) time.Duration
 }
 
-// Option configures a Client.
-type Option func(*Client)
+// Option configures a DefaultClient.
+type Option func(*DefaultClient)
 
 // WithHTTPClient overrides the default http.Client.
 func WithHTTPClient(hc *http.Client) Option {
-	return func(c *Client) {
+	return func(c *DefaultClient) {
 		c.cli = hc
 	}
 }
@@ -35,7 +45,7 @@ func WithHTTPClient(hc *http.Client) Option {
 // WithTimeout sets the default http.Client's timeout. It has no effect if
 // combined with WithHTTPClient, which replaces the client wholesale.
 func WithTimeout(d time.Duration) Option {
-	return func(c *Client) {
+	return func(c *DefaultClient) {
 		c.cli.Timeout = d
 	}
 }
@@ -43,7 +53,7 @@ func WithTimeout(d time.Duration) Option {
 // WithHeader sets a header sent with every request, such as an API key or
 // Authorization token. Calling it again with the same key replaces the value.
 func WithHeader(key, value string) Option {
-	return func(c *Client) {
+	return func(c *DefaultClient) {
 		c.headers.Set(key, value)
 	}
 }
@@ -55,7 +65,7 @@ func WithHeader(key, value string) Option {
 // non-429 4xx: the request already reached the server and failed on its
 // own terms, so retrying would just fail the same way again.
 func WithRetry(maxRetries int, backoff func(attempt int) time.Duration) Option {
-	return func(c *Client) {
+	return func(c *DefaultClient) {
 		c.maxRetries = maxRetries
 		c.backoff = backoff
 	}
@@ -75,9 +85,9 @@ func ExponentialBackoff(base, max time.Duration) func(attempt int) time.Duration
 	}
 }
 
-// NewClient returns a Client that sends requests to url.
-func NewClient(url string, opts ...Option) *Client {
-	c := &Client{
+// NewClient returns a DefaultClient that sends requests to url.
+func NewClient(url string, opts ...Option) *DefaultClient {
+	c := &DefaultClient{
 		url: url,
 		cli: &http.Client{
 			Timeout: 15 * time.Second,
@@ -114,7 +124,7 @@ func (e *ResponseError) Error() string {
 	return fmt.Sprintf("rpc error %d: %s: %s", e.Code, e.Message, string(e.Data))
 }
 
-func (c *Client) do(ctx context.Context, body []byte) ([]byte, error) {
+func (c *DefaultClient) do(ctx context.Context, body []byte) ([]byte, error) {
 	var lastErr error
 	for attempt := 0; ; attempt++ {
 		respBytes, retryable, err := c.doOnce(ctx, body)
@@ -137,7 +147,7 @@ func (c *Client) do(ctx context.Context, body []byte) ([]byte, error) {
 // doOnce sends body once. retryable reports whether the failure is worth
 // retrying: network errors and HTTP 429/5xx are, a malformed request or
 // any other 4xx is not.
-func (c *Client) doOnce(ctx context.Context, body []byte) ([]byte, bool, error) {
+func (c *DefaultClient) doOnce(ctx context.Context, body []byte) ([]byte, bool, error) {
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.url, bytes.NewReader(body))
 	if err != nil {
 		return nil, false, fmt.Errorf("rpc: create http request: %w", err)
@@ -162,7 +172,7 @@ func (c *Client) doOnce(ctx context.Context, body []byte) ([]byte, bool, error) 
 }
 
 // Call sends a single JSON-RPC request and decodes the result into e.Result.
-func (c *Client) Call(ctx context.Context, e Element) error {
+func (c *DefaultClient) Call(ctx context.Context, e Element) error {
 	req, err := json.Marshal(e.toRequest())
 	if err != nil {
 		return fmt.Errorf("rpc: marshal request: %w", err)
@@ -191,7 +201,7 @@ func (c *Client) Call(ctx context.Context, e Element) error {
 
 // Batch sends elems as a single JSON-RPC batch request and decodes each
 // result into its own Element.Result, matched by ID.
-func (c *Client) Batch(ctx context.Context, elems Elements) error {
+func (c *DefaultClient) Batch(ctx context.Context, elems Elements) error {
 	n := elems.Len()
 	if n == 0 {
 		return nil
