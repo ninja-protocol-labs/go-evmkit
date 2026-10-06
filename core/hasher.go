@@ -5,6 +5,7 @@ import (
 
 	"github.com/ninja-protocol-labs/go-lib-cryptography/keccak"
 
+	"github.com/ninja-protocol-labs/go-evmkit/core/rlp"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 )
 
@@ -65,4 +66,17 @@ func EIP1014Address(deployer *types.Address, salt [32]byte, initCode []byte) *ty
 
 	digest := Keccak256(buf)
 	return types.NewAddressFromBytes(digest.Bytes()[12:])
+}
+
+// CreateAddress returns the deterministic contract address the CREATE
+// opcode computes for a deployer at a given nonce:
+// keccak256(rlp([sender, nonce]))[12:].
+func CreateAddress(sender *types.Address, nonce uint64) (*types.Address, error) {
+	enc, err := rlp.Encode([]any{sender.Bytes(), nonce})
+	if err != nil {
+		return nil, err
+	}
+
+	digest := Keccak256(enc)
+	return types.NewAddressFromBytes(digest.Bytes()[12:]), nil
 }

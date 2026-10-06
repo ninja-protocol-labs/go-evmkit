@@ -121,3 +121,49 @@ func TestEIP1014AddressOfficialVectors(t *testing.T) {
 		require.Equal(t, want, got, tt.deployer)
 	}
 }
+
+func TestCreateAddressKnownVectors(t *testing.T) {
+	sender, err := types.NewAddressFromHex("0x6ac7ea33f8831ea9dcc53393aaa88b25a785dbf0")
+	require.NoError(t, err)
+
+	tests := []struct {
+		nonce uint64
+		want  string
+	}{
+		{0, "0xcd234a471b72ba2f1ccf0a70fcaba648a5eecd8d"},
+		{1, "0x343c43a37d37dff08ae8c4a11544c718abb4fcf8"},
+		{2, "0xf778b86fa74e846c4f0a1fbd1335fe81c00a0c91"},
+		{3, "0xfffd933a0bc612844eaf0c6fe3e5b8e9b6c1d19c"},
+	}
+
+	for _, tt := range tests {
+		want, err := types.NewAddressFromHex(tt.want)
+		require.NoError(t, err)
+
+		got, err := CreateAddress(sender, tt.nonce)
+		require.NoError(t, err)
+		require.Equal(t, want, got, tt.nonce)
+	}
+}
+
+func TestCreateAddressDeterministic(t *testing.T) {
+	sender, err := types.NewAddressFromHex("0x6ac7ea33f8831ea9dcc53393aaa88b25a785dbf0")
+	require.NoError(t, err)
+
+	got1, err := CreateAddress(sender, 7)
+	require.NoError(t, err)
+	got2, err := CreateAddress(sender, 7)
+	require.NoError(t, err)
+	require.Equal(t, got1, got2)
+}
+
+func TestCreateAddressDiffersByNonce(t *testing.T) {
+	sender, err := types.NewAddressFromHex("0x6ac7ea33f8831ea9dcc53393aaa88b25a785dbf0")
+	require.NoError(t, err)
+
+	got0, err := CreateAddress(sender, 0)
+	require.NoError(t, err)
+	got1, err := CreateAddress(sender, 1)
+	require.NoError(t, err)
+	require.NotEqual(t, got0, got1)
+}
