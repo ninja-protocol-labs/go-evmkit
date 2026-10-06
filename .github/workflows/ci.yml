@@ -28,13 +28,13 @@ jobs:
             - name: Vet
               run: go vet ./...
 
-            # go-ethereum is an implementation detail of rlp/ only.
+            # go-ethereum is an implementation detail of core/rlp/ only.
             - name: Check go-ethereum import boundary
               run: |
                   offenders="$(grep -rl '"github.com/ethereum/go-ethereum' --include='*.go' . \
-                      | grep -vE '^(\./)?rlp/' || true)"
+                      | grep -vE '^(\./)?core/rlp/' || true)"
                   if [ -n "$offenders" ]; then
-                      echo "::error::go-ethereum must only be imported from rlp/:"
+                      echo "::error::go-ethereum must only be imported from core/rlp/:"
                       echo "$offenders"
                       exit 1
                   fi
