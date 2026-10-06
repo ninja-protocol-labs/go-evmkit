@@ -158,7 +158,9 @@ func (c *DefaultClient) doOnce(ctx context.Context, body []byte) ([]byte, bool, 
 	if err != nil {
 		return nil, true, fmt.Errorf("rpc: send http request: %w", err)
 	}
-	defer httpResp.Body.Close()
+	defer func() {
+		_ = httpResp.Body.Close()
+	}()
 
 	respBytes, err := io.ReadAll(httpResp.Body)
 	if err != nil {
