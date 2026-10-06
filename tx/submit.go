@@ -15,7 +15,7 @@ import (
 // Packer is implemented by *LegacyTxConfig, *DynamicFeeTxConfig and
 // *SetCodeTxConfig.
 type Packer interface {
-	Pack(ctx context.Context, client rpc.Client) (core.Transaction, error)
+	Pack(context.Context, rpc.Client) (core.Transaction, error)
 }
 
 var (

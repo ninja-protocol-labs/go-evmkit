@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
+	"github.com/ninja-protocol-labs/go-evmkit/core"
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
@@ -36,11 +37,11 @@ type LegacyTxLiveSuite struct {
 func TestLegacyTxLiveSuite(t *testing.T) {
 	suite.Run(t, &LegacyTxLiveSuite{
 		Enable:        false,
-		RPCURL:        "https://sepolia.base.org",
+		RPCURL:        "https://ethereum-sepolia-rpc.publicnode.com",
 		FromHex:       "0x833e1D0b8Bc979D49d57b65dCF18364694B16D52",
 		ToHex:         "0xc10B4374F9654187DeB5eE2d2715c935f5C1Cb02",
-		PrivateKeyHex: "PRIVATE_KEY",
-		TokenHex:      "0xE4aB69C077896252FAFBD49EFD26B5D171A32410",
+		PrivateKeyHex: "",
+		TokenHex:      "0x779877A7B0D9E8603169DdbD7836e478b4624789",
 	})
 }
 
@@ -49,7 +50,7 @@ func (s *LegacyTxLiveSuite) SetupSuite() {
 		s.T().Skip("disabled")
 	}
 
-	s.ctx, s.cancel = context.WithTimeout(context.Background(), 30*time.Second)
+	s.ctx, s.cancel = context.WithTimeout(context.Background(), 120*time.Second)
 	s.client = rpc.NewClient(s.RPCURL, rpc.WithTimeout(15*time.Second))
 
 	var err error
@@ -69,8 +70,6 @@ func (s *LegacyTxLiveSuite) TearDownSuite() {
 	}
 }
 
-// TestSubmitETHTransfer packs, signs and broadcasts a plain 0.000001 ETH
-// transfer in one call.
 func (s *LegacyTxLiveSuite) TestSubmitETHTransfer() {
 	weiValue := new(big.Int).Mul(big.NewInt(1), big.NewInt(1_000_000_000_000)) // 0.000001 ETH
 	cfg := NewLegacyTxConfig(s.from, s.to, weiValue, nil)
@@ -80,9 +79,6 @@ func (s *LegacyTxLiveSuite) TestSubmitETHTransfer() {
 	s.T().Logf("tx hash: %s", hash)
 }
 
-// TestPackSignBroadcastTokenTransfer packs an ERC-20 transfer of 1 token
-// (18 decimals), then signs and broadcasts it as separate steps instead of
-// via Submit.
 func (s *LegacyTxLiveSuite) TestPackSignBroadcastTokenTransfer() {
 	fn, err := abi.ParseFunction("transfer(address,uint256) returns (bool)", nil)
 	s.Require().NoError(err)
@@ -104,4 +100,27 @@ func (s *LegacyTxLiveSuite) TestPackSignBroadcastTokenTransfer() {
 	hash, err := Broadcast(s.ctx, s.client, raw)
 	s.Require().NoError(err)
 	s.T().Logf("tx hash: %s", hash)
+
+	receipt, err := WaitForReceipt(s.ctx, s.client, hash, time.Second, 60*time.Second)
+	s.Require().NoError(err)
+	s.Require().True(receipt.Status)
+	s.Require().True(hash.Equal(receipt.TxHash))
+	s.Require().Len(receipt.Logs, 1)
+
+	log := receipt.Logs[0]
+	s.Require().True(s.token.Equal(log.Address))
+	s.Require().Len(log.Topics, 3)
+
+	transferTopic := core.Keccak256([]byte("Transfer(address,address,uint256)"))
+	s.Require().True(transferTopic.Equal(log.Topics[0]))
+
+	wantFrom := types.NewHashFromBytes(append(make([]byte, 12), s.from.Bytes()...))
+	s.Require().True(wantFrom.Equal(log.Topics[1]))
+
+	wantTo := types.NewHashFromBytes(append(make([]byte, 12), s.to.Bytes()...))
+	s.Require().True(wantTo.Equal(log.Topics[2]))
+
+	wantData := make([]byte, 32)
+	amount.FillBytes(wantData)
+	s.Require().Equal(wantData, log.Data)
 }
