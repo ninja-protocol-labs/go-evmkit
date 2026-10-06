@@ -11,7 +11,7 @@ import (
 
 type unichainNetwork struct {
 	name      string
-	client    *Client
+	client    Client
 	address   string
 	blockHash string
 	txHash    string
