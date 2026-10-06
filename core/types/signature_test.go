@@ -202,3 +202,83 @@ func TestSignatureECRecover(t *testing.T) {
 		t.Error("ECRecover with the wrong digest should not recover the same key")
 	}
 }
+
+func TestSignatureCompactRoundTrip(t *testing.T) {
+	_, _, sig := testSignature(t)
+
+	compact, err := sig.CompactBytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(compact) != CompactSignatureLength {
+		t.Fatalf("compact length = %d, want %d", len(compact), CompactSignatureLength)
+	}
+
+	parsed, err := NewSignatureFromCompact(compact)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !sig.Equal(parsed) {
+		t.Error("roundtrip through compact bytes changed the signature")
+	}
+}
+
+func TestSignatureCompactEncodesRecoveryIDInTopBit(t *testing.T) {
+	_, _, sig := testSignature(t)
+
+	compact, err := sig.CompactBytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	gotYParity := compact[32] >> 7
+	if byte(sig.V().Uint64()) != gotYParity {
+		t.Errorf("top bit of compact[32] = %d, want recovery id %d", gotYParity, sig.V().Uint64())
+	}
+}
+
+func TestSignatureCompactRejectsHighRecoveryID(t *testing.T) {
+	_, _, sig := testSignature(t)
+	sig.v = 2
+
+	if _, err := sig.CompactBytes(); err == nil {
+		t.Error("expected an error for a recovery id above 1")
+	}
+}
+
+func TestNewSignatureFromCompactRejectsWrongLength(t *testing.T) {
+	tests := []struct {
+		name string
+		in   []byte
+	}{
+		{"too short", make([]byte, CompactSignatureLength-1)},
+		{"too long", make([]byte, CompactSignatureLength+1)},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := NewSignatureFromCompact(tt.in); err == nil {
+				t.Error("expected an error")
+			}
+		})
+	}
+}
+
+func TestSignatureCompactBytesDoesNotAliasCaller(t *testing.T) {
+	_, _, sig := testSignature(t)
+
+	compact, err := sig.CompactBytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	original := bytes.Clone(compact)
+	compact[0] ^= 0xff
+
+	again, err := sig.CompactBytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(again, original) {
+		t.Error("mutating a returned compact encoding affected a later call")
+	}
+}

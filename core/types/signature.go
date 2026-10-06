@@ -8,8 +8,13 @@ import (
 	"github.com/ninja-protocol-labs/go-lib-cryptography/secp256k1"
 )
 
-// SignatureLength is the byte length of a recoverable (r ∥ s ∥ v) signature.
-const SignatureLength = secp256k1.SignatureCompactLen + 1
+const (
+	// SignatureLength is the byte length of a recoverable (r ∥ s ∥ v) signature.
+	SignatureLength = secp256k1.SignatureCompactLen + 1
+
+	// CompactSignatureLength is the byte length of an EIP-2098 compact (r ∥ yParityAndS) signature.
+	CompactSignatureLength = secp256k1.SignatureCompactLen
+)
 
 // Signature is a recoverable ECDSA signature: r, s and a recovery id.
 type Signature struct {
@@ -113,6 +118,45 @@ func (s *Signature) EIP155V(chainID *big.Int) *big.Int {
 	v.Add(v, big.NewInt(35))
 	v.Add(v, s.V())
 	return v
+}
+
+// CompactBytes returns the EIP-2098 compact encoding: r ∥ s, with the top
+// bit of s set to the recovery id. This is lossless only for a recovery id
+// of 0 or 1, which holds for every signature secp256k1.Sign produces.
+func (s *Signature) CompactBytes() ([]byte, error) {
+	if s.v > 1 {
+		return nil, fmt.Errorf("types: compact signature: unsupported recovery id %d", s.v)
+	}
+
+	b := s.Bytes()
+	compact := make([]byte, CompactSignatureLength)
+	copy(compact, b[:CompactSignatureLength])
+	if s.v == 1 {
+		compact[secp256k1.SignatureScalarLen] |= 0x80
+	}
+	return compact, nil
+}
+
+// NewSignatureFromCompact parses an EIP-2098 compact (r ∥ yParityAndS) signature.
+func NewSignatureFromCompact(b []byte) (*Signature, error) {
+	if len(b) != CompactSignatureLength {
+		return nil, fmt.Errorf("types: invalid compact signature length: %d", len(b))
+	}
+
+	ss := make([]byte, secp256k1.SignatureScalarLen)
+	copy(ss, b[secp256k1.SignatureScalarLen:])
+
+	var v byte
+	if ss[0]&0x80 != 0 {
+		v = 1
+		ss[0] &^= 0x80
+	}
+
+	full := make([]byte, SignatureLength)
+	copy(full[:secp256k1.SignatureScalarLen], b[:secp256k1.SignatureScalarLen])
+	copy(full[secp256k1.SignatureScalarLen:secp256k1.SignatureCompactLen], ss)
+	full[SignatureLength-1] = v
+	return NewSignatureFromBytes(full)
 }
 
 // Equal reports whether sig and o hold the same r, s and recovery id. It is nil-safe.
