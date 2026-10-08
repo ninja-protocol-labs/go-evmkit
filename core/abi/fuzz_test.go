@@ -525,3 +525,78 @@ func FuzzDecodeArgCrashSafety(f *testing.F) {
 		}
 	})
 }
+
+// go test -run '^$' -fuzz '^FuzzParseError$' -fuzztime=10s ./core/abi
+func FuzzParseError(f *testing.F) {
+	f.Add("Foo(uint256)")
+	f.Add("error Foo(uint256)")
+	f.Add("error InsufficientBalance(uint256 available, uint256 required)")
+	f.Add("errorCode(uint256)")
+	f.Add("Paused()")
+	f.Add("")
+	f.Add("   ")
+	f.Add("error")
+	f.Add("error ")
+	f.Add("error (uint256)")
+	f.Add("garbage(((")
+	f.Add("Foo(")
+	f.Add("Foo)")
+	f.Add("()")
+	f.Add("Foo(uint256")
+	f.Add("Foo(uint256,)")
+	f.Add("Foo(,uint256)")
+	f.Add("Foo(uint256 a uint256 b)")
+	f.Add("Foo(uint256) extra")
+	f.Add("Foo(uint256) returns (bool)")
+	f.Add("BatchFailed((address,uint256)[] memory items)")
+	f.Add("Foo(uint256[][2][] memory x)")
+
+	f.Fuzz(func(t *testing.T, sig string) {
+		e, err := ParseError(sig)
+		if err != nil {
+			return
+		}
+
+		e2, err := ParseError(e.Signature())
+		require.NoError(t, err)
+		require.Equal(t, e.Name, e2.Name)
+		require.Equal(t, e.Inputs, e2.Inputs)
+		require.Equal(t, e.Selector(), e2.Selector())
+	})
+}
+
+// go test -run '^$' -fuzz '^FuzzErrorDecodeCrashSafety$' -fuzztime=10s ./core/abi
+func FuzzErrorDecodeCrashSafety(f *testing.F) {
+	e, err := ParseError("InsufficientBalance(uint256,uint256)")
+	if err != nil {
+		f.Fatal(err)
+	}
+	sel := e.Selector()
+
+	f.Add([]byte{})
+	f.Add(sel[:])
+	f.Add(append(sel[:], make([]byte, 64)...))
+	f.Add(make([]byte, 4))
+	f.Add(make([]byte, 100))
+
+	f.Fuzz(func(t *testing.T, data []byte) {
+		_, _ = e.Decode(data)
+	})
+}
+
+// go test -run '^$' -fuzz '^FuzzDecodeRevertCrashSafety$' -fuzztime=10s ./core/abi
+func FuzzDecodeRevertCrashSafety(f *testing.F) {
+	f.Add([]byte{})
+	f.Add(errorSelector[:])
+	f.Add(panicSelector[:])
+	errData, _ := Pack(Types{String}, "Multicall3: call failed")
+	f.Add(append(errorSelector[:], errData...))
+	panicData, _ := Pack(Types{Uint256}, big.NewInt(0x11))
+	f.Add(append(panicSelector[:], panicData...))
+	f.Add(make([]byte, 4))
+	f.Add(make([]byte, 100))
+
+	f.Fuzz(func(t *testing.T, data []byte) {
+		_, _ = DecodeRevert(data)
+	})
+}
