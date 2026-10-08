@@ -72,6 +72,46 @@ func ParseFunction(signature string, outputs Types) (*Function, error) {
 	return NewFunction(name, inputs, outputs), nil
 }
 
+// ParseEvent parses a Solidity event signature, with or without a leading
+// "event" keyword and with or without a trailing "anonymous" modifier, e.g.
+// "Transfer(address indexed from, address indexed to, uint256 value)" or
+// "event Transfer(address indexed from, address indexed to, uint256 value)
+// anonymous".
+func ParseEvent(signature string) (*Event, error) {
+	sig := strings.TrimSpace(signature)
+	if rest, ok := stripPrefix(sig, "event"); ok && (rest == "" || !isIdentChar(rest[0])) {
+		sig = strings.TrimSpace(rest)
+	}
+
+	idx := strings.IndexByte(sig, '(')
+	if idx < 0 {
+		return nil, fmt.Errorf("%w: missing '(' in %q", ErrInvalidTypeString, signature)
+	}
+	name := strings.TrimSpace(sig[:idx])
+	if name == "" {
+		return nil, fmt.Errorf("%w: missing event name in %q", ErrInvalidTypeString, signature)
+	}
+
+	inputs, pos, err := parseEventParamList(sig, idx)
+	if err != nil {
+		return nil, err
+	}
+
+	var anonymous bool
+	if p := skipSpace(sig, pos); p < len(sig) {
+		if newPos, word := skipIdentWord(sig, p); word == "anonymous" {
+			anonymous = true
+			pos = newPos
+		}
+	}
+
+	if pos = skipSpace(sig, pos); pos != len(sig) {
+		return nil, fmt.Errorf("%w: unexpected trailing characters in %q", ErrInvalidTypeString, signature)
+	}
+
+	return NewEvent(name, inputs, anonymous), nil
+}
+
 // parseTypeExpr parses one type expression (scalar or tuple, plus any
 // trailing array suffixes) starting at pos, returning the position just
 // past it.
@@ -249,6 +289,71 @@ func parseParam(s string, pos int) (Type, int, error) {
 		pos = newPos
 	}
 	return t, pos, nil
+}
+
+// parseEventParamList parses a parenthesized, comma-separated event
+// parameter list starting at pos (where s[pos] == '('), returning the
+// component EventParams and the position just past the closing ')'.
+func parseEventParamList(s string, pos int) ([]EventParam, int, error) {
+	if pos >= len(s) || s[pos] != '(' {
+		return nil, pos, fmt.Errorf("%w: expected '(' at %d in %q", ErrInvalidTypeString, pos, s)
+	}
+	pos = skipSpace(s, pos+1)
+
+	var params []EventParam
+	if pos < len(s) && s[pos] == ')' {
+		return params, pos + 1, nil
+	}
+
+	for {
+		p, newPos, err := parseEventParam(s, pos)
+		if err != nil {
+			return nil, newPos, err
+		}
+		pos = newPos
+		params = append(params, p)
+
+		pos = skipSpace(s, pos)
+		if pos >= len(s) {
+			return nil, pos, fmt.Errorf("%w: unterminated parameter list in %q", ErrInvalidTypeString, s)
+		}
+		switch s[pos] {
+		case ',':
+			pos = skipSpace(s, pos+1)
+		case ')':
+			return params, pos + 1, nil
+		default:
+			return nil, pos, fmt.Errorf("%w: expected ',' or ')' at %d in %q", ErrInvalidTypeString, pos, s)
+		}
+	}
+}
+
+// parseEventParam parses a single event parameter: a type, optionally
+// followed by the "indexed" keyword, optionally followed by a name, e.g.
+// "uint256 amount", "address indexed from", or "address indexed" (indexed,
+// no name). Unlike a function parameter, an event parameter never takes a
+// data location (memory/storage/calldata) — "indexed" is the only keyword
+// Solidity allows here, so it's recognized rather than discarded like a
+// function parameter's trailing words.
+func parseEventParam(s string, pos int) (EventParam, int, error) {
+	t, pos, err := parseTypeExpr(s, pos)
+	if err != nil {
+		return EventParam{}, pos, err
+	}
+
+	param := EventParam{Type: t}
+
+	newPos, word := skipIdentWord(s, skipSpace(s, pos))
+	if word == "indexed" {
+		param.Indexed = true
+		pos = newPos
+		newPos, word = skipIdentWord(s, skipSpace(s, pos))
+	}
+	if word != "" {
+		pos = newPos
+	}
+
+	return param, pos, nil
 }
 
 // baseType maps a scalar type word (e.g. "uint256", "bytes32") to its Type.

@@ -600,3 +600,84 @@ func FuzzDecodeRevertCrashSafety(f *testing.F) {
 		_, _ = DecodeRevert(data)
 	})
 }
+
+// go test -run '^$' -fuzz '^FuzzParseEvent$' -fuzztime=10s ./core/abi
+func FuzzParseEvent(f *testing.F) {
+	f.Add("Transfer(address,address,uint256)")
+	f.Add("Transfer(address indexed from, address indexed to, uint256 value)")
+	f.Add("event Transfer(address indexed from, address indexed to, uint256 value)")
+	f.Add("event Transfer(address indexed from, address indexed to, uint256 value) anonymous")
+	f.Add("Foo(uint256 indexed)")
+	f.Add("Foo(uint256 indexedCount)")
+	f.Add("Paused()")
+	f.Add("")
+	f.Add("   ")
+	f.Add("event")
+	f.Add("event ")
+	f.Add("event (uint256)")
+	f.Add("garbage(((")
+	f.Add("Foo(")
+	f.Add("Foo)")
+	f.Add("()")
+	f.Add("Foo(uint256")
+	f.Add("Foo(uint256,)")
+	f.Add("Foo(,uint256)")
+	f.Add("Foo(uint256 a uint256 b)")
+	f.Add("Foo(uint256) extra")
+	f.Add("Foo(uint256) anonymous extra")
+	f.Add("Foo(uint256) returns (bool)")
+	f.Add("BatchFailed((address,uint256)[] indexed items)")
+	f.Add("Foo(uint256[][2][] memory x)")
+
+	f.Fuzz(func(t *testing.T, sig string) {
+		e, err := ParseEvent(sig)
+		if err != nil {
+			return
+		}
+
+		e2, err := ParseEvent(e.Signature())
+		require.NoError(t, err)
+		require.Equal(t, e.Name, e2.Name)
+		require.Len(t, e2.Inputs, len(e.Inputs))
+		for i := range e.Inputs {
+			require.Equal(t, e.Inputs[i].Type, e2.Inputs[i].Type)
+		}
+		// e2 is reparsed from e.Signature() alone, which drops the
+		// "anonymous" modifier, so e2 is never anonymous even if e was;
+		// only compare Topic0 when e wasn't anonymous either.
+		if t0a, ok := e.Topic0(); ok {
+			t0b, ok2 := e2.Topic0()
+			require.True(t, ok2)
+			require.Equal(t, t0a, t0b)
+		}
+	})
+}
+
+// go test -run '^$' -fuzz '^FuzzEventDecodeCrashSafety$' -fuzztime=10s ./core/abi
+func FuzzEventDecodeCrashSafety(f *testing.F) {
+	e, err := ParseEvent("Foo(uint256 indexed a, string indexed s, bytes32 b)")
+	if err != nil {
+		f.Fatal(err)
+	}
+	t0, _ := e.Topic0()
+
+	toTopics := func(raw []byte) []Topic {
+		n := len(raw) / 32
+		topics := make([]Topic, n)
+		for i := range topics {
+			copy(topics[i][:], raw[i*32:(i+1)*32])
+		}
+		return topics
+	}
+
+	f.Add([]byte{}, []byte{})
+	f.Add(t0[:], make([]byte, 64))
+	f.Add(append(append([]byte{}, t0[:]...), make([]byte, 64)...), make([]byte, 32))
+	f.Add(make([]byte, 100), make([]byte, 100))
+
+	f.Fuzz(func(t *testing.T, topicsRaw []byte, data []byte) {
+		// Must never panic, regardless of how many topics are given or
+		// how malformed data is: an error is a fine outcome for garbage input.
+		_, _ = e.Decode(toTopics(topicsRaw), data)
+	})
+}
