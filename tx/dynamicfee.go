@@ -2,13 +2,13 @@ package tx
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
 	"math/big"
 
 	"github.com/ninja-protocol-labs/go-evmkit/core"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
+	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
 // defaultBaseFeeMultiplierPct is applied to a fetched base fee when
@@ -148,7 +148,7 @@ func (c *DynamicFeeTxConfig) Pack(ctx context.Context, client rpc.Client) (core.
 		callParams := map[string]any{
 			"from":  c.from.String(),
 			"value": quantityHex(c.value),
-			"data":  "0x" + hex.EncodeToString(c.data),
+			"data":  encoding.Hex.EncodePrefixed(c.data),
 		}
 		if c.to != nil {
 			callParams["to"] = c.to.String()

@@ -153,8 +153,8 @@ func encodeUint(size int, v any) ([]byte, error) {
 	default:
 		word := make([]byte, 32)
 		x, ok := v.(*big.Int)
-		if !ok {
-			return nil, fmt.Errorf("%w: expected *big.Int, got %T", ErrInvalidGoType, v)
+		if !ok || x == nil {
+			return nil, fmt.Errorf("%w: expected non-nil *big.Int, got %T", ErrInvalidGoType, v)
 		}
 		if x.Sign() < 0 {
 			return nil, fmt.Errorf("%w: uint%d cannot be negative: %s", ErrIntegerOutOfRange, size, x)
@@ -202,8 +202,8 @@ func encodeInt(size int, v any) ([]byte, error) {
 		return encodeInt64Word(x), nil
 	default:
 		x, ok := v.(*big.Int)
-		if !ok {
-			return nil, fmt.Errorf("%w: expected *big.Int, got %T", ErrInvalidGoType, v)
+		if !ok || x == nil {
+			return nil, fmt.Errorf("%w: expected non-nil *big.Int, got %T", ErrInvalidGoType, v)
 		}
 		bnd, ok := boundsFor(size)
 		if !ok {

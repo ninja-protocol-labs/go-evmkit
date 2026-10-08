@@ -15,17 +15,20 @@ type Function struct {
 	Inputs  Types
 	Outputs Types
 
-	// cache
+	// set once by NewFunction and never written afterwards, so concurrent reads are safe
 	s *Selector
 }
 
 // NewFunction builds a Function from its name, input types, and output types.
 func NewFunction(name string, inputs, outputs Types) *Function {
-	return &Function{
+	f := &Function{
 		Name:    name,
 		Inputs:  inputs,
 		Outputs: outputs,
 	}
+	sel := f.computeSelector()
+	f.s = &sel
+	return f
 }
 
 // Signature returns the function's canonical signature, e.g.
@@ -44,11 +47,13 @@ func (f *Function) Selector() Selector {
 	if f.s != nil {
 		return *f.s
 	}
+	return f.computeSelector()
+}
 
+func (f *Function) computeSelector() Selector {
 	digest := keccak.Hash256([]byte(f.Signature())).Bytes()
 	var sel Selector
 	copy(sel[:], digest[:4])
-	f.s = &sel
 	return sel
 }
 

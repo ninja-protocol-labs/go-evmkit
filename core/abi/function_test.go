@@ -2,6 +2,7 @@ package abi
 
 import (
 	"math/big"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -202,4 +203,17 @@ func TestFunctionDecodeCallNoArgs(t *testing.T) {
 	got, err := fn.DecodeCall(calldata)
 	require.NoError(t, err)
 	require.Empty(t, got)
+}
+
+func TestFunctionSelectorConcurrent(t *testing.T) {
+	fn := NewFunction("transfer", Types{Address, Uint256}, Types{Bool})
+	want := Selector{0xa9, 0x05, 0x9c, 0xbb}
+
+	var wg sync.WaitGroup
+	for range 16 {
+		wg.Go(func() {
+			require.Equal(t, want, fn.Selector())
+		})
+	}
+	wg.Wait()
 }

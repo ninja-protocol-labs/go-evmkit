@@ -2,7 +2,6 @@ package tx
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
 	"math/big"
 	"strings"
@@ -10,6 +9,7 @@ import (
 	"github.com/ninja-protocol-labs/go-evmkit/core"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
+	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
 // Packer is implemented by *LegacyTxConfig, *DynamicFeeTxConfig and
@@ -50,7 +50,7 @@ func Submit(ctx context.Context, c rpc.Client, p Packer, s core.Signer) (*types.
 // eth_sendRawTransaction and returns its hash, keccak256(raw).
 func Broadcast(ctx context.Context, c rpc.Client, raw []byte) (*types.Hash, error) {
 	var result string
-	if err := c.Call(ctx, rpc.ETHSendRawTransaction("send", "0x"+hex.EncodeToString(raw), &result)); err != nil {
+	if err := c.Call(ctx, rpc.ETHSendRawTransaction("send", encoding.Hex.EncodePrefixed(raw), &result)); err != nil {
 		return nil, fmt.Errorf("tx: broadcast: %w", err)
 	}
 	return core.Keccak256(raw), nil

@@ -82,6 +82,18 @@ func TestEncodeUintRejectsWrongGoType(t *testing.T) {
 	require.ErrorIs(t, err, ErrInvalidGoType)
 }
 
+func TestEncodeUintRejectsNilBigInt(t *testing.T) {
+	var x *big.Int
+	_, err := encodeValue(Uint256, x)
+	require.ErrorIs(t, err, ErrInvalidGoType)
+}
+
+func TestEncodeIntRejectsNilBigInt(t *testing.T) {
+	var x *big.Int
+	_, err := encodeValue(Int256, x)
+	require.ErrorIs(t, err, ErrInvalidGoType)
+}
+
 func TestEncodeUintBigIntNegativeRejected(t *testing.T) {
 	_, err := encodeValue(Uint256, big.NewInt(-1))
 	require.ErrorIs(t, err, ErrIntegerOutOfRange)
