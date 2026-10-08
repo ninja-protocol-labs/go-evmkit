@@ -19,6 +19,7 @@ var (
 	ErrArgCountMismatch   = errors.New("abi: argument count mismatch")
 	ErrInvalidTypeString  = errors.New("abi: invalid type string")
 	ErrSelectorMismatch   = errors.New("abi: selector mismatch")
+	ErrTopicMismatch      = errors.New("abi: topic mismatch")
 )
 
 // Kind identifies which Solidity ABI type an Type represents.
