@@ -2,13 +2,12 @@ package tx
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
+	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
 // defaultReceiptPollInterval is used by WaitForReceipt when pollInterval is <= 0.
@@ -191,7 +190,7 @@ func parseLog(raw map[string]any) (Log, error) {
 	if !ok {
 		return Log{}, fmt.Errorf("missing data")
 	}
-	data, err := hex.DecodeString(strings.TrimPrefix(dataHex, "0x"))
+	data, err := encoding.Hex.Decode(dataHex)
 	if err != nil {
 		return Log{}, fmt.Errorf("data: %w", err)
 	}

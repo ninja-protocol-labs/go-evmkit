@@ -2,13 +2,13 @@ package tx
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
 	"math/big"
 
 	"github.com/ninja-protocol-labs/go-evmkit/core"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
+	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
 // perEmptyAccountCost is EIP-7702's PER_EMPTY_ACCOUNT_COST: the upfront
@@ -164,7 +164,7 @@ func (c *SetCodeTxConfig) Pack(ctx context.Context, client rpc.Client) (core.Tra
 			"from":  c.from.String(),
 			"to":    c.to.String(),
 			"value": quantityHex(c.value),
-			"data":  "0x" + hex.EncodeToString(c.data),
+			"data":  encoding.Hex.EncodePrefixed(c.data),
 		}
 		if len(c.accessList) > 0 {
 			callParams["accessList"] = accessListToRPC(c.accessList)
