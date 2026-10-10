@@ -36,6 +36,14 @@ func NewAddressFromHex(s string) (*Address, error) {
 	return NewAddressFromBytes(b), nil
 }
 
+func MustNewAddressFromHex(s string) *Address {
+	a, err := NewAddressFromHex(s)
+	if err != nil {
+		panic("failed to NewAddressFromHex: " + err.Error())
+	}
+	return a
+}
+
 // NewAddressFromBig builds an Address from a big-endian integer.
 func NewAddressFromBig(a *big.Int) *Address {
 	return NewAddressFromBytes(a.Bytes())
@@ -53,6 +61,20 @@ func (a *Address) SetBytes(b []byte) {
 		b = b[len(b)-AddressLength:]
 	}
 	copy(a.bytes[AddressLength-len(b):], b)
+}
+
+// Copy returns an independent Address with the same bytes, safe to mutate
+// via SetBytes without affecting a.
+func (a *Address) Copy() *Address {
+	o := &Address{
+		bytes: a.bytes,
+	}
+
+	if a.hex != "" {
+		o.hex = a.hex
+	}
+
+	return o
 }
 
 // Bytes returns a copy of the address's raw bytes.
@@ -112,4 +134,21 @@ func (a *Address) checksum() string {
 		buf[i] = c
 	}
 	return "0x" + string(buf)
+}
+
+var (
+	// zeroAddress is the all-zero Address.
+	zeroAddress *Address = MustNewAddressFromHex("0x0000000000000000000000000000000000000000")
+
+	// BurnAddress is 0x000...dEaD, the de facto standard (not enforced by the
+	// EVM) address tokens are sent to to be destroyed.
+	deadAddress *Address = MustNewAddressFromHex("0x000000000000000000000000000000000000dEaD")
+)
+
+func ZeroAddress() *Address {
+	return zeroAddress.Copy()
+}
+
+func DeadAddress() *Address {
+	return deadAddress.Copy()
 }

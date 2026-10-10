@@ -67,6 +67,12 @@ func (e *Event) Topic0() (topic Topic, ok bool) {
 	return *e.t0, true
 }
 
+// Matches reports whether topic0 is e's Topic0 (e.g. a log's first topic); always false for an Anonymous event.
+func (e *Event) Matches(topic0 Topic) bool {
+	t0, ok := e.Topic0()
+	return ok && topic0 == t0
+}
+
 // Decode decodes a log's topics and data according to Inputs, in
 // declaration order. An indexed value-type parameter (bool/uintN/intN/
 // address/bytesN) decodes to its Go value same as a non-indexed one; an

@@ -195,3 +195,76 @@ func TestAddressStringCached(t *testing.T) {
 		t.Errorf("cached String() mismatch: %s vs %s", first, second)
 	}
 }
+
+func TestMustNewAddressFromHex(t *testing.T) {
+	valid := "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed"
+	a := MustNewAddressFromHex(valid)
+	if a.String() != valid {
+		t.Errorf("got %s want %s", a.String(), valid)
+	}
+}
+
+func TestMustNewAddressFromHexPanics(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Error("expected panic for invalid hex, got none")
+		}
+	}()
+	MustNewAddressFromHex("not an address")
+}
+
+func TestAddressCopy(t *testing.T) {
+	a := NewAddressFromBytes([]byte{0x01, 0x02})
+	c := a.Copy()
+
+	if !a.Equal(c) {
+		t.Fatalf("copy has different bytes: %s vs %s", a.String(), c.String())
+	}
+
+	c.SetBytes([]byte{0x03, 0x04})
+	if a.Equal(c) {
+		t.Error("mutating the copy affected the original")
+	}
+
+	a2 := NewAddressFromBytes([]byte{0x05, 0x06})
+	c2 := a2.Copy()
+	a2.SetBytes([]byte{0x07, 0x08})
+	if a2.Equal(c2) {
+		t.Error("mutating the original affected the copy")
+	}
+}
+
+func TestAddressCopyPreservesCachedHex(t *testing.T) {
+	a := NewAddressFromBytes([]byte{0x01, 0x02})
+	want := a.String() // forces the checksum cache to populate
+
+	c := a.Copy()
+	if got := c.String(); got != want {
+		t.Errorf("got %s want %s", got, want)
+	}
+}
+
+func TestZeroAddress(t *testing.T) {
+	z := ZeroAddress()
+	if !z.IsZero() {
+		t.Error("ZeroAddress() is not the zero address")
+	}
+
+	z.SetBytes([]byte{0x01})
+	if ZeroAddress().Equal(z) {
+		t.Error("ZeroAddress() returned a shared, mutable instance")
+	}
+}
+
+func TestDeadAddress(t *testing.T) {
+	want := "0x000000000000000000000000000000000000dEaD"
+	d := DeadAddress()
+	if d.String() != want {
+		t.Errorf("got %s want %s", d.String(), want)
+	}
+
+	d.SetBytes([]byte{0x01})
+	if DeadAddress().Equal(d) {
+		t.Error("DeadAddress() returned a shared, mutable instance")
+	}
+}

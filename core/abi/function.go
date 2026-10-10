@@ -50,6 +50,13 @@ func (f *Function) Selector() Selector {
 	return f.computeSelector()
 }
 
+// SelectorBytes returns the 4-byte ABI selector as a []byte, i.e. the
+// calldata for a call with no arguments.
+func (f *Function) SelectorBytes() []byte {
+	sel := f.Selector()
+	return sel[:]
+}
+
 func (f *Function) computeSelector() Selector {
 	digest := keccak.Hash256([]byte(f.Signature())).Bytes()
 	var sel Selector
@@ -106,4 +113,34 @@ func (f *Function) DecodeReturn(data []byte) ([]any, error) {
 		return nil, fmt.Errorf("abi: decode return from %s: %w", f.Name, err)
 	}
 	return vals, nil
+}
+
+// DecodeSingleReturn decodes data as f's return values, expecting exactly
+// one (e.g. a single-value getter like balanceOf), and type-asserts it as T.
+func (f *Function) DecodeSingleReturn[T any](data []byte) (T, error) {
+	var z T
+	vals, err := f.DecodeReturn(data)
+	if err != nil {
+		return z, err
+	}
+	if len(vals) == 0 {
+		return z, fmt.Errorf("%w: %s has no return values", ErrArgCountMismatch, f.Name)
+	}
+	v, ok := vals[0].(T)
+	if !ok {
+		return z, fmt.Errorf("%w: expected %T, got %T", ErrInvalidGoType, z, vals[0])
+	}
+	return v, nil
+}
+
+// DecodeSingleReturnAs is DecodeSingleReturn followed by convert, for a
+// single return value that needs wrapping into a domain type (e.g. a raw
+// []byte into a *types.Hash). T and R are both inferred from convert.
+func (f *Function) DecodeSingleReturnAs[T, R any](data []byte, convert func(T) R) (R, error) {
+	var zero R
+	v, err := f.DecodeSingleReturn[T](data)
+	if err != nil {
+		return zero, err
+	}
+	return convert(v), nil
 }
