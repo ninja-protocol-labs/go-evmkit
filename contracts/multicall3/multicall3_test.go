@@ -176,7 +176,7 @@ func (s *Multicall3Suite) TestAcrossNetworks() {
 	for _, n := range networks {
 		s.Run(n.name, func() {
 			client := rpc.NewClient(n.rpcURL, rpc.WithTimeout(15*time.Second))
-			m := NewMulticall3(client)
+			m := New(client)
 
 			tokens := make([]*types.Address, len(n.tokens))
 			var calls []Call3
@@ -241,7 +241,7 @@ func (s *Multicall3Suite) TestChainInfoAcrossNetworks() {
 	for _, n := range networks {
 		s.Run(n.name, func() {
 			client := rpc.NewClient(n.rpcURL, rpc.WithTimeout(15*time.Second))
-			m := NewMulticall3(client)
+			m := New(client)
 
 			results := s.call(m, multicall, calls)
 			s.Require().Len(results, len(calls))

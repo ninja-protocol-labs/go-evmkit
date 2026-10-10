@@ -53,8 +53,8 @@ type Multicall3 struct {
 	c rpc.Client
 }
 
-// NewMulticall3 returns a Multicall3 calling contracts via cli.
-func NewMulticall3(cli rpc.Client) *Multicall3 {
+// New returns a Multicall3 calling contracts via cli.
+func New(cli rpc.Client) *Multicall3 {
 	return &Multicall3{
 		c: cli,
 	}

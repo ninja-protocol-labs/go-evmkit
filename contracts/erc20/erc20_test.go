@@ -78,7 +78,7 @@ func (s *ERC20Suite) SetupSuite() {
 	s.Require().True(ok)
 	s.value = value
 
-	s.erc20 = NewERC20(s.client)
+	s.erc20 = New(s.client)
 }
 
 func (s *ERC20Suite) TearDownSuite() {
