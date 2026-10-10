@@ -22,7 +22,7 @@ func ExtractTransfers(logs []tx.Log) ([]Transfer, error) {
 			continue
 		}
 
-		topics, err := logTopics(log.Topics)
+		topics, err := abi.TopicsFromHashes(log.Topics)
 		if err != nil {
 			return nil, fmt.Errorf("erc20: extractTransfers: logs[%d]: %w", i, err)
 		}
@@ -30,9 +30,17 @@ func ExtractTransfers(logs []tx.Log) ([]Transfer, error) {
 		if err != nil {
 			return nil, fmt.Errorf("erc20: extractTransfers: logs[%d]: %w", i, err)
 		}
-		from, to, value, err := eventArgs(vals)
-		if err != nil {
-			return nil, fmt.Errorf("erc20: extractTransfers: logs[%d]: %w", i, err)
+		from, ok := vals[0].(*types.Address)
+		if !ok {
+			return nil, fmt.Errorf("erc20: extractTransfers: logs[%d]: unexpected decoded type for from: %T", i, vals[0])
+		}
+		to, ok := vals[1].(*types.Address)
+		if !ok {
+			return nil, fmt.Errorf("erc20: extractTransfers: logs[%d]: unexpected decoded type for to: %T", i, vals[1])
+		}
+		value, ok := vals[2].(*big.Int)
+		if !ok {
+			return nil, fmt.Errorf("erc20: extractTransfers: logs[%d]: unexpected decoded type for value: %T", i, vals[2])
 		}
 		transfers = append(transfers, *NewTransfer(log.Address, from, to, value))
 	}
@@ -52,7 +60,7 @@ func ExtractApprovals(logs []tx.Log) ([]Approval, error) {
 			continue
 		}
 
-		topics, err := logTopics(log.Topics)
+		topics, err := abi.TopicsFromHashes(log.Topics)
 		if err != nil {
 			return nil, fmt.Errorf("erc20: extractApprovals: logs[%d]: %w", i, err)
 		}
@@ -60,34 +68,19 @@ func ExtractApprovals(logs []tx.Log) ([]Approval, error) {
 		if err != nil {
 			return nil, fmt.Errorf("erc20: extractApprovals: logs[%d]: %w", i, err)
 		}
-		owner, spender, value, err := eventArgs(vals)
-		if err != nil {
-			return nil, fmt.Errorf("erc20: extractApprovals: logs[%d]: %w", i, err)
+		owner, ok := vals[0].(*types.Address)
+		if !ok {
+			return nil, fmt.Errorf("erc20: extractApprovals: logs[%d]: unexpected decoded type for owner: %T", i, vals[0])
+		}
+		spender, ok := vals[1].(*types.Address)
+		if !ok {
+			return nil, fmt.Errorf("erc20: extractApprovals: logs[%d]: unexpected decoded type for spender: %T", i, vals[1])
+		}
+		value, ok := vals[2].(*big.Int)
+		if !ok {
+			return nil, fmt.Errorf("erc20: extractApprovals: logs[%d]: unexpected decoded type for value: %T", i, vals[2])
 		}
 		approvals = append(approvals, *NewApproval(log.Address, owner, spender, value))
 	}
 	return approvals, nil
-}
-
-// logTopics converts a log's topics to abi.Topic, erroring on a nil entry.
-func logTopics(hashes []*types.Hash) ([]abi.Topic, error) {
-	topics := make([]abi.Topic, len(hashes))
-	for i, h := range hashes {
-		if h == nil {
-			return nil, fmt.Errorf("topics[%d] is nil", i)
-		}
-		copy(topics[i][:], h.Bytes())
-	}
-	return topics, nil
-}
-
-// eventArgs type-asserts the [address, address, uint256] shape shared by Transfer and Approval.
-func eventArgs(vals []any) (*types.Address, *types.Address, *big.Int, error) {
-	a, ok1 := vals[0].(*types.Address)
-	b, ok2 := vals[1].(*types.Address)
-	value, ok3 := vals[2].(*big.Int)
-	if !ok1 || !ok2 || !ok3 {
-		return nil, nil, nil, fmt.Errorf("unexpected decoded types: %T, %T, %T", vals[0], vals[1], vals[2])
-	}
-	return a, b, value, nil
 }

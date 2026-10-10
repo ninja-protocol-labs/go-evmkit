@@ -4,24 +4,66 @@
 package erc20
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 
 	"github.com/ninja-protocol-labs/go-evmkit/contracts/multicall3"
+	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 )
 
-// Calldata for the no-argument functions, computed once rather than on every call.
+// Function signatures from IERC20/IERC20Metadata, for encoding calls and decoding results.
 var (
-	nameCalldata        = nameFn.SelectorBytes()
-	symbolCalldata      = symbolFn.SelectorBytes()
-	decimalsCalldata    = decimalsFn.SelectorBytes()
-	totalSupplyCalldata = totalSupplyFn.SelectorBytes()
+	nameFn         = abi.NewFunction("name", nil, abi.NewTypes(abi.String))
+	symbolFn       = abi.NewFunction("symbol", nil, abi.NewTypes(abi.String))
+	decimalsFn     = abi.NewFunction("decimals", nil, abi.NewTypes(abi.Uint8))
+	totalSupplyFn  = abi.NewFunction("totalSupply", nil, abi.NewTypes(abi.Uint256))
+	balanceOfFn    = abi.NewFunction("balanceOf", abi.NewTypes(abi.Address), abi.NewTypes(abi.Uint256))
+	transferFn     = abi.NewFunction("transfer", abi.NewTypes(abi.Address, abi.Uint256), abi.NewTypes(abi.Bool))
+	allowanceFn    = abi.NewFunction("allowance", abi.NewTypes(abi.Address, abi.Address), abi.NewTypes(abi.Uint256))
+	approveFn      = abi.NewFunction("approve", abi.NewTypes(abi.Address, abi.Uint256), abi.NewTypes(abi.Bool))
+	transferFromFn = abi.NewFunction("transferFrom", abi.NewTypes(abi.Address, abi.Address, abi.Uint256), abi.NewTypes(abi.Bool))
+)
+
+// Events from IERC20, for decoding logs via Event.Decode.
+var (
+	transferEvent = abi.NewEvent("Transfer", []abi.EventParam{
+		{Type: abi.Address, Indexed: true},
+		{Type: abi.Address, Indexed: true},
+		{Type: abi.Uint256},
+	}, false)
+	approvalEvent = abi.NewEvent("Approval", []abi.EventParam{
+		{Type: abi.Address, Indexed: true},
+		{Type: abi.Address, Indexed: true},
+		{Type: abi.Uint256},
+	}, false)
+)
+
+// Custom errors from IERC20Errors (ERC-6093), for decoding reverts via abi.Error.Decode.
+var (
+	errInsufficientBalance   = abi.NewError("ERC20InsufficientBalance", abi.NewTypes(abi.Address, abi.Uint256, abi.Uint256))
+	errInvalidSender         = abi.NewError("ERC20InvalidSender", abi.NewTypes(abi.Address))
+	errInvalidReceiver       = abi.NewError("ERC20InvalidReceiver", abi.NewTypes(abi.Address))
+	errInsufficientAllowance = abi.NewError("ERC20InsufficientAllowance", abi.NewTypes(abi.Address, abi.Uint256, abi.Uint256))
+	errInvalidApprover       = abi.NewError("ERC20InvalidApprover", abi.NewTypes(abi.Address))
+	errInvalidSpender        = abi.NewError("ERC20InvalidSpender", abi.NewTypes(abi.Address))
+)
+
+// ErrInsufficientBalance, etc. mirror IERC20Errors' custom errors, for errors.Is.
+var (
+	ErrInsufficientBalance   = errors.New("erc20: insufficient balance")
+	ErrInvalidSender         = errors.New("erc20: invalid sender")
+	ErrInvalidReceiver       = errors.New("erc20: invalid receiver")
+	ErrInsufficientAllowance = errors.New("erc20: insufficient allowance")
+	ErrInvalidApprover       = errors.New("erc20: invalid approver")
+	ErrInvalidSpender        = errors.New("erc20: invalid spender")
+	ErrUnknown               = errors.New("erc20: unknown revert")
 )
 
 // EncodeName returns the calldata for name().
 func EncodeName() []byte {
-	return nameCalldata
+	return nameFn.SelectorBytes()
 }
 
 // DecodeName decodes the return data of name.
@@ -35,7 +77,7 @@ func DecodeName(data []byte) (string, error) {
 
 // EncodeSymbol returns the calldata for symbol().
 func EncodeSymbol() []byte {
-	return symbolCalldata
+	return symbolFn.SelectorBytes()
 }
 
 // DecodeSymbol decodes the return data of symbol.
@@ -49,7 +91,7 @@ func DecodeSymbol(data []byte) (string, error) {
 
 // EncodeDecimals returns the calldata for decimals().
 func EncodeDecimals() []byte {
-	return decimalsCalldata
+	return decimalsFn.SelectorBytes()
 }
 
 // DecodeDecimals decodes the return data of decimals.
@@ -63,7 +105,7 @@ func DecodeDecimals(data []byte) (uint8, error) {
 
 // EncodeTotalSupply returns the calldata for totalSupply().
 func EncodeTotalSupply() []byte {
-	return totalSupplyCalldata
+	return totalSupplyFn.SelectorBytes()
 }
 
 // DecodeTotalSupply decodes the return data of totalSupply.
@@ -168,10 +210,10 @@ func DecodeTransferFrom(data []byte) (bool, error) {
 // EncodeMetadata batches name/symbol/decimals/totalSupply on token into one aggregate3 call.
 func EncodeMetadata(token *types.Address, allowFailure bool) ([]byte, error) {
 	calls := []multicall3.Call3{
-		multicall3.NewCall3(token, allowFailure, nameCalldata),
-		multicall3.NewCall3(token, allowFailure, symbolCalldata),
-		multicall3.NewCall3(token, allowFailure, decimalsCalldata),
-		multicall3.NewCall3(token, allowFailure, totalSupplyCalldata),
+		multicall3.NewCall3(token, allowFailure, EncodeName()),
+		multicall3.NewCall3(token, allowFailure, EncodeSymbol()),
+		multicall3.NewCall3(token, allowFailure, EncodeDecimals()),
+		multicall3.NewCall3(token, allowFailure, EncodeTotalSupply()),
 	}
 
 	data, err := multicall3.EncodeAggregate3(calls)
@@ -206,10 +248,10 @@ func EncodeMetadataWithBalance(token, account *types.Address, allowFailure bool)
 	}
 
 	calls := []multicall3.Call3{
-		multicall3.NewCall3(token, allowFailure, nameCalldata),
-		multicall3.NewCall3(token, allowFailure, symbolCalldata),
-		multicall3.NewCall3(token, allowFailure, decimalsCalldata),
-		multicall3.NewCall3(token, allowFailure, totalSupplyCalldata),
+		multicall3.NewCall3(token, allowFailure, EncodeName()),
+		multicall3.NewCall3(token, allowFailure, EncodeSymbol()),
+		multicall3.NewCall3(token, allowFailure, EncodeDecimals()),
+		multicall3.NewCall3(token, allowFailure, EncodeTotalSupply()),
 		multicall3.NewCall3(token, allowFailure, balCalldata),
 	}
 

@@ -14,7 +14,7 @@ import (
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
 )
 
-type DynamicFeeTxLiveSuite struct {
+type DynamicFeeTxSuite struct {
 	suite.Suite
 
 	Enable        bool
@@ -34,8 +34,8 @@ type DynamicFeeTxLiveSuite struct {
 	key   *types.PrivateKey
 }
 
-func TestDynamicFeeTxLiveSuite(t *testing.T) {
-	suite.Run(t, &DynamicFeeTxLiveSuite{
+func TestDynamicFeeTxSuite(t *testing.T) {
+	suite.Run(t, &DynamicFeeTxSuite{
 		Enable:        false,
 		RPCURL:        "https://ethereum-sepolia-rpc.publicnode.com",
 		FromHex:       "0x833e1D0b8Bc979D49d57b65dCF18364694B16D52",
@@ -45,7 +45,7 @@ func TestDynamicFeeTxLiveSuite(t *testing.T) {
 	})
 }
 
-func (s *DynamicFeeTxLiveSuite) SetupSuite() {
+func (s *DynamicFeeTxSuite) SetupSuite() {
 	if !s.Enable {
 		s.T().Skip("disabled")
 	}
@@ -64,13 +64,13 @@ func (s *DynamicFeeTxLiveSuite) SetupSuite() {
 	s.Require().NoError(err)
 }
 
-func (s *DynamicFeeTxLiveSuite) TearDownSuite() {
+func (s *DynamicFeeTxSuite) TearDownSuite() {
 	if s.cancel != nil {
 		s.cancel()
 	}
 }
 
-func (s *DynamicFeeTxLiveSuite) TestSubmitETHTransfer() {
+func (s *DynamicFeeTxSuite) TestSubmitETHTransfer() {
 	weiValue := new(big.Int).Mul(big.NewInt(1), big.NewInt(1_000_000_000_000)) // 0.000001 ETH
 	cfg := NewDynamicFeeTxConfig(s.from, s.to, weiValue, nil)
 
@@ -79,7 +79,7 @@ func (s *DynamicFeeTxLiveSuite) TestSubmitETHTransfer() {
 	s.T().Logf("tx hash: %s", hash)
 }
 
-func (s *DynamicFeeTxLiveSuite) TestPackSignBroadcastTokenTransfer() {
+func (s *DynamicFeeTxSuite) TestPackSignBroadcastTokenTransfer() {
 	fn, err := abi.ParseFunction("transfer(address,uint256) returns (bool)", nil)
 	s.Require().NoError(err)
 

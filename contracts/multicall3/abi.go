@@ -26,29 +26,16 @@ var (
 	tryAggregate         = abi.NewFunction("tryAggregate", abi.NewTypes(abi.Bool, abi.Slice(callT)), abi.NewTypes(abi.Slice(resultT)))
 	tryBlockAndAggregate = abi.NewFunction("tryBlockAndAggregate", abi.NewTypes(abi.Bool, abi.Slice(callT)), abi.NewTypes(abi.Uint256, abi.Bytes32, abi.Slice(resultT)))
 
-	getBasefee              = abi.NewFunction("getBasefee", abi.NewTypes(), abi.NewTypes(abi.Uint256))
+	getBasefee              = abi.NewFunction("getBasefee", nil, abi.NewTypes(abi.Uint256))
 	getBlockHash            = abi.NewFunction("getBlockHash", abi.NewTypes(abi.Uint256), abi.NewTypes(abi.Bytes32))
-	getBlockNumber          = abi.NewFunction("getBlockNumber", abi.NewTypes(), abi.NewTypes(abi.Uint256))
-	getChainId              = abi.NewFunction("getChainId", abi.NewTypes(), abi.NewTypes(abi.Uint256))
-	getCurrentBlockCoinbase = abi.NewFunction("getCurrentBlockCoinbase", abi.NewTypes(), abi.NewTypes(abi.Address))
-	getCurrentBlockDiff     = abi.NewFunction("getCurrentBlockDifficulty", abi.NewTypes(), abi.NewTypes(abi.Uint256))
-	getCurrentBlockGasLimit = abi.NewFunction("getCurrentBlockGasLimit", abi.NewTypes(), abi.NewTypes(abi.Uint256))
-	getCurrentBlockTime     = abi.NewFunction("getCurrentBlockTimestamp", abi.NewTypes(), abi.NewTypes(abi.Uint256))
+	getBlockNumber          = abi.NewFunction("getBlockNumber", nil, abi.NewTypes(abi.Uint256))
+	getChainId              = abi.NewFunction("getChainId", nil, abi.NewTypes(abi.Uint256))
+	getCurrentBlockCoinbase = abi.NewFunction("getCurrentBlockCoinbase", nil, abi.NewTypes(abi.Address))
+	getCurrentBlockDiff     = abi.NewFunction("getCurrentBlockDifficulty", nil, abi.NewTypes(abi.Uint256))
+	getCurrentBlockGasLimit = abi.NewFunction("getCurrentBlockGasLimit", nil, abi.NewTypes(abi.Uint256))
+	getCurrentBlockTime     = abi.NewFunction("getCurrentBlockTimestamp", nil, abi.NewTypes(abi.Uint256))
 	getEthBalance           = abi.NewFunction("getEthBalance", abi.NewTypes(abi.Address), abi.NewTypes(abi.Uint256))
-	getLastBlockHash        = abi.NewFunction("getLastBlockHash", abi.NewTypes(), abi.NewTypes(abi.Bytes32))
-)
-
-// Calldata for the no-argument getters: each is just a selector, so it's
-// always the same bytes — computed once rather than on every call.
-var (
-	getBasefeeCalldata              = getBasefee.SelectorBytes()
-	getBlockNumberCalldata          = getBlockNumber.SelectorBytes()
-	getChainIdCalldata              = getChainId.SelectorBytes()
-	getCurrentBlockCoinbaseCalldata = getCurrentBlockCoinbase.SelectorBytes()
-	getCurrentBlockDiffCalldata     = getCurrentBlockDiff.SelectorBytes()
-	getCurrentBlockGasLimitCalldata = getCurrentBlockGasLimit.SelectorBytes()
-	getCurrentBlockTimeCalldata     = getCurrentBlockTime.SelectorBytes()
-	getLastBlockHashCalldata        = getLastBlockHash.SelectorBytes()
+	getLastBlockHash        = abi.NewFunction("getLastBlockHash", nil, abi.NewTypes(abi.Bytes32))
 )
 
 // EncodeAggregate returns the calldata for aggregate(calls).
@@ -184,7 +171,7 @@ func DecodeBlockAndAggregate(data []byte) (*BlockResults, error) {
 
 // EncodeGetBasefee returns the calldata for getBasefee().
 func EncodeGetBasefee() []byte {
-	return getBasefeeCalldata
+	return getBasefee.SelectorBytes()
 }
 
 // DecodeGetBasefee decodes the return data of getBasefee.
@@ -216,7 +203,7 @@ func DecodeGetBlockHash(data []byte) (*types.Hash, error) {
 
 // EncodeGetBlockNumber returns the calldata for getBlockNumber().
 func EncodeGetBlockNumber() []byte {
-	return getBlockNumberCalldata
+	return getBlockNumber.SelectorBytes()
 }
 
 // DecodeGetBlockNumber decodes the return data of getBlockNumber.
@@ -230,7 +217,7 @@ func DecodeGetBlockNumber(data []byte) (*big.Int, error) {
 
 // EncodeGetChainID returns the calldata for getChainId().
 func EncodeGetChainID() []byte {
-	return getChainIdCalldata
+	return getChainId.SelectorBytes()
 }
 
 // DecodeGetChainID decodes the return data of getChainId.
@@ -244,7 +231,7 @@ func DecodeGetChainID(data []byte) (*big.Int, error) {
 
 // EncodeGetCurrentBlockCoinbase returns the calldata for getCurrentBlockCoinbase().
 func EncodeGetCurrentBlockCoinbase() []byte {
-	return getCurrentBlockCoinbaseCalldata
+	return getCurrentBlockCoinbase.SelectorBytes()
 }
 
 // DecodeGetCurrentBlockCoinbase decodes the return data of getCurrentBlockCoinbase.
@@ -258,7 +245,7 @@ func DecodeGetCurrentBlockCoinbase(data []byte) (*types.Address, error) {
 
 // EncodeGetCurrentBlockDifficulty returns the calldata for getCurrentBlockDifficulty().
 func EncodeGetCurrentBlockDifficulty() []byte {
-	return getCurrentBlockDiffCalldata
+	return getCurrentBlockDiff.SelectorBytes()
 }
 
 // DecodeGetCurrentBlockDifficulty decodes the return data of getCurrentBlockDifficulty.
@@ -272,7 +259,7 @@ func DecodeGetCurrentBlockDifficulty(data []byte) (*big.Int, error) {
 
 // EncodeGetCurrentBlockGasLimit returns the calldata for getCurrentBlockGasLimit().
 func EncodeGetCurrentBlockGasLimit() []byte {
-	return getCurrentBlockGasLimitCalldata
+	return getCurrentBlockGasLimit.SelectorBytes()
 }
 
 // DecodeGetCurrentBlockGasLimit decodes the return data of getCurrentBlockGasLimit.
@@ -286,7 +273,7 @@ func DecodeGetCurrentBlockGasLimit(data []byte) (*big.Int, error) {
 
 // EncodeGetCurrentBlockTimestamp returns the calldata for getCurrentBlockTimestamp().
 func EncodeGetCurrentBlockTimestamp() []byte {
-	return getCurrentBlockTimeCalldata
+	return getCurrentBlockTime.SelectorBytes()
 }
 
 // DecodeGetCurrentBlockTimestamp decodes the return data of getCurrentBlockTimestamp.
@@ -318,7 +305,7 @@ func DecodeGetEthBalance(data []byte) (*big.Int, error) {
 
 // EncodeGetLastBlockHash returns the calldata for getLastBlockHash().
 func EncodeGetLastBlockHash() []byte {
-	return getLastBlockHashCalldata
+	return getLastBlockHash.SelectorBytes()
 }
 
 // DecodeGetLastBlockHash decodes the return data of getLastBlockHash.

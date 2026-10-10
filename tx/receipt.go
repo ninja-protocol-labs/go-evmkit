@@ -63,7 +63,7 @@ func WaitForReceipt(ctx context.Context, client rpc.Client, hash *types.Hash, po
 			return nil, fmt.Errorf("tx: wait for receipt: %w", err)
 		}
 		if raw != nil {
-			return parseReceipt(raw)
+			return ParseReceipt(raw)
 		}
 
 		select {
@@ -74,7 +74,8 @@ func WaitForReceipt(ctx context.Context, client rpc.Client, hash *types.Hash, po
 	}
 }
 
-func parseReceipt(raw map[string]any) (*Receipt, error) {
+// ParseReceipt decodes an eth_getTransactionReceipt result into a Receipt.
+func ParseReceipt(raw map[string]any) (*Receipt, error) {
 	txHashHex, ok := raw["transactionHash"].(string)
 	if !ok {
 		return nil, fmt.Errorf("tx: receipt: missing transactionHash")
@@ -140,7 +141,7 @@ func parseReceipt(raw map[string]any) (*Receipt, error) {
 			if !ok {
 				return nil, fmt.Errorf("tx: receipt: logs[%d]: unexpected type %T", i, l)
 			}
-			log, err := parseLog(rawLog)
+			log, err := ParseLog(rawLog)
 			if err != nil {
 				return nil, fmt.Errorf("tx: receipt: logs[%d]: %w", i, err)
 			}
@@ -160,7 +161,8 @@ func parseReceipt(raw map[string]any) (*Receipt, error) {
 	}, nil
 }
 
-func parseLog(raw map[string]any) (Log, error) {
+// ParseLog decodes one entry of a receipt's "logs" array into a Log.
+func ParseLog(raw map[string]any) (Log, error) {
 	addressHex, ok := raw["address"].(string)
 	if !ok {
 		return Log{}, fmt.Errorf("missing address")

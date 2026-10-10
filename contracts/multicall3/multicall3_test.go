@@ -109,7 +109,7 @@ type Multicall3Suite struct {
 	holder *types.Address
 }
 
-func TestMulticall3LiveSuite(t *testing.T) {
+func TestMulticall3Suite(t *testing.T) {
 	suite.Run(t, &Multicall3Suite{
 		Enable:    false,
 		HolderHex: "0x833e1D0b8Bc979D49d57b65dCF18364694B16D52",
