@@ -90,8 +90,8 @@ type ERC20 struct {
 	c rpc.Client
 }
 
-// NewERC20 returns an ERC20 calling tokens via cli.
-func NewERC20(cli rpc.Client) *ERC20 {
+// New returns an ERC20 calling tokens via cli.
+func New(cli rpc.Client) *ERC20 {
 	return &ERC20{
 		c: cli,
 	}
