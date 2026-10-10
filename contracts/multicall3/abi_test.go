@@ -1,7 +1,6 @@
 package multicall3
 
 import (
-	"encoding/hex"
 	"math/big"
 	"testing"
 
@@ -9,6 +8,7 @@ import (
 
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
+	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
 const (
@@ -33,26 +33,19 @@ const (
 
 func mustHex(t *testing.T, s string) []byte {
 	t.Helper()
-	b, err := hex.DecodeString(s)
+	b, err := encoding.Hex.Decode(s)
 	require.NoError(t, err)
 	return b
-}
-
-func addr(t *testing.T, s string) *types.Address {
-	t.Helper()
-	a, err := types.NewAddressFromHex(s)
-	require.NoError(t, err)
-	return a
 }
 
 func TestEncodeAggregate3(t *testing.T) {
 	calls := []Call3{
 		{
-			Target:       addr(t, "0x1111111111111111111111111111111111111111"),
+			Target:       types.MustNewAddressFromHex("0x1111111111111111111111111111111111111111"),
 			AllowFailure: true,
 			CallData:     mustHex(t, "70a082310000000000000000000000002222222222222222222222222222222222222222"),
 		},
-		{Target: addr(t, "0x2222222222222222222222222222222222222222")},
+		{Target: types.MustNewAddressFromHex("0x2222222222222222222222222222222222222222")},
 	}
 
 	got, err := EncodeAggregate3(calls)
@@ -73,7 +66,7 @@ func TestEncodeAggregate3NilTarget(t *testing.T) {
 
 func TestEncodeAggregate3Value(t *testing.T) {
 	calls := []Call3Value{{
-		Target:       addr(t, "0x1111111111111111111111111111111111111111"),
+		Target:       types.MustNewAddressFromHex("0x1111111111111111111111111111111111111111"),
 		AllowFailure: true,
 		Value:        big.NewInt(1_000_000_000_000_000_000),
 		CallData:     mustHex(t, "deadbeef"),
@@ -85,7 +78,7 @@ func TestEncodeAggregate3Value(t *testing.T) {
 }
 
 func TestEncodeAggregate3ValueNilValue(t *testing.T) {
-	_, err := EncodeAggregate3Value([]Call3Value{{Target: addr(t, "0x1111111111111111111111111111111111111111")}})
+	_, err := EncodeAggregate3Value([]Call3Value{{Target: types.MustNewAddressFromHex("0x1111111111111111111111111111111111111111")}})
 	require.ErrorIs(t, err, abi.ErrInvalidGoType)
 }
 
@@ -124,8 +117,8 @@ func TestDecodeResultsRejectsHugeOffsets(t *testing.T) {
 
 func TestAggregate3RoundTripThroughDecodeCall(t *testing.T) {
 	calls := []Call3{
-		{Target: addr(t, "0x1111111111111111111111111111111111111111"), AllowFailure: true, CallData: []byte{1, 2, 3}},
-		{Target: addr(t, "0x2222222222222222222222222222222222222222"), CallData: nil},
+		{Target: types.MustNewAddressFromHex("0x1111111111111111111111111111111111111111"), AllowFailure: true, CallData: []byte{1, 2, 3}},
+		{Target: types.MustNewAddressFromHex("0x2222222222222222222222222222222222222222"), CallData: nil},
 	}
 
 	data, err := EncodeAggregate3(calls)
@@ -148,10 +141,10 @@ func sampleCalls(t *testing.T) []Call {
 	t.Helper()
 	return []Call{
 		{
-			Target:   addr(t, "0x1111111111111111111111111111111111111111"),
+			Target:   types.MustNewAddressFromHex("0x1111111111111111111111111111111111111111"),
 			CallData: mustHex(t, "70a082310000000000000000000000002222222222222222222222222222222222222222"),
 		},
-		{Target: addr(t, "0x2222222222222222222222222222222222222222")},
+		{Target: types.MustNewAddressFromHex("0x2222222222222222222222222222222222222222")},
 	}
 }
 
@@ -232,7 +225,7 @@ func TestEncodeGettersWithoutArguments(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			require.Equal(t, tt.selector, hex.EncodeToString(tt.got))
+			require.Equal(t, tt.selector, encoding.Hex.Encode(tt.got))
 		})
 	}
 }
@@ -249,7 +242,7 @@ func TestEncodeGetBlockHashNil(t *testing.T) {
 }
 
 func TestEncodeGetEthBalance(t *testing.T) {
-	got, err := EncodeGetEthBalance(addr(t, "0x1111111111111111111111111111111111111111"))
+	got, err := EncodeGetEthBalance(types.MustNewAddressFromHex("0x1111111111111111111111111111111111111111"))
 	require.NoError(t, err)
 	require.Equal(t, mustHex(t, callGetEthBalance), got)
 }
@@ -300,7 +293,7 @@ func TestDecodeHashGetters(t *testing.T) {
 func TestDecodeGetCurrentBlockCoinbase(t *testing.T) {
 	got, err := DecodeGetCurrentBlockCoinbase(mustHex(t, retAddress))
 	require.NoError(t, err)
-	require.True(t, got.Equal(addr(t, "0x1111111111111111111111111111111111111111")))
+	require.True(t, got.Equal(types.MustNewAddressFromHex("0x1111111111111111111111111111111111111111")))
 
 	_, err = DecodeGetCurrentBlockCoinbase(mustHex(t, retAddress)[:31])
 	require.Error(t, err)

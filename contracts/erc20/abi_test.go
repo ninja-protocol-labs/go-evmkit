@@ -26,13 +26,11 @@ func encodeResultsData(t *testing.T, successes []bool, datas [][]byte) []byte {
 }
 
 var (
-	testToken  = mustAddrPanic("0x4200000000000000000000000000000000000006")
-	testToken2 = mustAddrPanic("0x833589fcd6edb6e08f4c7c32d4f71b54bda02913")
-	testAddr1  = mustAddrPanic("0x6667c8dc9fbfec411e7c1ee2b24de960149f930f")
-	testAddr2  = mustAddrPanic("0xba12222222228d8ba445958a75a0704d566bf2c8")
+	testToken  = types.MustNewAddressFromHex("0x4200000000000000000000000000000000000006")
+	testToken2 = types.MustNewAddressFromHex("0x833589fcd6edb6e08f4c7c32d4f71b54bda02913")
+	testAddr1  = types.MustNewAddressFromHex("0x6667c8dc9fbfec411e7c1ee2b24de960149f930f")
+	testAddr2  = types.MustNewAddressFromHex("0xba12222222228d8ba445958a75a0704d566bf2c8")
 )
-
-// --- simple no-arg functions ---
 
 func TestEncodeNoArgFunctions(t *testing.T) {
 	require.Equal(t, []byte{0x06, 0xfd, 0xde, 0x03}, EncodeName())
@@ -161,8 +159,6 @@ func TestEncodeTransferFromDecodeTransferFrom(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, ok)
 }
-
-// --- Metadata ---
 
 func TestDecodeMetadataAllSuccess(t *testing.T) {
 	nameData, _ := abi.Pack(abi.Types{abi.String}, "USD Coin")

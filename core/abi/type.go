@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
 // Sentinel errors returned across the abi package: by the Type
@@ -63,6 +65,11 @@ type Types []Type
 
 // Selector is a 4-byte ABI function selector: keccak256(signature)[:4].
 type Selector [4]byte
+
+// String returns the "0x"-prefixed hex encoding of the selector.
+func (s Selector) String() string {
+	return encoding.Hex.EncodePrefixed(s[:])
+}
 
 // IsDynamic reports whether values of this type require head/tail encoding
 // (bytes, string, T[], or anything containing one of those).

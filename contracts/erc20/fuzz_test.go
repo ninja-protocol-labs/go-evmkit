@@ -11,27 +11,12 @@ import (
 	"github.com/ninja-protocol-labs/go-evmkit/tx"
 )
 
-func mustAddrPanic(s string) *types.Address {
-	a, err := types.NewAddressFromHex(s)
-	if err != nil {
-		panic(err)
-	}
-	return a
-}
-
 var (
-	fuzzToken1 = mustAddrPanic("0x4200000000000000000000000000000000000006")
-	fuzzToken2 = mustAddrPanic("0x833589fcd6edb6e08f4c7c32d4f71b54bda02913")
-	fuzzAddr1  = mustAddrPanic("0x6667c8dc9fbfec411e7c1ee2b24de960149f930f")
-	fuzzAddr2  = mustAddrPanic("0xba12222222228d8ba445958a75a0704d566bf2c8")
+	fuzzToken1 = types.MustNewAddressFromHex("0x4200000000000000000000000000000000000006")
+	fuzzToken2 = types.MustNewAddressFromHex("0x833589fcd6edb6e08f4c7c32d4f71b54bda02913")
+	fuzzAddr1  = types.MustNewAddressFromHex("0x6667c8dc9fbfec411e7c1ee2b24de960149f930f")
+	fuzzAddr2  = types.MustNewAddressFromHex("0xba12222222228d8ba445958a75a0704d566bf2c8")
 )
-
-// addrTopic left-pads a's 20 bytes into a 32-byte topic, as the EVM encodes an indexed address.
-func addrTopic(a *types.Address) *types.Hash {
-	b := make([]byte, 32)
-	copy(b[12:], a.Bytes())
-	return types.NewHashFromBytes(b)
-}
 
 // go test -run '^$' -fuzz '^FuzzSimpleDecodersDoNotPanic$' -fuzztime=10s ./contracts/erc20
 func FuzzSimpleDecodersDoNotPanic(f *testing.F) {
@@ -162,8 +147,8 @@ func FuzzExtractTransfersRoundTrip(f *testing.F) {
 				Address: fuzzToken1,
 				Topics: []*types.Hash{
 					types.NewHashFromBytes(t0[:]),
-					addrTopic(from),
-					addrTopic(to),
+					types.NewHashFromBytes(from.Bytes()),
+					types.NewHashFromBytes(to.Bytes()),
 				},
 				Data: data,
 			},

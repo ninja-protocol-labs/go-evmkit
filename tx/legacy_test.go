@@ -14,7 +14,7 @@ import (
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
 )
 
-type LegacyTxLiveSuite struct {
+type LegacyTxSuite struct {
 	suite.Suite
 
 	Enable        bool
@@ -34,8 +34,8 @@ type LegacyTxLiveSuite struct {
 	key   *types.PrivateKey
 }
 
-func TestLegacyTxLiveSuite(t *testing.T) {
-	suite.Run(t, &LegacyTxLiveSuite{
+func TestLegacyTxSuite(t *testing.T) {
+	suite.Run(t, &LegacyTxSuite{
 		Enable:        false,
 		RPCURL:        "https://ethereum-sepolia-rpc.publicnode.com",
 		FromHex:       "0x833e1D0b8Bc979D49d57b65dCF18364694B16D52",
@@ -45,7 +45,7 @@ func TestLegacyTxLiveSuite(t *testing.T) {
 	})
 }
 
-func (s *LegacyTxLiveSuite) SetupSuite() {
+func (s *LegacyTxSuite) SetupSuite() {
 	if !s.Enable {
 		s.T().Skip("disabled")
 	}
@@ -64,13 +64,13 @@ func (s *LegacyTxLiveSuite) SetupSuite() {
 	s.Require().NoError(err)
 }
 
-func (s *LegacyTxLiveSuite) TearDownSuite() {
+func (s *LegacyTxSuite) TearDownSuite() {
 	if s.cancel != nil {
 		s.cancel()
 	}
 }
 
-func (s *LegacyTxLiveSuite) TestSubmitETHTransfer() {
+func (s *LegacyTxSuite) TestSubmitETHTransfer() {
 	weiValue := new(big.Int).Mul(big.NewInt(1), big.NewInt(1_000_000_000_000)) // 0.000001 ETH
 	cfg := NewLegacyTxConfig(s.from, s.to, weiValue, nil)
 
@@ -79,7 +79,7 @@ func (s *LegacyTxLiveSuite) TestSubmitETHTransfer() {
 	s.T().Logf("tx hash: %s", hash)
 }
 
-func (s *LegacyTxLiveSuite) TestPackSignBroadcastTokenTransfer() {
+func (s *LegacyTxSuite) TestPackSignBroadcastTokenTransfer() {
 	fn, err := abi.ParseFunction("transfer(address,uint256) returns (bool)", nil)
 	s.Require().NoError(err)
 

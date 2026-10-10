@@ -39,7 +39,7 @@ type ERC20Suite struct {
 	erc20 *ERC20
 }
 
-func TestERC20LiveSuite(t *testing.T) {
+func TestERC20Suite(t *testing.T) {
 	suite.Run(t, &ERC20Suite{
 		Enable:        false,
 		RPCURL:        "",

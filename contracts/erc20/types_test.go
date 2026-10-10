@@ -10,17 +10,10 @@ import (
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 )
 
-func mustAddr(t *testing.T, s string) *types.Address {
-	t.Helper()
-	a, err := types.NewAddressFromHex(s)
-	require.NoError(t, err)
-	return a
-}
-
 func TestNewTransfer(t *testing.T) {
-	contract := mustAddr(t, "0x4200000000000000000000000000000000000006")
-	from := mustAddr(t, "0x67d03631fe51b741c0c00c4e16eb662ac84381df")
-	to := mustAddr(t, "0x6667c8dc9fbfec411e7c1ee2b24de960149f930f")
+	contract := types.MustNewAddressFromHex("0x4200000000000000000000000000000000000006")
+	from := types.MustNewAddressFromHex("0x67d03631fe51b741c0c00c4e16eb662ac84381df")
+	to := types.MustNewAddressFromHex("0x6667c8dc9fbfec411e7c1ee2b24de960149f930f")
 	value := big.NewInt(42)
 
 	tr := NewTransfer(contract, from, to, value)
@@ -31,9 +24,9 @@ func TestNewTransfer(t *testing.T) {
 }
 
 func TestNewApproval(t *testing.T) {
-	contract := mustAddr(t, "0x4200000000000000000000000000000000000006")
-	owner := mustAddr(t, "0x6667c8dc9fbfec411e7c1ee2b24de960149f930f")
-	spender := mustAddr(t, "0xba12222222228d8ba445958a75a0704d566bf2c8")
+	contract := types.MustNewAddressFromHex("0x4200000000000000000000000000000000000006")
+	owner := types.MustNewAddressFromHex("0x6667c8dc9fbfec411e7c1ee2b24de960149f930f")
+	spender := types.MustNewAddressFromHex("0xba12222222228d8ba445958a75a0704d566bf2c8")
 	value := big.NewInt(7)
 
 	ap := NewApproval(contract, owner, spender, value)
@@ -72,7 +65,7 @@ func TestNewAllowanceWithBalance(t *testing.T) {
 }
 
 func TestNewAddressBalance(t *testing.T) {
-	addr := mustAddr(t, "0x6667c8dc9fbfec411e7c1ee2b24de960149f930f")
+	addr := types.MustNewAddressFromHex("0x6667c8dc9fbfec411e7c1ee2b24de960149f930f")
 	amount := big.NewInt(5)
 
 	ab := NewAddressBalance(addr, amount)
@@ -81,7 +74,7 @@ func TestNewAddressBalance(t *testing.T) {
 }
 
 func TestNewTokenBalance(t *testing.T) {
-	token := mustAddr(t, "0x4200000000000000000000000000000000000006")
+	token := types.MustNewAddressFromHex("0x4200000000000000000000000000000000000006")
 	amount := big.NewInt(6)
 
 	tb := NewTokenBalance(token, amount)
@@ -90,8 +83,8 @@ func TestNewTokenBalance(t *testing.T) {
 }
 
 func TestNewTokenAddressBalance(t *testing.T) {
-	token := mustAddr(t, "0x4200000000000000000000000000000000000006")
-	addr := mustAddr(t, "0x6667c8dc9fbfec411e7c1ee2b24de960149f930f")
+	token := types.MustNewAddressFromHex("0x4200000000000000000000000000000000000006")
+	addr := types.MustNewAddressFromHex("0x6667c8dc9fbfec411e7c1ee2b24de960149f930f")
 	amount := big.NewInt(9)
 
 	tab := NewTokenAddressBalance(token, addr, amount)
@@ -101,10 +94,10 @@ func TestNewTokenAddressBalance(t *testing.T) {
 }
 
 func TestNewAddressBalances(t *testing.T) {
-	addr := mustAddr(t, "0x6667c8dc9fbfec411e7c1ee2b24de960149f930f")
+	addr := types.MustNewAddressFromHex("0x6667c8dc9fbfec411e7c1ee2b24de960149f930f")
 	tokens := []TokenBalance{
-		*NewTokenBalance(mustAddr(t, "0x4200000000000000000000000000000000000006"), big.NewInt(1)),
-		*NewTokenBalance(mustAddr(t, "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"), big.NewInt(2)),
+		*NewTokenBalance(types.MustNewAddressFromHex("0x4200000000000000000000000000000000000006"), big.NewInt(1)),
+		*NewTokenBalance(types.MustNewAddressFromHex("0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"), big.NewInt(2)),
 	}
 
 	ab := NewAddressBalances(addr, tokens)
@@ -113,10 +106,10 @@ func TestNewAddressBalances(t *testing.T) {
 }
 
 func TestNewTokenBalances(t *testing.T) {
-	token := mustAddr(t, "0x4200000000000000000000000000000000000006")
+	token := types.MustNewAddressFromHex("0x4200000000000000000000000000000000000006")
 	addrs := []AddressBalance{
-		*NewAddressBalance(mustAddr(t, "0x6667c8dc9fbfec411e7c1ee2b24de960149f930f"), big.NewInt(1)),
-		*NewAddressBalance(mustAddr(t, "0xba12222222228d8ba445958a75a0704d566bf2c8"), big.NewInt(2)),
+		*NewAddressBalance(types.MustNewAddressFromHex("0x6667c8dc9fbfec411e7c1ee2b24de960149f930f"), big.NewInt(1)),
+		*NewAddressBalance(types.MustNewAddressFromHex("0xba12222222228d8ba445958a75a0704d566bf2c8"), big.NewInt(2)),
 	}
 
 	tbs := NewTokenBalances(token, addrs)
@@ -131,21 +124,20 @@ func TestFunctionSignatures(t *testing.T) {
 		sig  string
 		sel  string
 	}{
-		{"name", nameFn, "name()", "06fdde03"},
-		{"symbol", symbolFn, "symbol()", "95d89b41"},
-		{"decimals", decimalsFn, "decimals()", "313ce567"},
-		{"totalSupply", totalSupplyFn, "totalSupply()", "18160ddd"},
-		{"balanceOf", balanceOfFn, "balanceOf(address)", "70a08231"},
-		{"transfer", transferFn, "transfer(address,uint256)", "a9059cbb"},
-		{"allowance", allowanceFn, "allowance(address,address)", "dd62ed3e"},
-		{"approve", approveFn, "approve(address,uint256)", "095ea7b3"},
-		{"transferFrom", transferFromFn, "transferFrom(address,address,uint256)", "23b872dd"},
+		{"name", nameFn, "name()", "0x06fdde03"},
+		{"symbol", symbolFn, "symbol()", "0x95d89b41"},
+		{"decimals", decimalsFn, "decimals()", "0x313ce567"},
+		{"totalSupply", totalSupplyFn, "totalSupply()", "0x18160ddd"},
+		{"balanceOf", balanceOfFn, "balanceOf(address)", "0x70a08231"},
+		{"transfer", transferFn, "transfer(address,uint256)", "0xa9059cbb"},
+		{"allowance", allowanceFn, "allowance(address,address)", "0xdd62ed3e"},
+		{"approve", approveFn, "approve(address,uint256)", "0x095ea7b3"},
+		{"transferFrom", transferFromFn, "transferFrom(address,address,uint256)", "0x23b872dd"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			require.Equal(t, tc.sig, tc.fn.Signature())
-			sel := tc.fn.Selector()
-			require.Equal(t, tc.sel, hexString(sel[:]))
+			require.Equal(t, tc.sel, tc.fn.Selector().String())
 		})
 	}
 }
@@ -157,15 +149,15 @@ func TestEventSignatures(t *testing.T) {
 		sig   string
 		topic string
 	}{
-		{"Transfer", transferEvent, "Transfer(address,address,uint256)", "ddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"},
-		{"Approval", approvalEvent, "Approval(address,address,uint256)", "8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925"},
+		{"Transfer", transferEvent, "Transfer(address,address,uint256)", "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"},
+		{"Approval", approvalEvent, "Approval(address,address,uint256)", "0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			require.Equal(t, tc.sig, tc.event.Signature())
 			t0, ok := tc.event.Topic0()
 			require.True(t, ok)
-			require.Equal(t, tc.topic, hexString(t0[:]))
+			require.Equal(t, tc.topic, t0.String())
 			require.False(t, tc.event.Anonymous)
 			require.Len(t, tc.event.Inputs, 3)
 			require.True(t, tc.event.Inputs[0].Indexed)
@@ -197,14 +189,4 @@ func TestCustomErrorSignatures(t *testing.T) {
 			require.Equal(t, tc.err.Selector(), parsed.Selector())
 		})
 	}
-}
-
-func hexString(b []byte) string {
-	const hextable = "0123456789abcdef"
-	out := make([]byte, len(b)*2)
-	for i, c := range b {
-		out[i*2] = hextable[c>>4]
-		out[i*2+1] = hextable[c&0x0f]
-	}
-	return string(out)
 }

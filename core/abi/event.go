@@ -4,12 +4,31 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/ninja-protocol-labs/go-evmkit/core/types"
+	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 	"github.com/ninja-protocol-labs/go-lib-cryptography/keccak"
 )
 
 // Topic is a 32-byte log topic slot: topics[0] (the event signature hash,
 // unless anonymous) or one indexed parameter's value/hash.
 type Topic [32]byte
+
+// String returns the "0x"-prefixed hex encoding of the topic.
+func (t Topic) String() string {
+	return encoding.Hex.EncodePrefixed(t[:])
+}
+
+// TopicsFromHashes converts a log's topics to Topic, erroring on a nil entry.
+func TopicsFromHashes(hashes []*types.Hash) ([]Topic, error) {
+	topics := make([]Topic, len(hashes))
+	for i, h := range hashes {
+		if h == nil {
+			return nil, fmt.Errorf("topics[%d] is nil", i)
+		}
+		copy(topics[i][:], h.Bytes())
+	}
+	return topics, nil
+}
 
 // EventParam is one parameter of an event declaration: a type plus whether
 // it's indexed (stored as a topic) or not (stored in the log's data).

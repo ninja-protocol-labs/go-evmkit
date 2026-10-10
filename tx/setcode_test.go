@@ -14,7 +14,7 @@ import (
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
 )
 
-type SetCodeTxLiveSuite struct {
+type SetCodeTxSuite struct {
 	suite.Suite
 
 	Enable        bool
@@ -34,8 +34,8 @@ type SetCodeTxLiveSuite struct {
 	key   *types.PrivateKey
 }
 
-func TestSetCodeTxLiveSuite(t *testing.T) {
-	suite.Run(t, &SetCodeTxLiveSuite{
+func TestSetCodeTxSuite(t *testing.T) {
+	suite.Run(t, &SetCodeTxSuite{
 		Enable:        false,
 		RPCURL:        "https://ethereum-sepolia-rpc.publicnode.com",
 		FromHex:       "0x833e1D0b8Bc979D49d57b65dCF18364694B16D52",
@@ -45,7 +45,7 @@ func TestSetCodeTxLiveSuite(t *testing.T) {
 	})
 }
 
-func (s *SetCodeTxLiveSuite) SetupSuite() {
+func (s *SetCodeTxSuite) SetupSuite() {
 	if !s.Enable {
 		s.T().Skip("disabled")
 	}
@@ -64,13 +64,13 @@ func (s *SetCodeTxLiveSuite) SetupSuite() {
 	s.Require().NoError(err)
 }
 
-func (s *SetCodeTxLiveSuite) TearDownSuite() {
+func (s *SetCodeTxSuite) TearDownSuite() {
 	if s.cancel != nil {
 		s.cancel()
 	}
 }
 
-func (s *SetCodeTxLiveSuite) authorization() core.Authorization {
+func (s *SetCodeTxSuite) authorization() core.Authorization {
 	authorityKey, err := types.GeneratePrivateKey()
 	s.Require().NoError(err)
 
@@ -83,7 +83,7 @@ func (s *SetCodeTxLiveSuite) authorization() core.Authorization {
 	return auth
 }
 
-func (s *SetCodeTxLiveSuite) TestSubmitETHTransfer() {
+func (s *SetCodeTxSuite) TestSubmitETHTransfer() {
 	weiValue := new(big.Int).Mul(big.NewInt(1), big.NewInt(1_000_000_000_000)) // 0.000001 ETH
 	cfg := NewSetCodeTxConfig(s.from, s.to, weiValue, nil, []core.Authorization{s.authorization()})
 
@@ -92,7 +92,7 @@ func (s *SetCodeTxLiveSuite) TestSubmitETHTransfer() {
 	s.T().Logf("tx hash: %s", hash)
 }
 
-func (s *SetCodeTxLiveSuite) TestPackSignBroadcastTokenTransfer() {
+func (s *SetCodeTxSuite) TestPackSignBroadcastTokenTransfer() {
 	fn, err := abi.ParseFunction("transfer(address,uint256) returns (bool)", nil)
 	s.Require().NoError(err)
 

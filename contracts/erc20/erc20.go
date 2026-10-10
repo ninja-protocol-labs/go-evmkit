@@ -15,52 +15,6 @@ import (
 	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
-var (
-	nameFn         = abi.NewFunction("name", abi.NewTypes(), abi.NewTypes(abi.String))
-	symbolFn       = abi.NewFunction("symbol", abi.NewTypes(), abi.NewTypes(abi.String))
-	decimalsFn     = abi.NewFunction("decimals", abi.NewTypes(), abi.NewTypes(abi.Uint8))
-	totalSupplyFn  = abi.NewFunction("totalSupply", abi.NewTypes(), abi.NewTypes(abi.Uint256))
-	balanceOfFn    = abi.NewFunction("balanceOf", abi.NewTypes(abi.Address), abi.NewTypes(abi.Uint256))
-	transferFn     = abi.NewFunction("transfer", abi.NewTypes(abi.Address, abi.Uint256), abi.NewTypes(abi.Bool))
-	allowanceFn    = abi.NewFunction("allowance", abi.NewTypes(abi.Address, abi.Address), abi.NewTypes(abi.Uint256))
-	approveFn      = abi.NewFunction("approve", abi.NewTypes(abi.Address, abi.Uint256), abi.NewTypes(abi.Bool))
-	transferFromFn = abi.NewFunction("transferFrom", abi.NewTypes(abi.Address, abi.Address, abi.Uint256), abi.NewTypes(abi.Bool))
-)
-
-var (
-	transferEvent = abi.NewEvent("Transfer", []abi.EventParam{
-		{Type: abi.Address, Indexed: true},
-		{Type: abi.Address, Indexed: true},
-		{Type: abi.Uint256},
-	}, false)
-	approvalEvent = abi.NewEvent("Approval", []abi.EventParam{
-		{Type: abi.Address, Indexed: true},
-		{Type: abi.Address, Indexed: true},
-		{Type: abi.Uint256},
-	}, false)
-)
-
-// Custom errors from IERC20Errors (ERC-6093), for decoding reverts via abi.Error.Decode.
-var (
-	errInsufficientBalance   = abi.NewError("ERC20InsufficientBalance", abi.NewTypes(abi.Address, abi.Uint256, abi.Uint256))
-	errInvalidSender         = abi.NewError("ERC20InvalidSender", abi.NewTypes(abi.Address))
-	errInvalidReceiver       = abi.NewError("ERC20InvalidReceiver", abi.NewTypes(abi.Address))
-	errInsufficientAllowance = abi.NewError("ERC20InsufficientAllowance", abi.NewTypes(abi.Address, abi.Uint256, abi.Uint256))
-	errInvalidApprover       = abi.NewError("ERC20InvalidApprover", abi.NewTypes(abi.Address))
-	errInvalidSpender        = abi.NewError("ERC20InvalidSpender", abi.NewTypes(abi.Address))
-)
-
-// ErrInsufficientBalance, etc. mirror IERC20Errors' custom errors, for errors.Is.
-var (
-	ErrInsufficientBalance   = errors.New("erc20: insufficient balance")
-	ErrInvalidSender         = errors.New("erc20: invalid sender")
-	ErrInvalidReceiver       = errors.New("erc20: invalid receiver")
-	ErrInsufficientAllowance = errors.New("erc20: insufficient allowance")
-	ErrInvalidApprover       = errors.New("erc20: invalid approver")
-	ErrInvalidSpender        = errors.New("erc20: invalid spender")
-	ErrUnknown               = errors.New("erc20: unknown revert")
-)
-
 // IERC20 is implemented by *ERC20.
 type IERC20 interface {
 	TotalSupply(ctx context.Context, token *types.Address, block string) (*big.Int, error)
