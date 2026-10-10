@@ -27,48 +27,47 @@ const (
 
 // IMulticall3 is implemented by *Multicall3.
 type IMulticall3 interface {
-	Aggregate(ctx context.Context, calls []Call, block string) (*AggregateResult, error)
-	TryAggregate(ctx context.Context, requireSuccess bool, calls []Call, block string) ([]Result, error)
-	TryBlockAndAggregate(ctx context.Context, requireSuccess bool, calls []Call, block string) (*BlockResults, error)
-	BlockAndAggregate(ctx context.Context, calls []Call, block string) (*BlockResults, error)
-	Aggregate3(ctx context.Context, calls []Call3, block string) ([]Result, error)
-	Aggregate3Value(ctx context.Context, calls []Call3Value, block string) ([]Result, error)
-	GetBlockHash(ctx context.Context, blockNumber *big.Int, block string) (*types.Hash, error)
-	GetBlockNumber(ctx context.Context, block string) (*big.Int, error)
-	GetCurrentBlockCoinbase(ctx context.Context, block string) (*types.Address, error)
-	GetCurrentBlockDifficulty(ctx context.Context, block string) (*big.Int, error)
-	GetCurrentBlockGasLimit(ctx context.Context, block string) (*big.Int, error)
-	GetCurrentBlockTimestamp(ctx context.Context, block string) (*big.Int, error)
-	GetEthBalance(ctx context.Context, addr *types.Address, block string) (*big.Int, error)
-	GetLastBlockHash(ctx context.Context, block string) (*types.Hash, error)
-	GetBasefee(ctx context.Context, block string) (*big.Int, error)
-	GetChainID(ctx context.Context, block string) (*big.Int, error)
+	Aggregate(ctx context.Context, multicall *types.Address, calls []Call, block string) (*AggregateResult, error)
+	TryAggregate(ctx context.Context, multicall *types.Address, requireSuccess bool, calls []Call, block string) ([]Result, error)
+	TryBlockAndAggregate(ctx context.Context, multicall *types.Address, requireSuccess bool, calls []Call, block string) (*BlockResults, error)
+	BlockAndAggregate(ctx context.Context, multicall *types.Address, calls []Call, block string) (*BlockResults, error)
+	Aggregate3(ctx context.Context, multicall *types.Address, calls []Call3, block string) ([]Result, error)
+	Aggregate3Value(ctx context.Context, multicall *types.Address, calls []Call3Value, block string) ([]Result, error)
+	GetBlockHash(ctx context.Context, multicall *types.Address, blockNumber *big.Int, block string) (*types.Hash, error)
+	GetBlockNumber(ctx context.Context, multicall *types.Address, block string) (*big.Int, error)
+	GetCurrentBlockCoinbase(ctx context.Context, multicall *types.Address, block string) (*types.Address, error)
+	GetCurrentBlockDifficulty(ctx context.Context, multicall *types.Address, block string) (*big.Int, error)
+	GetCurrentBlockGasLimit(ctx context.Context, multicall *types.Address, block string) (*big.Int, error)
+	GetCurrentBlockTimestamp(ctx context.Context, multicall *types.Address, block string) (*big.Int, error)
+	GetEthBalance(ctx context.Context, multicall, addr *types.Address, block string) (*big.Int, error)
+	GetLastBlockHash(ctx context.Context, multicall *types.Address, block string) (*types.Hash, error)
+	GetBasefee(ctx context.Context, multicall *types.Address, block string) (*big.Int, error)
+	GetChainID(ctx context.Context, multicall *types.Address, block string) (*big.Int, error)
 }
 
 var _ IMulticall3 = (*Multicall3)(nil)
 
-// Multicall3 calls a deployed Multicall3 contract over a Client.
+// Multicall3 calls a deployed Multicall3 contract over a Client. It holds no
+// contract address, so one instance serves every deployment.
 type Multicall3 struct {
 	c rpc.Client
-	a *types.Address
 }
 
-// NewMulticall3 returns a Multicall3 calling the contract at multicall via cli.
-func NewMulticall3(cli rpc.Client, multicall *types.Address) IMulticall3 {
+// NewMulticall3 returns a Multicall3 calling contracts via cli.
+func NewMulticall3(cli rpc.Client) *Multicall3 {
 	return &Multicall3{
 		c: cli,
-		a: multicall,
 	}
 }
 
-// Aggregate calls aggregate(calls). Any single call failing reverts the whole call.
-func (m *Multicall3) Aggregate(ctx context.Context, calls []Call, block string) (*AggregateResult, error) {
+// Aggregate calls aggregate(calls) on multicall. Any single call failing reverts the whole call.
+func (m *Multicall3) Aggregate(ctx context.Context, multicall *types.Address, calls []Call, block string) (*AggregateResult, error) {
 	calldata, err := EncodeAggregate(calls)
 	if err != nil {
 		return nil, fmt.Errorf("multicall3: aggregate: %w", err)
 	}
 
-	data, err := m.callMulticall3(ctx, calldata, nil, block)
+	data, err := m.callMulticall3(ctx, multicall, calldata, nil, block)
 	if err != nil {
 		return nil, fmt.Errorf("multicall3: aggregate: %w", err)
 	}
@@ -81,14 +80,14 @@ func (m *Multicall3) Aggregate(ctx context.Context, calls []Call, block string) 
 	return result, nil
 }
 
-// TryAggregate calls tryAggregate(requireSuccess, calls).
-func (m *Multicall3) TryAggregate(ctx context.Context, requireSuccess bool, calls []Call, block string) ([]Result, error) {
+// TryAggregate calls tryAggregate(requireSuccess, calls) on multicall.
+func (m *Multicall3) TryAggregate(ctx context.Context, multicall *types.Address, requireSuccess bool, calls []Call, block string) ([]Result, error) {
 	calldata, err := EncodeTryAggregate(requireSuccess, calls)
 	if err != nil {
 		return nil, fmt.Errorf("multicall3: tryAggregate: %w", err)
 	}
 
-	data, err := m.callMulticall3(ctx, calldata, nil, block)
+	data, err := m.callMulticall3(ctx, multicall, calldata, nil, block)
 	if err != nil {
 		return nil, fmt.Errorf("multicall3: tryAggregate: %w", err)
 	}
@@ -101,14 +100,14 @@ func (m *Multicall3) TryAggregate(ctx context.Context, requireSuccess bool, call
 	return results, nil
 }
 
-// TryBlockAndAggregate calls tryBlockAndAggregate(requireSuccess, calls).
-func (m *Multicall3) TryBlockAndAggregate(ctx context.Context, requireSuccess bool, calls []Call, block string) (*BlockResults, error) {
+// TryBlockAndAggregate calls tryBlockAndAggregate(requireSuccess, calls) on multicall.
+func (m *Multicall3) TryBlockAndAggregate(ctx context.Context, multicall *types.Address, requireSuccess bool, calls []Call, block string) (*BlockResults, error) {
 	calldata, err := EncodeTryBlockAndAggregate(requireSuccess, calls)
 	if err != nil {
 		return nil, fmt.Errorf("multicall3: tryBlockAndAggregate: %w", err)
 	}
 
-	data, err := m.callMulticall3(ctx, calldata, nil, block)
+	data, err := m.callMulticall3(ctx, multicall, calldata, nil, block)
 	if err != nil {
 		return nil, fmt.Errorf("multicall3: tryBlockAndAggregate: %w", err)
 	}
@@ -121,14 +120,14 @@ func (m *Multicall3) TryBlockAndAggregate(ctx context.Context, requireSuccess bo
 	return result, nil
 }
 
-// BlockAndAggregate calls blockAndAggregate(calls): tryBlockAndAggregate with requireSuccess true.
-func (m *Multicall3) BlockAndAggregate(ctx context.Context, calls []Call, block string) (*BlockResults, error) {
+// BlockAndAggregate calls blockAndAggregate(calls) on multicall: tryBlockAndAggregate with requireSuccess true.
+func (m *Multicall3) BlockAndAggregate(ctx context.Context, multicall *types.Address, calls []Call, block string) (*BlockResults, error) {
 	calldata, err := EncodeBlockAndAggregate(calls)
 	if err != nil {
 		return nil, fmt.Errorf("multicall3: blockAndAggregate: %w", err)
 	}
 
-	data, err := m.callMulticall3(ctx, calldata, nil, block)
+	data, err := m.callMulticall3(ctx, multicall, calldata, nil, block)
 	if err != nil {
 		return nil, fmt.Errorf("multicall3: blockAndAggregate: %w", err)
 	}
@@ -141,14 +140,14 @@ func (m *Multicall3) BlockAndAggregate(ctx context.Context, calls []Call, block 
 	return result, nil
 }
 
-// Aggregate3 calls aggregate3(calls).
-func (m *Multicall3) Aggregate3(ctx context.Context, calls []Call3, block string) ([]Result, error) {
+// Aggregate3 calls aggregate3(calls) on multicall.
+func (m *Multicall3) Aggregate3(ctx context.Context, multicall *types.Address, calls []Call3, block string) ([]Result, error) {
 	calldata, err := EncodeAggregate3(calls)
 	if err != nil {
 		return nil, fmt.Errorf("multicall3: aggregate3: %w", err)
 	}
 
-	data, err := m.callMulticall3(ctx, calldata, nil, block)
+	data, err := m.callMulticall3(ctx, multicall, calldata, nil, block)
 	if err != nil {
 		return nil, fmt.Errorf("multicall3: aggregate3: %w", err)
 	}
@@ -161,8 +160,8 @@ func (m *Multicall3) Aggregate3(ctx context.Context, calls []Call3, block string
 	return results, nil
 }
 
-// Aggregate3Value calls aggregate3Value(calls), sending the sum of calls' Value fields as the call's value.
-func (m *Multicall3) Aggregate3Value(ctx context.Context, calls []Call3Value, block string) ([]Result, error) {
+// Aggregate3Value calls aggregate3Value(calls) on multicall, sending the sum of calls' Value fields as the call's value.
+func (m *Multicall3) Aggregate3Value(ctx context.Context, multicall *types.Address, calls []Call3Value, block string) ([]Result, error) {
 	calldata, err := EncodeAggregate3Value(calls)
 	if err != nil {
 		return nil, fmt.Errorf("multicall3: aggregate3Value: %w", err)
@@ -175,7 +174,7 @@ func (m *Multicall3) Aggregate3Value(ctx context.Context, calls []Call3Value, bl
 		}
 	}
 
-	data, err := m.callMulticall3(ctx, calldata, total, block)
+	data, err := m.callMulticall3(ctx, multicall, calldata, total, block)
 	if err != nil {
 		return nil, fmt.Errorf("multicall3: aggregate3Value: %w", err)
 	}
@@ -188,14 +187,14 @@ func (m *Multicall3) Aggregate3Value(ctx context.Context, calls []Call3Value, bl
 	return results, nil
 }
 
-// GetBlockHash calls getBlockHash(blockNumber): the BLOCKHASH opcode, zero outside the last 256 blocks.
-func (m *Multicall3) GetBlockHash(ctx context.Context, blockNumber *big.Int, block string) (*types.Hash, error) {
+// GetBlockHash calls getBlockHash(blockNumber) on multicall: the BLOCKHASH opcode, zero outside the last 256 blocks.
+func (m *Multicall3) GetBlockHash(ctx context.Context, multicall *types.Address, blockNumber *big.Int, block string) (*types.Hash, error) {
 	calldata, err := EncodeGetBlockHash(blockNumber)
 	if err != nil {
 		return nil, fmt.Errorf("multicall3: getBlockHash: %w", err)
 	}
 
-	data, err := m.callMulticall3(ctx, calldata, nil, block)
+	data, err := m.callMulticall3(ctx, multicall, calldata, nil, block)
 	if err != nil {
 		return nil, fmt.Errorf("multicall3: getBlockHash: %w", err)
 	}
@@ -208,9 +207,9 @@ func (m *Multicall3) GetBlockHash(ctx context.Context, blockNumber *big.Int, blo
 	return hash, nil
 }
 
-// GetBlockNumber calls getBlockNumber().
-func (m *Multicall3) GetBlockNumber(ctx context.Context, block string) (*big.Int, error) {
-	data, err := m.callMulticall3(ctx, EncodeGetBlockNumber(), nil, block)
+// GetBlockNumber calls getBlockNumber() on multicall.
+func (m *Multicall3) GetBlockNumber(ctx context.Context, multicall *types.Address, block string) (*big.Int, error) {
+	data, err := m.callMulticall3(ctx, multicall, EncodeGetBlockNumber(), nil, block)
 	if err != nil {
 		return nil, fmt.Errorf("multicall3: getBlockNumber: %w", err)
 	}
@@ -223,9 +222,9 @@ func (m *Multicall3) GetBlockNumber(ctx context.Context, block string) (*big.Int
 	return n, nil
 }
 
-// GetCurrentBlockCoinbase calls getCurrentBlockCoinbase().
-func (m *Multicall3) GetCurrentBlockCoinbase(ctx context.Context, block string) (*types.Address, error) {
-	data, err := m.callMulticall3(ctx, EncodeGetCurrentBlockCoinbase(), nil, block)
+// GetCurrentBlockCoinbase calls getCurrentBlockCoinbase() on multicall.
+func (m *Multicall3) GetCurrentBlockCoinbase(ctx context.Context, multicall *types.Address, block string) (*types.Address, error) {
+	data, err := m.callMulticall3(ctx, multicall, EncodeGetCurrentBlockCoinbase(), nil, block)
 	if err != nil {
 		return nil, fmt.Errorf("multicall3: getCurrentBlockCoinbase: %w", err)
 	}
@@ -238,9 +237,9 @@ func (m *Multicall3) GetCurrentBlockCoinbase(ctx context.Context, block string) 
 	return addr, nil
 }
 
-// GetCurrentBlockDifficulty calls getCurrentBlockDifficulty().
-func (m *Multicall3) GetCurrentBlockDifficulty(ctx context.Context, block string) (*big.Int, error) {
-	data, err := m.callMulticall3(ctx, EncodeGetCurrentBlockDifficulty(), nil, block)
+// GetCurrentBlockDifficulty calls getCurrentBlockDifficulty() on multicall.
+func (m *Multicall3) GetCurrentBlockDifficulty(ctx context.Context, multicall *types.Address, block string) (*big.Int, error) {
+	data, err := m.callMulticall3(ctx, multicall, EncodeGetCurrentBlockDifficulty(), nil, block)
 	if err != nil {
 		return nil, fmt.Errorf("multicall3: getCurrentBlockDifficulty: %w", err)
 	}
@@ -253,9 +252,9 @@ func (m *Multicall3) GetCurrentBlockDifficulty(ctx context.Context, block string
 	return n, nil
 }
 
-// GetCurrentBlockGasLimit calls getCurrentBlockGasLimit().
-func (m *Multicall3) GetCurrentBlockGasLimit(ctx context.Context, block string) (*big.Int, error) {
-	data, err := m.callMulticall3(ctx, EncodeGetCurrentBlockGasLimit(), nil, block)
+// GetCurrentBlockGasLimit calls getCurrentBlockGasLimit() on multicall.
+func (m *Multicall3) GetCurrentBlockGasLimit(ctx context.Context, multicall *types.Address, block string) (*big.Int, error) {
+	data, err := m.callMulticall3(ctx, multicall, EncodeGetCurrentBlockGasLimit(), nil, block)
 	if err != nil {
 		return nil, fmt.Errorf("multicall3: getCurrentBlockGasLimit: %w", err)
 	}
@@ -268,9 +267,9 @@ func (m *Multicall3) GetCurrentBlockGasLimit(ctx context.Context, block string) 
 	return n, nil
 }
 
-// GetCurrentBlockTimestamp calls getCurrentBlockTimestamp().
-func (m *Multicall3) GetCurrentBlockTimestamp(ctx context.Context, block string) (*big.Int, error) {
-	data, err := m.callMulticall3(ctx, EncodeGetCurrentBlockTimestamp(), nil, block)
+// GetCurrentBlockTimestamp calls getCurrentBlockTimestamp() on multicall.
+func (m *Multicall3) GetCurrentBlockTimestamp(ctx context.Context, multicall *types.Address, block string) (*big.Int, error) {
+	data, err := m.callMulticall3(ctx, multicall, EncodeGetCurrentBlockTimestamp(), nil, block)
 	if err != nil {
 		return nil, fmt.Errorf("multicall3: getCurrentBlockTimestamp: %w", err)
 	}
@@ -283,14 +282,14 @@ func (m *Multicall3) GetCurrentBlockTimestamp(ctx context.Context, block string)
 	return n, nil
 }
 
-// GetEthBalance calls getEthBalance(addr).
-func (m *Multicall3) GetEthBalance(ctx context.Context, addr *types.Address, block string) (*big.Int, error) {
+// GetEthBalance calls getEthBalance(addr) on multicall.
+func (m *Multicall3) GetEthBalance(ctx context.Context, multicall, addr *types.Address, block string) (*big.Int, error) {
 	calldata, err := EncodeGetEthBalance(addr)
 	if err != nil {
 		return nil, fmt.Errorf("multicall3: getEthBalance: %w", err)
 	}
 
-	data, err := m.callMulticall3(ctx, calldata, nil, block)
+	data, err := m.callMulticall3(ctx, multicall, calldata, nil, block)
 	if err != nil {
 		return nil, fmt.Errorf("multicall3: getEthBalance: %w", err)
 	}
@@ -303,9 +302,9 @@ func (m *Multicall3) GetEthBalance(ctx context.Context, addr *types.Address, blo
 	return n, nil
 }
 
-// GetLastBlockHash calls getLastBlockHash().
-func (m *Multicall3) GetLastBlockHash(ctx context.Context, block string) (*types.Hash, error) {
-	data, err := m.callMulticall3(ctx, EncodeGetLastBlockHash(), nil, block)
+// GetLastBlockHash calls getLastBlockHash() on multicall.
+func (m *Multicall3) GetLastBlockHash(ctx context.Context, multicall *types.Address, block string) (*types.Hash, error) {
+	data, err := m.callMulticall3(ctx, multicall, EncodeGetLastBlockHash(), nil, block)
 	if err != nil {
 		return nil, fmt.Errorf("multicall3: getLastBlockHash: %w", err)
 	}
@@ -318,9 +317,9 @@ func (m *Multicall3) GetLastBlockHash(ctx context.Context, block string) (*types
 	return hash, nil
 }
 
-// GetBasefee calls getBasefee(). Fails with ErrBasefeeNotImplemented if the chain has no BASEFEE opcode.
-func (m *Multicall3) GetBasefee(ctx context.Context, block string) (*big.Int, error) {
-	data, err := m.callMulticall3(ctx, EncodeGetBasefee(), nil, block)
+// GetBasefee calls getBasefee() on multicall. Fails with ErrBasefeeNotImplemented if the chain has no BASEFEE opcode.
+func (m *Multicall3) GetBasefee(ctx context.Context, multicall *types.Address, block string) (*big.Int, error) {
+	data, err := m.callMulticall3(ctx, multicall, EncodeGetBasefee(), nil, block)
 	if err != nil {
 		return nil, fmt.Errorf("multicall3: getBasefee: %w: %w", ErrBasefeeNotImplemented, err)
 	}
@@ -333,9 +332,9 @@ func (m *Multicall3) GetBasefee(ctx context.Context, block string) (*big.Int, er
 	return n, nil
 }
 
-// GetChainID calls getChainId().
-func (m *Multicall3) GetChainID(ctx context.Context, block string) (*big.Int, error) {
-	data, err := m.callMulticall3(ctx, EncodeGetChainID(), nil, block)
+// GetChainID calls getChainId() on multicall.
+func (m *Multicall3) GetChainID(ctx context.Context, multicall *types.Address, block string) (*big.Int, error) {
+	data, err := m.callMulticall3(ctx, multicall, EncodeGetChainID(), nil, block)
 	if err != nil {
 		return nil, fmt.Errorf("multicall3: getChainId: %w", err)
 	}
@@ -348,10 +347,10 @@ func (m *Multicall3) GetChainID(ctx context.Context, block string) (*big.Int, er
 	return n, nil
 }
 
-// callMulticall3 eth_calls the contract with calldata and an optional value.
-func (m *Multicall3) callMulticall3(ctx context.Context, calldata []byte, value *big.Int, block string) ([]byte, error) {
+// callMulticall3 eth_calls multicall with calldata and an optional value.
+func (m *Multicall3) callMulticall3(ctx context.Context, multicall *types.Address, calldata []byte, value *big.Int, block string) ([]byte, error) {
 	params := map[string]any{
-		"to":   m.a.String(),
+		"to":   multicall.String(),
 		"data": encoding.Hex.EncodePrefixed(calldata),
 	}
 	if value != nil && value.Sign() != 0 {

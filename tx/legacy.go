@@ -13,6 +13,17 @@ import (
 	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
+type LegacyBuilder struct{}
+
+// NewLegacyBuilder returns a Builder producing a LegacyTxConfig.
+func NewLegacyBuilder() Builder {
+	return &LegacyBuilder{}
+}
+
+func (_ *LegacyBuilder) Build(from, to *types.Address, value *big.Int, data []byte) Packer {
+	return NewLegacyTxConfig(from, to, value, data)
+}
+
 // LegacyTxConfig builds a type-0 transaction. From, To, Value and Data are
 // fixed at construction; ChainID, Nonce, GasPrice and GasLimit are
 // resolved by Pack unless set explicitly via the With* methods.
@@ -89,6 +100,31 @@ func (c *LegacyTxConfig) WithGasLimit(gasLimit uint64) *LegacyTxConfig {
 func (c *LegacyTxConfig) WithGasLimitBuffer(percent uint64) *LegacyTxConfig {
 	c.gasLimitBufferPct = percent
 	return c
+}
+
+// Gas returns GasLimit, estimating and caching it via eth_estimateGas if
+// not already set (via WithGasLimit or an earlier Gas call) — so a later
+// Pack skips estimating it again.
+func (c *LegacyTxConfig) Gas(ctx context.Context, client rpc.Client) (uint64, error) {
+	if c.gasLimit != nil {
+		return *c.gasLimit, nil
+	}
+
+	callParams := map[string]any{
+		"from":  c.from.String(),
+		"value": quantityHex(c.value),
+		"data":  encoding.Hex.EncodePrefixed(c.data),
+	}
+	if c.to != nil {
+		callParams["to"] = c.to.String()
+	}
+
+	limit, err := estimateGasLimit(ctx, client, callParams, c.gasLimitBufferPct)
+	if err != nil {
+		return 0, err
+	}
+	c.gasLimit = &limit
+	return limit, nil
 }
 
 // Pack resolves every field not already set via a With* method against

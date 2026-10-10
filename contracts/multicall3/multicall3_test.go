@@ -152,10 +152,10 @@ func decodeValueOrUnknown[T any](t require.TestingT, decode func([]byte) (T, err
 	return fmt.Sprint(v)
 }
 
-// call sends calls to the Multicall3 contract via Aggregate3 and returns
-// the decoded results.
-func (s *Multicall3Suite) call(m IMulticall3, calls []Call3) []Result {
-	results, err := m.Aggregate3(s.ctx, calls, rpc.BlockTagLatest)
+// call sends calls to the Multicall3 contract at multicall via Aggregate3
+// and returns the decoded results.
+func (s *Multicall3Suite) call(m IMulticall3, multicall *types.Address, calls []Call3) []Result {
+	results, err := m.Aggregate3(s.ctx, multicall, calls, rpc.BlockTagLatest)
 	s.Require().NoError(err)
 	return results
 }
@@ -176,7 +176,7 @@ func (s *Multicall3Suite) TestAcrossNetworks() {
 	for _, n := range networks {
 		s.Run(n.name, func() {
 			client := rpc.NewClient(n.rpcURL, rpc.WithTimeout(15*time.Second))
-			m := NewMulticall3(client, multicall)
+			m := NewMulticall3(client)
 
 			tokens := make([]*types.Address, len(n.tokens))
 			var calls []Call3
@@ -202,7 +202,7 @@ func (s *Multicall3Suite) TestAcrossNetworks() {
 				calls = append(calls, NewCall3(token, true, b))
 			}
 
-			results := s.call(m, calls)
+			results := s.call(m, multicall, calls)
 			s.Require().Len(results, len(calls))
 
 			for i, token := range tokens {
@@ -241,9 +241,9 @@ func (s *Multicall3Suite) TestChainInfoAcrossNetworks() {
 	for _, n := range networks {
 		s.Run(n.name, func() {
 			client := rpc.NewClient(n.rpcURL, rpc.WithTimeout(15*time.Second))
-			m := NewMulticall3(client, multicall)
+			m := NewMulticall3(client)
 
-			results := s.call(m, calls)
+			results := s.call(m, multicall, calls)
 			s.Require().Len(results, len(calls))
 
 			chainID := decodeValueOrUnknown(s.T(), DecodeGetChainID, results[0])

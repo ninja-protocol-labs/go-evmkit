@@ -3,7 +3,6 @@ package multicall3
 import (
 	"math/big"
 
-	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 )
 
@@ -22,7 +21,10 @@ func NewCall(target *types.Address, callData []byte) Call {
 
 // tuple returns c as the []any ABI encoding expects for a callT value.
 func (c Call) tuple() []any {
-	return []any{c.Target, c.CallData}
+	return []any{
+		c.Target,
+		c.CallData,
+	}
 }
 
 // Call3 is IMulticall3.Call3.
@@ -41,7 +43,11 @@ func NewCall3(target *types.Address, allowFailure bool, callData []byte) Call3 {
 
 // tuple returns c as the []any ABI encoding expects for a call3T value.
 func (c Call3) tuple() []any {
-	return []any{c.Target, c.AllowFailure, c.CallData}
+	return []any{
+		c.Target,
+		c.AllowFailure,
+		c.CallData,
+	}
 }
 
 // Call3Value is IMulticall3.Call3Value.
@@ -61,7 +67,12 @@ func NewCall3Value(target *types.Address, allowFailure bool, value *big.Int, cal
 
 // tuple returns c as the []any ABI encoding expects for a call3ValueT value.
 func (c Call3Value) tuple() []any {
-	return []any{c.Target, c.AllowFailure, c.Value, c.CallData}
+	return []any{
+		c.Target,
+		c.AllowFailure,
+		c.Value,
+		c.CallData,
+	}
 }
 
 // Result is IMulticall3.Result.
@@ -104,30 +115,3 @@ func NewBlockResults(blockNumber *big.Int, blockHash *types.Hash, results []Resu
 		Results:     results,
 	}
 }
-
-var (
-	callT       = abi.Tuple(abi.Address, abi.Bytes)
-	call3T      = abi.Tuple(abi.Address, abi.Bool, abi.Bytes)
-	call3ValueT = abi.Tuple(abi.Address, abi.Bool, abi.Uint256, abi.Bytes)
-	resultT     = abi.Tuple(abi.Bool, abi.Bytes)
-)
-
-var (
-	aggregate            = abi.NewFunction("aggregate", abi.NewTypes(abi.Slice(callT)), abi.NewTypes(abi.Uint256, abi.Slice(abi.Bytes)))
-	aggregate3           = abi.NewFunction("aggregate3", abi.NewTypes(abi.Slice(call3T)), abi.NewTypes(abi.Slice(resultT)))
-	aggregate3Value      = abi.NewFunction("aggregate3Value", abi.NewTypes(abi.Slice(call3ValueT)), abi.NewTypes(abi.Slice(resultT)))
-	blockAndAggregate    = abi.NewFunction("blockAndAggregate", abi.NewTypes(abi.Slice(callT)), abi.NewTypes(abi.Uint256, abi.Bytes32, abi.Slice(resultT)))
-	tryAggregate         = abi.NewFunction("tryAggregate", abi.NewTypes(abi.Bool, abi.Slice(callT)), abi.NewTypes(abi.Slice(resultT)))
-	tryBlockAndAggregate = abi.NewFunction("tryBlockAndAggregate", abi.NewTypes(abi.Bool, abi.Slice(callT)), abi.NewTypes(abi.Uint256, abi.Bytes32, abi.Slice(resultT)))
-
-	getBasefee              = abi.NewFunction("getBasefee", abi.NewTypes(), abi.NewTypes(abi.Uint256))
-	getBlockHash            = abi.NewFunction("getBlockHash", abi.NewTypes(abi.Uint256), abi.NewTypes(abi.Bytes32))
-	getBlockNumber          = abi.NewFunction("getBlockNumber", abi.NewTypes(), abi.NewTypes(abi.Uint256))
-	getChainId              = abi.NewFunction("getChainId", abi.NewTypes(), abi.NewTypes(abi.Uint256))
-	getCurrentBlockCoinbase = abi.NewFunction("getCurrentBlockCoinbase", abi.NewTypes(), abi.NewTypes(abi.Address))
-	getCurrentBlockDiff     = abi.NewFunction("getCurrentBlockDifficulty", abi.NewTypes(), abi.NewTypes(abi.Uint256))
-	getCurrentBlockGasLimit = abi.NewFunction("getCurrentBlockGasLimit", abi.NewTypes(), abi.NewTypes(abi.Uint256))
-	getCurrentBlockTime     = abi.NewFunction("getCurrentBlockTimestamp", abi.NewTypes(), abi.NewTypes(abi.Uint256))
-	getEthBalance           = abi.NewFunction("getEthBalance", abi.NewTypes(abi.Address), abi.NewTypes(abi.Uint256))
-	getLastBlockHash        = abi.NewFunction("getLastBlockHash", abi.NewTypes(), abi.NewTypes(abi.Bytes32))
-)

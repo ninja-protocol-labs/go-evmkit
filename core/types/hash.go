@@ -35,6 +35,14 @@ func NewHashFromHex(s string) (*Hash, error) {
 	return NewHashFromBytes(b), nil
 }
 
+func MustNewHashFromHex(s string) *Hash {
+	a, err := NewHashFromHex(s)
+	if err != nil {
+		panic("failed to NewHashFromHex: " + err.Error())
+	}
+	return a
+}
+
 // NewHashFromBig builds a Hash from a big-endian integer.
 func NewHashFromBig(n *big.Int) *Hash {
 	return NewHashFromBytes(n.Bytes())
@@ -52,6 +60,20 @@ func (h *Hash) SetBytes(b []byte) {
 		b = b[len(b)-HashLength:]
 	}
 	copy(h.bytes[HashLength-len(b):], b)
+}
+
+// Copy returns an independent Hash with the same bytes, safe to mutate
+// via SetBytes without affecting a.
+func (h *Hash) Copy() *Hash {
+	o := &Hash{
+		bytes: h.bytes,
+	}
+
+	if h.hex != "" {
+		o.hex = h.hex
+	}
+
+	return o
 }
 
 // Bytes returns a copy of the hash's raw bytes.
