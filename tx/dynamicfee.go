@@ -12,6 +12,13 @@ import (
 )
 
 type DynamicFeeBuilder struct {
+	chainid              *big.Int
+	accessList           core.AccessList
+	nonce                *uint64
+	nonceBlockTag        string
+	gasLimit             *uint64
+	gasFeeCap            *big.Int
+	gasTipCap            *big.Int
 	gasLimitBufferPct    uint64
 	baseFeeMultiplierPct uint64
 }
@@ -21,18 +28,80 @@ func NewDynamicFeeBuilder() *DynamicFeeBuilder {
 	return &DynamicFeeBuilder{}
 }
 
-// Buffer carries a gas limit buffer and base fee multiplier percentage
-// (see DynamicFeeTxConfig.WithGasLimitBuffer and WithBaseFeeMultiplier)
-// onto every DynamicFeeTxConfig produced by Build.
-func (b *DynamicFeeBuilder) Buffer(limit, baseFeeMultiplier uint64) {
-	b.gasLimitBufferPct = limit
-	b.baseFeeMultiplierPct = baseFeeMultiplier
+// AccessList carries list onto every DynamicFeeTxConfig produced by Build.
+// Not part of the Builder interface: LegacyTxConfig has no equivalent, so
+// this is only reachable while holding a *DynamicFeeBuilder directly.
+func (b *DynamicFeeBuilder) AccessList(list core.AccessList) {
+	b.accessList = list
+}
+
+// ChainID carries id onto every DynamicFeeTxConfig produced by Build.
+func (b *DynamicFeeBuilder) ChainID(id *big.Int) {
+	b.chainid = id
+}
+
+// Nonce carries nonce onto every DynamicFeeTxConfig produced by Build.
+func (b *DynamicFeeBuilder) Nonce(nonce uint64) {
+	b.nonce = &nonce
+}
+
+// NonceBlockTag carries tag onto every DynamicFeeTxConfig produced by Build.
+func (b *DynamicFeeBuilder) NonceBlockTag(tag string) {
+	b.nonceBlockTag = tag
+}
+
+// Limit carries limit onto every DynamicFeeTxConfig produced by Build.
+func (b *DynamicFeeBuilder) Limit(limit uint64) {
+	b.gasLimit = &limit
+}
+
+// Price carries feeCap and tipCap onto every DynamicFeeTxConfig produced by
+// Build as GasFeeCap and GasTipCap.
+func (b *DynamicFeeBuilder) Price(feeCap, tipCap *big.Int) {
+	b.gasFeeCap = feeCap
+	b.gasTipCap = tipCap
+}
+
+// LimitBuffer carries percent onto every DynamicFeeTxConfig produced by
+// Build as its gas limit buffer (see DynamicFeeTxConfig.WithGasLimitBuffer).
+func (b *DynamicFeeBuilder) LimitBuffer(percent uint64) {
+	b.gasLimitBufferPct = percent
+}
+
+// PriceBuffer carries percent onto every DynamicFeeTxConfig produced by
+// Build as its base fee multiplier (see DynamicFeeTxConfig.WithBaseFeeMultiplier).
+func (b *DynamicFeeBuilder) PriceBuffer(percent uint64) {
+	b.baseFeeMultiplierPct = percent
 }
 
 func (b *DynamicFeeBuilder) Build(from, to *types.Address, value *big.Int, data []byte) Packer {
-	return NewDynamicFeeTxConfig(from, to, value, data).
+	c := NewDynamicFeeTxConfig(from, to, value, data).
+		WithChainID(b.chainid).
+		WithAccessList(b.accessList).
 		WithGasLimitBuffer(b.gasLimitBufferPct).
 		WithBaseFeeMultiplier(b.baseFeeMultiplierPct)
+
+	if b.nonce != nil {
+		c = c.WithNonce(*b.nonce)
+	}
+
+	if b.nonceBlockTag != "" {
+		c = c.WithNonceBlockTag(b.nonceBlockTag)
+	}
+
+	if b.gasLimit != nil {
+		c = c.WithGasLimit(*b.gasLimit)
+	}
+
+	if b.gasFeeCap != nil {
+		c = c.WithGasFeeCap(b.gasFeeCap)
+	}
+
+	if b.gasTipCap != nil {
+		c = c.WithGasTipCap(b.gasTipCap)
+	}
+
+	return c
 }
 
 // defaultBaseFeeMultiplierPct is applied to a fetched base fee when

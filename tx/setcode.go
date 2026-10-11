@@ -13,6 +13,13 @@ import (
 
 type SetCodeBuilder struct {
 	authorizationList    []core.Authorization
+	chainid              *big.Int
+	accessList           core.AccessList
+	nonce                *uint64
+	nonceBlockTag        string
+	gasLimit             *uint64
+	gasFeeCap            *big.Int
+	gasTipCap            *big.Int
 	gasLimitBufferPct    uint64
 	baseFeeMultiplierPct uint64
 }
@@ -24,18 +31,80 @@ func NewSetCodeBuilder(authorizationList []core.Authorization) *SetCodeBuilder {
 	}
 }
 
-// Buffer carries a gas limit buffer and base fee multiplier percentage
-// (see SetCodeTxConfig.WithGasLimitBuffer and WithBaseFeeMultiplier) onto
-// every SetCodeTxConfig produced by Build.
-func (b *SetCodeBuilder) Buffer(limit, baseFeeMultiplier uint64) {
-	b.gasLimitBufferPct = limit
-	b.baseFeeMultiplierPct = baseFeeMultiplier
+// AccessList carries list onto every SetCodeTxConfig produced by Build.
+// Not part of the Builder interface: LegacyTxConfig has no equivalent, so
+// this is only reachable while holding a *SetCodeBuilder directly.
+func (b *SetCodeBuilder) AccessList(list core.AccessList) {
+	b.accessList = list
+}
+
+// ChainID carries id onto every SetCodeTxConfig produced by Build.
+func (b *SetCodeBuilder) ChainID(id *big.Int) {
+	b.chainid = id
+}
+
+// Nonce carries nonce onto every SetCodeTxConfig produced by Build.
+func (b *SetCodeBuilder) Nonce(nonce uint64) {
+	b.nonce = &nonce
+}
+
+// NonceBlockTag carries tag onto every SetCodeTxConfig produced by Build.
+func (b *SetCodeBuilder) NonceBlockTag(tag string) {
+	b.nonceBlockTag = tag
+}
+
+// Limit carries limit onto every SetCodeTxConfig produced by Build.
+func (b *SetCodeBuilder) Limit(limit uint64) {
+	b.gasLimit = &limit
+}
+
+// Price carries feeCap and tipCap onto every SetCodeTxConfig produced by
+// Build as GasFeeCap and GasTipCap.
+func (b *SetCodeBuilder) Price(feeCap, tipCap *big.Int) {
+	b.gasFeeCap = feeCap
+	b.gasTipCap = tipCap
+}
+
+// LimitBuffer carries percent onto every SetCodeTxConfig produced by Build
+// as its gas limit buffer (see SetCodeTxConfig.WithGasLimitBuffer).
+func (b *SetCodeBuilder) LimitBuffer(percent uint64) {
+	b.gasLimitBufferPct = percent
+}
+
+// PriceBuffer carries percent onto every SetCodeTxConfig produced by Build
+// as its base fee multiplier (see SetCodeTxConfig.WithBaseFeeMultiplier).
+func (b *SetCodeBuilder) PriceBuffer(percent uint64) {
+	b.baseFeeMultiplierPct = percent
 }
 
 func (b *SetCodeBuilder) Build(from, to *types.Address, value *big.Int, data []byte) Packer {
-	return NewSetCodeTxConfig(from, to, value, data, b.authorizationList).
+	c := NewSetCodeTxConfig(from, to, value, data, b.authorizationList).
+		WithChainID(b.chainid).
+		WithAccessList(b.accessList).
 		WithGasLimitBuffer(b.gasLimitBufferPct).
 		WithBaseFeeMultiplier(b.baseFeeMultiplierPct)
+
+	if b.nonce != nil {
+		c = c.WithNonce(*b.nonce)
+	}
+
+	if b.nonceBlockTag != "" {
+		c = c.WithNonceBlockTag(b.nonceBlockTag)
+	}
+
+	if b.gasLimit != nil {
+		c = c.WithGasLimit(*b.gasLimit)
+	}
+
+	if b.gasFeeCap != nil {
+		c = c.WithGasFeeCap(b.gasFeeCap)
+	}
+
+	if b.gasTipCap != nil {
+		c = c.WithGasTipCap(b.gasTipCap)
+	}
+
+	return c
 }
 
 // perEmptyAccountCost is EIP-7702's PER_EMPTY_ACCOUNT_COST: the upfront

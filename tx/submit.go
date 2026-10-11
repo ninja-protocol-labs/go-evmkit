@@ -15,10 +15,30 @@ import (
 // Builder builds a Packer for a call to "to" with data, letting callers
 // (e.g. contract packages) pick a transaction type without hardcoding one.
 type Builder interface {
-	// Buffer sets the gas limit buffer and price buffer (gas price, or base
-	// fee multiplier, depending on the transaction type) percentages Build
-	// carries onto the Packer it produces.
-	Buffer(limit, price uint64)
+	// ChainID sets ChainID explicitly on every Packer Build produces, skipping eth_chainId in Pack.
+	ChainID(id *big.Int)
+	// Nonce sets Nonce explicitly on every Packer Build produces, skipping eth_getTransactionCount in Pack.
+	Nonce(nonce uint64)
+	// NonceBlockTag sets the block parameter Pack passes to eth_getTransactionCount when Nonce isn't set explicitly.
+	NonceBlockTag(tag string)
+	// Limit sets GasLimit explicitly on every Packer Build produces, skipping eth_estimateGas in Pack.
+	Limit(limit uint64)
+	// Price sets the gas price knobs explicitly on every Packer Build
+	// produces, skipping Pack's own fee-discovery calls (eth_gasPrice, or
+	// eth_maxPriorityFeePerGas and a base fee lookup). feeCap sets GasPrice
+	// for a Legacy transaction, or GasFeeCap for a DynamicFee/SetCode one;
+	// tipCap sets GasTipCap and is ignored for Legacy (nil is fine there).
+	Price(feeCap, tipCap *big.Int)
+	// LimitBuffer scales a GasLimit fetched via eth_estimateGas by
+	// percent/100 on every Packer Build produces. It has no effect on an
+	// explicit Limit.
+	LimitBuffer(percent uint64)
+	// PriceBuffer scales a fetched gas price by percent/100 on every Packer
+	// Build produces: GasPrice (Legacy), or the base fee multiplier used to
+	// compute GasFeeCap (DynamicFee/SetCode). It has no effect on an
+	// explicit Price.
+	PriceBuffer(percent uint64)
+
 	// Build returns a Packer for a call to "to" with data.
 	Build(from, to *types.Address, value *big.Int, data []byte) Packer
 }

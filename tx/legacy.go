@@ -14,6 +14,11 @@ import (
 )
 
 type LegacyBuilder struct {
+	chainid           *big.Int
+	nonce             *uint64
+	nonceBlockTag     string
+	gasLimit          *uint64
+	gasPrice          *big.Int
 	gasLimitBufferPct uint64
 	gasPriceBufferPct uint64
 }
@@ -23,18 +28,67 @@ func NewLegacyBuilder() *LegacyBuilder {
 	return &LegacyBuilder{}
 }
 
-// Buffer carries a gas limit buffer and gas price buffer percentage (see
-// LegacyTxConfig.WithGasLimitBuffer and WithGasPriceBuffer) onto every
-// LegacyTxConfig produced by Build.
-func (b *LegacyBuilder) Buffer(limit, price uint64) {
-	b.gasLimitBufferPct = limit
-	b.gasPriceBufferPct = price
+// ChainID carries id onto every LegacyTxConfig produced by Build.
+func (b *LegacyBuilder) ChainID(id *big.Int) {
+	b.chainid = id
+}
+
+// Nonce carries nonce onto every LegacyTxConfig produced by Build.
+func (b *LegacyBuilder) Nonce(nonce uint64) {
+	b.nonce = &nonce
+}
+
+// NonceBlockTag carries tag onto every LegacyTxConfig produced by Build.
+func (b *LegacyBuilder) NonceBlockTag(tag string) {
+	b.nonceBlockTag = tag
+}
+
+// Limit carries limit onto every LegacyTxConfig produced by Build.
+func (b *LegacyBuilder) Limit(limit uint64) {
+	b.gasLimit = &limit
+}
+
+// Price carries feeCap onto every LegacyTxConfig produced by Build as
+// GasPrice. tipCap has no equivalent on a Legacy transaction and is ignored.
+func (b *LegacyBuilder) Price(feeCap, _ *big.Int) {
+	b.gasPrice = feeCap
+}
+
+// LimitBuffer carries percent onto every LegacyTxConfig produced by Build
+// as its gas limit buffer (see LegacyTxConfig.WithGasLimitBuffer).
+func (b *LegacyBuilder) LimitBuffer(percent uint64) {
+	b.gasLimitBufferPct = percent
+}
+
+// PriceBuffer carries percent onto every LegacyTxConfig produced by Build
+// as its gas price buffer (see LegacyTxConfig.WithGasPriceBuffer).
+func (b *LegacyBuilder) PriceBuffer(percent uint64) {
+	b.gasPriceBufferPct = percent
 }
 
 func (b *LegacyBuilder) Build(from, to *types.Address, value *big.Int, data []byte) Packer {
-	return NewLegacyTxConfig(from, to, value, data).
+	c := NewLegacyTxConfig(from, to, value, data).
+		WithChainID(b.chainid).
 		WithGasLimitBuffer(b.gasLimitBufferPct).
 		WithGasPriceBuffer(b.gasPriceBufferPct)
+
+	if b.nonce != nil {
+		c = c.WithNonce(*b.nonce)
+	}
+
+	if b.nonceBlockTag != "" {
+		c = c.WithNonceBlockTag(b.nonceBlockTag)
+	}
+
+	if b.gasLimit != nil {
+		c = c.WithGasLimit(*b.gasLimit)
+	}
+
+	if b.gasPrice != nil {
+		c = c.WithGasPrice(b.gasPrice)
+	}
+
+	return c
 }
 
 // LegacyTxConfig builds a type-0 transaction. From, To, Value and Data are

@@ -122,7 +122,7 @@ func (s *ERC2470DeployerSuite) deploy(rpcURL string, from *types.Address) (*type
 	deployer := NewERC2470Deployer(client)
 
 	builder := tx.NewDynamicFeeBuilder()
-	builder.Buffer(150, 0)
+	builder.LimitBuffer(150)
 	unsigned, err := deployer.CreateDeployment(s.ctx, builder, from, DefaultERC2470SingletonFactory, big.NewInt(0), s.deployment)
 	if err != nil {
 		return nil, err

@@ -122,7 +122,7 @@ func (s *NicksDeployerSuite) deploy(rpcURL string, from *types.Address) (*types.
 	deployer := NewNicksDeployer(client)
 
 	builder := tx.NewDynamicFeeBuilder()
-	builder.Buffer(150, 0)
+	builder.LimitBuffer(150)
 	unsigned, err := deployer.CreateDeployment(s.ctx, builder, from, DefaultNicksMethodFactory, big.NewInt(0), s.deployment)
 	if err != nil {
 		return nil, err
