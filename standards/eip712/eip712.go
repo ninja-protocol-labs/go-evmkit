@@ -1,4 +1,5 @@
-package core
+// Package eip712 implements EIP-712 typed structured data hashing and signing.
+package eip712
 
 import (
 	"fmt"
@@ -8,12 +9,16 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/ninja-protocol-labs/go-evmkit/core"
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 )
 
-// EIP712Domain describes a signing domain per EIP-712. Only non-zero/non-nil fields are used.
-type EIP712Domain struct {
+// eip712Prefix is the two-byte version prefix defined by EIP-712.
+const eip712Prefix = "\x19\x01"
+
+// Domain describes a signing domain per EIP-712. Only non-zero/non-nil fields are used.
+type Domain struct {
 	Name              string
 	Version           string
 	ChainID           *big.Int
@@ -21,54 +26,76 @@ type EIP712Domain struct {
 	Salt              *types.Hash
 }
 
+// NewDomain returns a Domain with the given fields; any zero-valued field
+// (e.g. a nil chainID) is omitted from the signed domain, per EIP-712.
+func NewDomain(name, version string, chainID *big.Int, verifyingContract *types.Address, salt *types.Hash) Domain {
+	return Domain{
+		Name:              name,
+		Version:           version,
+		ChainID:           chainID,
+		VerifyingContract: verifyingContract,
+		Salt:              salt,
+	}
+}
+
 // fieldsAndData returns domain's EIP-712 type fields and value map,
 // including only the fields actually set.
-func (d EIP712Domain) fieldsAndData() ([]EIP712Field, map[string]any) {
-	var fields []EIP712Field
+func (d Domain) fieldsAndData() ([]Field, map[string]any) {
+	var fields []Field
 	data := make(map[string]any)
 
 	if d.Name != "" {
-		fields = append(fields, EIP712Field{Name: "name", Type: "string"})
+		fields = append(fields, Field{Name: "name", Type: "string"})
 		data["name"] = d.Name
 	}
 	if d.Version != "" {
-		fields = append(fields, EIP712Field{Name: "version", Type: "string"})
+		fields = append(fields, Field{Name: "version", Type: "string"})
 		data["version"] = d.Version
 	}
 	if d.ChainID != nil {
-		fields = append(fields, EIP712Field{Name: "chainId", Type: "uint256"})
+		fields = append(fields, Field{Name: "chainId", Type: "uint256"})
 		data["chainId"] = d.ChainID
 	}
 	if d.VerifyingContract != nil {
-		fields = append(fields, EIP712Field{Name: "verifyingContract", Type: "address"})
+		fields = append(fields, Field{Name: "verifyingContract", Type: "address"})
 		data["verifyingContract"] = d.VerifyingContract
 	}
 	if d.Salt != nil {
-		fields = append(fields, EIP712Field{Name: "salt", Type: "bytes32"})
+		fields = append(fields, Field{Name: "salt", Type: "bytes32"})
 		data["salt"] = d.Salt.Bytes()
 	}
 	return fields, data
 }
 
-// DomainSeparator returns hashStruct(eip712Domain) for domain.
-func DomainSeparator(domain EIP712Domain) (*types.Hash, error) {
+// DomainSeparator returns hashStruct(eip712Domain) for domain. domain must
+// have at least one field set, per EIP-712's requirement that the
+// EIP712Domain type contain one or more members.
+func DomainSeparator(domain Domain) (*types.Hash, error) {
 	fields, data := domain.fieldsAndData()
-	return EIP712Types{"EIP712Domain": fields}.HashStruct("EIP712Domain", data)
+	if len(fields) == 0 {
+		return nil, fmt.Errorf("eip712: domain has no fields set")
+	}
+	return Types{"EIP712Domain": fields}.HashStruct("EIP712Domain", data)
 }
 
-// EIP712Field is one named, typed field of an EIP-712 struct type.
-type EIP712Field struct {
+// Field is one named, typed field of an EIP-712 struct type.
+type Field struct {
 	Name string
 	Type string
 }
 
-// EIP712Types maps a custom struct type's name to its ordered fields.
-type EIP712Types map[string][]EIP712Field
+// NewField returns a Field named name with the given EIP-712 type string.
+func NewField(name, typ string) Field {
+	return Field{Name: name, Type: typ}
+}
+
+// Types maps a custom struct type's name to its ordered fields.
+type Types map[string][]Field
 
 // EncodeType returns primaryType's EIP-712 type encoding: its own
 // definition, then every struct type it references (directly or
 // transitively), sorted alphabetically.
-func (t EIP712Types) EncodeType(primaryType string) string {
+func (t Types) EncodeType(primaryType string) string {
 	deps := t.collectDependencies(primaryType, nil)
 	if len(deps) > 1 {
 		sort.Strings(deps[1:])
@@ -92,20 +119,20 @@ func (t EIP712Types) EncodeType(primaryType string) string {
 }
 
 // TypeHash returns keccak256(EncodeType(primaryType)).
-func (t EIP712Types) TypeHash(primaryType string) *types.Hash {
-	return Keccak256([]byte(t.EncodeType(primaryType)))
+func (t Types) TypeHash(primaryType string) *types.Hash {
+	return core.Keccak256([]byte(t.EncodeType(primaryType)))
 }
 
 // HashStruct returns keccak256(EncodeData(primaryType, data)).
-func (t EIP712Types) HashStruct(primaryType string, data map[string]any) (*types.Hash, error) {
+func (t Types) HashStruct(primaryType string, data map[string]any) (*types.Hash, error) {
 	encoded, err := t.EncodeData(primaryType, data)
 	if err != nil {
 		return nil, err
 	}
-	return Keccak256(encoded), nil
+	return core.Keccak256(encoded), nil
 }
 
-func (t EIP712Types) collectDependencies(typeName string, found []string) []string {
+func (t Types) collectDependencies(typeName string, found []string) []string {
 	name := baseTypeName(typeName)
 	if slices.Contains(found, name) {
 		return found
@@ -130,7 +157,7 @@ func baseTypeName(typeName string) string {
 
 // EncodeData returns the EIP-712 encoding of a struct instance:
 // typeHash ++ enc(value) for each field in order.
-func (t EIP712Types) EncodeData(primaryType string, data map[string]any) ([]byte, error) {
+func (t Types) EncodeData(primaryType string, data map[string]any) ([]byte, error) {
 	buf := t.TypeHash(primaryType).Bytes()
 	for _, field := range t[primaryType] {
 		encoded, err := t.encodeFieldValue(field.Type, data[field.Name])
@@ -146,7 +173,7 @@ func (t EIP712Types) EncodeData(primaryType string, data map[string]any) ([]byte
 // array (recurses), a reference to another struct type (hashStruct),
 // bytes/string (keccak256 of the raw data), or an atomic ABI scalar
 // (encoded via the abi package, the same 32-byte word Pack would produce).
-func (t EIP712Types) encodeFieldValue(typeName string, value any) ([]byte, error) {
+func (t Types) encodeFieldValue(typeName string, value any) ([]byte, error) {
 	if strings.Contains(typeName, "[") {
 		return t.encodeArrayValue(typeName, value)
 	}
@@ -159,21 +186,21 @@ func (t EIP712Types) encodeFieldValue(typeName string, value any) ([]byte, error
 		if err != nil {
 			return nil, err
 		}
-		return Keccak256(encoded).Bytes(), nil
+		return core.Keccak256(encoded).Bytes(), nil
 	}
 	if typeName == "bytes" {
 		b, ok := value.([]byte)
 		if !ok {
 			return nil, fmt.Errorf("expected []byte for bytes, got %T", value)
 		}
-		return Keccak256(b).Bytes(), nil
+		return core.Keccak256(b).Bytes(), nil
 	}
 	if typeName == "string" {
 		s, ok := value.(string)
 		if !ok {
 			return nil, fmt.Errorf("expected string, got %T", value)
 		}
-		return Keccak256([]byte(s)).Bytes(), nil
+		return core.Keccak256([]byte(s)).Bytes(), nil
 	}
 
 	abiType, err := abi.ParseType(typeName)
@@ -191,7 +218,7 @@ func (t EIP712Types) encodeFieldValue(typeName string, value any) ([]byte, error
 // is an alias for uint8, so a []uint8 row is indistinguishable by
 // reflection from a bytes-shaped leaf. Use uint256[] (or larger) for
 // numeric arrays-of-arrays to avoid it.
-func (t EIP712Types) encodeArrayValue(typeName string, value any) ([]byte, error) {
+func (t Types) encodeArrayValue(typeName string, value any) ([]byte, error) {
 	rv := reflect.ValueOf(value)
 	if rv.Kind() != reflect.Slice && rv.Kind() != reflect.Array {
 		return nil, fmt.Errorf("expected a slice or array for %q, got %T", typeName, value)
@@ -216,5 +243,22 @@ func (t EIP712Types) encodeArrayValue(typeName string, value any) ([]byte, error
 		}
 		buf = append(buf, encoded...)
 	}
-	return Keccak256(buf).Bytes(), nil
+	return core.Keccak256(buf).Bytes(), nil
+}
+
+// Hash returns the final signable EIP-712 digest:
+// keccak256("\x19\x01" ++ domainSeparator ++ hashStruct(message)).
+func Hash(domain Domain, primaryType string, schema Types, message map[string]any) (*types.Hash, error) {
+	domainSep, err := DomainSeparator(domain)
+	if err != nil {
+		return nil, err
+	}
+	msgHash, err := schema.HashStruct(primaryType, message)
+	if err != nil {
+		return nil, err
+	}
+
+	buf := append([]byte(eip712Prefix), domainSep.Bytes()...)
+	buf = append(buf, msgHash.Bytes()...)
+	return core.Keccak256(buf), nil
 }

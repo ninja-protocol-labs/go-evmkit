@@ -1,4 +1,4 @@
-package core
+package eip712
 
 import (
 	"encoding/hex"
@@ -11,7 +11,7 @@ import (
 )
 
 func TestEIP712EncodeTypeMail(t *testing.T) {
-	ts := EIP712Types{
+	ts := Types{
 		"Person": {{Name: "name", Type: "string"}, {Name: "wallet", Type: "address"}},
 		"Mail":   {{Name: "from", Type: "Person"}, {Name: "to", Type: "Person"}, {Name: "contents", Type: "string"}},
 	}
@@ -20,7 +20,7 @@ func TestEIP712EncodeTypeMail(t *testing.T) {
 }
 
 func TestEIP712TypeHashMail(t *testing.T) {
-	ts := EIP712Types{
+	ts := Types{
 		"Person": {{Name: "name", Type: "string"}, {Name: "wallet", Type: "address"}},
 		"Mail":   {{Name: "from", Type: "Person"}, {Name: "to", Type: "Person"}, {Name: "contents", Type: "string"}},
 	}
@@ -31,7 +31,7 @@ func TestEIP712TypeHashMail(t *testing.T) {
 }
 
 func TestEIP712EncodeTypeTransaction(t *testing.T) {
-	ts := EIP712Types{
+	ts := Types{
 		"Transaction": {{Name: "from", Type: "Person"}, {Name: "to", Type: "Person"}, {Name: "tx", Type: "Asset"}},
 		"Asset":       {{Name: "token", Type: "address"}, {Name: "amount", Type: "uint256"}},
 		"Person":      {{Name: "wallet", Type: "address"}, {Name: "name", Type: "string"}},
@@ -41,7 +41,7 @@ func TestEIP712EncodeTypeTransaction(t *testing.T) {
 }
 
 func TestEIP712TypeHashTransaction(t *testing.T) {
-	ts := EIP712Types{
+	ts := Types{
 		"Transaction": {{Name: "from", Type: "Person"}, {Name: "to", Type: "Person"}, {Name: "tx", Type: "Asset"}},
 		"Asset":       {{Name: "token", Type: "address"}, {Name: "amount", Type: "uint256"}},
 		"Person":      {{Name: "wallet", Type: "address"}, {Name: "name", Type: "string"}},
@@ -53,14 +53,14 @@ func TestEIP712TypeHashTransaction(t *testing.T) {
 }
 
 func TestEIP712EncodeTypeNoReferences(t *testing.T) {
-	ts := EIP712Types{
+	ts := Types{
 		"Person": {{Name: "name", Type: "string"}, {Name: "wallet", Type: "address"}},
 	}
 	require.Equal(t, "Person(string name,address wallet)", ts.EncodeType("Person"))
 }
 
 func TestEIP712EncodeTypeArrayReference(t *testing.T) {
-	ts := EIP712Types{
+	ts := Types{
 		"Group":  {{Name: "members", Type: "Person[]"}},
 		"Person": {{Name: "name", Type: "string"}},
 	}
@@ -69,7 +69,7 @@ func TestEIP712EncodeTypeArrayReference(t *testing.T) {
 }
 
 func TestEIP712EncodeTypeUnknownType(t *testing.T) {
-	ts := EIP712Types{}
+	ts := Types{}
 	require.Equal(t, "", ts.EncodeType("Nonexistent"))
 }
 
@@ -81,7 +81,7 @@ func TestEIP712BaseTypeName(t *testing.T) {
 }
 
 func TestEIP712EncodeTypeMutualCycle(t *testing.T) {
-	ts := EIP712Types{
+	ts := Types{
 		"A": {{Name: "b", Type: "B"}},
 		"B": {{Name: "a", Type: "A"}},
 	}
@@ -90,7 +90,7 @@ func TestEIP712EncodeTypeMutualCycle(t *testing.T) {
 }
 
 func TestEIP712EncodeTypeSelfReference(t *testing.T) {
-	ts := EIP712Types{
+	ts := Types{
 		"Node": {{Name: "value", Type: "uint256"}, {Name: "children", Type: "Node[]"}},
 	}
 	got := ts.EncodeType("Node")
@@ -98,7 +98,7 @@ func TestEIP712EncodeTypeSelfReference(t *testing.T) {
 }
 
 func TestEIP712EncodeTypeDiamond(t *testing.T) {
-	ts := EIP712Types{
+	ts := Types{
 		"Top":    {{Name: "l", Type: "Left"}, {Name: "r", Type: "Right"}},
 		"Left":   {{Name: "shared", Type: "Shared"}},
 		"Right":  {{Name: "shared", Type: "Shared"}},
@@ -109,7 +109,7 @@ func TestEIP712EncodeTypeDiamond(t *testing.T) {
 }
 
 func TestEIP712HashStructPerson(t *testing.T) {
-	ts := EIP712Types{
+	ts := Types{
 		"Person": {{Name: "name", Type: "string"}, {Name: "wallet", Type: "address"}},
 		"Mail":   {{Name: "from", Type: "Person"}, {Name: "to", Type: "Person"}, {Name: "contents", Type: "string"}},
 	}
@@ -127,7 +127,7 @@ func TestEIP712HashStructPerson(t *testing.T) {
 }
 
 func TestEIP712HashStructMail(t *testing.T) {
-	ts := EIP712Types{
+	ts := Types{
 		"Person": {{Name: "name", Type: "string"}, {Name: "wallet", Type: "address"}},
 		"Mail":   {{Name: "from", Type: "Person"}, {Name: "to", Type: "Person"}, {Name: "contents", Type: "string"}},
 	}
@@ -154,19 +154,19 @@ func TestEIP712HashStructMail(t *testing.T) {
 }
 
 func TestEIP712EncodeDataFieldCountMismatchIgnored(t *testing.T) {
-	ts := EIP712Types{"Simple": {{Name: "a", Type: "uint256"}}}
+	ts := Types{"Simple": {{Name: "a", Type: "uint256"}}}
 	_, err := ts.EncodeData("Simple", map[string]any{"a": big.NewInt(1), "extra": "ignored"})
 	require.NoError(t, err)
 }
 
 func TestEIP712EncodeDataMissingFieldErrors(t *testing.T) {
-	ts := EIP712Types{"Simple": {{Name: "a", Type: "address"}}}
+	ts := Types{"Simple": {{Name: "a", Type: "address"}}}
 	_, err := ts.EncodeData("Simple", map[string]any{})
 	require.Error(t, err)
 }
 
 func TestEIP712EncodeDataArrayOfStructs(t *testing.T) {
-	ts := EIP712Types{
+	ts := Types{
 		"Group":  {{Name: "members", Type: "Person[]"}},
 		"Person": {{Name: "name", Type: "string"}},
 	}
@@ -182,7 +182,7 @@ func TestEIP712EncodeDataArrayOfStructs(t *testing.T) {
 }
 
 func TestEIP712EncodeDataArrayOfBytes32(t *testing.T) {
-	ts := EIP712Types{"Batch": {{Name: "ids", Type: "bytes32[]"}}}
+	ts := Types{"Batch": {{Name: "ids", Type: "bytes32[]"}}}
 	id1 := make([]byte, 32)
 	id1[0] = 0x01
 	id2 := make([]byte, 32)
@@ -194,21 +194,21 @@ func TestEIP712EncodeDataArrayOfBytes32(t *testing.T) {
 }
 
 func TestEIP712EncodeDataUnknownFieldTypeErrors(t *testing.T) {
-	ts := EIP712Types{"Bad": {{Name: "x", Type: "notarealtype"}}}
+	ts := Types{"Bad": {{Name: "x", Type: "notarealtype"}}}
 	_, err := ts.EncodeData("Bad", map[string]any{"x": "whatever"})
 	require.Error(t, err)
 }
 
 func TestEIP712EncodeDataArrayWrongGoTypeErrors(t *testing.T) {
-	ts := EIP712Types{"Bad": {{Name: "x", Type: "uint256[]"}}}
+	ts := Types{"Bad": {{Name: "x", Type: "uint256[]"}}}
 	_, err := ts.EncodeData("Bad", map[string]any{"x": "not a slice"})
 	require.Error(t, err)
 }
 
-func etherMailDomain(t *testing.T) EIP712Domain {
+func etherMailDomain(t *testing.T) Domain {
 	contract, err := types.NewAddressFromHex("0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC")
 	require.NoError(t, err)
-	return EIP712Domain{
+	return Domain{
 		Name:              "Ether Mail",
 		Version:           "1",
 		ChainID:           big.NewInt(1),
@@ -225,11 +225,16 @@ func TestEIP712DomainSeparator(t *testing.T) {
 }
 
 func TestEIP712DomainSeparatorOmitsUnsetFields(t *testing.T) {
-	domain := EIP712Domain{Name: "Only Name"}
+	domain := Domain{Name: "Only Name"}
 	fields, data := domain.fieldsAndData()
 	require.Len(t, fields, 1)
 	require.Equal(t, "name", fields[0].Name)
 	require.Len(t, data, 1)
+}
+
+func TestEIP712DomainSeparatorRejectsEmptyDomain(t *testing.T) {
+	_, err := DomainSeparator(Domain{})
+	require.Error(t, err)
 }
 
 func TestEIP712Hash(t *testing.T) {
@@ -248,12 +253,12 @@ func TestEIP712Hash(t *testing.T) {
 		},
 		"contents": "Hello, Bob!",
 	}
-	ts := EIP712Types{
+	ts := Types{
 		"Person": {{Name: "name", Type: "string"}, {Name: "wallet", Type: "address"}},
 		"Mail":   {{Name: "from", Type: "Person"}, {Name: "to", Type: "Person"}, {Name: "contents", Type: "string"}},
 	}
 
-	got, err := EIP712Hash(etherMailDomain(t), "Mail", ts, mail)
+	got, err := Hash(etherMailDomain(t), "Mail", ts, mail)
 	require.NoError(t, err)
 	want, err := hex.DecodeString("be609aee343fb3c4b28e1df9e632fca64fcfaede20f02e86244efddf30957bd2")
 	require.NoError(t, err)
@@ -261,11 +266,11 @@ func TestEIP712Hash(t *testing.T) {
 }
 
 func TestEIP712HashErrorsOnBadMessage(t *testing.T) {
-	ts := EIP712Types{
+	ts := Types{
 		"Person": {{Name: "name", Type: "string"}, {Name: "wallet", Type: "address"}},
 		"Mail":   {{Name: "from", Type: "Person"}, {Name: "to", Type: "Person"}, {Name: "contents", Type: "string"}},
 	}
-	_, err := EIP712Hash(etherMailDomain(t), "Mail", ts, map[string]any{})
+	_, err := Hash(etherMailDomain(t), "Mail", ts, map[string]any{})
 	require.Error(t, err)
 }
 
@@ -274,7 +279,7 @@ func TestEIP712DomainSeparatorWithSalt(t *testing.T) {
 	require.NoError(t, err)
 	salt := types.NewHashFromBytes([]byte("some salt value"))
 
-	domain := EIP712Domain{
+	domain := Domain{
 		Name:              "Ether Mail",
 		Version:           "1",
 		ChainID:           big.NewInt(1),
@@ -293,7 +298,7 @@ func TestEIP712DomainSeparatorWithSalt(t *testing.T) {
 }
 
 func TestEIP712EncodeDataBoolField(t *testing.T) {
-	ts := EIP712Types{"Simple": {{Name: "ok", Type: "bool"}}}
+	ts := Types{"Simple": {{Name: "ok", Type: "bool"}}}
 
 	got, err := ts.EncodeData("Simple", map[string]any{"ok": true})
 	require.NoError(t, err)
@@ -305,7 +310,7 @@ func TestEIP712EncodeDataBoolField(t *testing.T) {
 }
 
 func TestEIP712EncodeDataNegativeInt256Field(t *testing.T) {
-	ts := EIP712Types{"Simple": {{Name: "delta", Type: "int256"}}}
+	ts := Types{"Simple": {{Name: "delta", Type: "int256"}}}
 
 	got, err := ts.EncodeData("Simple", map[string]any{"delta": big.NewInt(-42)})
 	require.NoError(t, err)
@@ -314,7 +319,7 @@ func TestEIP712EncodeDataNegativeInt256Field(t *testing.T) {
 }
 
 func TestEIP712EncodeDataSelfReferencingTree(t *testing.T) {
-	ts := EIP712Types{
+	ts := Types{
 		"Node": {{Name: "value", Type: "uint256"}, {Name: "children", Type: "Node[]"}},
 	}
 	leaf := map[string]any{"value": big.NewInt(2), "children": []any{}}
@@ -330,7 +335,7 @@ func TestEIP712EncodeDataSelfReferencingTree(t *testing.T) {
 }
 
 func TestEIP712EncodeDataNestedArray(t *testing.T) {
-	ts := EIP712Types{"Matrix": {{Name: "rows", Type: "uint256[][]"}}}
+	ts := Types{"Matrix": {{Name: "rows", Type: "uint256[][]"}}}
 
 	got, err := ts.EncodeData("Matrix", map[string]any{
 		"rows": [][]*big.Int{
@@ -343,9 +348,28 @@ func TestEIP712EncodeDataNestedArray(t *testing.T) {
 }
 
 func TestEIP712EncodeDataArrayOfUint8IsAmbiguousWithBytes(t *testing.T) {
-	ts := EIP712Types{"Matrix": {{Name: "rows", Type: "uint8[][]"}}}
+	ts := Types{"Matrix": {{Name: "rows", Type: "uint8[][]"}}}
 	_, err := ts.EncodeData("Matrix", map[string]any{
 		"rows": [][]uint8{{1, 2}, {3, 4, 5}},
 	})
 	require.Error(t, err)
+}
+
+func TestNewDomain(t *testing.T) {
+	contract, err := types.NewAddressFromHex("0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC")
+	require.NoError(t, err)
+	chainID := big.NewInt(1)
+	salt := types.NewHashFromBytes([]byte("salt"))
+
+	d := NewDomain("Ether Mail", "1", chainID, contract, salt)
+	require.Equal(t, "Ether Mail", d.Name)
+	require.Equal(t, "1", d.Version)
+	require.Same(t, chainID, d.ChainID)
+	require.Same(t, contract, d.VerifyingContract)
+	require.Same(t, salt, d.Salt)
+}
+
+func TestNewField(t *testing.T) {
+	f := NewField("wallet", "address")
+	require.Equal(t, Field{Name: "wallet", Type: "address"}, f)
 }
