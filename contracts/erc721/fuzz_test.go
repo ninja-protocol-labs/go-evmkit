@@ -145,8 +145,6 @@ func FuzzExtractEventsCrashSafety(f *testing.F) {
 	f.Add(t0[:], fuzzAddr1.Bytes(), fuzzAddr2.Bytes(), []byte{0x04, 0xd2}, []byte{})
 	f.Add([]byte{}, []byte{}, []byte{}, []byte{}, []byte{})
 	f.Add(make([]byte, 32), make([]byte, 20), make([]byte, 20), make([]byte, 32), make([]byte, 32))
-	// a real production incident: a hand-written Yul contract emitting an
-	// ApprovalForAll-shaped log with a 1-byte data payload instead of a 32-byte word.
 	f.Add(t0[:], fuzzAddr1.Bytes(), fuzzAddr2.Bytes(), []byte{}, []byte{0x01})
 
 	f.Fuzz(func(t *testing.T, topic0Raw, topic1Raw, topic2Raw, topic3Raw, data []byte) {
