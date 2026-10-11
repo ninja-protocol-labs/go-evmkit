@@ -8,6 +8,7 @@ import (
 	"github.com/ninja-protocol-labs/go-evmkit/core"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
+	"github.com/ninja-protocol-labs/go-evmkit/standards/eip1014"
 	"github.com/ninja-protocol-labs/go-evmkit/tx"
 )
 
@@ -67,7 +68,7 @@ func (d *NicksDeployer) DeployAddress(factory *types.Address, deployment *Determ
 	if err != nil {
 		return nil, fmt.Errorf("deploy: deployAddress: %w", err)
 	}
-	return core.EIP1014Address(factory, deployment.Salt, initCode), nil
+	return eip1014.Address(factory, deployment.Salt, initCode), nil
 }
 
 // Deploy broadcasts an already-signed CREATE2-via-Nick's-method transaction.
