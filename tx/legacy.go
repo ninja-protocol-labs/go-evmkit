@@ -19,7 +19,7 @@
 //   - core.Transaction is the result: sign it, RLP-encode it and broadcast
 //     it (or call Submit to do all three, plus Pack, in one step).
 //
-// Contract packages (e.g. contracts/erc20) accept a Builder so their own
+// Contract packages (e.g. standards/erc20) accept a Builder so their own
 // callers can pick a transaction type without the contract package
 // hardcoding one.
 package tx
