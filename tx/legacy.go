@@ -1,5 +1,27 @@
 // Package tx builds ready-to-sign transactions, resolving whatever fields
 // the caller did not supply from the chain through an rpc.Client.
+//
+// Building a transaction goes through three stages:
+//
+//   - Builder configures a transaction without committing to a call target
+//     yet (nonce, gas limit/price and their buffers, ...), and without the
+//     caller needing to know which concrete transaction type is in use.
+//     NewLegacyBuilder, NewDynamicFeeBuilder and NewSetCodeBuilder each
+//     return one. Build(from, to, value, data) then fixes the call target
+//     and returns a Packer.
+//   - Packer resolves every field the Builder didn't set explicitly
+//     against an rpc.Client, in a single batch, and returns the
+//     signed-ready transaction. *LegacyTxConfig, *DynamicFeeTxConfig and
+//     *SetCodeTxConfig each implement it, so a Packer can also be built
+//     directly (NewLegacyTxConfig, NewDynamicFeeTxConfig,
+//     NewSetCodeTxConfig) when the caller already knows which type it
+//     wants and has from/to/value/data in hand.
+//   - core.Transaction is the result: sign it, RLP-encode it and broadcast
+//     it (or call Submit to do all three, plus Pack, in one step).
+//
+// Contract packages (e.g. contracts/erc20) accept a Builder so their own
+// callers can pick a transaction type without the contract package
+// hardcoding one.
 package tx
 
 import (
