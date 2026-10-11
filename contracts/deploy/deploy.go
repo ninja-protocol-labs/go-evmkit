@@ -13,15 +13,15 @@ import (
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 )
 
-// IDeployer is implemented by *CreateDeployer, *NicksDeployer, and *ERC2470Deployer.
-type IDeployer interface {
+// Deployer is implemented by *CreateDeployer, *NicksDeployer, and *ERC2470Deployer.
+type Deployer interface {
 	Deploy(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
 }
 
 var (
-	_ IDeployer = (*CreateDeployer)(nil)
-	_ IDeployer = (*ERC2470Deployer)(nil)
-	_ IDeployer = (*NicksDeployer)(nil)
+	_ Deployer = (*CreateDeployer)(nil)
+	_ Deployer = (*ERC2470Deployer)(nil)
+	_ Deployer = (*NicksDeployer)(nil)
 )
 
 // ContractDeployment is a contract's creation bytecode plus its
