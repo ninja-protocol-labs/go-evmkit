@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ninja-protocol-labs/go-evmkit/contracts/multicall3"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/ninja-protocol-labs/go-evmkit/core"
@@ -42,11 +43,11 @@ type ERC20Suite struct {
 func TestERC20Suite(t *testing.T) {
 	suite.Run(t, &ERC20Suite{
 		Enable:        false,
-		RPCURL:        "",
+		RPCURL:        "https://sepolia.base.org",
 		PrivateKeyHex: "",
 		TokenHex:      "",
 		ToHex:         "",
-		MulticallHex:  "",
+		MulticallHex:  multicall3.DefaultMulticall3Address.String(),
 		Value:         "",
 	})
 }
@@ -363,9 +364,6 @@ func (s *ERC20Suite) TestTransfer() {
 	s.Require().NoError(err)
 	s.Require().True(ok)
 
-	gas, err := s.erc20.TransferGas(s.ctx, tx.NewDynamicFeeBuilder(), s.token, s.from, s.to, s.value)
-	s.Require().NoError(err)
-
 	unsigned, err := s.erc20.CreateTransfer(s.ctx, tx.NewDynamicFeeBuilder(), s.token, s.from, s.to, s.value)
 	s.Require().NoError(err)
 
@@ -397,8 +395,10 @@ func (s *ERC20Suite) TestTransfer() {
 	s.T().Logf("\tFrom: %s", s.from)
 	s.T().Logf("\tTo: %s", s.to)
 	s.T().Logf("\tValue: %s", s.value)
+	s.T().Logf("\tNonce: %d", unsigned.AddressNonce())
+	s.T().Logf("\tGas: %d", unsigned.Gas())
+	s.T().Logf("\tMaxFee: %s", unsigned.MaxFee())
 	s.T().Logf("\tTx: %s", hash)
-	s.T().Logf("\tGas: %d", gas)
 	s.T().Logf("\tBalance")
 	s.T().Logf("\t\tBefore: %s", before)
 	s.T().Logf("\t\tAfter: %s", after)
@@ -433,9 +433,6 @@ func (s *ERC20Suite) TestApprove() {
 	s.Require().NoError(err)
 	s.Require().True(ok)
 
-	gas, err := s.erc20.ApproveGas(s.ctx, tx.NewDynamicFeeBuilder(), s.token, s.from, s.to, s.value)
-	s.Require().NoError(err)
-
 	unsigned, err := s.erc20.CreateApprove(s.ctx, tx.NewDynamicFeeBuilder(), s.token, s.from, s.to, s.value)
 	s.Require().NoError(err)
 
@@ -466,14 +463,17 @@ func (s *ERC20Suite) TestApprove() {
 	s.T().Logf("\tOwner: %s", s.from)
 	s.T().Logf("\tSpender: %s", s.to)
 	s.T().Logf("\tValue: %s", s.value)
+	s.T().Logf("\tNonce: %d", unsigned.AddressNonce())
+	s.T().Logf("\tGas: %d", unsigned.Gas())
+	s.T().Logf("\tMaxFee: %s", unsigned.MaxFee())
 	s.T().Logf("\tTx: %s", hash)
-	s.T().Logf("\tGas: %d", gas)
 	s.T().Logf("\tAllowance: %s", allowance)
 }
 
 func (s *ERC20Suite) TestTransferFrom() {
 	unsignedApprove, err := s.erc20.CreateApprove(s.ctx, tx.NewDynamicFeeBuilder(), s.token, s.from, s.from, s.value)
 	s.Require().NoError(err)
+
 	s.Require().NoError(unsignedApprove.Sign(s.signer))
 
 	approveHash, err := s.erc20.Approve(s.ctx, unsignedApprove)
@@ -498,11 +498,9 @@ func (s *ERC20Suite) TestTransferFrom() {
 	s.Require().NoError(err)
 	s.Require().True(ok)
 
-	gas, err := s.erc20.TransferFromGas(s.ctx, tx.NewDynamicFeeBuilder(), s.token, s.from, s.from, s.to, s.value)
-	s.Require().NoError(err)
-
 	unsigned, err := s.erc20.CreateTransferFrom(s.ctx, tx.NewDynamicFeeBuilder(), s.token, s.from, s.from, s.to, s.value)
 	s.Require().NoError(err)
+
 	s.Require().NoError(unsigned.Sign(s.signer))
 
 	hash, err := s.erc20.TransferFrom(s.ctx, unsigned)
@@ -526,14 +524,19 @@ func (s *ERC20Suite) TestTransferFrom() {
 	s.T().Logf("\t\tOwner: %s", s.from)
 	s.T().Logf("\t\tSpender: %s", s.from)
 	s.T().Logf("\t\tValue: %s", s.value)
+	s.T().Logf("\t\tNonce: %d", unsignedApprove.AddressNonce())
+	s.T().Logf("\t\tGas: %d", unsignedApprove.Gas())
+	s.T().Logf("\t\tMaxFee: %s", unsignedApprove.MaxFee())
 	s.T().Logf("\t\tTx: %s", approveHash)
-	s.T().Logf("\t\tGas: %d", gas)
 	s.T().Logf("\t\tAllowance: %s", allowance)
 	s.T().Logf("\tTransferFrom")
 	s.T().Logf("\t\tSender: %s", s.from)
 	s.T().Logf("\t\tFrom: %s", s.from)
 	s.T().Logf("\t\tTo: %s", s.to)
 	s.T().Logf("\t\tValue: %s", s.value)
+	s.T().Logf("\t\tNonce: %d", unsigned.AddressNonce())
+	s.T().Logf("\t\tGas: %d", unsigned.Gas())
+	s.T().Logf("\t\tMaxFee: %s", unsigned.MaxFee())
 	s.T().Logf("\t\tTx: %s", hash)
 }
 

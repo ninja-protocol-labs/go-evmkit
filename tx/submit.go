@@ -15,6 +15,11 @@ import (
 // Builder builds a Packer for a call to "to" with data, letting callers
 // (e.g. contract packages) pick a transaction type without hardcoding one.
 type Builder interface {
+	// Buffer sets the gas limit buffer and price buffer (gas price, or base
+	// fee multiplier, depending on the transaction type) percentages Build
+	// carries onto the Packer it produces.
+	Buffer(limit, price uint64)
+	// Build returns a Packer for a call to "to" with data.
 	Build(from, to *types.Address, value *big.Int, data []byte) Packer
 }
 
@@ -27,7 +32,6 @@ var (
 // Packer is implemented by *LegacyTxConfig, *DynamicFeeTxConfig and
 // *SetCodeTxConfig.
 type Packer interface {
-	Gas(context.Context, rpc.Client) (uint64, error)
 	Pack(context.Context, rpc.Client) (core.Transaction, error)
 }
 
@@ -108,19 +112,4 @@ func bufferUint64(n uint64, percent uint64) uint64 {
 		return n
 	}
 	return n * percent / 100
-}
-
-// estimateGasLimit calls eth_estimateGas directly (not batched with any
-// other element) and applies bufferPct, for a Config's Gas method.
-func estimateGasLimit(ctx context.Context, client rpc.Client, callParams map[string]any, bufferPct uint64) (uint64, error) {
-	var gasLimitHex string
-	if err := client.Call(ctx, rpc.ETHEstimateGas("gasLimit", callParams, rpc.BlockTagLatest, &gasLimitHex)); err != nil {
-		return 0, fmt.Errorf("tx: gas: %w", err)
-	}
-
-	n, err := parseQuantity(gasLimitHex)
-	if err != nil {
-		return 0, fmt.Errorf("tx: gas: %w", err)
-	}
-	return bufferUint64(n.Uint64(), bufferPct), nil
 }

@@ -59,12 +59,18 @@ type Transaction interface {
 	Sign(Signer) error
 	// Hash returns keccak256 of the signed encoding.
 	Hash() (*types.Hash, error)
-	// Sender recovers the signer's address.
-	Sender() (*types.Address, error)
 	// EncodeRLP returns the signed wire encoding, or ErrUnsigned.
 	EncodeRLP() ([]byte, error)
 	// DecodeRLP parses a signed wire encoding, including Signature.
 	DecodeRLP([]byte) error
+	// Sender recovers the signer's address.
+	Sender() (*types.Address, error)
+	// Gas returns GasLimit.
+	Gas() uint64
+	// AddressNonce returns Nonce.
+	AddressNonce() uint64
+	// MaxFee returns the maximum this transaction could cost.
+	MaxFee() *big.Int
 }
 
 // DecodeTransaction parses a signed transaction, choosing its type from the first byte.
@@ -276,10 +282,6 @@ func (tx *LegacyTx) Hash() (*types.Hash, error) {
 	return Keccak256(enc), nil
 }
 
-func (tx *LegacyTx) Sender() (*types.Address, error) {
-	return recoverSigner(tx.Signature, tx.SigningHash)
-}
-
 // DecodeRLP parses a signed legacy transaction. v of 27 or 28 means ChainID 0;
 // otherwise ChainID is (v - 35) / 2.
 func (tx *LegacyTx) DecodeRLP(data []byte) error {
@@ -325,6 +327,26 @@ func (tx *LegacyTx) DecodeRLP(data []byte) error {
 	}
 	*tx = decoded
 	return nil
+}
+
+// Sender recovers the signer's address.
+func (tx *LegacyTx) Sender() (*types.Address, error) {
+	return recoverSigner(tx.Signature, tx.SigningHash)
+}
+
+// Gas returns GasLimit.
+func (tx *LegacyTx) Gas() uint64 {
+	return tx.GasLimit
+}
+
+// AddressNonce returns Nonce.
+func (tx *LegacyTx) AddressNonce() uint64 {
+	return tx.Nonce
+}
+
+// MaxFee returns GasLimit * GasPrice.
+func (tx *LegacyTx) MaxFee() *big.Int {
+	return new(big.Int).Mul(new(big.Int).SetUint64(tx.GasLimit), tx.GasPrice)
 }
 
 // DynamicFeeTx is a type 2 (EIP-1559) transaction.
@@ -453,10 +475,6 @@ func (tx *DynamicFeeTx) Hash() (*types.Hash, error) {
 	return Keccak256(enc), nil
 }
 
-func (tx *DynamicFeeTx) Sender() (*types.Address, error) {
-	return recoverSigner(tx.Signature, tx.SigningHash)
-}
-
 // DecodeRLP parses a signed type 2 transaction.
 func (tx *DynamicFeeTx) DecodeRLP(data []byte) error {
 	if len(data) == 0 || data[0] != byte(DynamicFeeTxType) {
@@ -493,6 +511,26 @@ func (tx *DynamicFeeTx) DecodeRLP(data []byte) error {
 	}
 	*tx = decoded
 	return nil
+}
+
+// Sender recovers the signer's address.
+func (tx *DynamicFeeTx) Sender() (*types.Address, error) {
+	return recoverSigner(tx.Signature, tx.SigningHash)
+}
+
+// Gas returns GasLimit.
+func (tx *DynamicFeeTx) Gas() uint64 {
+	return tx.GasLimit
+}
+
+// AddressNonce returns Nonce.
+func (tx *DynamicFeeTx) AddressNonce() uint64 {
+	return tx.Nonce
+}
+
+// MaxFee returns GasLimit * GasFeeCap.
+func (tx *DynamicFeeTx) MaxFee() *big.Int {
+	return new(big.Int).Mul(new(big.Int).SetUint64(tx.GasLimit), tx.GasFeeCap)
 }
 
 // SetCodeTx is a type 4 (EIP-7702) transaction. To and AuthList are required.
@@ -657,10 +695,6 @@ func (tx *SetCodeTx) Hash() (*types.Hash, error) {
 	return Keccak256(enc), nil
 }
 
-func (tx *SetCodeTx) Sender() (*types.Address, error) {
-	return recoverSigner(tx.Signature, tx.SigningHash)
-}
-
 // DecodeRLP parses a signed type 4 transaction.
 func (tx *SetCodeTx) DecodeRLP(data []byte) error {
 	if len(data) == 0 || data[0] != byte(SetCodeTxType) {
@@ -712,6 +746,26 @@ func (tx *SetCodeTx) DecodeRLP(data []byte) error {
 	}
 	*tx = decoded
 	return nil
+}
+
+// Sender recovers the signer's address.
+func (tx *SetCodeTx) Sender() (*types.Address, error) {
+	return recoverSigner(tx.Signature, tx.SigningHash)
+}
+
+// Gas returns GasLimit.
+func (tx *SetCodeTx) Gas() uint64 {
+	return tx.GasLimit
+}
+
+// AddressNonce returns Nonce.
+func (tx *SetCodeTx) AddressNonce() uint64 {
+	return tx.Nonce
+}
+
+// MaxFee returns GasLimit * GasFeeCap.
+func (tx *SetCodeTx) MaxFee() *big.Int {
+	return new(big.Int).Mul(new(big.Int).SetUint64(tx.GasLimit), tx.GasFeeCap)
 }
 
 // checkUint256 reports whether n, which may be nil, is an unsigned 256-bit integer.

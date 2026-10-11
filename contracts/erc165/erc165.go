@@ -1,3 +1,6 @@
+// Package erc165 encodes calls to and decodes results from an ERC-165
+// introspection call. Go types mirror the interface in
+// solidity/interfaces/IERC165.sol.
 package erc165
 
 import (

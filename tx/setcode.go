@@ -12,16 +12,30 @@ import (
 )
 
 type SetCodeBuilder struct {
-	authorizationList []core.Authorization
+	authorizationList    []core.Authorization
+	gasLimitBufferPct    uint64
+	baseFeeMultiplierPct uint64
 }
 
 // NewSetCodeBuilder returns a Builder producing a SetCodeTxConfig with the given authorization list.
-func NewSetCodeBuilder(authorizationList []core.Authorization) Builder {
-	return &SetCodeBuilder{authorizationList: authorizationList}
+func NewSetCodeBuilder(authorizationList []core.Authorization) *SetCodeBuilder {
+	return &SetCodeBuilder{
+		authorizationList: authorizationList,
+	}
+}
+
+// Buffer carries a gas limit buffer and base fee multiplier percentage
+// (see SetCodeTxConfig.WithGasLimitBuffer and WithBaseFeeMultiplier) onto
+// every SetCodeTxConfig produced by Build.
+func (b *SetCodeBuilder) Buffer(limit, baseFeeMultiplier uint64) {
+	b.gasLimitBufferPct = limit
+	b.baseFeeMultiplierPct = baseFeeMultiplier
 }
 
 func (b *SetCodeBuilder) Build(from, to *types.Address, value *big.Int, data []byte) Packer {
-	return NewSetCodeTxConfig(from, to, value, data, b.authorizationList)
+	return NewSetCodeTxConfig(from, to, value, data, b.authorizationList).
+		WithGasLimitBuffer(b.gasLimitBufferPct).
+		WithBaseFeeMultiplier(b.baseFeeMultiplierPct)
 }
 
 // perEmptyAccountCost is EIP-7702's PER_EMPTY_ACCOUNT_COST: the upfront
@@ -131,37 +145,6 @@ func (c *SetCodeTxConfig) WithGasLimit(gasLimit uint64) *SetCodeTxConfig {
 func (c *SetCodeTxConfig) WithGasLimitBuffer(percent uint64) *SetCodeTxConfig {
 	c.gasLimitBufferPct = percent
 	return c
-}
-
-// Gas returns GasLimit (including the per-authorization PER_EMPTY_ACCOUNT_COST
-// surcharge), estimating and caching it via eth_estimateGas if not already
-// set (via WithGasLimit or an earlier Gas call) — so a later Pack skips
-// estimating it again.
-func (c *SetCodeTxConfig) Gas(ctx context.Context, client rpc.Client) (uint64, error) {
-	if c.gasLimit != nil {
-		return *c.gasLimit, nil
-	}
-	if c.to == nil {
-		return 0, fmt.Errorf("tx: gas: to is required")
-	}
-
-	callParams := map[string]any{
-		"from":  c.from.String(),
-		"to":    c.to.String(),
-		"value": quantityHex(c.value),
-		"data":  encoding.Hex.EncodePrefixed(c.data),
-	}
-	if len(c.accessList) > 0 {
-		callParams["accessList"] = accessListToRPC(c.accessList)
-	}
-
-	limit, err := estimateGasLimit(ctx, client, callParams, c.gasLimitBufferPct)
-	if err != nil {
-		return 0, err
-	}
-	limit += perEmptyAccountCost * uint64(len(c.authorization))
-	c.gasLimit = &limit
-	return limit, nil
 }
 
 // Pack resolves every field not already set via a With* method against

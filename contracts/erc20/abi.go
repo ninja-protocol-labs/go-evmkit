@@ -1,6 +1,3 @@
-// Package erc20 encodes calls to and decodes results from an ERC-20 token
-// contract. Go types mirror the interfaces in solidity/interfaces/IERC20.sol
-// and solidity/interfaces/IERC20Metadata.sol.
 package erc20
 
 import (

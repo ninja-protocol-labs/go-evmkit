@@ -1,3 +1,6 @@
+// Package erc721 encodes calls to and decodes results from an ERC-721 token
+// contract. Go types mirror the interfaces in solidity/interfaces/IERC721.sol
+// and solidity/interfaces/IERC721Metadata.sol.
 package erc721
 
 import (
@@ -183,21 +186,6 @@ func (e *ERC721) CreateApprove(ctx context.Context, b tx.Builder, contract, from
 	return unsigned, nil
 }
 
-// ApproveGas estimates the gas an approve transaction would use, without
-// resolving chainID/nonce/gasPrice or building the transaction itself.
-func (e *ERC721) ApproveGas(ctx context.Context, b tx.Builder, contract, from, to *types.Address, tokenId *big.Int) (uint64, error) {
-	calldata, err := EncodeApprove(to, tokenId)
-	if err != nil {
-		return 0, fmt.Errorf("erc721: approveGas: %w", err)
-	}
-
-	gas, err := b.Build(from, contract, nil, calldata).Gas(ctx, e.c)
-	if err != nil {
-		return 0, fmt.Errorf("erc721: approveGas: %w", e.wrapRevertError(err))
-	}
-	return gas, nil
-}
-
 // Approve broadcasts an already-signed approve transaction.
 func (e *ERC721) Approve(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
 	raw, err := signedTx.EncodeRLP()
@@ -223,21 +211,6 @@ func (e *ERC721) CreateSetApprovalForAll(ctx context.Context, b tx.Builder, cont
 		return nil, fmt.Errorf("erc721: createSetApprovalForAll: %w", e.wrapRevertError(err))
 	}
 	return unsigned, nil
-}
-
-// SetApprovalForAllGas estimates the gas a setApprovalForAll transaction would use, without
-// resolving chainID/nonce/gasPrice or building the transaction itself.
-func (e *ERC721) SetApprovalForAllGas(ctx context.Context, b tx.Builder, contract, from, operator *types.Address, approved bool) (uint64, error) {
-	calldata, err := EncodeSetApprovalForAll(operator, approved)
-	if err != nil {
-		return 0, fmt.Errorf("erc721: setApprovalForAllGas: %w", err)
-	}
-
-	gas, err := b.Build(from, contract, nil, calldata).Gas(ctx, e.c)
-	if err != nil {
-		return 0, fmt.Errorf("erc721: setApprovalForAllGas: %w", e.wrapRevertError(err))
-	}
-	return gas, nil
 }
 
 // SetApprovalForAll broadcasts an already-signed setApprovalForAll transaction.
@@ -267,21 +240,6 @@ func (e *ERC721) CreateTransferFrom(ctx context.Context, b tx.Builder, contract,
 	return unsigned, nil
 }
 
-// TransferFromGas estimates the gas a transferFrom transaction would use, without
-// resolving chainID/nonce/gasPrice or building the transaction itself.
-func (e *ERC721) TransferFromGas(ctx context.Context, b tx.Builder, contract, sender, from, to *types.Address, tokenId *big.Int) (uint64, error) {
-	calldata, err := EncodeTransferFrom(from, to, tokenId)
-	if err != nil {
-		return 0, fmt.Errorf("erc721: transferFromGas: %w", err)
-	}
-
-	gas, err := b.Build(sender, contract, nil, calldata).Gas(ctx, e.c)
-	if err != nil {
-		return 0, fmt.Errorf("erc721: transferFromGas: %w", e.wrapRevertError(err))
-	}
-	return gas, nil
-}
-
 // TransferFrom broadcasts an already-signed transferFrom transaction.
 func (e *ERC721) TransferFrom(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
 	raw, err := signedTx.EncodeRLP()
@@ -309,21 +267,6 @@ func (e *ERC721) CreateSafeTransferFrom(ctx context.Context, b tx.Builder, contr
 	return unsigned, nil
 }
 
-// SafeTransferFromGas estimates the gas a safeTransferFrom transaction would use, without
-// resolving chainID/nonce/gasPrice or building the transaction itself.
-func (e *ERC721) SafeTransferFromGas(ctx context.Context, b tx.Builder, contract, sender, from, to *types.Address, tokenId *big.Int) (uint64, error) {
-	calldata, err := EncodeSafeTransferFrom(from, to, tokenId)
-	if err != nil {
-		return 0, fmt.Errorf("erc721: safeTransferFromGas: %w", err)
-	}
-
-	gas, err := b.Build(sender, contract, nil, calldata).Gas(ctx, e.c)
-	if err != nil {
-		return 0, fmt.Errorf("erc721: safeTransferFromGas: %w", e.wrapRevertError(err))
-	}
-	return gas, nil
-}
-
 // CreateSafeTransferFromWithData builds an unsigned safeTransferFrom(from, to, tokenId, data) transaction via b, sent by sender.
 func (e *ERC721) CreateSafeTransferFromWithData(ctx context.Context, b tx.Builder, contract, sender, from, to *types.Address, tokenId *big.Int, callData []byte) (core.Transaction, error) {
 	calldata, err := EncodeSafeTransferFromWithData(from, to, tokenId, callData)
@@ -336,21 +279,6 @@ func (e *ERC721) CreateSafeTransferFromWithData(ctx context.Context, b tx.Builde
 		return nil, fmt.Errorf("erc721: createSafeTransferFromWithData: %w", e.wrapRevertError(err))
 	}
 	return unsigned, nil
-}
-
-// SafeTransferFromWithDataGas estimates the gas a safeTransferFrom-with-data transaction would use, without
-// resolving chainID/nonce/gasPrice or building the transaction itself.
-func (e *ERC721) SafeTransferFromWithDataGas(ctx context.Context, b tx.Builder, contract, sender, from, to *types.Address, tokenId *big.Int, callData []byte) (uint64, error) {
-	calldata, err := EncodeSafeTransferFromWithData(from, to, tokenId, callData)
-	if err != nil {
-		return 0, fmt.Errorf("erc721: safeTransferFromWithDataGas: %w", err)
-	}
-
-	gas, err := b.Build(sender, contract, nil, calldata).Gas(ctx, e.c)
-	if err != nil {
-		return 0, fmt.Errorf("erc721: safeTransferFromWithDataGas: %w", e.wrapRevertError(err))
-	}
-	return gas, nil
 }
 
 // SafeTransferFrom broadcasts an already-signed safeTransferFrom transaction.

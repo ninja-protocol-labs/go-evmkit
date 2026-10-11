@@ -271,6 +271,16 @@ func TestLegacyTxSignRecoversSender(t *testing.T) {
 	}
 }
 
+func TestLegacyTxMaxFee(t *testing.T) {
+	for _, v := range legacyVectors(t) {
+		t.Run(v.name, func(t *testing.T) {
+			tx := v.tx
+			want := new(big.Int).Mul(new(big.Int).SetUint64(tx.GasLimit), tx.GasPrice)
+			require.Zero(t, want.Cmp(tx.MaxFee()))
+		})
+	}
+}
+
 func TestLegacyTxSignThenRoundTrip(t *testing.T) {
 	key, err := types.NewPrivateKeyFromHex(legacyTestKey)
 	require.NoError(t, err)
@@ -1145,6 +1155,16 @@ func TestDynamicFeeTxSignRecoversSender(t *testing.T) {
 			ok, err := VerifyAddress(digest, tx.Signature, want)
 			require.NoError(t, err)
 			require.True(t, ok)
+		})
+	}
+}
+
+func TestDynamicFeeTxMaxFee(t *testing.T) {
+	for _, v := range dynamicFeeVectors(t) {
+		t.Run(v.name, func(t *testing.T) {
+			tx := v.tx
+			want := new(big.Int).Mul(new(big.Int).SetUint64(tx.GasLimit), tx.GasFeeCap)
+			require.Zero(t, want.Cmp(tx.MaxFee()))
 		})
 	}
 }
@@ -2245,6 +2265,16 @@ func TestSetCodeTxSignRecoversSender(t *testing.T) {
 			ok, err := VerifyAddress(digest, tx.Signature, want)
 			require.NoError(t, err)
 			require.True(t, ok)
+		})
+	}
+}
+
+func TestSetCodeTxMaxFee(t *testing.T) {
+	for _, v := range setCodeVectors(t) {
+		t.Run(v.name, func(t *testing.T) {
+			tx := v.tx
+			want := new(big.Int).Mul(new(big.Int).SetUint64(tx.GasLimit), tx.GasFeeCap)
+			require.Zero(t, want.Cmp(tx.MaxFee()))
 		})
 	}
 }
