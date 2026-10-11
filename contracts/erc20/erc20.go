@@ -1,3 +1,6 @@
+// Package erc20 encodes calls to and decodes results from an ERC-20 token
+// contract. Go types mirror the interfaces in solidity/interfaces/IERC20.sol
+// and solidity/interfaces/IERC20Metadata.sol.
 package erc20
 
 import (
@@ -151,21 +154,6 @@ func (e *ERC20) CreateTransfer(ctx context.Context, b tx.Builder, token, from, t
 	return unsigned, nil
 }
 
-// TransferGas estimates the gas a transfer transaction would use, without
-// resolving chainID/nonce/gasPrice or building the transaction itself.
-func (e *ERC20) TransferGas(ctx context.Context, b tx.Builder, token, from, to *types.Address, value *big.Int) (uint64, error) {
-	calldata, err := EncodeTransfer(to, value)
-	if err != nil {
-		return 0, fmt.Errorf("erc20: transferGas: %w", err)
-	}
-
-	gas, err := b.Build(from, token, nil, calldata).Gas(ctx, e.c)
-	if err != nil {
-		return 0, fmt.Errorf("erc20: transferGas: %w", e.wrapRevertError(err))
-	}
-	return gas, nil
-}
-
 // Transfer broadcasts an already-signed transfer transaction.
 func (e *ERC20) Transfer(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
 	raw, err := signedTx.EncodeRLP()
@@ -213,21 +201,6 @@ func (e *ERC20) CreateApprove(ctx context.Context, b tx.Builder, token, from, sp
 	return unsigned, nil
 }
 
-// ApproveGas estimates the gas an approve transaction would use, without
-// resolving chainID/nonce/gasPrice or building the transaction itself.
-func (e *ERC20) ApproveGas(ctx context.Context, b tx.Builder, token, from, spender *types.Address, value *big.Int) (uint64, error) {
-	calldata, err := EncodeApprove(spender, value)
-	if err != nil {
-		return 0, fmt.Errorf("erc20: approveGas: %w", err)
-	}
-
-	gas, err := b.Build(from, token, nil, calldata).Gas(ctx, e.c)
-	if err != nil {
-		return 0, fmt.Errorf("erc20: approveGas: %w", e.wrapRevertError(err))
-	}
-	return gas, nil
-}
-
 // Approve broadcasts an already-signed approve transaction.
 func (e *ERC20) Approve(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
 	raw, err := signedTx.EncodeRLP()
@@ -273,21 +246,6 @@ func (e *ERC20) CreateTransferFrom(ctx context.Context, b tx.Builder, token, sen
 		return nil, fmt.Errorf("erc20: createTransferFrom: %w", e.wrapRevertError(err))
 	}
 	return unsigned, nil
-}
-
-// TransferFromGas estimates the gas a transferFrom transaction would use, without
-// resolving chainID/nonce/gasPrice or building the transaction itself.
-func (e *ERC20) TransferFromGas(ctx context.Context, b tx.Builder, token, sender, from, to *types.Address, value *big.Int) (uint64, error) {
-	calldata, err := EncodeTransferFrom(from, to, value)
-	if err != nil {
-		return 0, fmt.Errorf("erc20: transferFromGas: %w", err)
-	}
-
-	gas, err := b.Build(sender, token, nil, calldata).Gas(ctx, e.c)
-	if err != nil {
-		return 0, fmt.Errorf("erc20: transferFromGas: %w", e.wrapRevertError(err))
-	}
-	return gas, nil
 }
 
 // TransferFrom broadcasts an already-signed transferFrom transaction.

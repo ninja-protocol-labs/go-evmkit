@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ninja-protocol-labs/go-evmkit/contracts/multicall3"
 	"github.com/ninja-protocol-labs/go-evmkit/core"
 	"github.com/stretchr/testify/suite"
 
@@ -45,12 +46,12 @@ type ERC721Suite struct {
 func TestERC721Suite(t *testing.T) {
 	suite.Run(t, &ERC721Suite{
 		Enable:        false,
-		RPCURL:        "",
+		RPCURL:        "https://testnet-rpc.monad.xyz",
 		ContractHex:   "",
 		ContractBHex:  "",
 		PrivateKeyHex: "",
 		ToHex:         "",
-		MulticallHex:  "",
+		MulticallHex:  multicall3.DefaultMulticall3Address.String(),
 	})
 }
 
@@ -141,9 +142,6 @@ func (s *ERC721Suite) TestApprove() {
 	before, err := s.erc721.GetApproved(s.ctx, s.contract, tokenId, rpc.BlockTagLatest)
 	s.Require().NoError(err)
 
-	gas, err := s.erc721.ApproveGas(s.ctx, tx.NewDynamicFeeBuilder(), s.contract, s.from, s.to, tokenId)
-	s.Require().NoError(err)
-
 	unsigned, err := s.erc721.CreateApprove(s.ctx, tx.NewDynamicFeeBuilder(), s.contract, s.from, s.to, tokenId)
 	s.Require().NoError(err)
 
@@ -175,7 +173,9 @@ func (s *ERC721Suite) TestApprove() {
 	s.T().Logf("\tApproved: %s", s.to)
 	s.T().Logf("\tTokenId: %s", tokenId)
 	s.T().Logf("\tTx: %s", hash)
-	s.T().Logf("\tGas: %d", gas)
+	s.T().Logf("\tGas: %d", unsigned.Gas())
+	s.T().Logf("\tNonce: %d", unsigned.AddressNonce())
+	s.T().Logf("\tMaxFee: %s", unsigned.MaxFee())
 	s.T().Logf("\tGetApproved")
 	s.T().Logf("\t\tBefore: %s", before)
 	s.T().Logf("\t\tAfter: %s", after)
@@ -184,7 +184,7 @@ func (s *ERC721Suite) TestApprove() {
 func (s *ERC721Suite) TestApproveInvalidApprover() {
 	tokenId := big.NewInt(1)
 
-	_, err := s.erc721.ApproveGas(s.ctx, tx.NewDynamicFeeBuilder(), s.contract, s.to, s.from, tokenId)
+	_, err := s.erc721.CreateApprove(s.ctx, tx.NewDynamicFeeBuilder(), s.contract, s.to, s.from, tokenId)
 	s.Require().Error(err)
 	s.Require().ErrorIs(err, ErrInvalidApprover)
 
@@ -203,11 +203,9 @@ func (s *ERC721Suite) TestSetApprovalForAll() {
 	before, err := s.erc721.IsApprovedForAll(s.ctx, s.contract, s.from, s.to, rpc.BlockTagLatest)
 	s.Require().NoError(err)
 
-	gas, err := s.erc721.SetApprovalForAllGas(s.ctx, tx.NewDynamicFeeBuilder(), s.contract, s.from, s.to, true)
-	s.Require().NoError(err)
-
 	unsigned, err := s.erc721.CreateSetApprovalForAll(s.ctx, tx.NewDynamicFeeBuilder(), s.contract, s.from, s.to, true)
 	s.Require().NoError(err)
+	gas := unsigned.Gas()
 
 	s.Require().NoError(unsigned.Sign(s.signer))
 
@@ -259,17 +257,19 @@ func (s *ERC721Suite) TestSetApprovalForAll() {
 	s.T().Logf("\tOperator: %s", s.to)
 	s.T().Logf("\tTx: %s", hash)
 	s.T().Logf("\tGas: %d", gas)
+	s.T().Logf("\tMaxFee: %s", unsigned.MaxFee())
 	s.T().Logf("\tIsApprovedForAll")
 	s.T().Logf("\t\tBefore: %v", before)
 	s.T().Logf("\t\tAfter: %v", after)
 	s.T().Logf("\tRevertTx: %s", revertHash)
+	s.T().Logf("\t\tMaxFee: %s", unsignedRevert.MaxFee())
 	s.T().Logf("\t\tReverted: %v", reverted)
 }
 
 func (s *ERC721Suite) TestSetApprovalForAllInvalidOperator() {
 	zero := types.ZeroAddress()
 
-	_, err := s.erc721.SetApprovalForAllGas(s.ctx, tx.NewDynamicFeeBuilder(), s.contract, s.from, zero, true)
+	_, err := s.erc721.CreateSetApprovalForAll(s.ctx, tx.NewDynamicFeeBuilder(), s.contract, s.from, zero, true)
 	s.Require().Error(err)
 	s.Require().ErrorIs(err, ErrInvalidOperator)
 
@@ -286,11 +286,9 @@ func (s *ERC721Suite) TestSetApprovalForAllInvalidOperator() {
 func (s *ERC721Suite) TestTransferFrom() {
 	tokenId := big.NewInt(1)
 
-	gas, err := s.erc721.TransferFromGas(s.ctx, tx.NewDynamicFeeBuilder(), s.contract, s.from, s.from, s.from, tokenId)
-	s.Require().NoError(err)
-
 	unsigned, err := s.erc721.CreateTransferFrom(s.ctx, tx.NewDynamicFeeBuilder(), s.contract, s.from, s.from, s.from, tokenId)
 	s.Require().NoError(err)
+	gas := unsigned.Gas()
 
 	s.Require().NoError(unsigned.Sign(s.signer))
 
@@ -321,6 +319,7 @@ func (s *ERC721Suite) TestTransferFrom() {
 	s.T().Logf("\tTokenId: %s", tokenId)
 	s.T().Logf("\tTx: %s", hash)
 	s.T().Logf("\tGas: %d", gas)
+	s.T().Logf("\tMaxFee: %s", unsigned.MaxFee())
 	s.T().Logf("\tOwnerOf: %s", owner)
 }
 
@@ -328,7 +327,7 @@ func (s *ERC721Suite) TestTransferFromInvalidReceiver() {
 	tokenId := big.NewInt(1)
 	zero := types.ZeroAddress()
 
-	_, err := s.erc721.TransferFromGas(s.ctx, tx.NewDynamicFeeBuilder(), s.contract, s.from, s.from, zero, tokenId)
+	_, err := s.erc721.CreateTransferFrom(s.ctx, tx.NewDynamicFeeBuilder(), s.contract, s.from, s.from, zero, tokenId)
 	s.Require().Error(err)
 	s.Require().ErrorIs(err, ErrInvalidReceiver)
 
@@ -345,11 +344,9 @@ func (s *ERC721Suite) TestTransferFromInvalidReceiver() {
 func (s *ERC721Suite) TestSafeTransferFrom() {
 	tokenId := big.NewInt(1)
 
-	gas, err := s.erc721.SafeTransferFromGas(s.ctx, tx.NewDynamicFeeBuilder(), s.contract, s.from, s.from, s.from, tokenId)
-	s.Require().NoError(err)
-
 	unsigned, err := s.erc721.CreateSafeTransferFrom(s.ctx, tx.NewDynamicFeeBuilder(), s.contract, s.from, s.from, s.from, tokenId)
 	s.Require().NoError(err)
+	gas := unsigned.Gas()
 
 	s.Require().NoError(unsigned.Sign(s.signer))
 
@@ -380,6 +377,7 @@ func (s *ERC721Suite) TestSafeTransferFrom() {
 	s.T().Logf("\tTokenId: %s", tokenId)
 	s.T().Logf("\tTx: %s", hash)
 	s.T().Logf("\tGas: %d", gas)
+	s.T().Logf("\tMaxFee: %s", unsigned.MaxFee())
 	s.T().Logf("\tOwnerOf: %s", owner)
 }
 
@@ -387,11 +385,9 @@ func (s *ERC721Suite) TestSafeTransferFromWithData() {
 	tokenId := big.NewInt(1)
 
 	var callData []byte
-	gas, err := s.erc721.SafeTransferFromWithDataGas(s.ctx, tx.NewDynamicFeeBuilder(), s.contract, s.from, s.from, s.from, tokenId, callData)
-	s.Require().NoError(err)
-
 	unsigned, err := s.erc721.CreateSafeTransferFromWithData(s.ctx, tx.NewDynamicFeeBuilder(), s.contract, s.from, s.from, s.from, tokenId, callData)
 	s.Require().NoError(err)
+	gas := unsigned.Gas()
 
 	s.Require().NoError(unsigned.Sign(s.signer))
 
@@ -414,13 +410,14 @@ func (s *ERC721Suite) TestSafeTransferFromWithData() {
 	s.T().Logf("\tTokenId: %s", tokenId)
 	s.T().Logf("\tTx: %s", hash)
 	s.T().Logf("\tGas: %d", gas)
+	s.T().Logf("\tMaxFee: %s", unsigned.MaxFee())
 }
 
 func (s *ERC721Suite) TestSafeTransferFromInvalidReceiver() {
 	tokenId := big.NewInt(1)
 	zero := types.ZeroAddress()
 
-	_, err := s.erc721.SafeTransferFromGas(s.ctx, tx.NewDynamicFeeBuilder(), s.contract, s.from, s.from, zero, tokenId)
+	_, err := s.erc721.CreateSafeTransferFrom(s.ctx, tx.NewDynamicFeeBuilder(), s.contract, s.from, s.from, zero, tokenId)
 	s.Require().Error(err)
 	s.Require().ErrorIs(err, ErrInvalidReceiver)
 

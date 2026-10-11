@@ -1,9 +1,7 @@
-// Package multicall3 encodes calls to and decodes results from the Multicall3
-// contract (https://github.com/mds1/multicall). Go types mirror the structs
-// in solidity/interfaces/IMulticall3.sol.
 package multicall3
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 
@@ -36,6 +34,18 @@ var (
 	getCurrentBlockTime     = abi.NewFunction("getCurrentBlockTimestamp", nil, abi.NewTypes(abi.Uint256))
 	getEthBalance           = abi.NewFunction("getEthBalance", abi.NewTypes(abi.Address), abi.NewTypes(abi.Uint256))
 	getLastBlockHash        = abi.NewFunction("getLastBlockHash", nil, abi.NewTypes(abi.Bytes32))
+)
+
+// ErrCallFailed, ErrValueMismatch and ErrBasefeeNotImplemented mirror Multicall3's own revert reasons, for errors.Is.
+var (
+	ErrCallFailed            = errors.New("multicall3: call failed")
+	ErrValueMismatch         = errors.New("multicall3: value mismatch")
+	ErrBasefeeNotImplemented = errors.New("multicall3: BASEFEE opcode not implemented on this chain")
+)
+
+const (
+	ErrCallFailedString    = "Multicall3: call failed"
+	ErrValueMismatchString = "Multicall3: value mismatch"
 )
 
 // EncodeAggregate returns the calldata for aggregate(calls).

@@ -14,10 +14,6 @@ import (
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
 )
 
-// multicall3Address is Multicall3's deployment address: the same on every chain that
-// has it (https://github.com/mds1/multicall#new-deployments).
-const multicall3Address = "0xcA11bde05977b3631167028862bE2a173976CA11"
-
 var (
 	ethereum = []string{
 		"0xdAC17F958D2ee523a2206206994597C13D831ec7", // USDT
@@ -161,9 +157,6 @@ func (s *Multicall3Suite) call(m IMulticall3, multicall *types.Address, calls []
 }
 
 func (s *Multicall3Suite) TestAcrossNetworks() {
-	multicall, err := types.NewAddressFromHex(multicall3Address)
-	s.Require().NoError(err)
-
 	balanceOf, err := abi.ParseFunction("balanceOf(address) returns (uint256)", nil)
 	s.Require().NoError(err)
 	symbolFn, err := abi.ParseFunction("symbol() returns (string)", nil)
@@ -202,7 +195,7 @@ func (s *Multicall3Suite) TestAcrossNetworks() {
 				calls = append(calls, NewCall3(token, true, b))
 			}
 
-			results := s.call(m, multicall, calls)
+			results := s.call(m, DefaultMulticall3Address, calls)
 			s.Require().Len(results, len(calls))
 
 			for i, token := range tokens {
@@ -220,22 +213,19 @@ func (s *Multicall3Suite) TestAcrossNetworks() {
 }
 
 func (s *Multicall3Suite) TestChainInfoAcrossNetworks() {
-	multicall, err := types.NewAddressFromHex(multicall3Address)
-	s.Require().NoError(err)
-
 	ethBalanceData, err := EncodeGetEthBalance(s.holder)
 	s.Require().NoError(err)
 
 	calls := []Call3{
-		NewCall3(multicall, true, EncodeGetChainID()),
-		NewCall3(multicall, true, EncodeGetBlockNumber()),
-		NewCall3(multicall, true, EncodeGetCurrentBlockCoinbase()),
-		NewCall3(multicall, true, EncodeGetCurrentBlockDifficulty()),
-		NewCall3(multicall, true, EncodeGetCurrentBlockGasLimit()),
-		NewCall3(multicall, true, EncodeGetCurrentBlockTimestamp()),
-		NewCall3(multicall, true, EncodeGetBasefee()), // can revert if BASEFEE isn't implemented
-		NewCall3(multicall, true, EncodeGetLastBlockHash()),
-		NewCall3(multicall, true, ethBalanceData),
+		NewCall3(DefaultMulticall3Address, true, EncodeGetChainID()),
+		NewCall3(DefaultMulticall3Address, true, EncodeGetBlockNumber()),
+		NewCall3(DefaultMulticall3Address, true, EncodeGetCurrentBlockCoinbase()),
+		NewCall3(DefaultMulticall3Address, true, EncodeGetCurrentBlockDifficulty()),
+		NewCall3(DefaultMulticall3Address, true, EncodeGetCurrentBlockGasLimit()),
+		NewCall3(DefaultMulticall3Address, true, EncodeGetCurrentBlockTimestamp()),
+		NewCall3(DefaultMulticall3Address, true, EncodeGetBasefee()), // can revert if BASEFEE isn't implemented
+		NewCall3(DefaultMulticall3Address, true, EncodeGetLastBlockHash()),
+		NewCall3(DefaultMulticall3Address, true, ethBalanceData),
 	}
 
 	for _, n := range networks {
@@ -243,7 +233,7 @@ func (s *Multicall3Suite) TestChainInfoAcrossNetworks() {
 			client := rpc.NewClient(n.rpcURL, rpc.WithTimeout(15*time.Second))
 			m := New(client)
 
-			results := s.call(m, multicall, calls)
+			results := s.call(m, DefaultMulticall3Address, calls)
 			s.Require().Len(results, len(calls))
 
 			chainID := decodeValueOrUnknown(s.T(), DecodeGetChainID, results[0])

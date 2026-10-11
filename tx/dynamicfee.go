@@ -11,15 +11,28 @@ import (
 	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
-type DynamicFeeBuilder struct{}
+type DynamicFeeBuilder struct {
+	gasLimitBufferPct    uint64
+	baseFeeMultiplierPct uint64
+}
 
 // NewDynamicFeeBuilder returns a Builder producing a DynamicFeeTxConfig.
-func NewDynamicFeeBuilder() Builder {
+func NewDynamicFeeBuilder() *DynamicFeeBuilder {
 	return &DynamicFeeBuilder{}
 }
 
-func (_ *DynamicFeeBuilder) Build(from, to *types.Address, value *big.Int, data []byte) Packer {
-	return NewDynamicFeeTxConfig(from, to, value, data)
+// Buffer carries a gas limit buffer and base fee multiplier percentage
+// (see DynamicFeeTxConfig.WithGasLimitBuffer and WithBaseFeeMultiplier)
+// onto every DynamicFeeTxConfig produced by Build.
+func (b *DynamicFeeBuilder) Buffer(limit, baseFeeMultiplier uint64) {
+	b.gasLimitBufferPct = limit
+	b.baseFeeMultiplierPct = baseFeeMultiplier
+}
+
+func (b *DynamicFeeBuilder) Build(from, to *types.Address, value *big.Int, data []byte) Packer {
+	return NewDynamicFeeTxConfig(from, to, value, data).
+		WithGasLimitBuffer(b.gasLimitBufferPct).
+		WithBaseFeeMultiplier(b.baseFeeMultiplierPct)
 }
 
 // defaultBaseFeeMultiplierPct is applied to a fetched base fee when
@@ -121,34 +134,6 @@ func (c *DynamicFeeTxConfig) WithGasLimit(gasLimit uint64) *DynamicFeeTxConfig {
 func (c *DynamicFeeTxConfig) WithGasLimitBuffer(percent uint64) *DynamicFeeTxConfig {
 	c.gasLimitBufferPct = percent
 	return c
-}
-
-// Gas returns GasLimit, estimating and caching it via eth_estimateGas if
-// not already set (via WithGasLimit or an earlier Gas call) — so a later
-// Pack skips estimating it again.
-func (c *DynamicFeeTxConfig) Gas(ctx context.Context, client rpc.Client) (uint64, error) {
-	if c.gasLimit != nil {
-		return *c.gasLimit, nil
-	}
-
-	callParams := map[string]any{
-		"from":  c.from.String(),
-		"value": quantityHex(c.value),
-		"data":  encoding.Hex.EncodePrefixed(c.data),
-	}
-	if c.to != nil {
-		callParams["to"] = c.to.String()
-	}
-	if len(c.accessList) > 0 {
-		callParams["accessList"] = accessListToRPC(c.accessList)
-	}
-
-	limit, err := estimateGasLimit(ctx, client, callParams, c.gasLimitBufferPct)
-	if err != nil {
-		return 0, err
-	}
-	c.gasLimit = &limit
-	return limit, nil
 }
 
 // Pack resolves every field not already set via a With* method against

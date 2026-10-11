@@ -1,3 +1,6 @@
+// Package multicall3 encodes calls to and decodes results from the Multicall3
+// contract (https://github.com/mds1/multicall). Go types mirror the structs
+// in solidity/interfaces/IMulticall3.sol.
 package multicall3
 
 import (
@@ -13,17 +16,9 @@ import (
 	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
-// ErrCallFailed, ErrValueMismatch and ErrBasefeeNotImplemented mirror Multicall3's own revert reasons, for errors.Is.
-var (
-	ErrCallFailed            = errors.New("multicall3: call failed")
-	ErrValueMismatch         = errors.New("multicall3: value mismatch")
-	ErrBasefeeNotImplemented = errors.New("multicall3: BASEFEE opcode not implemented on this chain")
-)
-
-const (
-	ErrCallFailedString    = "Multicall3: call failed"
-	ErrValueMismatchString = "Multicall3: value mismatch"
-)
+// DefaultMulticall3Address is the address Multicall3 is conventionally
+// deployed at on most EVM chains (https://github.com/mds1/multicall).
+var DefaultMulticall3Address = types.MustNewAddressFromHex("0xcA11bde05977b3631167028862bE2a173976CA11")
 
 // IMulticall3 is implemented by *Multicall3.
 type IMulticall3 interface {

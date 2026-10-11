@@ -1,6 +1,3 @@
-// Package erc721 encodes calls to and decodes results from an ERC-721 token
-// contract. Go types mirror the interfaces in solidity/interfaces/IERC721.sol
-// and solidity/interfaces/IERC721Metadata.sol.
 package erc721
 
 import (
