@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 )
 
@@ -16,7 +17,7 @@ func FuzzEIP712EncodeArrayOfUint8(f *testing.F) {
 	f.Add([]byte{1, 2, 3})
 	f.Add(make([]byte, 256))
 
-	schema := Types{"Simple": {{Name: "a", Type: "uint8[]"}}}
+	schema := NewTypes("Simple", NewField("a", abi.Slice(abi.Uint8).String()))
 
 	f.Fuzz(func(t *testing.T, raw []byte) {
 		_, err := schema.EncodeData("Simple", map[string]any{"a": raw})
@@ -31,7 +32,7 @@ func FuzzEIP712EncodeDataAddressField(f *testing.F) {
 	f.Add(make([]byte, 20), true)
 	f.Add(make([]byte, 5), true)
 
-	schema := Types{"Simple": {{Name: "a", Type: "address"}}}
+	schema := NewTypes("Simple", NewField("a", abi.Address.String()))
 
 	f.Fuzz(func(t *testing.T, raw []byte, wrongType bool) {
 		var value any
@@ -46,15 +47,16 @@ func FuzzEIP712EncodeDataAddressField(f *testing.F) {
 
 // go test -run '^$' -fuzz '^FuzzEIP712EncodeDataCrashSafety$' -fuzztime=10s ./standards/eip712
 func FuzzEIP712EncodeDataCrashSafety(f *testing.F) {
-	schema := Types{
-		"Person": {{Name: "name", Type: "string"}, {Name: "wallet", Type: "address"}},
-		"Mail": {
-			{Name: "from", Type: "Person"},
-			{Name: "to", Type: "Person"},
-			{Name: "contents", Type: "string"},
-			{Name: "nums", Type: "uint256[]"},
-		},
-	}
+	schema := NewTypes("Person",
+		NewField("name", abi.String.String()),
+		NewField("wallet", abi.Address.String()),
+	)
+	schema.Append("Mail",
+		NewField("from", "Person"),
+		NewField("to", "Person"),
+		NewField("contents", abi.String.String()),
+		NewField("nums", abi.Slice(abi.Uint256).String()),
+	)
 
 	f.Add("hello", []byte{1, 2, 3}, int8(5))
 	f.Add("", []byte(nil), int8(0))
@@ -103,19 +105,22 @@ func FuzzDomainSeparatorCrashSafety(f *testing.F) {
 	f.Add("x", "", make([]byte, 64), make([]byte, 64), make([]byte, 64), true, true, true)
 
 	f.Fuzz(func(t *testing.T, name, version string, chainIDRaw, contractRaw, saltRaw []byte, hasChainID, hasContract, hasSalt bool) {
-		domain := Domain{Name: name, Version: version}
+		var chainID *big.Int
 		if hasChainID {
 			if len(chainIDRaw) > 32 {
 				chainIDRaw = chainIDRaw[len(chainIDRaw)-32:]
 			}
-			domain.ChainID = new(big.Int).SetBytes(chainIDRaw)
+			chainID = new(big.Int).SetBytes(chainIDRaw)
 		}
+		var contract *types.Address
 		if hasContract {
-			domain.VerifyingContract = types.NewAddressFromBytes(contractRaw)
+			contract = types.NewAddressFromBytes(contractRaw)
 		}
+		var salt *types.Hash
 		if hasSalt {
-			domain.Salt = types.NewHashFromBytes(saltRaw)
+			salt = types.NewHashFromBytes(saltRaw)
 		}
+		domain := NewDomain(name, version, chainID, contract, salt)
 
 		if name == "" && version == "" && !hasChainID && !hasContract && !hasSalt {
 			_, err := DomainSeparator(domain)
@@ -173,11 +178,11 @@ func FuzzHashStructDeterministic(f *testing.F) {
 	f.Add("hello", []byte{1, 2, 3}, true)
 	f.Add("", []byte{}, false)
 
-	schema := Types{"Simple": {
-		{Name: "s", Type: "string"},
-		{Name: "a", Type: "address"},
-		{Name: "ok", Type: "bool"},
-	}}
+	schema := NewTypes("Simple",
+		NewField("s", abi.String.String()),
+		NewField("a", abi.Address.String()),
+		NewField("ok", abi.Bool.String()),
+	)
 
 	f.Fuzz(func(t *testing.T, s string, addrRaw []byte, ok bool) {
 		data := map[string]any{
@@ -198,7 +203,7 @@ func FuzzHashStructDeterministic(f *testing.F) {
 
 // go test -run '^$' -fuzz '^FuzzEncodeArrayValueNestedCrashSafety$' -fuzztime=10s ./standards/eip712
 func FuzzEncodeArrayValueNestedCrashSafety(f *testing.F) {
-	schema := Types{"Matrix": {{Name: "rows", Type: "uint256[][]"}}}
+	schema := NewTypes("Matrix", NewField("rows", abi.Slice(abi.Slice(abi.Uint256)).String()))
 
 	f.Add(uint8(0), uint8(0), uint64(1))
 	f.Add(uint8(3), uint8(3), uint64(7))
@@ -229,7 +234,7 @@ func FuzzEncodeFieldValueGarbageTypeCrashSafety(f *testing.F) {
 	f.Add("Bad", []byte{0x01})
 
 	f.Fuzz(func(t *testing.T, typ string, raw []byte) {
-		schema := Types{"Bad": {{Name: "x", Type: typ}}}
+		schema := NewTypes("Bad", NewField("x", typ))
 		values := []any{raw, string(raw), nil, big.NewInt(int64(len(raw))), []any{raw}, map[string]any{"x": raw}}
 		for _, v := range values {
 			_, _ = schema.EncodeData("Bad", map[string]any{"x": v})

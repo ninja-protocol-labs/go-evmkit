@@ -28,8 +28,8 @@ type Domain struct {
 
 // NewDomain returns a Domain with the given fields; any zero-valued field
 // (e.g. a nil chainID) is omitted from the signed domain, per EIP-712.
-func NewDomain(name, version string, chainID *big.Int, verifyingContract *types.Address, salt *types.Hash) Domain {
-	return Domain{
+func NewDomain(name, version string, chainID *big.Int, verifyingContract *types.Address, salt *types.Hash) *Domain {
+	return &Domain{
 		Name:              name,
 		Version:           version,
 		ChainID:           chainID,
@@ -45,23 +45,23 @@ func (d Domain) fieldsAndData() ([]Field, map[string]any) {
 	data := make(map[string]any)
 
 	if d.Name != "" {
-		fields = append(fields, Field{Name: "name", Type: "string"})
+		fields = append(fields, NewField("name", "string"))
 		data["name"] = d.Name
 	}
 	if d.Version != "" {
-		fields = append(fields, Field{Name: "version", Type: "string"})
+		fields = append(fields, NewField("version", "string"))
 		data["version"] = d.Version
 	}
 	if d.ChainID != nil {
-		fields = append(fields, Field{Name: "chainId", Type: "uint256"})
+		fields = append(fields, NewField("chainId", "uint256"))
 		data["chainId"] = d.ChainID
 	}
 	if d.VerifyingContract != nil {
-		fields = append(fields, Field{Name: "verifyingContract", Type: "address"})
+		fields = append(fields, NewField("verifyingContract", "address"))
 		data["verifyingContract"] = d.VerifyingContract
 	}
 	if d.Salt != nil {
-		fields = append(fields, Field{Name: "salt", Type: "bytes32"})
+		fields = append(fields, NewField("salt", "bytes32"))
 		data["salt"] = d.Salt.Bytes()
 	}
 	return fields, data
@@ -70,12 +70,12 @@ func (d Domain) fieldsAndData() ([]Field, map[string]any) {
 // DomainSeparator returns hashStruct(eip712Domain) for domain. domain must
 // have at least one field set, per EIP-712's requirement that the
 // EIP712Domain type contain one or more members.
-func DomainSeparator(domain Domain) (*types.Hash, error) {
+func DomainSeparator(domain *Domain) (*types.Hash, error) {
 	fields, data := domain.fieldsAndData()
 	if len(fields) == 0 {
 		return nil, fmt.Errorf("eip712: domain has no fields set")
 	}
-	return Types{"EIP712Domain": fields}.HashStruct("EIP712Domain", data)
+	return NewTypes("EIP712Domain", fields...).HashStruct("EIP712Domain", data)
 }
 
 // Field is one named, typed field of an EIP-712 struct type.
@@ -86,11 +86,26 @@ type Field struct {
 
 // NewField returns a Field named name with the given EIP-712 type string.
 func NewField(name, typ string) Field {
-	return Field{Name: name, Type: typ}
+	return Field{
+		Name: name,
+		Type: typ,
+	}
 }
 
 // Types maps a custom struct type's name to its ordered fields.
 type Types map[string][]Field
+
+// NewTypes returns a Types schema with a single entry, name mapped to fields.
+func NewTypes(name string, fields ...Field) Types {
+	return Types{
+		name: fields,
+	}
+}
+
+// Append adds another entry to t, name mapped to fields.
+func (t Types) Append(name string, fields ...Field) {
+	t[name] = fields
+}
 
 // EncodeType returns primaryType's EIP-712 type encoding: its own
 // definition, then every struct type it references (directly or
@@ -145,14 +160,6 @@ func (t Types) collectDependencies(typeName string, found []string) []string {
 		found = t.collectDependencies(field.Type, found)
 	}
 	return found
-}
-
-// baseTypeName strips any array suffix, e.g. "Person[3][]" -> "Person".
-func baseTypeName(typeName string) string {
-	if before, _, ok := strings.Cut(typeName, "["); ok {
-		return before
-	}
-	return typeName
 }
 
 // EncodeData returns the EIP-712 encoding of a struct instance:
@@ -246,9 +253,17 @@ func (t Types) encodeArrayValue(typeName string, value any) ([]byte, error) {
 	return core.Keccak256(buf).Bytes(), nil
 }
 
+// baseTypeName strips any array suffix, e.g. "Person[3][]" -> "Person".
+func baseTypeName(typeName string) string {
+	if before, _, ok := strings.Cut(typeName, "["); ok {
+		return before
+	}
+	return typeName
+}
+
 // Hash returns the final signable EIP-712 digest:
 // keccak256("\x19\x01" ++ domainSeparator ++ hashStruct(message)).
-func Hash(domain Domain, primaryType string, schema Types, message map[string]any) (*types.Hash, error) {
+func Hash(domain *Domain, primaryType string, schema Types, message map[string]any) (*types.Hash, error) {
 	domainSep, err := DomainSeparator(domain)
 	if err != nil {
 		return nil, err

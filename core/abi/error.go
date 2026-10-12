@@ -79,7 +79,7 @@ func NewError(name string, inputs Types) *Error {
 // "error InsufficientBalance(uint256 available, uint256 required)".
 func ParseError(signature string) (*Error, error) {
 	sig := strings.TrimSpace(signature)
-	if rest, ok := stripPrefix(sig, "error"); ok && (rest == "" || !isIdentChar(rest[0])) {
+	if rest, ok := stripPrefix(sig, "error"); ok && len(rest) > 0 && (rest[0] == ' ' || rest[0] == '\t') {
 		sig = strings.TrimSpace(rest)
 	}
 

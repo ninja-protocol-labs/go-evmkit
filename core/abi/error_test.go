@@ -85,6 +85,25 @@ func TestParseErrorNameStartingWithErrorIsNotStripped(t *testing.T) {
 	require.Equal(t, "errorCode", e.Name)
 }
 
+func TestParseErrorNameExactlyErrorIsNotStripped(t *testing.T) {
+	e, err := ParseError("error()")
+	require.NoError(t, err)
+	require.Equal(t, "error", e.Name)
+	require.Equal(t, "error()", e.Signature())
+
+	e2, err := ParseError(e.Signature())
+	require.NoError(t, err)
+	require.Equal(t, e.Name, e2.Name)
+	require.Equal(t, e.Selector(), e2.Selector())
+}
+
+func TestParseErrorNameExactlyErrorWithArgsIsNotStripped(t *testing.T) {
+	e, err := ParseError("error(uint256)")
+	require.NoError(t, err)
+	require.Equal(t, "error", e.Name)
+	require.Equal(t, "error(uint256)", e.Signature())
+}
+
 func TestParseErrorNoArgs(t *testing.T) {
 	e, err := ParseError("Paused()")
 	require.NoError(t, err)
