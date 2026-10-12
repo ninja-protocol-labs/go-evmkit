@@ -63,17 +63,9 @@ type Type struct {
 // Types is a list of Type, e.g. a function's parameter types.
 type Types []Type
 
-// Selector is a 4-byte ABI function selector: keccak256(signature)[:4].
-type Selector [4]byte
-
-// String returns the "0x"-prefixed hex encoding of the selector.
-func (s Selector) String() string {
-	return encoding.Hex.EncodePrefixed(s[:])
-}
-
 // IsDynamic reports whether values of this type require head/tail encoding
 // (bytes, string, T[], or anything containing one of those).
-func (t *Type) IsDynamic() bool {
+func (t Type) IsDynamic() bool {
 	switch t.Kind {
 	case KindBytes, KindString, KindSlice:
 		return true
@@ -93,7 +85,7 @@ func (t *Type) IsDynamic() bool {
 
 // String returns t's canonical ABI type name, e.g. "uint256", "address[]",
 // or "(address,uint256)" for a tuple.
-func (t *Type) String() string {
+func (t Type) String() string {
 	switch t.Kind {
 	case KindBool:
 		return "bool"
@@ -190,7 +182,10 @@ var (
 
 // Slice returns the dynamic-length array type T[] for elem.
 func Slice(elem Type) Type {
-	return Type{Kind: KindSlice, Elem: &elem}
+	return Type{
+		Kind: KindSlice,
+		Elem: &elem,
+	}
 }
 
 // Array returns the fixed-length array type T[size] for elem. size must be
@@ -199,12 +194,19 @@ func Array(elem Type, size int) (Type, error) {
 	if size < 0 {
 		return Type{}, fmt.Errorf("%w: got %d", ErrInvalidArraySize, size)
 	}
-	return Type{Kind: KindArray, Elem: &elem, Size: size}, nil
+	return Type{
+		Kind: KindArray,
+		Elem: &elem,
+		Size: size,
+	}, nil
 }
 
 // Tuple returns the unnamed tuple type (T1, T2, ...) for components.
 func Tuple(components ...Type) Type {
-	return Type{Kind: KindTuple, Components: components}
+	return Type{
+		Kind:       KindTuple,
+		Components: components,
+	}
 }
 
 // NamedTuple returns the tuple type (T1, T2, ...) for components, with
@@ -214,5 +216,17 @@ func NamedTuple(names []string, components ...Type) (Type, error) {
 	if len(names) != len(components) {
 		return Type{}, fmt.Errorf("%w: %d names but %d components", ErrTupleNameMismatch, len(names), len(components))
 	}
-	return Type{Kind: KindTuple, Components: components, Names: names}, nil
+	return Type{
+		Kind:       KindTuple,
+		Components: components,
+		Names:      names,
+	}, nil
+}
+
+// Selector is a 4-byte ABI function selector: keccak256(signature)[:4].
+type Selector [4]byte
+
+// String returns the "0x"-prefixed hex encoding of the selector.
+func (s Selector) String() string {
+	return encoding.Hex.EncodePrefixed(s[:])
 }
