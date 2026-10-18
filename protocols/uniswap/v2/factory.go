@@ -44,6 +44,7 @@ type IFactory interface {
 	GetPair(ctx context.Context, contract, tokenA, tokenB *types.Address, block string) (*types.Address, error)
 	AllPairs(ctx context.Context, contract *types.Address, index *big.Int, block string) (*types.Address, error)
 	AllPairsLength(ctx context.Context, contract *types.Address, block string) (*big.Int, error)
+
 	CreatePair(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
 	SetFeeTo(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
 	SetFeeToSetter(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)

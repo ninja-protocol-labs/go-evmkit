@@ -44,7 +44,7 @@ type CreateDeployerSuite struct {
 func TestERC20CreateDeployerSuite(t *testing.T) {
 	suite.Run(t, &CreateDeployerSuite{
 		Enable:        false,
-		RPCURL:        "https://api.avax-test.network/ext/bc/C/rpc",
+		RPCURL:        "",
 		PrivateKeyHex: "",
 		ByteCode:      erc20ByteCodeHex,
 		Constructor:   abi.NewFunction("constructor", abi.Types{abi.String, abi.String, abi.Uint8}, nil),

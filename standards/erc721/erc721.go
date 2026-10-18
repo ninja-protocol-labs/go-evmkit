@@ -26,6 +26,7 @@ type IERC721 interface {
 	OwnerOf(ctx context.Context, contract *types.Address, tokenId *big.Int, block string) (*types.Address, error)
 	GetApproved(ctx context.Context, contract *types.Address, tokenId *big.Int, block string) (*types.Address, error)
 	IsApprovedForAll(ctx context.Context, contract, owner, operator *types.Address, block string) (bool, error)
+
 	Approve(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
 	SetApprovalForAll(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
 	TransferFrom(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)

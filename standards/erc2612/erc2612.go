@@ -25,6 +25,7 @@ import (
 type IERC2612 interface {
 	Nonces(ctx context.Context, contract, owner *types.Address, block string) (*big.Int, error)
 	DomainSeparator(ctx context.Context, contract *types.Address, block string) ([]byte, error)
+
 	Permit(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
 }
 

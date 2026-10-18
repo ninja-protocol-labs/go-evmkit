@@ -25,6 +25,7 @@ type IERC1155 interface {
 	BalanceOf(ctx context.Context, contract, account *types.Address, id *big.Int, block string) (*big.Int, error)
 	BalanceOfBatch(ctx context.Context, contract *types.Address, accounts []*types.Address, ids []*big.Int, block string) ([]*big.Int, error)
 	IsApprovedForAll(ctx context.Context, contract, account, operator *types.Address, block string) (bool, error)
+
 	SetApprovalForAll(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
 	SafeTransferFrom(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
 	SafeBatchTransferFrom(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
