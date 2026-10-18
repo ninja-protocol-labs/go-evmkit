@@ -37,11 +37,11 @@ type DynamicFeeTxSuite struct {
 func TestDynamicFeeTxSuite(t *testing.T) {
 	suite.Run(t, &DynamicFeeTxSuite{
 		Enable:        false,
-		RPCURL:        "https://ethereum-sepolia-rpc.publicnode.com",
-		FromHex:       "0x833e1D0b8Bc979D49d57b65dCF18364694B16D52",
-		ToHex:         "0xc10B4374F9654187DeB5eE2d2715c935f5C1Cb02",
+		RPCURL:        "",
+		FromHex:       "",
+		ToHex:         "",
 		PrivateKeyHex: "",
-		TokenHex:      "0x779877A7B0D9E8603169DdbD7836e478b4624789",
+		TokenHex:      "",
 	})
 }
 

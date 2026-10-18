@@ -23,6 +23,7 @@ type IERC20 interface {
 	TotalSupply(ctx context.Context, token *types.Address, block string) (*big.Int, error)
 	BalanceOf(ctx context.Context, token, addr *types.Address, block string) (*big.Int, error)
 	Allowance(ctx context.Context, token, owner, spender *types.Address, block string) (*big.Int, error)
+
 	Transfer(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
 	Approve(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
 	TransferFrom(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
@@ -34,6 +35,7 @@ var _ IERC20 = (*ERC20)(nil)
 // name/symbol/decimals are optional per EIP-20.
 type IERC20Metadata interface {
 	IERC20
+
 	Name(ctx context.Context, token *types.Address, block string) (string, error)
 	Symbol(ctx context.Context, token *types.Address, block string) (string, error)
 	Decimals(ctx context.Context, token *types.Address, block string) (uint8, error)
