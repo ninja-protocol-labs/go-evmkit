@@ -8,6 +8,7 @@ import (
 
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
+	"github.com/ninja-protocol-labs/go-evmkit/tx"
 )
 
 // go test -run '^$' -fuzz '^FuzzDecodeGetReservesRoundTrip$' -fuzztime=10s ./protocols/uniswap/v2
@@ -147,5 +148,33 @@ func FuzzPairSimpleDecodersDoNotPanic(f *testing.F) {
 		_, _ = DecodeMint(data)
 		_, _, _ = DecodeBurn(data)
 		_, _ = DecodePermitTypehash(data)
+	})
+}
+
+// go test -run '^$' -fuzz '^FuzzExtractEventsDoNotPanic$' -fuzztime=10s ./protocols/uniswap/v2
+func FuzzExtractEventsDoNotPanic(f *testing.F) {
+	f.Add(uint8(0), []byte{}, []byte{})
+	f.Add(uint8(4), make([]byte, 128), make([]byte, 64))
+	f.Add(uint8(7), []byte{0xde, 0xad, 0xbe, 0xef}, []byte{0x01})
+
+	f.Fuzz(func(t *testing.T, topicCount uint8, topicsRaw, data []byte) {
+		n := int(topicCount % 8)
+		topics := make([]*types.Hash, n)
+		for i := range topics {
+			start := i * 32
+			if start >= len(topicsRaw) {
+				topics[i] = types.NewHashFromBytes(nil)
+				continue
+			}
+			end := min(start+32, len(topicsRaw))
+			topics[i] = types.NewHashFromBytes(topicsRaw[start:end])
+		}
+		logs := []tx.Log{{Address: testPair, Topics: topics, Data: data}}
+
+		_, _ = ExtractPairCreated(logs)
+		_, _ = ExtractMint(logs)
+		_, _ = ExtractBurn(logs)
+		_, _ = ExtractSwap(logs)
+		_, _ = ExtractSync(logs)
 	})
 }

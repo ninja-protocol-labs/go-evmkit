@@ -81,6 +81,13 @@ func (s *Signature) Bytes() []byte {
 	return b
 }
 
+// LegacyBytes returns the recoverable encoding, r ∥ s ∥ v, with v in its legacy (27/28) form.
+func (s *Signature) LegacyBytes() []byte {
+	b := s.Bytes()
+	b[SignatureLength-1] = byte(s.LegacyV().Uint64())
+	return b
+}
+
 // Big returns the recoverable encoding, r ∥ s ∥ v, interpreted as a big-endian integer.
 func (s *Signature) Big() *big.Int {
 	return new(big.Int).SetBytes(s.Bytes())

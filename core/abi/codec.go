@@ -27,13 +27,13 @@ type bounds struct {
 	uintMax, intMin, intMax *big.Int
 }
 
-// boundsTable holds precomputed bounds for widths 65..256, indexed by size-65.
-var boundsTable [192]bounds
+// boundsTable holds precomputed bounds for widths 1..256, indexed by size-1.
+var boundsTable [256]bounds
 
 func init() {
-	for size := 65; size <= 256; size++ {
+	for size := 1; size <= 256; size++ {
 		half := new(big.Int).Lsh(big.NewInt(1), uint(size-1))
-		boundsTable[size-65] = bounds{
+		boundsTable[size-1] = bounds{
 			uintMax: new(big.Int).Lsh(big.NewInt(1), uint(size)),
 			intMin:  new(big.Int).Neg(half),
 			intMax:  new(big.Int).Sub(half, big.NewInt(1)),
@@ -41,12 +41,15 @@ func init() {
 	}
 }
 
-// boundsFor returns the precomputed bounds for size, or ok=false if size is outside 65..256.
+// boundsFor returns the precomputed bounds for size, or ok=false if size is outside 1..256. This
+// covers every width encodeUint/encodeInt's *big.Int path can be asked for, including widths
+// between 1 and 64 that aren't 8/16/32/64 (e.g. uint48) -- those used to fall through to this
+// same default path but boundsFor only recognized 65..256, so they errored as unsupported.
 func boundsFor(size int) (b bounds, ok bool) {
-	if size < 65 || size > 256 {
+	if size < 1 || size > 256 {
 		return bounds{}, false
 	}
-	return boundsTable[size-65], true
+	return boundsTable[size-1], true
 }
 
 // encodeValue encodes a static scalar value as a single 32-byte ABI word.

@@ -182,7 +182,7 @@ func FuzzBoundsFor(f *testing.F) {
 
 	f.Fuzz(func(t *testing.T, size int) {
 		bnd, ok := boundsFor(size)
-		if size < 65 || size > 256 {
+		if size < 1 || size > 256 {
 			require.False(t, ok)
 			return
 		}
@@ -482,14 +482,14 @@ func FuzzPackUnpackTupleMixedRoundTrip(f *testing.F) {
 	f.Add(uint64(1)<<63, make([]byte, 40), make([]byte, 70))
 
 	f.Fuzz(func(t *testing.T, amount uint64, strBytes []byte, dynBytes []byte) {
-		types := Types{Uint64, String, Bytes}
+		typ := Types{Uint64, String, Bytes}
 		str := string(strBytes)
 		args := []any{amount, str, dynBytes}
 
-		data, err := packTuple(types, args)
+		data, err := packTuple(typ, args)
 		require.NoError(t, err)
 
-		got, err := unpackTuple(types, data)
+		got, err := unpackTuple(typ, data)
 		require.NoError(t, err)
 		require.Equal(t, amount, got[0])
 		require.Equal(t, str, got[1])
