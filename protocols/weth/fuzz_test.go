@@ -5,6 +5,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/ninja-protocol-labs/go-evmkit/core/types"
+	"github.com/ninja-protocol-labs/go-evmkit/tx"
 )
 
 // go test -run '^$' -fuzz '^FuzzEncodeWithdrawRoundTrip$' -fuzztime=10s ./protocols/weth
@@ -38,5 +41,30 @@ func FuzzWETHSimpleDecodersDoNotPanic(f *testing.F) {
 
 	f.Fuzz(func(t *testing.T, data []byte) {
 		_, _ = withdrawFn.DecodeCall(data)
+	})
+}
+
+// go test -run '^$' -fuzz '^FuzzExtractEventsDoNotPanic$' -fuzztime=10s ./protocols/weth
+func FuzzExtractEventsDoNotPanic(f *testing.F) {
+	f.Add(uint8(0), []byte{}, []byte{})
+	f.Add(uint8(2), make([]byte, 64), make([]byte, 32))
+	f.Add(uint8(3), []byte{0xde, 0xad, 0xbe, 0xef}, []byte{0x01})
+
+	f.Fuzz(func(t *testing.T, topicCount uint8, topicsRaw, data []byte) {
+		n := int(topicCount % 4)
+		topics := make([]*types.Hash, n)
+		for i := range topics {
+			start := i * 32
+			if start >= len(topicsRaw) {
+				topics[i] = types.NewHashFromBytes(nil)
+				continue
+			}
+			end := min(start+32, len(topicsRaw))
+			topics[i] = types.NewHashFromBytes(topicsRaw[start:end])
+		}
+		logs := []tx.Log{{Address: testWETH, Topics: topics, Data: data}}
+
+		_, _ = ExtractDeposits(logs)
+		_, _ = ExtractWithdrawals(logs)
 	})
 }

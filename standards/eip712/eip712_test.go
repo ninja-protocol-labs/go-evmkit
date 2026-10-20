@@ -145,7 +145,7 @@ func TestEIP712HashStructPerson(t *testing.T) {
 	)
 	wallet, err := types.NewAddressFromHex("0xCD2a3d9F938E13CD947Ec05AbC7FE734Df8DD826")
 	require.NoError(t, err)
-	cow := map[string]any{
+	cow := Message{
 		"name":   "Cow",
 		"wallet": wallet,
 	}
@@ -170,12 +170,12 @@ func TestEIP712HashStructMail(t *testing.T) {
 	require.NoError(t, err)
 	bobWallet, err := types.NewAddressFromHex("0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB")
 	require.NoError(t, err)
-	mail := map[string]any{
-		"from": map[string]any{
+	mail := Message{
+		"from": Message{
 			"name":   "Cow",
 			"wallet": cowWallet,
 		},
-		"to": map[string]any{
+		"to": Message{
 			"name":   "Bob",
 			"wallet": bobWallet,
 		},
@@ -190,23 +190,23 @@ func TestEIP712HashStructMail(t *testing.T) {
 
 func TestEIP712EncodeDataFieldCountMismatchIgnored(t *testing.T) {
 	ts := NewTypes("Simple", NewField("a", abi.Uint256.String()))
-	_, err := ts.EncodeData("Simple", map[string]any{"a": big.NewInt(1), "extra": "ignored"})
+	_, err := ts.EncodeData("Simple", Message{"a": big.NewInt(1), "extra": "ignored"})
 	require.NoError(t, err)
 }
 
 func TestEIP712EncodeDataMissingFieldErrors(t *testing.T) {
 	ts := NewTypes("Simple", NewField("a", abi.Address.String()))
-	_, err := ts.EncodeData("Simple", map[string]any{})
+	_, err := ts.EncodeData("Simple", Message{})
 	require.Error(t, err)
 }
 
 func TestEIP712EncodeDataArrayOfStructs(t *testing.T) {
 	ts := NewTypes("Group", NewField("members", "Person[]"))
 	ts.Append("Person", NewField("name", abi.String.String()))
-	group := map[string]any{
+	group := Message{
 		"members": []any{
-			map[string]any{"name": "Alice"},
-			map[string]any{"name": "Bob"},
+			Message{"name": "Alice"},
+			Message{"name": "Bob"},
 		},
 	}
 	got, err := ts.HashStruct("Group", group)
@@ -221,20 +221,20 @@ func TestEIP712EncodeDataArrayOfBytes32(t *testing.T) {
 	id2 := make([]byte, 32)
 	id2[0] = 0x02
 
-	got, err := ts.EncodeData("Batch", map[string]any{"ids": [][]byte{id1, id2}})
+	got, err := ts.EncodeData("Batch", Message{"ids": [][]byte{id1, id2}})
 	require.NoError(t, err)
 	require.Len(t, got, 64)
 }
 
 func TestEIP712EncodeDataUnknownFieldTypeErrors(t *testing.T) {
 	ts := NewTypes("Bad", NewField("x", "notarealtype"))
-	_, err := ts.EncodeData("Bad", map[string]any{"x": "whatever"})
+	_, err := ts.EncodeData("Bad", Message{"x": "whatever"})
 	require.Error(t, err)
 }
 
 func TestEIP712EncodeDataArrayWrongGoTypeErrors(t *testing.T) {
 	ts := NewTypes("Bad", NewField("x", abi.Slice(abi.Uint256).String()))
-	_, err := ts.EncodeData("Bad", map[string]any{"x": "not a slice"})
+	_, err := ts.EncodeData("Bad", Message{"x": "not a slice"})
 	require.Error(t, err)
 }
 
@@ -271,12 +271,12 @@ func TestEIP712Hash(t *testing.T) {
 	require.NoError(t, err)
 	bobWallet, err := types.NewAddressFromHex("0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB")
 	require.NoError(t, err)
-	mail := map[string]any{
-		"from": map[string]any{
+	mail := Message{
+		"from": Message{
 			"name":   "Cow",
 			"wallet": cowWallet,
 		},
-		"to": map[string]any{
+		"to": Message{
 			"name":   "Bob",
 			"wallet": bobWallet,
 		},
@@ -312,7 +312,7 @@ func TestEIP712HashErrorsOnBadMessage(t *testing.T) {
 		NewField("to", "Person"),
 		NewField("contents", abi.String.String()),
 	)
-	_, err = Hash(domain, "Mail", ts, map[string]any{})
+	_, err = Hash(domain, "Mail", ts, Message{})
 	require.Error(t, err)
 }
 
@@ -336,11 +336,11 @@ func TestEIP712DomainSeparatorWithSalt(t *testing.T) {
 func TestEIP712EncodeDataBoolField(t *testing.T) {
 	ts := NewTypes("Simple", NewField("ok", abi.Bool.String()))
 
-	got, err := ts.EncodeData("Simple", map[string]any{"ok": true})
+	got, err := ts.EncodeData("Simple", Message{"ok": true})
 	require.NoError(t, err)
 	require.Len(t, got, 64)
 
-	gotFalse, err := ts.EncodeData("Simple", map[string]any{"ok": false})
+	gotFalse, err := ts.EncodeData("Simple", Message{"ok": false})
 	require.NoError(t, err)
 	require.NotEqual(t, got, gotFalse)
 }
@@ -348,7 +348,7 @@ func TestEIP712EncodeDataBoolField(t *testing.T) {
 func TestEIP712EncodeDataNegativeInt256Field(t *testing.T) {
 	ts := NewTypes("Simple", NewField("delta", abi.Int256.String()))
 
-	got, err := ts.EncodeData("Simple", map[string]any{"delta": big.NewInt(-42)})
+	got, err := ts.EncodeData("Simple", Message{"delta": big.NewInt(-42)})
 	require.NoError(t, err)
 	require.Len(t, got, 64)
 	require.Equal(t, byte(0xff), got[32])
@@ -359,8 +359,8 @@ func TestEIP712EncodeDataSelfReferencingTree(t *testing.T) {
 		NewField("value", abi.Uint256.String()),
 		NewField("children", "Node[]"),
 	)
-	leaf := map[string]any{"value": big.NewInt(2), "children": []any{}}
-	root := map[string]any{"value": big.NewInt(1), "children": []any{leaf}}
+	leaf := Message{"value": big.NewInt(2), "children": []any{}}
+	root := Message{"value": big.NewInt(1), "children": []any{leaf}}
 
 	got, err := ts.HashStruct("Node", root)
 	require.NoError(t, err)
@@ -374,7 +374,7 @@ func TestEIP712EncodeDataSelfReferencingTree(t *testing.T) {
 func TestEIP712EncodeDataNestedArray(t *testing.T) {
 	ts := NewTypes("Matrix", NewField("rows", abi.Slice(abi.Slice(abi.Uint256)).String()))
 
-	got, err := ts.EncodeData("Matrix", map[string]any{
+	got, err := ts.EncodeData("Matrix", Message{
 		"rows": [][]*big.Int{
 			{big.NewInt(1), big.NewInt(2)},
 			{big.NewInt(3), big.NewInt(4), big.NewInt(5)},
@@ -386,7 +386,7 @@ func TestEIP712EncodeDataNestedArray(t *testing.T) {
 
 func TestEIP712EncodeDataArrayOfUint8IsAmbiguousWithBytes(t *testing.T) {
 	ts := NewTypes("Matrix", NewField("rows", abi.Slice(abi.Slice(abi.Uint8)).String()))
-	_, err := ts.EncodeData("Matrix", map[string]any{
+	_, err := ts.EncodeData("Matrix", Message{
 		"rows": [][]uint8{{1, 2}, {3, 4, 5}},
 	})
 	require.Error(t, err)
@@ -409,4 +409,105 @@ func TestNewDomain(t *testing.T) {
 func TestNewField(t *testing.T) {
 	f := NewField("wallet", "address")
 	require.Equal(t, Field{Name: "wallet", Type: "address"}, f)
+}
+
+func mailTestFixture(t *testing.T) (*Domain, Types, Message) {
+	t.Helper()
+	contract, err := types.NewAddressFromHex("0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC")
+	require.NoError(t, err)
+	domain := NewDomain("Ether Mail", "1", big.NewInt(1), contract, nil)
+	cowWallet, err := types.NewAddressFromHex("0xCD2a3d9F938E13CD947Ec05AbC7FE734Df8DD826")
+	require.NoError(t, err)
+	bobWallet, err := types.NewAddressFromHex("0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB")
+	require.NoError(t, err)
+	mail := Message{
+		"from":     Message{"name": "Cow", "wallet": cowWallet},
+		"to":       Message{"name": "Bob", "wallet": bobWallet},
+		"contents": "Hello, Bob!",
+	}
+	ts := NewTypes("Person",
+		NewField("name", abi.String.String()),
+		NewField("wallet", abi.Address.String()),
+	)
+	ts.Append("Mail",
+		NewField("from", "Person"),
+		NewField("to", "Person"),
+		NewField("contents", abi.String.String()),
+	)
+	return domain, ts, mail
+}
+
+func TestFinalizeHashMatchesHash(t *testing.T) {
+	domain, ts, mail := mailTestFixture(t)
+
+	msgHash, err := ts.HashStruct("Mail", mail)
+	require.NoError(t, err)
+
+	got, err := FinalizeHash(domain, msgHash)
+	require.NoError(t, err)
+
+	want, err := Hash(domain, "Mail", ts, mail)
+	require.NoError(t, err)
+	require.Equal(t, want.Bytes(), got.Bytes())
+
+	wantHex, err := hex.DecodeString("be609aee343fb3c4b28e1df9e632fca64fcfaede20f02e86244efddf30957bd2")
+	require.NoError(t, err)
+	require.Equal(t, wantHex, got.Bytes())
+}
+
+func TestFinalizeHashDeterministic(t *testing.T) {
+	domain, ts, mail := mailTestFixture(t)
+	msgHash, err := ts.HashStruct("Mail", mail)
+	require.NoError(t, err)
+
+	h1, err := FinalizeHash(domain, msgHash)
+	require.NoError(t, err)
+	h2, err := FinalizeHash(domain, msgHash)
+	require.NoError(t, err)
+	require.Equal(t, h1.Bytes(), h2.Bytes())
+}
+
+func TestFinalizeHashSensitiveToStructHash(t *testing.T) {
+	domain, _, _ := mailTestFixture(t)
+
+	h1, err := FinalizeHash(domain, types.NewHashFromBytes([]byte("struct hash one, 32 bytes long!")))
+	require.NoError(t, err)
+	h2, err := FinalizeHash(domain, types.NewHashFromBytes([]byte("struct hash two, 32 bytes long!")))
+	require.NoError(t, err)
+	require.NotEqual(t, h1.Bytes(), h2.Bytes())
+}
+
+func TestFinalizeHashRejectsEmptyDomain(t *testing.T) {
+	_, err := FinalizeHash(&Domain{}, types.NewHashFromBytes([]byte("struct hash, 32 bytes long here")))
+	require.Error(t, err)
+}
+
+func TestHashStructWithTypeHashMatchesHashStruct(t *testing.T) {
+	_, ts, mail := mailTestFixture(t)
+
+	want, err := ts.HashStruct("Mail", mail)
+	require.NoError(t, err)
+
+	got, err := ts.HashStructWithTypeHash(ts.TypeHash("Mail"), "Mail", mail)
+	require.NoError(t, err)
+	require.Equal(t, want.Bytes(), got.Bytes())
+}
+
+func TestHashStructWithTypeHashSensitiveToTypeHash(t *testing.T) {
+	_, ts, mail := mailTestFixture(t)
+
+	h1, err := ts.HashStructWithTypeHash(ts.TypeHash("Mail"), "Mail", mail)
+	require.NoError(t, err)
+
+	fakeTypeHash := types.NewHashFromBytes([]byte("a totally different type hash!!"))
+	h2, err := ts.HashStructWithTypeHash(fakeTypeHash, "Mail", mail)
+	require.NoError(t, err)
+
+	require.NotEqual(t, h1.Bytes(), h2.Bytes())
+}
+
+func TestHashStructWithTypeHashErrorsOnBadMessage(t *testing.T) {
+	_, ts, _ := mailTestFixture(t)
+	_, err := ts.HashStructWithTypeHash(ts.TypeHash("Mail"), "Mail", Message{})
+	require.Error(t, err)
 }

@@ -223,10 +223,7 @@ func TestEncodeUintEveryNonNativeSizeCovered(t *testing.T) {
 }
 
 func TestBoundsForRejectsOutsideRange(t *testing.T) {
-	_, ok := boundsFor(64)
-	require.False(t, ok)
-
-	_, ok = boundsFor(257)
+	_, ok := boundsFor(257)
 	require.False(t, ok)
 
 	_, ok = boundsFor(0)
@@ -234,6 +231,16 @@ func TestBoundsForRejectsOutsideRange(t *testing.T) {
 
 	_, ok = boundsFor(-8)
 	require.False(t, ok)
+}
+
+func TestBoundsForCoversNonNativeSubWidths(t *testing.T) {
+	for _, size := range []int{24, 40, 48, 56} {
+		b, ok := boundsFor(size)
+		require.True(t, ok, "size %d", size)
+		require.NotNil(t, b.uintMax)
+		require.NotNil(t, b.intMin)
+		require.NotNil(t, b.intMax)
+	}
 }
 
 func TestEncodeUintNativeBoundaries(t *testing.T) {
@@ -1380,7 +1387,7 @@ func TestDecodeArgRejectsOffsetBeyondData(t *testing.T) {
 
 func TestDecodeDynamicValueRejectsHugeSliceCount(t *testing.T) {
 	tail := make([]byte, 64)
-	for i := 0; i < 32; i++ {
+	for i := range 32 {
 		tail[i] = 0xff
 	}
 	_, err := decodeDynamicValue(Slice(Uint8), tail)

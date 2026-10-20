@@ -241,3 +241,54 @@ func FuzzEncodeFieldValueGarbageTypeCrashSafety(f *testing.F) {
 		}
 	})
 }
+
+// go test -run '^$' -fuzz '^FuzzFinalizeHashDeterministic$' -fuzztime=10s ./standards/eip712
+func FuzzFinalizeHashDeterministic(f *testing.F) {
+	f.Add("Ether Mail", "1", []byte{1}, make([]byte, 20), make([]byte, 32))
+	f.Add("x", "", make([]byte, 64), make([]byte, 64), make([]byte, 64))
+
+	f.Fuzz(func(t *testing.T, name, version string, chainIDRaw, contractRaw, structHashRaw []byte) {
+		if len(chainIDRaw) > 32 {
+			chainIDRaw = chainIDRaw[len(chainIDRaw)-32:]
+		}
+		chainID := new(big.Int).SetBytes(chainIDRaw)
+		contract := types.NewAddressFromBytes(contractRaw)
+		domain := NewDomain(name, version, chainID, contract, nil)
+		structHash := types.NewHashFromBytes(structHashRaw)
+
+		got1, err := FinalizeHash(domain, structHash)
+		require.NoError(t, err)
+		require.Len(t, got1.Bytes(), 32)
+
+		got2, err := FinalizeHash(domain, structHash)
+		require.NoError(t, err)
+		require.Equal(t, got1.Bytes(), got2.Bytes())
+	})
+}
+
+// go test -run '^$' -fuzz '^FuzzHashStructWithTypeHashMatchesHashStruct$' -fuzztime=10s ./standards/eip712
+func FuzzHashStructWithTypeHashMatchesHashStruct(f *testing.F) {
+	f.Add("hello", []byte{1, 2, 3}, true)
+	f.Add("", []byte{}, false)
+
+	schema := NewTypes("Simple",
+		NewField("s", abi.String.String()),
+		NewField("a", abi.Address.String()),
+		NewField("ok", abi.Bool.String()),
+	)
+
+	f.Fuzz(func(t *testing.T, s string, addrRaw []byte, ok bool) {
+		data := Message{
+			"s":  s,
+			"a":  types.NewAddressFromBytes(addrRaw),
+			"ok": ok,
+		}
+
+		want, err := schema.HashStruct("Simple", data)
+		require.NoError(t, err)
+
+		got, err := schema.HashStructWithTypeHash(schema.TypeHash("Simple"), "Simple", data)
+		require.NoError(t, err)
+		require.Equal(t, want.Bytes(), got.Bytes())
+	})
+}

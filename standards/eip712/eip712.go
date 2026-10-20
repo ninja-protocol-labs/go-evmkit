@@ -17,6 +17,10 @@ import (
 // eip712Prefix is the two-byte version prefix defined by EIP-712.
 const eip712Prefix = "\x19\x01"
 
+// Message is an EIP-712 struct instance's field values, keyed by field name -- the "message" (or
+// a nested struct-typed field's own value) in the signed typed data.
+type Message map[string]any
+
 // Domain describes a signing domain per EIP-712. Only non-zero/non-nil fields are used.
 type Domain struct {
 	Name              string
@@ -40,9 +44,9 @@ func NewDomain(name, version string, chainID *big.Int, verifyingContract *types.
 
 // fieldsAndData returns domain's EIP-712 type fields and value map,
 // including only the fields actually set.
-func (d Domain) fieldsAndData() ([]Field, map[string]any) {
+func (d *Domain) fieldsAndData() ([]Field, Message) {
 	var fields []Field
-	data := make(map[string]any)
+	data := make(Message)
 
 	if d.Name != "" {
 		fields = append(fields, NewField("name", "string"))
@@ -139,7 +143,7 @@ func (t Types) TypeHash(primaryType string) *types.Hash {
 }
 
 // HashStruct returns keccak256(EncodeData(primaryType, data)).
-func (t Types) HashStruct(primaryType string, data map[string]any) (*types.Hash, error) {
+func (t Types) HashStruct(primaryType string, data Message) (*types.Hash, error) {
 	encoded, err := t.EncodeData(primaryType, data)
 	if err != nil {
 		return nil, err
@@ -164,8 +168,18 @@ func (t Types) collectDependencies(typeName string, found []string) []string {
 
 // EncodeData returns the EIP-712 encoding of a struct instance:
 // typeHash ++ enc(value) for each field in order.
-func (t Types) EncodeData(primaryType string, data map[string]any) ([]byte, error) {
+func (t Types) EncodeData(primaryType string, data Message) ([]byte, error) {
 	buf := t.TypeHash(primaryType).Bytes()
+	fields, err := t.encodeFields(primaryType, data)
+	if err != nil {
+		return nil, err
+	}
+	return append(buf, fields...), nil
+}
+
+// encodeFields encodes primaryType's fields in order, no typeHash prefix.
+func (t Types) encodeFields(primaryType string, data Message) ([]byte, error) {
+	var buf []byte
 	for _, field := range t[primaryType] {
 		encoded, err := t.encodeFieldValue(field.Type, data[field.Name])
 		if err != nil {
@@ -174,6 +188,16 @@ func (t Types) EncodeData(primaryType string, data map[string]any) ([]byte, erro
 		buf = append(buf, encoded...)
 	}
 	return buf, nil
+}
+
+// HashStructWithTypeHash is like HashStruct, but uses typeHash directly instead of deriving it
+// from schema -- for a type signature with a caller-supplied opaque fragment (e.g. a "witness").
+func (t Types) HashStructWithTypeHash(typeHash *types.Hash, primaryType string, data Message) (*types.Hash, error) {
+	fields, err := t.encodeFields(primaryType, data)
+	if err != nil {
+		return nil, err
+	}
+	return core.Keccak256(append(typeHash.Bytes(), fields...)), nil
 }
 
 // encodeFieldValue encodes one field's value per its EIP-712 type: an
@@ -185,9 +209,14 @@ func (t Types) encodeFieldValue(typeName string, value any) ([]byte, error) {
 		return t.encodeArrayValue(typeName, value)
 	}
 	if _, ok := t[typeName]; ok {
-		mapValue, ok := value.(map[string]any)
-		if !ok {
-			return nil, fmt.Errorf("expected map[string]any for %q, got %T", typeName, value)
+		var mapValue Message
+		switch v := value.(type) {
+		case Message:
+			mapValue = v
+		case map[string]any:
+			mapValue = v
+		default:
+			return nil, fmt.Errorf("expected eip712.Message for %q, got %T", typeName, value)
 		}
 		encoded, err := t.EncodeData(typeName, mapValue)
 		if err != nil {
@@ -263,17 +292,22 @@ func baseTypeName(typeName string) string {
 
 // Hash returns the final signable EIP-712 digest:
 // keccak256("\x19\x01" ++ domainSeparator ++ hashStruct(message)).
-func Hash(domain *Domain, primaryType string, schema Types, message map[string]any) (*types.Hash, error) {
-	domainSep, err := DomainSeparator(domain)
+func Hash(domain *Domain, primaryType string, schema Types, message Message) (*types.Hash, error) {
+	msgHash, err := schema.HashStruct(primaryType, message)
 	if err != nil {
 		return nil, err
 	}
-	msgHash, err := schema.HashStruct(primaryType, message)
+	return FinalizeHash(domain, msgHash)
+}
+
+// FinalizeHash wraps a precomputed struct hash (e.g. from HashStructWithTypeHash) with domain.
+func FinalizeHash(domain *Domain, structHash *types.Hash) (*types.Hash, error) {
+	domainSep, err := DomainSeparator(domain)
 	if err != nil {
 		return nil, err
 	}
 
 	buf := append([]byte(eip712Prefix), domainSep.Bytes()...)
-	buf = append(buf, msgHash.Bytes()...)
+	buf = append(buf, structHash.Bytes()...)
 	return core.Keccak256(buf), nil
 }
