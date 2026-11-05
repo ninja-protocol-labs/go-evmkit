@@ -75,6 +75,10 @@ func (d *Domain) fieldsAndData() ([]Field, Message) {
 // have at least one field set, per EIP-712's requirement that the
 // EIP712Domain type contain one or more members.
 func DomainSeparator(domain *Domain) (*types.Hash, error) {
+	if domain == nil {
+		return nil, fmt.Errorf("eip712: domain is nil")
+	}
+
 	fields, data := domain.fieldsAndData()
 	if len(fields) == 0 {
 		return nil, fmt.Errorf("eip712: domain has no fields set")
