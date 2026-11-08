@@ -37,6 +37,7 @@ type RouterSwapSuite struct {
 	RPCURL        string
 	PrivateKeyHex string
 	RouterHex     string
+	QuoterHex     string
 	TokenInHex    string
 	TokenOutHex   string
 	HopsHex       []string
@@ -59,6 +60,7 @@ type RouterSwapSuite struct {
 	signer    core.Signer
 	from      *types.Address
 	router    *types.Address
+	quoter    *types.Address
 	weth9Addr *types.Address
 	tokenIn   *types.Address
 	tokenOut  *types.Address
@@ -68,6 +70,7 @@ type RouterSwapSuite struct {
 	amount    *big.Int
 
 	v3Router *Router
+	v3Quoter *Quoter
 	erc20    *erc20.ERC20
 
 	totalFee *big.Int
@@ -80,6 +83,7 @@ func TestRouterSwapSuite(t *testing.T) {
 		RPCURL:        "",
 		PrivateKeyHex: "",
 		RouterHex:     "",
+		QuoterHex:     "",
 		TokenInHex:    "",
 		TokenOutHex:   "",
 		HopsHex:       []string{},
@@ -105,6 +109,7 @@ func (s *RouterSwapSuite) SetupSuite() {
 
 	s.client = rpc.NewClient(s.RPCURL, rpc.WithRetry(5, rpc.ExponentialBackoff(500*time.Millisecond, 10*time.Second)))
 	s.v3Router = NewRouter(s.client)
+	s.v3Quoter = NewQuoter(s.client)
 	s.erc20 = erc20.New(s.client)
 
 	s.totalFee = big.NewInt(0)
@@ -115,6 +120,9 @@ func (s *RouterSwapSuite) SetupSuite() {
 	s.from = core.PubkeyToAddress(privKey.PublicKey())
 
 	s.router, err = types.NewAddressFromHex(s.RouterHex)
+	s.Require().NoError(err)
+
+	s.quoter, err = types.NewAddressFromHex(s.QuoterHex)
 	s.Require().NoError(err)
 
 	s.Require().False(s.NativeIn && s.NativeOut, "NativeIn and NativeOut can't both be set -- that's not a swap")
@@ -319,8 +327,11 @@ func (s *RouterSwapSuite) swap(path []*types.Address, fees []*big.Int, amountIn 
 		return true
 	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "swap not buildable: %v", lastErr)
 
+	quoterQuote, err := s.v3Quoter.CallQuoteExactInput(s.ctx, s.quoter, s.from, encodedPath, amountIn, rpc.BlockTagLatest)
+	s.Require().NoError(err)
+	s.T().Logf("swap %s -> %s: Quoter's own quote taken right before broadcast: amountOut=%s", tokenIn, tokenOut, quoterQuote.AmountOut)
+
 	var unsignedSwap core.Transaction
-	var err error
 	if nativeOut {
 		unwrapCalldata, encErr := EncodeRouterUnwrapWETH9(amountOutMin, s.from)
 		s.Require().NoError(encErr)
@@ -365,9 +376,14 @@ func (s *RouterSwapSuite) swap(path []*types.Address, fees []*big.Int, amountIn 
 		actualAmountOut = new(big.Int).Neg(lastSwap.Amount1)
 	}
 
+	drift := new(big.Int).Sub(actualAmountOut, quoterQuote.AmountOut)
+	driftPct := new(big.Float).Quo(new(big.Float).SetInt(drift), new(big.Float).SetInt(quoterQuote.AmountOut))
+	driftPct.Mul(driftPct, big.NewFloat(100))
+
 	s.T().Logf("Router swap %s -> %s Result", tokenIn, tokenOut)
 	s.T().Logf("\tAmountIn: %s", amountIn)
 	s.T().Logf("\tAmountOut: %s", actualAmountOut)
+	s.T().Logf("\tQuoter's pre-swap quote: %s (drift %s, %s%%)", quoterQuote.AmountOut, drift, driftPct.Text('f', 6))
 	s.T().Logf("\tTx: %s", swapHash)
 	s.T().Logf("\tLogs:")
 	for _, transfer := range transfers {
