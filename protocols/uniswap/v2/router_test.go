@@ -24,6 +24,330 @@ import (
 	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
+type RouterSwapSuite struct {
+	suite.Suite
+
+	Enable          bool
+	RPCURL          string
+	PrivateKeyHex   string
+	RouterHex       string
+	TokenInHex      string
+	TokenOutHex     string
+	HopsHex         []string
+	NativeIn        bool
+	NativeOut       bool
+	MulticallHex    string
+	AmountIn        string
+	NativeSymbol    string
+	RoundTrip       bool
+	Interval        int
+	Timeout         int
+	DeadlineSeconds int
+	PriceBuffer     uint64
+	LimitBuffer     uint64
+
+	ctx    context.Context
+	cancel context.CancelFunc
+
+	client    rpc.Client
+	signer    core.Signer
+	from      *types.Address
+	router    *types.Address
+	wethAddr  *types.Address
+	tokenIn   *types.Address
+	tokenOut  *types.Address
+	hops      []*types.Address
+	multicall *types.Address
+	amount    *big.Int
+
+	v2Router *Router
+	erc20    *erc20.ERC20
+
+	totalFee *big.Int
+}
+
+func TestRouterSwapSuite(t *testing.T) {
+	suite.Run(t, &RouterSwapSuite{
+		Enable:          false,
+		RoundTrip:       false,
+		RPCURL:          "",
+		PrivateKeyHex:   "",
+		RouterHex:       "",
+		TokenInHex:      "",
+		TokenOutHex:     "",
+		HopsHex:         []string{},
+		NativeIn:        false,
+		NativeOut:       true,
+		MulticallHex:    multicall3.DefaultMulticall3Address.String(),
+		AmountIn:        "",
+		NativeSymbol:    "",
+		Interval:        200,
+		Timeout:         60,
+		DeadlineSeconds: 600,
+		PriceBuffer:     150,
+		LimitBuffer:     150,
+	})
+}
+
+func (s *RouterSwapSuite) SetupSuite() {
+	if !s.Enable {
+		s.T().Skip("disabled")
+	}
+
+	s.ctx, s.cancel = context.WithTimeout(context.Background(), 10*time.Minute)
+
+	s.client = rpc.NewClient(s.RPCURL, rpc.WithRetry(5, rpc.ExponentialBackoff(500*time.Millisecond, 10*time.Second)))
+	s.v2Router = NewRouter(s.client)
+	s.erc20 = erc20.New(s.client)
+
+	s.totalFee = big.NewInt(0)
+
+	privKey, err := types.NewPrivateKeyFromHex(s.PrivateKeyHex)
+	s.Require().NoError(err)
+	s.signer = privKey
+	s.from = core.PubkeyToAddress(privKey.PublicKey())
+
+	s.router, err = types.NewAddressFromHex(s.RouterHex)
+	s.Require().NoError(err)
+
+	s.Require().False(s.NativeIn && s.NativeOut, "NativeIn and NativeOut can't both be set -- that's not a swap")
+
+	s.wethAddr, err = s.v2Router.WETH(s.ctx, s.router, rpc.BlockTagLatest)
+	s.Require().NoError(err)
+
+	if s.NativeIn {
+		s.tokenIn = s.wethAddr
+	} else {
+		s.tokenIn, err = types.NewAddressFromHex(s.TokenInHex)
+		s.Require().NoError(err)
+	}
+
+	if s.NativeOut {
+		s.tokenOut = s.wethAddr
+	} else {
+		s.tokenOut, err = types.NewAddressFromHex(s.TokenOutHex)
+		s.Require().NoError(err)
+	}
+
+	s.hops = make([]*types.Address, 0, len(s.HopsHex))
+	for _, h := range s.HopsHex {
+		hop, err := types.NewAddressFromHex(h)
+		s.Require().NoError(err)
+		s.hops = append(s.hops, hop)
+	}
+
+	s.multicall, err = types.NewAddressFromHex(s.MulticallHex)
+	s.Require().NoError(err)
+
+	amount, ok := new(big.Int).SetString(s.AmountIn, 10)
+	s.Require().True(ok)
+	s.amount = amount
+
+	path := append([]*types.Address{s.tokenIn}, s.hops...)
+	path = append(path, s.tokenOut)
+	amountsOut, err := s.v2Router.GetAmountsOut(s.ctx, s.router, s.amount, path, rpc.BlockTagLatest)
+	s.Require().NoError(err, "no route from tokenIn to tokenOut via this router")
+	s.Require().Len(amountsOut, len(path))
+}
+
+func (s *RouterSwapSuite) TearDownSuite() {
+	if s.totalFee != nil {
+		base := new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil)
+		whole, frac := new(big.Int), new(big.Int)
+		whole.DivMod(s.totalFee, base, frac)
+
+		fracStr := strings.TrimRight(fmt.Sprintf("%018s", frac.String()), "0")
+		decimal := whole.String()
+		if fracStr != "" {
+			decimal += "." + fracStr
+		}
+
+		s.T().Logf("RouterSwapSuite total fee spent: %s %s", decimal, s.NativeSymbol)
+	}
+
+	if s.cancel != nil {
+		s.cancel()
+	}
+}
+
+func (s *RouterSwapSuite) TestSwap() {
+	tokenInMeta, err := s.erc20.MetadataWithBalance(s.ctx, s.multicall, s.tokenIn, s.from, false, rpc.BlockTagLatest)
+	s.Require().NoError(err)
+	s.T().Logf("TestSwap: TokenIn %s", s.tokenIn)
+	s.T().Logf("\t %s (%s), decimals: %d", tokenInMeta.Name, tokenInMeta.Symbol, tokenInMeta.Decimals)
+	s.T().Logf("\t %s amounts: %s", s.tokenIn, tokenInMeta.Balance.String())
+
+	tokenOutMeta, err := s.erc20.MetadataWithBalance(s.ctx, s.multicall, s.tokenOut, s.from, false, rpc.BlockTagLatest)
+	s.Require().NoError(err)
+	s.T().Logf("TestSwap: TokenOut %s", s.tokenOut)
+	s.T().Logf("\t %s (%s), decimals: %d", tokenOutMeta.Name, tokenOutMeta.Symbol, tokenOutMeta.Decimals)
+	s.T().Logf("\t %s amounts: %s", s.tokenOut, tokenOutMeta.Balance.String())
+
+	forwardPath := append([]*types.Address{s.tokenIn}, s.hops...)
+	forwardPath = append(forwardPath, s.tokenOut)
+
+	reversePath := make([]*types.Address, len(forwardPath))
+	for i, addr := range forwardPath {
+		reversePath[len(forwardPath)-1-i] = addr
+	}
+
+	received := s.swap(forwardPath, s.amount, s.NativeIn, s.NativeOut)
+	if !s.RoundTrip {
+		return
+	}
+
+	final := s.swap(reversePath, received, s.NativeOut, s.NativeIn)
+	s.T().Logf("TestSwap: round trip %s -> %s -> %s: sent %s, received back %s", s.tokenIn, s.tokenOut, s.tokenIn, s.amount, final)
+
+	if s.NativeOut {
+		return
+	}
+	tokenOutBalanceAfter, err := s.erc20.BalanceOf(s.ctx, s.tokenOut, s.from, rpc.BlockTagLatest)
+	s.Require().NoError(err)
+	s.Require().Zero(tokenOutBalanceAfter.Cmp(tokenOutMeta.Balance), "wallet's TokenOut balance changed (%s -> %s) after swapping it all back", tokenOutMeta.Balance, tokenOutBalanceAfter)
+}
+
+func (s *RouterSwapSuite) swap(path []*types.Address, amountIn *big.Int, nativeIn, nativeOut bool) *big.Int {
+	tokenIn, tokenOut := path[0], path[len(path)-1]
+
+	if nativeIn {
+		var hex string
+		s.Require().NoError(s.client.Call(s.ctx, rpc.ETHGetBalance("balance", s.from.String(), rpc.BlockTagLatest, &hex)))
+		balance, ok := new(big.Int).SetString(strings.TrimPrefix(hex, "0x"), 16)
+		s.Require().True(ok)
+		s.Require().True(balance.Cmp(amountIn) >= 0, "wallet holds %s native, less than amountIn %s", balance, amountIn)
+		s.T().Logf("swap %s -> %s: wallet native balance: %s", tokenIn, tokenOut, balance)
+	} else {
+		balance, err := s.erc20.BalanceOf(s.ctx, tokenIn, s.from, rpc.BlockTagLatest)
+		s.Require().NoError(err)
+		s.Require().True(balance.Cmp(amountIn) >= 0, "wallet holds %s of tokenIn, less than amountIn %s", balance, amountIn)
+		s.T().Logf("swap %s -> %s: wallet balance of tokenIn: %s", tokenIn, tokenOut, balance)
+
+		approveBuilder := tx.NewDynamicFeeBuilder()
+		approveBuilder.PriceBuffer(s.PriceBuffer)
+		approveBuilder.LimitBuffer(s.LimitBuffer)
+		unsignedApprove, err := s.erc20.CreateApprove(s.ctx, approveBuilder, tokenIn, s.from, s.router, amountIn)
+		s.Require().NoError(err)
+		s.Require().NoError(unsignedApprove.Sign(s.signer))
+		s.totalFee.Add(s.totalFee, unsignedApprove.MaxFee())
+
+		approveHash, err := s.erc20.Approve(s.ctx, unsignedApprove)
+		s.Require().NoError(err)
+		s.T().Logf("swap %s -> %s: approve %s to spend %s, broadcast tx %s", tokenIn, tokenOut, s.router, amountIn, approveHash)
+
+		approveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, approveHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+		s.Require().NoError(err)
+		s.Require().True(approveReceipt.Status, "approve transaction reverted")
+		var allowance *big.Int
+		s.Require().Eventually(func() bool {
+			allowance, err = s.erc20.Allowance(s.ctx, tokenIn, s.from, s.router, rpc.BlockTagLatest)
+			return err == nil && amountIn.Cmp(allowance) == 0
+		}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "allowance not visible after approve")
+		s.T().Logf("swap %s -> %s: approve confirmed in block %d", tokenIn, tokenOut, approveReceipt.BlockNumber)
+	}
+
+	var amountOutMin *big.Int
+	var unsignedSwap core.Transaction
+	var lastErr error
+	attempt := 0
+	s.Require().Eventually(func() bool {
+		attempt++
+		amountsOut, err := s.v2Router.GetAmountsOut(s.ctx, s.router, amountIn, path, rpc.BlockTagLatest)
+		if err != nil {
+			lastErr = err
+			return false
+		}
+		amountOutLast := amountsOut[len(amountsOut)-1]
+		amountOutMin = new(big.Int).Div(new(big.Int).Mul(amountOutLast, big.NewInt(995)), big.NewInt(1000))
+		s.T().Logf("swap %s -> %s: attempt %d: GetAmountsOut=%s amountOutMin=%s", tokenIn, tokenOut, attempt, amountOutLast, amountOutMin)
+
+		deadline := big.NewInt(time.Now().Add(time.Duration(s.DeadlineSeconds) * time.Second).Unix())
+		builder := tx.NewDynamicFeeBuilder()
+		builder.PriceBuffer(s.PriceBuffer)
+		builder.LimitBuffer(s.LimitBuffer)
+
+		var u core.Transaction
+		switch {
+		case nativeIn:
+			u, err = s.v2Router.CreateSwapExactETHForTokens(s.ctx, builder, s.router, s.from, amountOutMin, path, s.from, deadline, amountIn)
+		case nativeOut:
+			u, err = s.v2Router.CreateSwapExactTokensForETH(s.ctx, builder, s.router, s.from, amountIn, amountOutMin, path, s.from, deadline)
+		default:
+			u, err = s.v2Router.CreateSwapExactTokensForTokens(s.ctx, builder, s.router, s.from, amountIn, amountOutMin, path, s.from, deadline)
+		}
+		if err != nil {
+			lastErr = err
+			s.T().Logf("swap %s -> %s: attempt %d failed: %v", tokenIn, tokenOut, attempt, err)
+			return false
+		}
+		unsignedSwap = u
+		return true
+	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "swap not buildable: %v", lastErr)
+	s.Require().NoError(unsignedSwap.Sign(s.signer))
+	s.totalFee.Add(s.totalFee, unsignedSwap.MaxFee())
+	s.T().Logf("swap %s -> %s: swap tx built after %d attempt(s), amountOutMin=%s", tokenIn, tokenOut, attempt, amountOutMin)
+
+	var swapHash *types.Hash
+	var err error
+	switch {
+	case nativeIn:
+		swapHash, err = s.v2Router.SwapExactETHForTokens(s.ctx, unsignedSwap)
+	case nativeOut:
+		swapHash, err = s.v2Router.SwapExactTokensForETH(s.ctx, unsignedSwap)
+	default:
+		swapHash, err = s.v2Router.SwapExactTokensForTokens(s.ctx, unsignedSwap)
+	}
+	s.Require().NoError(err)
+	s.T().Logf("swap %s -> %s: broadcast swap, tx %s", tokenIn, tokenOut, swapHash)
+
+	swapReceipt, err := tx.WaitForReceipt(s.ctx, s.client, swapHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	s.Require().NoError(err)
+	s.Require().True(swapReceipt.Status, "swap transaction reverted")
+	s.T().Logf("swap %s -> %s: swap confirmed in block %d", tokenIn, tokenOut, swapReceipt.BlockNumber)
+
+	swaps, err := ExtractSwap(swapReceipt.Logs)
+	s.Require().NoError(err)
+	s.Require().Len(swaps, len(path)-1)
+
+	transfers, err := erc20.ExtractTransfers(swapReceipt.Logs)
+	s.Require().NoError(err)
+
+	lastSwap := swaps[len(swaps)-1]
+	actualAmountOut := lastSwap.Amount1Out
+	if actualAmountOut.Sign() == 0 {
+		actualAmountOut = lastSwap.Amount0Out
+	}
+
+	s.T().Logf("Router swap %s -> %s Result", tokenIn, tokenOut)
+	s.T().Logf("\tAmountIn: %s", amountIn)
+	s.T().Logf("\tAmountOut: %s", actualAmountOut)
+	s.T().Logf("\tTx: %s", swapHash)
+	s.T().Logf("\tLogs:")
+	for _, transfer := range transfers {
+		s.T().Logf("\t\tTransfer: contract=%s from=%s to=%s value=%s", transfer.Contract, transfer.From, transfer.To, transfer.Value)
+	}
+	if nativeIn {
+		deposits, err := weth.ExtractDeposits(swapReceipt.Logs)
+		s.Require().NoError(err)
+		for _, d := range deposits {
+			s.T().Logf("\t\tDeposit: dst=%s wad=%s", d.Dst, d.Wad)
+		}
+	}
+	if nativeOut {
+		withdrawals, err := weth.ExtractWithdrawals(swapReceipt.Logs)
+		s.Require().NoError(err)
+		for _, w := range withdrawals {
+			s.T().Logf("\t\tWithdrawal: src=%s wad=%s", w.Src, w.Wad)
+		}
+	}
+	for _, sw := range swaps {
+		s.T().Logf("\t\tSwap: contract=%s sender=%s to=%s amount0In=%s amount1In=%s amount0Out=%s amount1Out=%s",
+			sw.Contract, sw.Sender, sw.To, sw.Amount0In, sw.Amount1In, sw.Amount0Out, sw.Amount1Out)
+	}
+
+	return actualAmountOut
+}
+
 type RouterLifeCycleSuite struct {
 	suite.Suite
 
@@ -2253,328 +2577,4 @@ func (s *RouterLifeCycleSuite) Test29MultihopSwap() {
 		return err == nil && new(big.Int).Sub(after, before).Cmp(predicted[2]) == 0
 	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "token2 balance not visible after swap")
 	s.T().Logf("Test29MultihopSwap: token2 balance %s -> %s", before, after)
-}
-
-type RouterSwapSuite struct {
-	suite.Suite
-
-	Enable          bool
-	RPCURL          string
-	PrivateKeyHex   string
-	RouterHex       string
-	TokenInHex      string
-	TokenOutHex     string
-	HopsHex         []string
-	NativeIn        bool
-	NativeOut       bool
-	MulticallHex    string
-	AmountIn        string
-	NativeSymbol    string
-	RoundTrip       bool
-	Interval        int
-	Timeout         int
-	DeadlineSeconds int
-	PriceBuffer     uint64
-	LimitBuffer     uint64
-
-	ctx    context.Context
-	cancel context.CancelFunc
-
-	client    rpc.Client
-	signer    core.Signer
-	from      *types.Address
-	router    *types.Address
-	wethAddr  *types.Address
-	tokenIn   *types.Address
-	tokenOut  *types.Address
-	hops      []*types.Address
-	multicall *types.Address
-	amount    *big.Int
-
-	v2Router *Router
-	erc20    *erc20.ERC20
-
-	totalFee *big.Int
-}
-
-func TestRouterSwapSuite(t *testing.T) {
-	suite.Run(t, &RouterSwapSuite{
-		Enable:          false,
-		RoundTrip:       false,
-		RPCURL:          "",
-		PrivateKeyHex:   "",
-		RouterHex:       "",
-		TokenInHex:      "",
-		TokenOutHex:     "",
-		HopsHex:         []string{},
-		NativeIn:        false,
-		NativeOut:       true,
-		MulticallHex:    multicall3.DefaultMulticall3Address.String(),
-		AmountIn:        "",
-		NativeSymbol:    "",
-		Interval:        200,
-		Timeout:         60,
-		DeadlineSeconds: 600,
-		PriceBuffer:     150,
-		LimitBuffer:     150,
-	})
-}
-
-func (s *RouterSwapSuite) SetupSuite() {
-	if !s.Enable {
-		s.T().Skip("disabled")
-	}
-
-	s.ctx, s.cancel = context.WithTimeout(context.Background(), 10*time.Minute)
-
-	s.client = rpc.NewClient(s.RPCURL, rpc.WithRetry(5, rpc.ExponentialBackoff(500*time.Millisecond, 10*time.Second)))
-	s.v2Router = NewRouter(s.client)
-	s.erc20 = erc20.New(s.client)
-
-	s.totalFee = big.NewInt(0)
-
-	privKey, err := types.NewPrivateKeyFromHex(s.PrivateKeyHex)
-	s.Require().NoError(err)
-	s.signer = privKey
-	s.from = core.PubkeyToAddress(privKey.PublicKey())
-
-	s.router, err = types.NewAddressFromHex(s.RouterHex)
-	s.Require().NoError(err)
-
-	s.Require().False(s.NativeIn && s.NativeOut, "NativeIn and NativeOut can't both be set -- that's not a swap")
-
-	s.wethAddr, err = s.v2Router.WETH(s.ctx, s.router, rpc.BlockTagLatest)
-	s.Require().NoError(err)
-
-	if s.NativeIn {
-		s.tokenIn = s.wethAddr
-	} else {
-		s.tokenIn, err = types.NewAddressFromHex(s.TokenInHex)
-		s.Require().NoError(err)
-	}
-
-	if s.NativeOut {
-		s.tokenOut = s.wethAddr
-	} else {
-		s.tokenOut, err = types.NewAddressFromHex(s.TokenOutHex)
-		s.Require().NoError(err)
-	}
-
-	s.hops = make([]*types.Address, 0, len(s.HopsHex))
-	for _, h := range s.HopsHex {
-		hop, err := types.NewAddressFromHex(h)
-		s.Require().NoError(err)
-		s.hops = append(s.hops, hop)
-	}
-
-	s.multicall, err = types.NewAddressFromHex(s.MulticallHex)
-	s.Require().NoError(err)
-
-	amount, ok := new(big.Int).SetString(s.AmountIn, 10)
-	s.Require().True(ok)
-	s.amount = amount
-
-	path := append([]*types.Address{s.tokenIn}, s.hops...)
-	path = append(path, s.tokenOut)
-	amountsOut, err := s.v2Router.GetAmountsOut(s.ctx, s.router, s.amount, path, rpc.BlockTagLatest)
-	s.Require().NoError(err, "no route from tokenIn to tokenOut via this router")
-	s.Require().Len(amountsOut, len(path))
-}
-
-func (s *RouterSwapSuite) TearDownSuite() {
-	if s.totalFee != nil {
-		base := new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil)
-		whole, frac := new(big.Int), new(big.Int)
-		whole.DivMod(s.totalFee, base, frac)
-
-		fracStr := strings.TrimRight(fmt.Sprintf("%018s", frac.String()), "0")
-		decimal := whole.String()
-		if fracStr != "" {
-			decimal += "." + fracStr
-		}
-
-		s.T().Logf("RouterSwapSuite total fee spent: %s %s", decimal, s.NativeSymbol)
-	}
-
-	if s.cancel != nil {
-		s.cancel()
-	}
-}
-
-func (s *RouterSwapSuite) TestSwap() {
-	tokenInMeta, err := s.erc20.MetadataWithBalance(s.ctx, s.multicall, s.tokenIn, s.from, false, rpc.BlockTagLatest)
-	s.Require().NoError(err)
-	s.T().Logf("TestSwap: TokenIn %s", s.tokenIn)
-	s.T().Logf("\t %s (%s), decimals: %d", tokenInMeta.Name, tokenInMeta.Symbol, tokenInMeta.Decimals)
-	s.T().Logf("\t %s amounts: %s", s.tokenIn, tokenInMeta.Balance.String())
-
-	tokenOutMeta, err := s.erc20.MetadataWithBalance(s.ctx, s.multicall, s.tokenOut, s.from, false, rpc.BlockTagLatest)
-	s.Require().NoError(err)
-	s.T().Logf("TestSwap: TokenOut %s", s.tokenOut)
-	s.T().Logf("\t %s (%s), decimals: %d", tokenOutMeta.Name, tokenOutMeta.Symbol, tokenOutMeta.Decimals)
-	s.T().Logf("\t %s amounts: %s", s.tokenOut, tokenOutMeta.Balance.String())
-
-	forwardPath := append([]*types.Address{s.tokenIn}, s.hops...)
-	forwardPath = append(forwardPath, s.tokenOut)
-
-	reversePath := make([]*types.Address, len(forwardPath))
-	for i, addr := range forwardPath {
-		reversePath[len(forwardPath)-1-i] = addr
-	}
-
-	received := s.swap(forwardPath, s.amount, s.NativeIn, s.NativeOut)
-	if !s.RoundTrip {
-		return
-	}
-
-	final := s.swap(reversePath, received, s.NativeOut, s.NativeIn)
-	s.T().Logf("TestSwap: round trip %s -> %s -> %s: sent %s, received back %s", s.tokenIn, s.tokenOut, s.tokenIn, s.amount, final)
-
-	if s.NativeOut {
-		return
-	}
-	tokenOutBalanceAfter, err := s.erc20.BalanceOf(s.ctx, s.tokenOut, s.from, rpc.BlockTagLatest)
-	s.Require().NoError(err)
-	s.Require().Zero(tokenOutBalanceAfter.Cmp(tokenOutMeta.Balance), "wallet's TokenOut balance changed (%s -> %s) after swapping it all back", tokenOutMeta.Balance, tokenOutBalanceAfter)
-}
-
-func (s *RouterSwapSuite) swap(path []*types.Address, amountIn *big.Int, nativeIn, nativeOut bool) *big.Int {
-	tokenIn, tokenOut := path[0], path[len(path)-1]
-
-	if nativeIn {
-		var hex string
-		s.Require().NoError(s.client.Call(s.ctx, rpc.ETHGetBalance("balance", s.from.String(), rpc.BlockTagLatest, &hex)))
-		balance, ok := new(big.Int).SetString(strings.TrimPrefix(hex, "0x"), 16)
-		s.Require().True(ok)
-		s.Require().True(balance.Cmp(amountIn) >= 0, "wallet holds %s native, less than amountIn %s", balance, amountIn)
-		s.T().Logf("swap %s -> %s: wallet native balance: %s", tokenIn, tokenOut, balance)
-	} else {
-		balance, err := s.erc20.BalanceOf(s.ctx, tokenIn, s.from, rpc.BlockTagLatest)
-		s.Require().NoError(err)
-		s.Require().True(balance.Cmp(amountIn) >= 0, "wallet holds %s of tokenIn, less than amountIn %s", balance, amountIn)
-		s.T().Logf("swap %s -> %s: wallet balance of tokenIn: %s", tokenIn, tokenOut, balance)
-
-		approveBuilder := tx.NewDynamicFeeBuilder()
-		approveBuilder.PriceBuffer(s.PriceBuffer)
-		approveBuilder.LimitBuffer(s.LimitBuffer)
-		unsignedApprove, err := s.erc20.CreateApprove(s.ctx, approveBuilder, tokenIn, s.from, s.router, amountIn)
-		s.Require().NoError(err)
-		s.Require().NoError(unsignedApprove.Sign(s.signer))
-		s.totalFee.Add(s.totalFee, unsignedApprove.MaxFee())
-
-		approveHash, err := s.erc20.Approve(s.ctx, unsignedApprove)
-		s.Require().NoError(err)
-		s.T().Logf("swap %s -> %s: approve %s to spend %s, broadcast tx %s", tokenIn, tokenOut, s.router, amountIn, approveHash)
-
-		approveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, approveHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
-		s.Require().NoError(err)
-		s.Require().True(approveReceipt.Status, "approve transaction reverted")
-		var allowance *big.Int
-		s.Require().Eventually(func() bool {
-			allowance, err = s.erc20.Allowance(s.ctx, tokenIn, s.from, s.router, rpc.BlockTagLatest)
-			return err == nil && amountIn.Cmp(allowance) == 0
-		}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "allowance not visible after approve")
-		s.T().Logf("swap %s -> %s: approve confirmed in block %d", tokenIn, tokenOut, approveReceipt.BlockNumber)
-	}
-
-	var amountOutMin *big.Int
-	var unsignedSwap core.Transaction
-	var lastErr error
-	attempt := 0
-	s.Require().Eventually(func() bool {
-		attempt++
-		amountsOut, err := s.v2Router.GetAmountsOut(s.ctx, s.router, amountIn, path, rpc.BlockTagLatest)
-		if err != nil {
-			lastErr = err
-			return false
-		}
-		amountOutLast := amountsOut[len(amountsOut)-1]
-		amountOutMin = new(big.Int).Div(new(big.Int).Mul(amountOutLast, big.NewInt(995)), big.NewInt(1000))
-		s.T().Logf("swap %s -> %s: attempt %d: GetAmountsOut=%s amountOutMin=%s", tokenIn, tokenOut, attempt, amountOutLast, amountOutMin)
-
-		deadline := big.NewInt(time.Now().Add(time.Duration(s.DeadlineSeconds) * time.Second).Unix())
-		builder := tx.NewDynamicFeeBuilder()
-		builder.PriceBuffer(s.PriceBuffer)
-		builder.LimitBuffer(s.LimitBuffer)
-
-		var u core.Transaction
-		switch {
-		case nativeIn:
-			u, err = s.v2Router.CreateSwapExactETHForTokens(s.ctx, builder, s.router, s.from, amountOutMin, path, s.from, deadline, amountIn)
-		case nativeOut:
-			u, err = s.v2Router.CreateSwapExactTokensForETH(s.ctx, builder, s.router, s.from, amountIn, amountOutMin, path, s.from, deadline)
-		default:
-			u, err = s.v2Router.CreateSwapExactTokensForTokens(s.ctx, builder, s.router, s.from, amountIn, amountOutMin, path, s.from, deadline)
-		}
-		if err != nil {
-			lastErr = err
-			s.T().Logf("swap %s -> %s: attempt %d failed: %v", tokenIn, tokenOut, attempt, err)
-			return false
-		}
-		unsignedSwap = u
-		return true
-	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "swap not buildable: %v", lastErr)
-	s.Require().NoError(unsignedSwap.Sign(s.signer))
-	s.totalFee.Add(s.totalFee, unsignedSwap.MaxFee())
-	s.T().Logf("swap %s -> %s: swap tx built after %d attempt(s), amountOutMin=%s", tokenIn, tokenOut, attempt, amountOutMin)
-
-	var swapHash *types.Hash
-	var err error
-	switch {
-	case nativeIn:
-		swapHash, err = s.v2Router.SwapExactETHForTokens(s.ctx, unsignedSwap)
-	case nativeOut:
-		swapHash, err = s.v2Router.SwapExactTokensForETH(s.ctx, unsignedSwap)
-	default:
-		swapHash, err = s.v2Router.SwapExactTokensForTokens(s.ctx, unsignedSwap)
-	}
-	s.Require().NoError(err)
-	s.T().Logf("swap %s -> %s: broadcast swap, tx %s", tokenIn, tokenOut, swapHash)
-
-	swapReceipt, err := tx.WaitForReceipt(s.ctx, s.client, swapHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
-	s.Require().NoError(err)
-	s.Require().True(swapReceipt.Status, "swap transaction reverted")
-	s.T().Logf("swap %s -> %s: swap confirmed in block %d", tokenIn, tokenOut, swapReceipt.BlockNumber)
-
-	swaps, err := ExtractSwap(swapReceipt.Logs)
-	s.Require().NoError(err)
-	s.Require().Len(swaps, len(path)-1)
-
-	transfers, err := erc20.ExtractTransfers(swapReceipt.Logs)
-	s.Require().NoError(err)
-
-	lastSwap := swaps[len(swaps)-1]
-	actualAmountOut := lastSwap.Amount1Out
-	if actualAmountOut.Sign() == 0 {
-		actualAmountOut = lastSwap.Amount0Out
-	}
-
-	s.T().Logf("Router swap %s -> %s Result", tokenIn, tokenOut)
-	s.T().Logf("\tAmountIn: %s", amountIn)
-	s.T().Logf("\tAmountOut: %s", actualAmountOut)
-	s.T().Logf("\tTx: %s", swapHash)
-	s.T().Logf("\tLogs:")
-	for _, transfer := range transfers {
-		s.T().Logf("\t\tTransfer: contract=%s from=%s to=%s value=%s", transfer.Contract, transfer.From, transfer.To, transfer.Value)
-	}
-	if nativeIn {
-		deposits, err := weth.ExtractDeposits(swapReceipt.Logs)
-		s.Require().NoError(err)
-		for _, d := range deposits {
-			s.T().Logf("\t\tDeposit: dst=%s wad=%s", d.Dst, d.Wad)
-		}
-	}
-	if nativeOut {
-		withdrawals, err := weth.ExtractWithdrawals(swapReceipt.Logs)
-		s.Require().NoError(err)
-		for _, w := range withdrawals {
-			s.T().Logf("\t\tWithdrawal: src=%s wad=%s", w.Src, w.Wad)
-		}
-	}
-	for _, sw := range swaps {
-		s.T().Logf("\t\tSwap: contract=%s sender=%s to=%s amount0In=%s amount1In=%s amount0Out=%s amount1Out=%s",
-			sw.Contract, sw.Sender, sw.To, sw.Amount0In, sw.Amount1In, sw.Amount0Out, sw.Amount1Out)
-	}
-
-	return actualAmountOut
 }
