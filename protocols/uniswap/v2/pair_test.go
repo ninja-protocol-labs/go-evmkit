@@ -79,7 +79,7 @@ func (s *PairLifeCycleSuite) SetupSuite() {
 		s.T().Skip("disabled")
 	}
 
-	s.ctx, s.cancel = context.WithTimeout(context.Background(), 10*time.Minute)
+	s.ctx, s.cancel = context.WithTimeout(s.T().Context(), 10*time.Minute)
 
 	s.client = rpc.NewClient(s.RPCURL, rpc.WithRetry(5, rpc.ExponentialBackoff(500*time.Millisecond, 10*time.Second)))
 	s.deployer = deploy.NewNicksDeployer(s.client)
@@ -190,7 +190,7 @@ func (s *PairLifeCycleSuite) SetupSuite() {
 
 	createBuilder := tx.NewDynamicFeeBuilder()
 	createBuilder.PriceBuffer(150)
-	unsignedCreate, err := s.v2Factory.CreateCreatePair(s.ctx, createBuilder, s.factory, s.from, s.token0, s.token1)
+	unsignedCreate, err := s.v2Factory.CreateCreatePair(s.ctx, createBuilder, NewCreatePairParams(s.factory, s.from, s.token0, s.token1))
 	s.Require().NoError(err)
 	s.Require().NoError(unsignedCreate.Sign(s.signer))
 	s.mu.Lock()
@@ -208,6 +208,15 @@ func (s *PairLifeCycleSuite) SetupSuite() {
 	s.Require().NoError(err)
 	s.Require().Len(created, 1)
 	s.pair = created[0].Pair
+
+	s.Require().Eventually(func() bool {
+		var codeHex string
+		if err := s.client.Call(s.ctx, rpc.ETHGetCode("code", s.pair.String(), rpc.BlockTagLatest, &codeHex)); err != nil {
+			return false
+		}
+		code, err := encoding.Hex.Decode(codeHex)
+		return err == nil && len(code) > 0
+	}, 10*time.Second, time.Duration(s.Interval)*time.Millisecond, "no code visible at created pair %s", s.pair)
 
 	s.T().Logf("SetupSuite: created pair %s for (%s, %s) (tx %s)", s.pair, s.token0, s.token1, createHash)
 }
@@ -351,11 +360,11 @@ func (s *PairLifeCycleSuite) Test02Mint() {
 	var predicted *big.Int
 	s.Require().Eventually(func() bool {
 		var err error
-		predicted, err = s.v2Pair.CallMint(s.ctx, s.pair, s.from, s.from, rpc.BlockTagLatest)
+		predicted, err = s.v2Pair.CallMint(s.ctx, NewMintParams(s.pair, s.from, s.from), rpc.BlockTagLatest)
 		return err == nil
 	}, 10*time.Second, time.Duration(s.Interval)*time.Millisecond, "deposited balances not visible before mint")
 
-	unsignedMint, err := s.v2Pair.CreateMint(s.ctx, tx.NewDynamicFeeBuilder(), s.pair, s.from, s.from)
+	unsignedMint, err := s.v2Pair.CreateMint(s.ctx, tx.NewDynamicFeeBuilder(), NewMintParams(s.pair, s.from, s.from))
 	s.Require().NoError(err)
 	s.Require().NoError(unsignedMint.Sign(s.signer))
 	s.mu.Lock()
@@ -372,7 +381,7 @@ func (s *PairLifeCycleSuite) Test02Mint() {
 	mints, err := ExtractMint(mintReceipt.Logs)
 	s.Require().NoError(err)
 	s.Require().Len(mints, 1)
-	s.Require().True(mints[0].Contract.Equal(s.pair))
+	s.Require().True(mints[0].Pair.Equal(s.pair))
 	s.Require().True(mints[0].Sender.Equal(s.from))
 	s.Require().Zero(amount0.Cmp(mints[0].Amount0))
 	s.Require().Zero(amount1.Cmp(mints[0].Amount1))
@@ -449,7 +458,7 @@ func (s *PairLifeCycleSuite) Test04Swap() {
 
 	var unsignedSwap core.Transaction
 	s.Require().Eventually(func() bool {
-		u, err := s.v2Pair.CreateSwap(s.ctx, tx.NewDynamicFeeBuilder(), s.pair, s.from, big.NewInt(0), amountOut, s.from, nil)
+		u, err := s.v2Pair.CreateSwap(s.ctx, tx.NewDynamicFeeBuilder(), NewSwapParams(s.pair, s.from, big.NewInt(0), amountOut, s.from, nil))
 		if err != nil {
 			return false
 		}
@@ -471,7 +480,7 @@ func (s *PairLifeCycleSuite) Test04Swap() {
 	swaps, err := ExtractSwap(swapReceipt.Logs)
 	s.Require().NoError(err)
 	s.Require().Len(swaps, 1)
-	s.Require().True(swaps[0].Contract.Equal(s.pair))
+	s.Require().True(swaps[0].Pair.Equal(s.pair))
 	s.Require().True(swaps[0].Sender.Equal(s.from))
 	s.Require().Zero(amountIn.Cmp(swaps[0].Amount0In))
 	s.Require().Zero(big.NewInt(0).Cmp(swaps[0].Amount1In))
@@ -543,7 +552,7 @@ func (s *PairLifeCycleSuite) Test06Burn() {
 
 	var unsignedBurn core.Transaction
 	s.Require().Eventually(func() bool {
-		u, err := s.v2Pair.CreateBurn(s.ctx, tx.NewDynamicFeeBuilder(), s.pair, s.from, s.from)
+		u, err := s.v2Pair.CreateBurn(s.ctx, tx.NewDynamicFeeBuilder(), NewBurnParams(s.pair, s.from, s.from))
 		if err != nil {
 			return false
 		}
@@ -565,7 +574,7 @@ func (s *PairLifeCycleSuite) Test06Burn() {
 	burns, err := ExtractBurn(burnReceipt.Logs)
 	s.Require().NoError(err)
 	s.Require().Len(burns, 1)
-	s.Require().True(burns[0].Contract.Equal(s.pair))
+	s.Require().True(burns[0].Pair.Equal(s.pair))
 	s.Require().True(burns[0].Sender.Equal(s.from))
 	s.Require().Zero(wantAmount0.Cmp(burns[0].Amount0))
 	s.Require().Zero(wantAmount1.Cmp(burns[0].Amount1))
@@ -593,13 +602,13 @@ func (s *PairLifeCycleSuite) Test06Burn() {
 }
 
 func (s *PairLifeCycleSuite) Test07SwapInsufficientOutputAmount() {
-	_, err := s.v2Pair.CreateSwap(s.ctx, tx.NewDynamicFeeBuilder(), s.pair, s.from, big.NewInt(0), big.NewInt(0), s.from, nil)
+	_, err := s.v2Pair.CreateSwap(s.ctx, tx.NewDynamicFeeBuilder(), NewSwapParams(s.pair, s.from, big.NewInt(0), big.NewInt(0), s.from, nil))
 	s.Require().Error(err)
 	s.Require().ErrorIs(err, ErrInsufficientOutputAmount)
 }
 
 func (s *PairLifeCycleSuite) Test08SwapInvalidTo() {
-	_, err := s.v2Pair.CreateSwap(s.ctx, tx.NewDynamicFeeBuilder(), s.pair, s.from, big.NewInt(0), big.NewInt(1), s.token1, nil)
+	_, err := s.v2Pair.CreateSwap(s.ctx, tx.NewDynamicFeeBuilder(), NewSwapParams(s.pair, s.from, big.NewInt(0), big.NewInt(1), s.token1, nil))
 	s.Require().Error(err)
 	s.Require().ErrorIs(err, ErrInvalidTo)
 }
@@ -608,13 +617,13 @@ func (s *PairLifeCycleSuite) Test09SwapInsufficientLiquidity() {
 	reserves, err := s.v2Pair.GetReserves(s.ctx, s.pair, rpc.BlockTagLatest)
 	s.Require().NoError(err)
 
-	_, err = s.v2Pair.CreateSwap(s.ctx, tx.NewDynamicFeeBuilder(), s.pair, s.from, big.NewInt(0), reserves.Reserve1, s.from, nil)
+	_, err = s.v2Pair.CreateSwap(s.ctx, tx.NewDynamicFeeBuilder(), NewSwapParams(s.pair, s.from, big.NewInt(0), reserves.Reserve1, s.from, nil))
 	s.Require().Error(err)
 	s.Require().ErrorIs(err, ErrInsufficientLiquidity)
 }
 
 func (s *PairLifeCycleSuite) Test10SwapInsufficientInputAmount() {
-	_, err := s.v2Pair.CreateSwap(s.ctx, tx.NewDynamicFeeBuilder(), s.pair, s.from, big.NewInt(0), big.NewInt(1), s.from, nil)
+	_, err := s.v2Pair.CreateSwap(s.ctx, tx.NewDynamicFeeBuilder(), NewSwapParams(s.pair, s.from, big.NewInt(0), big.NewInt(1), s.from, nil))
 	s.Require().Error(err)
 	s.Require().ErrorIs(err, ErrInsufficientInputAmount)
 }
@@ -645,15 +654,18 @@ func (s *PairLifeCycleSuite) Test11SwapK() {
 	s.Require().NoError(err)
 	s.Require().True(transferReceipt.Status, "transfer transaction reverted")
 
+	expectedBalance := new(big.Int).Add(reserves.Reserve0, amountIn)
 	s.Require().Eventually(func() bool {
-		_, err = s.v2Pair.CreateSwap(s.ctx, tx.NewDynamicFeeBuilder(), s.pair, s.from, big.NewInt(0), tooMuchAmountOut, s.from, nil)
-		return err != nil
+		balance, err := s.erc20.BalanceOf(s.ctx, s.token0, s.pair, rpc.BlockTagLatest)
+		return err == nil && expectedBalance.Cmp(balance) == 0
 	}, 10*time.Second, time.Duration(s.Interval)*time.Millisecond, "deposited balance not visible before swap")
+
+	_, err = s.v2Pair.CreateSwap(s.ctx, tx.NewDynamicFeeBuilder(), NewSwapParams(s.pair, s.from, big.NewInt(0), tooMuchAmountOut, s.from, nil))
 	s.Require().ErrorIs(err, ErrK)
 }
 
 func (s *PairLifeCycleSuite) Test12InitializeForbidden() {
-	_, err := s.v2Pair.CreateInitialize(s.ctx, tx.NewDynamicFeeBuilder(), s.pair, s.from, s.token0, s.token1)
+	_, err := s.v2Pair.CreateInitialize(s.ctx, tx.NewDynamicFeeBuilder(), NewInitializeParams(s.pair, s.from, s.token0, s.token1))
 	s.Require().Error(err)
 	s.Require().ErrorIs(err, ErrForbidden)
 }
@@ -746,7 +758,7 @@ func (s *PairSwapSuite) SetupSuite() {
 	s.Require().True(ok)
 	s.amount = amount
 
-	s.pair, err = s.v2Factory.GetPair(s.ctx, s.factory, s.tokenIn, s.tokenOut, rpc.BlockTagLatest)
+	s.pair, err = s.v2Factory.GetPair(s.ctx, NewGetPairParams(s.factory, s.tokenIn, s.tokenOut), rpc.BlockTagLatest)
 	s.Require().NoError(err)
 	s.Require().False(s.pair.IsZero(), "no pair exists for (%s, %s)", s.tokenIn, s.tokenOut)
 }
@@ -861,7 +873,7 @@ func (s *PairSwapSuite) swap(tokenIn, tokenOut *types.Address, amountIn *big.Int
 
 		s.T().Logf("swap %s -> %s: attempt %d: reserveIn=%s reserveOut=%s amountOut=%s", tokenIn, tokenOut, attempt, reserveIn, reserveOut, amountOut)
 
-		u, err := s.v2Pair.CreateSwap(s.ctx, tx.NewDynamicFeeBuilder(), s.pair, s.from, amount0Out, amount1Out, s.from, nil)
+		u, err := s.v2Pair.CreateSwap(s.ctx, tx.NewDynamicFeeBuilder(), NewSwapParams(s.pair, s.from, amount0Out, amount1Out, s.from, nil))
 		if err != nil {
 			lastErr = err
 			s.T().Logf("swap %s -> %s: attempt %d failed: %v", tokenIn, tokenOut, attempt, err)

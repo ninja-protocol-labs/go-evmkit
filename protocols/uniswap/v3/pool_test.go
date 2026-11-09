@@ -180,7 +180,7 @@ func (s *PoolSuite) SetupSuite() {
 
 	createBuilder := tx.NewDynamicFeeBuilder()
 	createBuilder.PriceBuffer(150)
-	unsignedCreate, err := s.v3Factory.CreateCreatePool(s.ctx, createBuilder, s.factory, s.from, s.tokenA, s.tokenB, s.Fee)
+	unsignedCreate, err := s.v3Factory.CreateCreatePool(s.ctx, createBuilder, NewCreatePoolParams(s.factory, s.from, s.tokenA, s.tokenB, s.Fee))
 	s.Require().NoError(err)
 	s.Require().NoError(unsignedCreate.Sign(s.signer))
 	s.mu.Lock()
@@ -266,7 +266,7 @@ func (s *PoolSuite) Test01Initialize() {
 
 	initBuilder := tx.NewDynamicFeeBuilder()
 	initBuilder.PriceBuffer(150)
-	unsigned, err := s.v3Pool.CreateInitialize(s.ctx, initBuilder, s.pool, s.from, sqrtPriceX96)
+	unsigned, err := s.v3Pool.CreateInitialize(s.ctx, initBuilder, NewInitializeParams(s.pool, s.from, sqrtPriceX96))
 	s.Require().NoError(err)
 	s.Require().NoError(unsigned.Sign(s.signer))
 	s.mu.Lock()
@@ -305,7 +305,7 @@ func (s *PoolSuite) Test01Initialize() {
 func (s *PoolSuite) Test02InitializeAlreadyInitialized() {
 	sqrtPriceX96 := new(big.Int).Lsh(big.NewInt(1), 96)
 
-	_, err := s.v3Pool.CreateInitialize(s.ctx, tx.NewDynamicFeeBuilder(), s.pool, s.from, sqrtPriceX96)
+	_, err := s.v3Pool.CreateInitialize(s.ctx, tx.NewDynamicFeeBuilder(), NewInitializeParams(s.pool, s.from, sqrtPriceX96))
 	s.Require().Error(err)
 	s.Require().ErrorIs(err, ErrAlreadyInitialized)
 	s.T().Logf("Test02InitializeAlreadyInitialized: initialize(%s) reverted as expected: %v", sqrtPriceX96, err)
@@ -372,12 +372,12 @@ func (s *PoolSuite) Test03ReadMethods() {
 func (s *PoolSuite) Test04BurnNoPosition() {
 	tickLower, tickUpper := big.NewInt(-60), big.NewInt(60)
 
-	_, _, err := s.v3Pool.CallBurn(s.ctx, s.pool, s.from, tickLower, tickUpper, big.NewInt(0), rpc.BlockTagLatest)
+	_, _, err := s.v3Pool.CallBurn(s.ctx, NewBurnParams(s.pool, s.from, tickLower, tickUpper, big.NewInt(0)), rpc.BlockTagLatest)
 	s.Require().Error(err)
 	s.Require().ErrorIs(err, ErrNoPosition)
 	s.T().Logf("Test04BurnNoPosition: callBurn(%s, %s, 0) reverted as expected: %v", tickLower, tickUpper, err)
 
-	_, err = s.v3Pool.CreateBurn(s.ctx, tx.NewDynamicFeeBuilder(), s.pool, s.from, tickLower, tickUpper, big.NewInt(0))
+	_, err = s.v3Pool.CreateBurn(s.ctx, tx.NewDynamicFeeBuilder(), NewBurnParams(s.pool, s.from, tickLower, tickUpper, big.NewInt(0)))
 	s.Require().Error(err)
 	s.Require().ErrorIs(err, ErrNoPosition)
 	s.T().Logf("Test04BurnNoPosition: createBurn(%s, %s, 0) reverted as expected: %v", tickLower, tickUpper, err)
@@ -386,7 +386,7 @@ func (s *PoolSuite) Test04BurnNoPosition() {
 func (s *PoolSuite) Test05CollectZeroLiquidity() {
 	tickLower, tickUpper := big.NewInt(-60), big.NewInt(60)
 
-	predictedAmount0, predictedAmount1, err := s.v3Pool.CallCollect(s.ctx, s.pool, s.from, s.from, tickLower, tickUpper, big.NewInt(0), big.NewInt(0), rpc.BlockTagLatest)
+	predictedAmount0, predictedAmount1, err := s.v3Pool.CallCollect(s.ctx, NewPoolCollectParams(s.pool, s.from, s.from, tickLower, tickUpper, big.NewInt(0), big.NewInt(0)), rpc.BlockTagLatest)
 	s.Require().NoError(err)
 	s.Require().Zero(predictedAmount0.Sign())
 	s.Require().Zero(predictedAmount1.Sign())
@@ -394,7 +394,7 @@ func (s *PoolSuite) Test05CollectZeroLiquidity() {
 
 	collectBuilder := tx.NewDynamicFeeBuilder()
 	collectBuilder.PriceBuffer(150)
-	unsigned, err := s.v3Pool.CreateCollect(s.ctx, collectBuilder, s.pool, s.from, s.from, tickLower, tickUpper, big.NewInt(0), big.NewInt(0))
+	unsigned, err := s.v3Pool.CreateCollect(s.ctx, collectBuilder, NewPoolCollectParams(s.pool, s.from, s.from, tickLower, tickUpper, big.NewInt(0), big.NewInt(0)))
 	s.Require().NoError(err)
 	s.Require().NoError(unsigned.Sign(s.signer))
 	s.mu.Lock()
@@ -439,7 +439,7 @@ func (s *PoolSuite) Test06IncreaseObservationCardinalityNext() {
 
 	increaseBuilder := tx.NewDynamicFeeBuilder()
 	increaseBuilder.PriceBuffer(150)
-	unsigned, err := s.v3Pool.CreateIncreaseObservationCardinalityNext(s.ctx, increaseBuilder, s.pool, s.from, next)
+	unsigned, err := s.v3Pool.CreateIncreaseObservationCardinalityNext(s.ctx, increaseBuilder, NewIncreaseObservationCardinalityNextParams(s.pool, s.from, next))
 	s.Require().NoError(err)
 	s.Require().NoError(unsigned.Sign(s.signer))
 	s.mu.Lock()
@@ -474,7 +474,7 @@ func (s *PoolSuite) Test06IncreaseObservationCardinalityNext() {
 }
 
 func (s *PoolSuite) Test07BurnTickLowerGreaterThanOrEqualUpper() {
-	_, err := s.v3Pool.CreateBurn(s.ctx, tx.NewDynamicFeeBuilder(), s.pool, s.from, big.NewInt(60), big.NewInt(-60), big.NewInt(0))
+	_, err := s.v3Pool.CreateBurn(s.ctx, tx.NewDynamicFeeBuilder(), NewBurnParams(s.pool, s.from, big.NewInt(60), big.NewInt(-60), big.NewInt(0)))
 	s.Require().Error(err)
 	s.Require().ErrorIs(err, ErrTickLowerGreaterThanOrEqual)
 	s.T().Logf("Test07BurnTickLowerGreaterThanOrEqualUpper: burn(60, -60, 0) reverted as expected: %v", err)
@@ -482,7 +482,7 @@ func (s *PoolSuite) Test07BurnTickLowerGreaterThanOrEqualUpper() {
 
 func (s *PoolSuite) Test08BurnTickLowerTooLow() {
 	tooLow := big.NewInt(-887273)
-	_, err := s.v3Pool.CreateBurn(s.ctx, tx.NewDynamicFeeBuilder(), s.pool, s.from, tooLow, big.NewInt(60), big.NewInt(0))
+	_, err := s.v3Pool.CreateBurn(s.ctx, tx.NewDynamicFeeBuilder(), NewBurnParams(s.pool, s.from, tooLow, big.NewInt(60), big.NewInt(0)))
 	s.Require().Error(err)
 	s.Require().ErrorIs(err, ErrTickLowerTooLow)
 	s.T().Logf("Test08BurnTickLowerTooLow: burn(%s, 60, 0) reverted as expected: %v", tooLow, err)
@@ -490,7 +490,7 @@ func (s *PoolSuite) Test08BurnTickLowerTooLow() {
 
 func (s *PoolSuite) Test09BurnTickUpperTooHigh() {
 	tooHigh := big.NewInt(887273)
-	_, err := s.v3Pool.CreateBurn(s.ctx, tx.NewDynamicFeeBuilder(), s.pool, s.from, big.NewInt(-60), tooHigh, big.NewInt(0))
+	_, err := s.v3Pool.CreateBurn(s.ctx, tx.NewDynamicFeeBuilder(), NewBurnParams(s.pool, s.from, big.NewInt(-60), tooHigh, big.NewInt(0)))
 	s.Require().Error(err)
 	s.Require().ErrorIs(err, ErrTickUpperTooHigh)
 	s.T().Logf("Test09BurnTickUpperTooHigh: burn(-60, %s, 0) reverted as expected: %v", tooHigh, err)
@@ -500,14 +500,14 @@ func (s *PoolSuite) Test10SetFeeProtocolForbidden() {
 	_, err := s.v3Factory.Owner(s.ctx, s.factory, rpc.BlockTagLatest)
 	s.Require().NoError(err)
 
-	_, err = s.v3Pool.CreateSetFeeProtocol(s.ctx, tx.NewDynamicFeeBuilder(), s.pool, s.from, 4, 10)
+	_, err = s.v3Pool.CreateSetFeeProtocol(s.ctx, tx.NewDynamicFeeBuilder(), NewSetFeeProtocolParams(s.pool, s.from, 4, 10))
 	s.Require().Error(err)
 	s.Require().ErrorIs(err, ErrReverted)
 	s.T().Logf("Test10SetFeeProtocolForbidden: setFeeProtocol(4, 10) from non-owner %s reverted as expected: %v", s.from, err)
 }
 
 func (s *PoolSuite) Test11CollectProtocolForbidden() {
-	_, err := s.v3Pool.CreateCollectProtocol(s.ctx, tx.NewDynamicFeeBuilder(), s.pool, s.from, s.from, big.NewInt(0), big.NewInt(0))
+	_, err := s.v3Pool.CreateCollectProtocol(s.ctx, tx.NewDynamicFeeBuilder(), NewCollectProtocolParams(s.pool, s.from, s.from, big.NewInt(0), big.NewInt(0)))
 	s.Require().Error(err)
 	s.Require().ErrorIs(err, ErrReverted)
 	s.T().Logf("Test11CollectProtocolForbidden: collectProtocol(%s, 0, 0) from non-owner %s reverted as expected: %v", s.from, s.from, err)

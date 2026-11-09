@@ -68,7 +68,7 @@ func (s *WETHSuite) SetupSuite() {
 		s.T().Skip("disabled")
 	}
 
-	s.ctx, s.cancel = context.WithTimeout(context.Background(), 10*time.Minute)
+	s.ctx, s.cancel = context.WithTimeout(s.T().Context(), 10*time.Minute)
 
 	s.client = rpc.NewClient(s.RPCURL, rpc.WithRetry(5, rpc.ExponentialBackoff(500*time.Millisecond, 10*time.Second)))
 	s.w = New(s.client)
@@ -141,7 +141,7 @@ func (s *WETHSuite) Test01ReadMethods() {
 }
 
 func (s *WETHSuite) Test02Deposit() {
-	unsigned, err := s.w.CreateDeposit(s.ctx, tx.NewDynamicFeeBuilder(), s.contract, s.from, s.depositValue)
+	unsigned, err := s.w.CreateDeposit(s.ctx, tx.NewDynamicFeeBuilder(), NewDepositParams(s.contract, s.from, s.depositValue))
 	s.Require().NoError(err)
 	s.Require().NoError(unsigned.Sign(s.signer))
 	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
@@ -155,9 +155,15 @@ func (s *WETHSuite) Test02Deposit() {
 	s.Require().True(receipt.Status, "deposit transaction reverted")
 	s.T().Logf("deposit: confirmed in block %d", receipt.BlockNumber)
 
-	deposits, err := ExtractDeposits(receipt.Logs)
-	s.Require().NoError(err)
-	s.Require().Len(deposits, 1)
+	var deposits []Deposit
+	s.Require().Eventually(func() bool {
+		receipt, err = tx.WaitForReceipt(s.ctx, s.client, hash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+		if err != nil {
+			return false
+		}
+		deposits, err = ExtractDeposits(receipt.Logs)
+		return err == nil && len(deposits) == 1
+	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "deposit log not visible after confirmation")
 	s.Require().True(deposits[0].Dst.Equal(s.from))
 	s.Require().Zero(s.depositValue.Cmp(deposits[0].Wad))
 
@@ -253,7 +259,7 @@ func (s *WETHSuite) Test05Transfer() {
 }
 
 func (s *WETHSuite) Test06Withdraw() {
-	unsigned, err := s.w.CreateWithdraw(s.ctx, tx.NewDynamicFeeBuilder(), s.contract, s.from, s.depositValue)
+	unsigned, err := s.w.CreateWithdraw(s.ctx, tx.NewDynamicFeeBuilder(), NewWithdrawParams(s.contract, s.from, s.depositValue))
 	s.Require().NoError(err)
 	s.Require().NoError(unsigned.Sign(s.signer))
 	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
@@ -267,9 +273,15 @@ func (s *WETHSuite) Test06Withdraw() {
 	s.Require().True(receipt.Status, "withdraw transaction reverted")
 	s.T().Logf("withdraw: confirmed in block %d", receipt.BlockNumber)
 
-	withdrawals, err := ExtractWithdrawals(receipt.Logs)
-	s.Require().NoError(err)
-	s.Require().Len(withdrawals, 1)
+	var withdrawals []Withdrawal
+	s.Require().Eventually(func() bool {
+		receipt, err = tx.WaitForReceipt(s.ctx, s.client, hash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+		if err != nil {
+			return false
+		}
+		withdrawals, err = ExtractWithdrawals(receipt.Logs)
+		return err == nil && len(withdrawals) == 1
+	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "withdrawal log not visible after confirmation")
 	s.Require().True(withdrawals[0].Src.Equal(s.from))
 	s.Require().Zero(s.depositValue.Cmp(withdrawals[0].Wad))
 
@@ -285,6 +297,6 @@ func (s *WETHSuite) Test07WithdrawInsufficientBalance() {
 	s.Require().NoError(err)
 	s.Require().Zero(balance.Sign(), "spender must hold no WETH for this revert case")
 
-	_, err = s.w.CreateWithdraw(s.ctx, tx.NewDynamicFeeBuilder(), s.contract, s.spender, s.depositValue)
+	_, err = s.w.CreateWithdraw(s.ctx, tx.NewDynamicFeeBuilder(), NewWithdrawParams(s.contract, s.spender, s.depositValue))
 	s.Require().Error(err)
 }

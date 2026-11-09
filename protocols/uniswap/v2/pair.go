@@ -62,8 +62,8 @@ func NewPair(c rpc.Client) *Pair {
 }
 
 // MinimumLiquidity returns contract's minimum liquidity burned to the zero address on first mint.
-func (p *Pair) MinimumLiquidity(ctx context.Context, contract *types.Address, block string) (*big.Int, error) {
-	data, err := p.call(ctx, nil, contract, EncodeMinimumLiquidity(), block)
+func (pr *Pair) MinimumLiquidity(ctx context.Context, contract *types.Address, block string) (*big.Int, error) {
+	data, err := pr.call(ctx, nil, contract, EncodeMinimumLiquidity(), block)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: minimumLiquidity: %w", err)
 	}
@@ -75,8 +75,8 @@ func (p *Pair) MinimumLiquidity(ctx context.Context, contract *types.Address, bl
 }
 
 // Factory returns the UniswapV2Factory that deployed contract.
-func (p *Pair) Factory(ctx context.Context, contract *types.Address, block string) (*types.Address, error) {
-	data, err := p.call(ctx, nil, contract, EncodeFactory(), block)
+func (pr *Pair) Factory(ctx context.Context, contract *types.Address, block string) (*types.Address, error) {
+	data, err := pr.call(ctx, nil, contract, EncodeFactory(), block)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: factory: %w", err)
 	}
@@ -88,8 +88,8 @@ func (p *Pair) Factory(ctx context.Context, contract *types.Address, block strin
 }
 
 // Token0 returns contract's token0 (the lower-valued of its two tokens).
-func (p *Pair) Token0(ctx context.Context, contract *types.Address, block string) (*types.Address, error) {
-	data, err := p.call(ctx, nil, contract, EncodeToken0(), block)
+func (pr *Pair) Token0(ctx context.Context, contract *types.Address, block string) (*types.Address, error) {
+	data, err := pr.call(ctx, nil, contract, EncodeToken0(), block)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: token0: %w", err)
 	}
@@ -101,8 +101,8 @@ func (p *Pair) Token0(ctx context.Context, contract *types.Address, block string
 }
 
 // Token1 returns contract's token1 (the higher-valued of its two tokens).
-func (p *Pair) Token1(ctx context.Context, contract *types.Address, block string) (*types.Address, error) {
-	data, err := p.call(ctx, nil, contract, EncodeToken1(), block)
+func (pr *Pair) Token1(ctx context.Context, contract *types.Address, block string) (*types.Address, error) {
+	data, err := pr.call(ctx, nil, contract, EncodeToken1(), block)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: token1: %w", err)
 	}
@@ -114,8 +114,8 @@ func (p *Pair) Token1(ctx context.Context, contract *types.Address, block string
 }
 
 // GetReserves returns contract's current (reserve0, reserve1, blockTimestampLast).
-func (p *Pair) GetReserves(ctx context.Context, contract *types.Address, block string) (*Reserves, error) {
-	data, err := p.call(ctx, nil, contract, EncodeGetReserves(), block)
+func (pr *Pair) GetReserves(ctx context.Context, contract *types.Address, block string) (*Reserves, error) {
+	data, err := pr.call(ctx, nil, contract, EncodeGetReserves(), block)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: getReserves: %w", err)
 	}
@@ -127,8 +127,8 @@ func (p *Pair) GetReserves(ctx context.Context, contract *types.Address, block s
 }
 
 // Price0CumulativeLast returns contract's cumulative price of token0, as of the last update.
-func (p *Pair) Price0CumulativeLast(ctx context.Context, contract *types.Address, block string) (*big.Int, error) {
-	data, err := p.call(ctx, nil, contract, EncodePrice0CumulativeLast(), block)
+func (pr *Pair) Price0CumulativeLast(ctx context.Context, contract *types.Address, block string) (*big.Int, error) {
+	data, err := pr.call(ctx, nil, contract, EncodePrice0CumulativeLast(), block)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: price0CumulativeLast: %w", err)
 	}
@@ -140,8 +140,8 @@ func (p *Pair) Price0CumulativeLast(ctx context.Context, contract *types.Address
 }
 
 // Price1CumulativeLast returns contract's cumulative price of token1, as of the last update.
-func (p *Pair) Price1CumulativeLast(ctx context.Context, contract *types.Address, block string) (*big.Int, error) {
-	data, err := p.call(ctx, nil, contract, EncodePrice1CumulativeLast(), block)
+func (pr *Pair) Price1CumulativeLast(ctx context.Context, contract *types.Address, block string) (*big.Int, error) {
+	data, err := pr.call(ctx, nil, contract, EncodePrice1CumulativeLast(), block)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: price1CumulativeLast: %w", err)
 	}
@@ -153,8 +153,8 @@ func (p *Pair) Price1CumulativeLast(ctx context.Context, contract *types.Address
 }
 
 // KLast returns contract's reserve0*reserve1 as of the most recent liquidity event.
-func (p *Pair) KLast(ctx context.Context, contract *types.Address, block string) (*big.Int, error) {
-	data, err := p.call(ctx, nil, contract, EncodeKLast(), block)
+func (pr *Pair) KLast(ctx context.Context, contract *types.Address, block string) (*big.Int, error) {
+	data, err := pr.call(ctx, nil, contract, EncodeKLast(), block)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: kLast: %w", err)
 	}
@@ -166,8 +166,8 @@ func (p *Pair) KLast(ctx context.Context, contract *types.Address, block string)
 }
 
 // PermitTypehash returns contract's Permit EIP-712 typehash.
-func (p *Pair) PermitTypehash(ctx context.Context, contract *types.Address, block string) ([]byte, error) {
-	data, err := p.call(ctx, nil, contract, EncodePermitTypehash(), block)
+func (pr *Pair) PermitTypehash(ctx context.Context, contract *types.Address, block string) ([]byte, error) {
+	data, err := pr.call(ctx, nil, contract, EncodePermitTypehash(), block)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: permitTypehash: %w", err)
 	}
@@ -179,26 +179,26 @@ func (p *Pair) PermitTypehash(ctx context.Context, contract *types.Address, bloc
 }
 
 // CreateInitialize builds an unsigned initialize(token0, token1) transaction via b, sent by sender.
-func (p *Pair) CreateInitialize(ctx context.Context, b tx.Builder, contract, sender, token0, token1 *types.Address) (core.Transaction, error) {
-	calldata, err := EncodeInitialize(token0, token1)
+func (pr *Pair) CreateInitialize(ctx context.Context, b tx.Builder, p *InitializeParams) (core.Transaction, error) {
+	calldata, err := EncodeInitialize(p.Token0, p.Token1)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: createInitialize: %w", err)
 	}
 
-	unsigned, err := b.Build(sender, contract, nil, calldata).Pack(ctx, p.c)
+	unsigned, err := b.Build(p.Sender, p.Pair, nil, calldata).Pack(ctx, pr.c)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: createInitialize: %w", p.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv2: createInitialize: %w", pr.wrapRevertError(err))
 	}
 	return unsigned, nil
 }
 
 // Initialize broadcasts an already-signed initialize transaction.
-func (p *Pair) Initialize(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
+func (pr *Pair) Initialize(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
 	raw, err := signedTx.EncodeRLP()
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: initialize: %w", err)
 	}
-	hash, err := tx.Broadcast(ctx, p.c, raw)
+	hash, err := tx.Broadcast(ctx, pr.c, raw)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: initialize: %w", err)
 	}
@@ -206,12 +206,12 @@ func (p *Pair) Initialize(ctx context.Context, signedTx core.Transaction) (*type
 }
 
 // CallMint simulates mint(to) via eth_call, returning the liquidity it would mint.
-func (p *Pair) CallMint(ctx context.Context, contract, sender, to *types.Address, block string) (*big.Int, error) {
-	calldata, err := EncodeMint(to)
+func (pr *Pair) CallMint(ctx context.Context, p *MintParams, block string) (*big.Int, error) {
+	calldata, err := EncodeMint(p.To)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: callMint: %w", err)
 	}
-	data, err := p.call(ctx, sender, contract, calldata, block)
+	data, err := pr.call(ctx, p.Sender, p.Pair, calldata, block)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: callMint: %w", err)
 	}
@@ -223,26 +223,26 @@ func (p *Pair) CallMint(ctx context.Context, contract, sender, to *types.Address
 }
 
 // CreateMint builds an unsigned mint(to) transaction via b, sent by sender.
-func (p *Pair) CreateMint(ctx context.Context, b tx.Builder, contract, sender, to *types.Address) (core.Transaction, error) {
-	calldata, err := EncodeMint(to)
+func (pr *Pair) CreateMint(ctx context.Context, b tx.Builder, p *MintParams) (core.Transaction, error) {
+	calldata, err := EncodeMint(p.To)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: createMint: %w", err)
 	}
 
-	unsigned, err := b.Build(sender, contract, nil, calldata).Pack(ctx, p.c)
+	unsigned, err := b.Build(p.Sender, p.Pair, nil, calldata).Pack(ctx, pr.c)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: createMint: %w", p.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv2: createMint: %w", pr.wrapRevertError(err))
 	}
 	return unsigned, nil
 }
 
 // Mint broadcasts an already-signed mint transaction.
-func (p *Pair) Mint(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
+func (pr *Pair) Mint(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
 	raw, err := signedTx.EncodeRLP()
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: mint: %w", err)
 	}
-	hash, err := tx.Broadcast(ctx, p.c, raw)
+	hash, err := tx.Broadcast(ctx, pr.c, raw)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: mint: %w", err)
 	}
@@ -250,12 +250,12 @@ func (p *Pair) Mint(ctx context.Context, signedTx core.Transaction) (*types.Hash
 }
 
 // CallBurn simulates burn(to) via eth_call, returning the (amount0, amount1) it would withdraw.
-func (p *Pair) CallBurn(ctx context.Context, contract, sender, to *types.Address, block string) (amount0, amount1 *big.Int, err error) {
-	calldata, err := EncodeBurn(to)
+func (pr *Pair) CallBurn(ctx context.Context, p *BurnParams, block string) (amount0, amount1 *big.Int, err error) {
+	calldata, err := EncodeBurn(p.To)
 	if err != nil {
 		return nil, nil, fmt.Errorf("uniswapv2: callBurn: %w", err)
 	}
-	data, err := p.call(ctx, sender, contract, calldata, block)
+	data, err := pr.call(ctx, p.Sender, p.Pair, calldata, block)
 	if err != nil {
 		return nil, nil, fmt.Errorf("uniswapv2: callBurn: %w", err)
 	}
@@ -267,26 +267,26 @@ func (p *Pair) CallBurn(ctx context.Context, contract, sender, to *types.Address
 }
 
 // CreateBurn builds an unsigned burn(to) transaction via b, sent by sender.
-func (p *Pair) CreateBurn(ctx context.Context, b tx.Builder, contract, sender, to *types.Address) (core.Transaction, error) {
-	calldata, err := EncodeBurn(to)
+func (pr *Pair) CreateBurn(ctx context.Context, b tx.Builder, p *BurnParams) (core.Transaction, error) {
+	calldata, err := EncodeBurn(p.To)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: createBurn: %w", err)
 	}
 
-	unsigned, err := b.Build(sender, contract, nil, calldata).Pack(ctx, p.c)
+	unsigned, err := b.Build(p.Sender, p.Pair, nil, calldata).Pack(ctx, pr.c)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: createBurn: %w", p.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv2: createBurn: %w", pr.wrapRevertError(err))
 	}
 	return unsigned, nil
 }
 
 // Burn broadcasts an already-signed burn transaction.
-func (p *Pair) Burn(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
+func (pr *Pair) Burn(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
 	raw, err := signedTx.EncodeRLP()
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: burn: %w", err)
 	}
-	hash, err := tx.Broadcast(ctx, p.c, raw)
+	hash, err := tx.Broadcast(ctx, pr.c, raw)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: burn: %w", err)
 	}
@@ -295,26 +295,26 @@ func (p *Pair) Burn(ctx context.Context, signedTx core.Transaction) (*types.Hash
 
 // CreateSwap builds an unsigned swap(amount0Out, amount1Out, to, data) transaction via b, sent
 // by sender.
-func (p *Pair) CreateSwap(ctx context.Context, b tx.Builder, contract, sender *types.Address, amount0Out, amount1Out *big.Int, to *types.Address, data []byte) (core.Transaction, error) {
-	calldata, err := EncodeSwap(amount0Out, amount1Out, to, data)
+func (pr *Pair) CreateSwap(ctx context.Context, b tx.Builder, p *SwapParams) (core.Transaction, error) {
+	calldata, err := EncodeSwap(p.Amount0Out, p.Amount1Out, p.To, p.Data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: createSwap: %w", err)
 	}
 
-	unsigned, err := b.Build(sender, contract, nil, calldata).Pack(ctx, p.c)
+	unsigned, err := b.Build(p.Sender, p.Pair, nil, calldata).Pack(ctx, pr.c)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: createSwap: %w", p.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv2: createSwap: %w", pr.wrapRevertError(err))
 	}
 	return unsigned, nil
 }
 
 // Swap broadcasts an already-signed swap transaction.
-func (p *Pair) Swap(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
+func (pr *Pair) Swap(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
 	raw, err := signedTx.EncodeRLP()
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: swap: %w", err)
 	}
-	hash, err := tx.Broadcast(ctx, p.c, raw)
+	hash, err := tx.Broadcast(ctx, pr.c, raw)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: swap: %w", err)
 	}
@@ -322,26 +322,26 @@ func (p *Pair) Swap(ctx context.Context, signedTx core.Transaction) (*types.Hash
 }
 
 // CreateSkim builds an unsigned skim(to) transaction via b, sent by sender.
-func (p *Pair) CreateSkim(ctx context.Context, b tx.Builder, contract, sender, to *types.Address) (core.Transaction, error) {
-	calldata, err := EncodeSkim(to)
+func (pr *Pair) CreateSkim(ctx context.Context, b tx.Builder, p *SkimParams) (core.Transaction, error) {
+	calldata, err := EncodeSkim(p.To)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: createSkim: %w", err)
 	}
 
-	unsigned, err := b.Build(sender, contract, nil, calldata).Pack(ctx, p.c)
+	unsigned, err := b.Build(p.Sender, p.Pair, nil, calldata).Pack(ctx, pr.c)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: createSkim: %w", p.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv2: createSkim: %w", pr.wrapRevertError(err))
 	}
 	return unsigned, nil
 }
 
 // Skim broadcasts an already-signed skim transaction.
-func (p *Pair) Skim(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
+func (pr *Pair) Skim(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
 	raw, err := signedTx.EncodeRLP()
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: skim: %w", err)
 	}
-	hash, err := tx.Broadcast(ctx, p.c, raw)
+	hash, err := tx.Broadcast(ctx, pr.c, raw)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: skim: %w", err)
 	}
@@ -349,21 +349,21 @@ func (p *Pair) Skim(ctx context.Context, signedTx core.Transaction) (*types.Hash
 }
 
 // CreateSync builds an unsigned sync() transaction via b, sent by sender.
-func (p *Pair) CreateSync(ctx context.Context, b tx.Builder, contract, sender *types.Address) (core.Transaction, error) {
-	unsigned, err := b.Build(sender, contract, nil, EncodeSync()).Pack(ctx, p.c)
+func (pr *Pair) CreateSync(ctx context.Context, b tx.Builder, p *SyncParams) (core.Transaction, error) {
+	unsigned, err := b.Build(p.Sender, p.Pair, nil, EncodeSync()).Pack(ctx, pr.c)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: createSync: %w", p.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv2: createSync: %w", pr.wrapRevertError(err))
 	}
 	return unsigned, nil
 }
 
 // Sync broadcasts an already-signed sync transaction.
-func (p *Pair) Sync(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
+func (pr *Pair) Sync(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
 	raw, err := signedTx.EncodeRLP()
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: sync: %w", err)
 	}
-	hash, err := tx.Broadcast(ctx, p.c, raw)
+	hash, err := tx.Broadcast(ctx, pr.c, raw)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: sync: %w", err)
 	}
@@ -371,7 +371,7 @@ func (p *Pair) Sync(ctx context.Context, signedTx core.Transaction) (*types.Hash
 }
 
 // call eth_calls contract with calldata, decoding a reverted require(cond, reason) to its sentinel.
-func (p *Pair) call(ctx context.Context, from, contract *types.Address, calldata []byte, block string) ([]byte, error) {
+func (pr *Pair) call(ctx context.Context, from, contract *types.Address, calldata []byte, block string) ([]byte, error) {
 	params := map[string]any{
 		"to":   contract.String(),
 		"data": encoding.Hex.EncodePrefixed(calldata),
@@ -381,8 +381,8 @@ func (p *Pair) call(ctx context.Context, from, contract *types.Address, calldata
 	}
 
 	var raw string
-	if err := p.c.Call(ctx, rpc.ETHCall("call", params, block, &raw)); err != nil {
-		return nil, p.wrapRevertError(err)
+	if err := pr.c.Call(ctx, rpc.ETHCall("call", params, block, &raw)); err != nil {
+		return nil, pr.wrapRevertError(err)
 	}
 	return encoding.Hex.Decode(raw)
 }

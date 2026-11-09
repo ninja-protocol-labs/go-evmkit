@@ -17,7 +17,7 @@ func TestNewPairCreated(t *testing.T) {
 	allPairsLength := big.NewInt(7)
 
 	pc := NewPairCreated(contract, token0, token1, pair, allPairsLength)
-	require.Same(t, contract, pc.Contract)
+	require.Same(t, contract, pc.Factory)
 	require.Same(t, token0, pc.Token0)
 	require.Same(t, token1, pc.Token1)
 	require.Same(t, pair, pc.Pair)

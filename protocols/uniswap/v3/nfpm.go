@@ -26,7 +26,7 @@ type INFPMImmutables interface {
 // INFPMEnumerable mirrors IERC721Enumerable.
 type INFPMEnumerable interface {
 	TotalSupply(ctx context.Context, contract *types.Address, block string) (*big.Int, error)
-	TokenOfOwnerByIndex(ctx context.Context, contract, owner *types.Address, index *big.Int, block string) (*big.Int, error)
+	TokenOfOwnerByIndex(ctx context.Context, p *TokenOfOwnerByIndexParams, block string) (*big.Int, error)
 	TokenByIndex(ctx context.Context, contract *types.Address, index *big.Int, block string) (*big.Int, error)
 }
 
@@ -143,12 +143,12 @@ func (n *NFPM) TotalSupply(ctx context.Context, contract *types.Address, block s
 }
 
 // TokenOfOwnerByIndex returns the tokenId owned by owner at index.
-func (n *NFPM) TokenOfOwnerByIndex(ctx context.Context, contract, owner *types.Address, index *big.Int, block string) (*big.Int, error) {
-	calldata, err := EncodeTokenOfOwnerByIndex(owner, index)
+func (n *NFPM) TokenOfOwnerByIndex(ctx context.Context, p *TokenOfOwnerByIndexParams, block string) (*big.Int, error) {
+	calldata, err := EncodeTokenOfOwnerByIndex(p.Owner, p.Index)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: tokenOfOwnerByIndex: %w", err)
 	}
-	data, err := n.call(ctx, nil, contract, nil, calldata, block)
+	data, err := n.call(ctx, nil, p.NFPM, nil, calldata, block)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: tokenOfOwnerByIndex: %w", err)
 	}
@@ -204,13 +204,13 @@ func (n *NFPM) DomainSeparator(ctx context.Context, contract *types.Address, blo
 
 // CreatePermit builds an unsigned permit(spender, tokenId, deadline, v, r, s) transaction via b,
 // sent by sender.
-func (n *NFPM) CreatePermit(ctx context.Context, b tx.Builder, contract, sender, spender *types.Address, tokenId, deadline *big.Int, sig *types.Signature) (core.Transaction, error) {
-	calldata, err := EncodeNFTPermit(spender, tokenId, deadline, sig)
+func (n *NFPM) CreatePermit(ctx context.Context, b tx.Builder, p *PermitParams) (core.Transaction, error) {
+	calldata, err := EncodeNFTPermit(p.Spender, p.TokenId, p.Deadline, p.Sig)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: createPermit: %w", err)
 	}
 
-	unsigned, err := b.Build(sender, contract, nil, calldata).Pack(ctx, n.c)
+	unsigned, err := b.Build(p.Sender, p.NFPM, nil, calldata).Pack(ctx, n.c)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: createPermit: %w", n.wrapRevertError(err))
 	}
@@ -233,13 +233,13 @@ func (n *NFPM) Permit(ctx context.Context, signedTx core.Transaction) (*types.Ha
 // CreateCreateAndInitializePoolIfNecessary builds an unsigned
 // createAndInitializePoolIfNecessary(token0, token1, fee, sqrtPriceX96) transaction via b, sent
 // by sender.
-func (n *NFPM) CreateCreateAndInitializePoolIfNecessary(ctx context.Context, b tx.Builder, contract, sender, token0, token1 *types.Address, fee, sqrtPriceX96 *big.Int) (core.Transaction, error) {
-	calldata, err := EncodeCreateAndInitializePoolIfNecessary(token0, token1, fee, sqrtPriceX96)
+func (n *NFPM) CreateCreateAndInitializePoolIfNecessary(ctx context.Context, b tx.Builder, p *CreateAndInitializePoolIfNecessaryParams) (core.Transaction, error) {
+	calldata, err := EncodeCreateAndInitializePoolIfNecessary(p.Token0, p.Token1, p.Fee, p.SqrtPriceX96)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: createCreateAndInitializePoolIfNecessary: %w", err)
 	}
 
-	unsigned, err := b.Build(sender, contract, nil, calldata).Pack(ctx, n.c)
+	unsigned, err := b.Build(p.Sender, p.NFPM, nil, calldata).Pack(ctx, n.c)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: createCreateAndInitializePoolIfNecessary: %w", n.wrapRevertError(err))
 	}
@@ -249,12 +249,12 @@ func (n *NFPM) CreateCreateAndInitializePoolIfNecessary(ctx context.Context, b t
 // CallCreateAndInitializePoolIfNecessary simulates createAndInitializePoolIfNecessary(token0,
 // token1, fee, sqrtPriceX96) via eth_call, as sender, returning the pool's address -- without
 // broadcasting anything.
-func (n *NFPM) CallCreateAndInitializePoolIfNecessary(ctx context.Context, contract, sender, token0, token1 *types.Address, fee, sqrtPriceX96 *big.Int, block string) (*types.Address, error) {
-	calldata, err := EncodeCreateAndInitializePoolIfNecessary(token0, token1, fee, sqrtPriceX96)
+func (n *NFPM) CallCreateAndInitializePoolIfNecessary(ctx context.Context, p *CreateAndInitializePoolIfNecessaryParams, block string) (*types.Address, error) {
+	calldata, err := EncodeCreateAndInitializePoolIfNecessary(p.Token0, p.Token1, p.Fee, p.SqrtPriceX96)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: callCreateAndInitializePoolIfNecessary: %w", err)
 	}
-	data, err := n.call(ctx, sender, contract, nil, calldata, block)
+	data, err := n.call(ctx, p.Sender, p.NFPM, nil, calldata, block)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: callCreateAndInitializePoolIfNecessary: %w", err)
 	}
@@ -281,13 +281,13 @@ func (n *NFPM) CreateAndInitializePoolIfNecessary(ctx context.Context, signedTx 
 
 // CreateUnwrapWETH9 builds an unsigned unwrapWETH9(amountMinimum, recipient) transaction via b,
 // sent by sender.
-func (n *NFPM) CreateUnwrapWETH9(ctx context.Context, b tx.Builder, contract, sender *types.Address, amountMinimum *big.Int, recipient *types.Address) (core.Transaction, error) {
-	calldata, err := EncodeUnwrapWETH9(amountMinimum, recipient)
+func (n *NFPM) CreateUnwrapWETH9(ctx context.Context, b tx.Builder, p *NFPMUnwrapWETH9Params) (core.Transaction, error) {
+	calldata, err := EncodeUnwrapWETH9(p.AmountMinimum, p.Recipient)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: createUnwrapWETH9: %w", err)
 	}
 
-	unsigned, err := b.Build(sender, contract, nil, calldata).Pack(ctx, n.c)
+	unsigned, err := b.Build(p.Sender, p.NFPM, nil, calldata).Pack(ctx, n.c)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: createUnwrapWETH9: %w", n.wrapRevertError(err))
 	}
@@ -309,13 +309,13 @@ func (n *NFPM) UnwrapWETH9(ctx context.Context, signedTx core.Transaction) (*typ
 
 // CreateSweepToken builds an unsigned sweepToken(token, amountMinimum, recipient) transaction
 // via b, sent by sender.
-func (n *NFPM) CreateSweepToken(ctx context.Context, b tx.Builder, contract, sender, token *types.Address, amountMinimum *big.Int, recipient *types.Address) (core.Transaction, error) {
-	calldata, err := EncodeSweepToken(token, amountMinimum, recipient)
+func (n *NFPM) CreateSweepToken(ctx context.Context, b tx.Builder, p *NFPMSweepTokenParams) (core.Transaction, error) {
+	calldata, err := EncodeSweepToken(p.Token, p.AmountMinimum, p.Recipient)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: createSweepToken: %w", err)
 	}
 
-	unsigned, err := b.Build(sender, contract, nil, calldata).Pack(ctx, n.c)
+	unsigned, err := b.Build(p.Sender, p.NFPM, nil, calldata).Pack(ctx, n.c)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: createSweepToken: %w", n.wrapRevertError(err))
 	}
@@ -336,8 +336,8 @@ func (n *NFPM) SweepToken(ctx context.Context, signedTx core.Transaction) (*type
 }
 
 // CreateRefundETH builds an unsigned refundETH() transaction via b, sent by sender.
-func (n *NFPM) CreateRefundETH(ctx context.Context, b tx.Builder, contract, sender *types.Address) (core.Transaction, error) {
-	unsigned, err := b.Build(sender, contract, nil, EncodeRefundETH()).Pack(ctx, n.c)
+func (n *NFPM) CreateRefundETH(ctx context.Context, b tx.Builder, p *NFPMRefundETHParams) (core.Transaction, error) {
+	unsigned, err := b.Build(p.Sender, p.NFPM, nil, EncodeRefundETH()).Pack(ctx, n.c)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: createRefundETH: %w", n.wrapRevertError(err))
 	}
@@ -359,13 +359,13 @@ func (n *NFPM) RefundETH(ctx context.Context, signedTx core.Transaction) (*types
 
 // CreateMulticall builds an unsigned multicall(data) transaction via b, sent by sender with
 // value wei attached (value may be nil).
-func (n *NFPM) CreateMulticall(ctx context.Context, b tx.Builder, contract, sender *types.Address, value *big.Int, data [][]byte) (core.Transaction, error) {
-	calldata, err := EncodeMulticall(data)
+func (n *NFPM) CreateMulticall(ctx context.Context, b tx.Builder, p *NFPMMulticallParams) (core.Transaction, error) {
+	calldata, err := EncodeMulticall(p.Data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: createMulticall: %w", err)
 	}
 
-	unsigned, err := b.Build(sender, contract, value, calldata).Pack(ctx, n.c)
+	unsigned, err := b.Build(p.Sender, p.NFPM, p.Value, calldata).Pack(ctx, n.c)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: createMulticall: %w", n.wrapRevertError(err))
 	}
@@ -374,12 +374,12 @@ func (n *NFPM) CreateMulticall(ctx context.Context, b tx.Builder, contract, send
 
 // CallMulticall simulates multicall(data) via eth_call, as sender with value wei attached,
 // returning each sub-call's own return data -- without broadcasting anything.
-func (n *NFPM) CallMulticall(ctx context.Context, contract, sender *types.Address, value *big.Int, data [][]byte, block string) ([][]byte, error) {
-	calldata, err := EncodeMulticall(data)
+func (n *NFPM) CallMulticall(ctx context.Context, p *NFPMMulticallParams, block string) ([][]byte, error) {
+	calldata, err := EncodeMulticall(p.Data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: callMulticall: %w", err)
 	}
-	raw, err := n.call(ctx, sender, contract, value, calldata, block)
+	raw, err := n.call(ctx, p.Sender, p.NFPM, p.Value, calldata, block)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: callMulticall: %w", err)
 	}
@@ -607,13 +607,13 @@ func (n *NFPM) Collect(ctx context.Context, signedTx core.Transaction) (*types.H
 
 // CreateBurn builds an unsigned burn(tokenId) transaction via b, sent by sender -- who must be
 // the position's owner or operator. The position must have 0 liquidity and 0 tokens owed.
-func (n *NFPM) CreateBurn(ctx context.Context, b tx.Builder, contract, sender *types.Address, tokenId *big.Int) (core.Transaction, error) {
-	calldata, err := EncodeNfpmBurn(tokenId)
+func (n *NFPM) CreateBurn(ctx context.Context, b tx.Builder, p *NFPMBurnParams) (core.Transaction, error) {
+	calldata, err := EncodeNfpmBurn(p.TokenId)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: createBurn: %w", err)
 	}
 
-	unsigned, err := b.Build(sender, contract, nil, calldata).Pack(ctx, n.c)
+	unsigned, err := b.Build(p.Sender, p.NFPM, nil, calldata).Pack(ctx, n.c)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: createBurn: %w", n.wrapRevertError(err))
 	}

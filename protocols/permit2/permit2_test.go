@@ -95,7 +95,7 @@ func (s *Permit2Suite) SetupSuite() {
 		s.T().Skip("disabled")
 	}
 
-	s.ctx, s.cancel = context.WithTimeout(context.Background(), 10*time.Minute)
+	s.ctx, s.cancel = context.WithTimeout(s.T().Context(), 10*time.Minute)
 
 	s.client = rpc.NewClient(s.RPCURL, rpc.WithRetry(5, rpc.ExponentialBackoff(500*time.Millisecond, 10*time.Second)))
 	s.deployer = deploy.NewNicksDeployer(s.client)
@@ -309,7 +309,7 @@ func (s *Permit2Suite) Test01ReadMethods() {
 	s.T().Logf("Test01ReadMethods: DomainSeparator")
 	s.T().Logf("\tvalue = 0x%x", domainSep.Bytes())
 
-	allowance, err := s.p.Allowance(s.ctx, s.contract, s.from, s.token, s.spender, rpc.BlockTagLatest)
+	allowance, err := s.p.Allowance(s.ctx, NewAllowanceParams(s.contract, s.from, s.token, s.spender), rpc.BlockTagLatest)
 	s.Require().NoError(err)
 	s.T().Logf("Test01ReadMethods: Allowance")
 	s.T().Logf("\towner = %s", s.from.String())
@@ -338,7 +338,7 @@ func (s *Permit2Suite) Test02Approve() {
 	builder := tx.NewDynamicFeeBuilder()
 	builder.PriceBuffer(s.PriceBuffer)
 	builder.LimitBuffer(s.LimitBuffer)
-	unsigned, err := s.p.CreateApprove(s.ctx, builder, s.contract, s.from, s.token, s.spender, s.approveAmount, expiration)
+	unsigned, err := s.p.CreateApprove(s.ctx, builder, NewApproveParams(s.contract, s.from, s.token, s.spender, s.approveAmount, expiration))
 	s.Require().NoError(err)
 	s.Require().NoError(unsigned.Sign(s.signer))
 	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
@@ -376,7 +376,7 @@ func (s *Permit2Suite) Test02Approve() {
 
 	var allowance *PackedAllowance
 	s.Require().Eventually(func() bool {
-		a, err := s.p.Allowance(s.ctx, s.contract, s.from, s.token, s.spender, rpc.BlockTagLatest)
+		a, err := s.p.Allowance(s.ctx, NewAllowanceParams(s.contract, s.from, s.token, s.spender), rpc.BlockTagLatest)
 		if err != nil || a.Amount.Cmp(s.approveAmount) != 0 || a.Expiration.Cmp(expiration) != 0 {
 			return false
 		}
@@ -391,7 +391,7 @@ func (s *Permit2Suite) Test02Approve() {
 }
 
 func (s *Permit2Suite) Test03PermitSingle() {
-	before, err := s.p.Allowance(s.ctx, s.contract, s.from, s.token, s.spender, rpc.BlockTagLatest)
+	before, err := s.p.Allowance(s.ctx, NewAllowanceParams(s.contract, s.from, s.token, s.spender), rpc.BlockTagLatest)
 	s.Require().NoError(err)
 
 	expiration := big.NewInt(time.Now().Add(1 * time.Hour).Unix())
@@ -414,7 +414,7 @@ func (s *Permit2Suite) Test03PermitSingle() {
 	builder := tx.NewDynamicFeeBuilder()
 	builder.PriceBuffer(s.PriceBuffer)
 	builder.LimitBuffer(s.LimitBuffer)
-	unsigned, err := s.p.CreatePermitSingle(s.ctx, builder, s.contract, s.spender, s.from, permitSingle, sig)
+	unsigned, err := s.p.CreatePermitSingle(s.ctx, builder, NewPermitSingleParams(s.contract, s.spender, s.from, permitSingle, sig))
 	s.Require().NoError(err)
 	s.Require().NoError(unsigned.Sign(s.spenderSigner))
 	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
@@ -450,7 +450,7 @@ func (s *Permit2Suite) Test03PermitSingle() {
 	wantNonce := new(big.Int).Add(before.Nonce, big.NewInt(1))
 	var allowance *PackedAllowance
 	s.Require().Eventually(func() bool {
-		a, err := s.p.Allowance(s.ctx, s.contract, s.from, s.token, s.spender, rpc.BlockTagLatest)
+		a, err := s.p.Allowance(s.ctx, NewAllowanceParams(s.contract, s.from, s.token, s.spender), rpc.BlockTagLatest)
 		if err != nil || a.Nonce.Cmp(wantNonce) != 0 {
 			return false
 		}
@@ -465,7 +465,7 @@ func (s *Permit2Suite) Test03PermitSingle() {
 }
 
 func (s *Permit2Suite) Test04TransferFrom() {
-	before, err := s.p.Allowance(s.ctx, s.contract, s.from, s.token, s.spender, rpc.BlockTagLatest)
+	before, err := s.p.Allowance(s.ctx, NewAllowanceParams(s.contract, s.from, s.token, s.spender), rpc.BlockTagLatest)
 	s.Require().NoError(err)
 
 	amount := new(big.Int).Div(before.Amount, big.NewInt(2))
@@ -478,7 +478,7 @@ func (s *Permit2Suite) Test04TransferFrom() {
 	builder := tx.NewDynamicFeeBuilder()
 	builder.PriceBuffer(s.PriceBuffer)
 	builder.LimitBuffer(s.LimitBuffer)
-	unsigned, err := s.p.CreateTransferFrom(s.ctx, builder, s.contract, s.spender, s.from, s.spender, amount, s.token)
+	unsigned, err := s.p.CreateTransferFrom(s.ctx, builder, NewTransferFromParams(s.contract, s.spender, s.from, s.spender, amount, s.token))
 	s.Require().NoError(err)
 	s.Require().NoError(unsigned.Sign(s.spenderSigner))
 	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
@@ -513,7 +513,7 @@ func (s *Permit2Suite) Test04TransferFrom() {
 	wantAllowance := new(big.Int).Sub(before.Amount, amount)
 	var allowance *PackedAllowance
 	s.Require().Eventually(func() bool {
-		a, err := s.p.Allowance(s.ctx, s.contract, s.from, s.token, s.spender, rpc.BlockTagLatest)
+		a, err := s.p.Allowance(s.ctx, NewAllowanceParams(s.contract, s.from, s.token, s.spender), rpc.BlockTagLatest)
 		if err != nil || a.Amount.Cmp(wantAllowance) != 0 {
 			return false
 		}
@@ -542,7 +542,7 @@ func (s *Permit2Suite) Test04TransferFrom() {
 }
 
 func (s *Permit2Suite) Test05PermitBatch() {
-	before, err := s.p.Allowance(s.ctx, s.contract, s.from, s.token, s.spender, rpc.BlockTagLatest)
+	before, err := s.p.Allowance(s.ctx, NewAllowanceParams(s.contract, s.from, s.token, s.spender), rpc.BlockTagLatest)
 	s.Require().NoError(err)
 
 	expiration := big.NewInt(time.Now().Add(1 * time.Hour).Unix())
@@ -565,7 +565,7 @@ func (s *Permit2Suite) Test05PermitBatch() {
 	builder := tx.NewDynamicFeeBuilder()
 	builder.PriceBuffer(s.PriceBuffer)
 	builder.LimitBuffer(s.LimitBuffer)
-	unsigned, err := s.p.CreatePermitBatch(s.ctx, builder, s.contract, s.spender, s.from, permitBatch, sig)
+	unsigned, err := s.p.CreatePermitBatch(s.ctx, builder, NewPermitBatchParams(s.contract, s.spender, s.from, permitBatch, sig))
 	s.Require().NoError(err)
 	s.Require().NoError(unsigned.Sign(s.spenderSigner))
 	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
@@ -601,7 +601,7 @@ func (s *Permit2Suite) Test05PermitBatch() {
 	wantNonce := new(big.Int).Add(before.Nonce, big.NewInt(1))
 	var allowance *PackedAllowance
 	s.Require().Eventually(func() bool {
-		a, err := s.p.Allowance(s.ctx, s.contract, s.from, s.token, s.spender, rpc.BlockTagLatest)
+		a, err := s.p.Allowance(s.ctx, NewAllowanceParams(s.contract, s.from, s.token, s.spender), rpc.BlockTagLatest)
 		if err != nil || a.Nonce.Cmp(wantNonce) != 0 {
 			return false
 		}
@@ -616,7 +616,7 @@ func (s *Permit2Suite) Test05PermitBatch() {
 }
 
 func (s *Permit2Suite) Test06TransferFromBatch() {
-	before, err := s.p.Allowance(s.ctx, s.contract, s.from, s.token, s.spender, rpc.BlockTagLatest)
+	before, err := s.p.Allowance(s.ctx, NewAllowanceParams(s.contract, s.from, s.token, s.spender), rpc.BlockTagLatest)
 	s.Require().NoError(err)
 
 	amount := new(big.Int).Div(before.Amount, big.NewInt(2))
@@ -630,7 +630,7 @@ func (s *Permit2Suite) Test06TransferFromBatch() {
 	builder := tx.NewDynamicFeeBuilder()
 	builder.PriceBuffer(s.PriceBuffer)
 	builder.LimitBuffer(s.LimitBuffer)
-	unsigned, err := s.p.CreateTransferFromBatch(s.ctx, builder, s.contract, s.spender, transferDetails)
+	unsigned, err := s.p.CreateTransferFromBatch(s.ctx, builder, NewTransferFromBatchParams(s.contract, s.spender, transferDetails))
 	s.Require().NoError(err)
 	s.Require().NoError(unsigned.Sign(s.spenderSigner))
 	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
@@ -665,7 +665,7 @@ func (s *Permit2Suite) Test06TransferFromBatch() {
 	wantAllowance := new(big.Int).Sub(before.Amount, amount)
 	var allowance *PackedAllowance
 	s.Require().Eventually(func() bool {
-		a, err := s.p.Allowance(s.ctx, s.contract, s.from, s.token, s.spender, rpc.BlockTagLatest)
+		a, err := s.p.Allowance(s.ctx, NewAllowanceParams(s.contract, s.from, s.token, s.spender), rpc.BlockTagLatest)
 		if err != nil || a.Amount.Cmp(wantAllowance) != 0 {
 			return false
 		}
@@ -694,7 +694,7 @@ func (s *Permit2Suite) Test06TransferFromBatch() {
 }
 
 func (s *Permit2Suite) Test07Lockdown() {
-	before, err := s.p.Allowance(s.ctx, s.contract, s.from, s.token, s.spender, rpc.BlockTagLatest)
+	before, err := s.p.Allowance(s.ctx, NewAllowanceParams(s.contract, s.from, s.token, s.spender), rpc.BlockTagLatest)
 	s.Require().NoError(err)
 	s.Require().Positive(before.Amount.Sign(), "expected a nonzero allowance to lock down")
 
@@ -703,7 +703,7 @@ func (s *Permit2Suite) Test07Lockdown() {
 	builder := tx.NewDynamicFeeBuilder()
 	builder.PriceBuffer(s.PriceBuffer)
 	builder.LimitBuffer(s.LimitBuffer)
-	unsigned, err := s.p.CreateLockdown(s.ctx, builder, s.contract, s.from, approvals)
+	unsigned, err := s.p.CreateLockdown(s.ctx, builder, NewLockdownParams(s.contract, s.from, approvals))
 	s.Require().NoError(err)
 	s.Require().NoError(unsigned.Sign(s.signer))
 	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
@@ -736,7 +736,7 @@ func (s *Permit2Suite) Test07Lockdown() {
 
 	var allowance *PackedAllowance
 	s.Require().Eventually(func() bool {
-		a, err := s.p.Allowance(s.ctx, s.contract, s.from, s.token, s.spender, rpc.BlockTagLatest)
+		a, err := s.p.Allowance(s.ctx, NewAllowanceParams(s.contract, s.from, s.token, s.spender), rpc.BlockTagLatest)
 		if err != nil || a.Amount.Sign() != 0 {
 			return false
 		}
@@ -751,7 +751,7 @@ func (s *Permit2Suite) Test07Lockdown() {
 }
 
 func (s *Permit2Suite) Test08InvalidateNonces() {
-	before, err := s.p.Allowance(s.ctx, s.contract, s.from, s.token, s.spender, rpc.BlockTagLatest)
+	before, err := s.p.Allowance(s.ctx, NewAllowanceParams(s.contract, s.from, s.token, s.spender), rpc.BlockTagLatest)
 	s.Require().NoError(err)
 
 	newNonce := new(big.Int).Add(before.Nonce, big.NewInt(5))
@@ -759,7 +759,7 @@ func (s *Permit2Suite) Test08InvalidateNonces() {
 	builder := tx.NewDynamicFeeBuilder()
 	builder.PriceBuffer(s.PriceBuffer)
 	builder.LimitBuffer(s.LimitBuffer)
-	unsigned, err := s.p.CreateInvalidateNonces(s.ctx, builder, s.contract, s.from, s.token, s.spender, newNonce)
+	unsigned, err := s.p.CreateInvalidateNonces(s.ctx, builder, NewInvalidateNoncesParams(s.contract, s.from, s.token, s.spender, newNonce))
 	s.Require().NoError(err)
 	s.Require().NoError(unsigned.Sign(s.signer))
 	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
@@ -798,7 +798,7 @@ func (s *Permit2Suite) Test08InvalidateNonces() {
 
 	var allowance *PackedAllowance
 	s.Require().Eventually(func() bool {
-		a, err := s.p.Allowance(s.ctx, s.contract, s.from, s.token, s.spender, rpc.BlockTagLatest)
+		a, err := s.p.Allowance(s.ctx, NewAllowanceParams(s.contract, s.from, s.token, s.spender), rpc.BlockTagLatest)
 		if err != nil || a.Nonce.Cmp(newNonce) != 0 {
 			return false
 		}
@@ -823,7 +823,7 @@ func (s *Permit2Suite) Test08InvalidateNonces() {
 	staleBuilder := tx.NewDynamicFeeBuilder()
 	staleBuilder.PriceBuffer(s.PriceBuffer)
 	staleBuilder.LimitBuffer(s.LimitBuffer)
-	_, err = s.p.CreatePermitSingle(s.ctx, staleBuilder, s.contract, s.spender, s.from, stalePermitSingle, staleSig)
+	_, err = s.p.CreatePermitSingle(s.ctx, staleBuilder, NewPermitSingleParams(s.contract, s.spender, s.from, stalePermitSingle, staleSig))
 	s.Require().Error(err)
 	s.Require().ErrorIs(err, ErrInvalidNonce)
 	s.T().Logf("Test08InvalidateNonces: stale-nonce PermitSingle correctly rejected: %v", err)
@@ -857,7 +857,7 @@ func (s *Permit2Suite) Test09PermitTransferFrom() {
 	builder := tx.NewDynamicFeeBuilder()
 	builder.PriceBuffer(s.PriceBuffer)
 	builder.LimitBuffer(s.LimitBuffer)
-	unsigned, err := s.p.CreatePermitTransferFrom(s.ctx, builder, s.contract, s.spender, permit, transferDetails, s.from, sig)
+	unsigned, err := s.p.CreatePermitTransferFrom(s.ctx, builder, NewPermitTransferFromParams(s.contract, s.spender, permit, transferDetails, s.from, sig))
 	s.Require().NoError(err)
 	s.Require().NoError(unsigned.Sign(s.spenderSigner))
 	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
@@ -933,7 +933,7 @@ func (s *Permit2Suite) Test10PermitWitnessTransferFrom() {
 	builder := tx.NewDynamicFeeBuilder()
 	builder.PriceBuffer(s.PriceBuffer)
 	builder.LimitBuffer(s.LimitBuffer)
-	unsigned, err := s.p.CreatePermitWitnessTransferFrom(s.ctx, builder, s.contract, s.spender, permit, transferDetails, s.from, witness, witnessTypeString, sig)
+	unsigned, err := s.p.CreatePermitWitnessTransferFrom(s.ctx, builder, NewPermitWitnessTransferFromParams(s.contract, s.spender, permit, transferDetails, s.from, witness, witnessTypeString, sig))
 	s.Require().NoError(err)
 	s.Require().NoError(unsigned.Sign(s.spenderSigner))
 	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
@@ -1005,7 +1005,7 @@ func (s *Permit2Suite) Test11PermitTransferFromBatch() {
 	builder := tx.NewDynamicFeeBuilder()
 	builder.PriceBuffer(s.PriceBuffer)
 	builder.LimitBuffer(s.LimitBuffer)
-	unsigned, err := s.p.CreatePermitTransferFromBatch(s.ctx, builder, s.contract, s.spender, permit, transferDetails, s.from, sig)
+	unsigned, err := s.p.CreatePermitTransferFromBatch(s.ctx, builder, NewPermitTransferFromBatchParams(s.contract, s.spender, permit, transferDetails, s.from, sig))
 	s.Require().NoError(err)
 	s.Require().NoError(unsigned.Sign(s.spenderSigner))
 	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
@@ -1081,7 +1081,7 @@ func (s *Permit2Suite) Test12PermitWitnessTransferFromBatch() {
 	builder := tx.NewDynamicFeeBuilder()
 	builder.PriceBuffer(s.PriceBuffer)
 	builder.LimitBuffer(s.LimitBuffer)
-	unsigned, err := s.p.CreatePermitWitnessTransferFromBatch(s.ctx, builder, s.contract, s.spender, permit, transferDetails, s.from, witness, witnessTypeString, sig)
+	unsigned, err := s.p.CreatePermitWitnessTransferFromBatch(s.ctx, builder, NewPermitWitnessTransferFromBatchParams(s.contract, s.spender, permit, transferDetails, s.from, witness, witnessTypeString, sig))
 	s.Require().NoError(err)
 	s.Require().NoError(unsigned.Sign(s.spenderSigner))
 	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
@@ -1135,7 +1135,7 @@ func (s *Permit2Suite) Test13InvalidateUnorderedNonces() {
 	builder := tx.NewDynamicFeeBuilder()
 	builder.PriceBuffer(s.PriceBuffer)
 	builder.LimitBuffer(s.LimitBuffer)
-	unsigned, err := s.p.CreateInvalidateUnorderedNonces(s.ctx, builder, s.contract, s.from, wordPos, mask)
+	unsigned, err := s.p.CreateInvalidateUnorderedNonces(s.ctx, builder, NewInvalidateUnorderedNoncesParams(s.contract, s.from, wordPos, mask))
 	s.Require().NoError(err)
 	s.Require().NoError(unsigned.Sign(s.signer))
 	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
@@ -1193,7 +1193,7 @@ func (s *Permit2Suite) Test13InvalidateUnorderedNonces() {
 	staleBuilder := tx.NewDynamicFeeBuilder()
 	staleBuilder.PriceBuffer(s.PriceBuffer)
 	staleBuilder.LimitBuffer(s.LimitBuffer)
-	_, err = s.p.CreatePermitTransferFrom(s.ctx, staleBuilder, s.contract, s.spender, permit, transferDetails, s.from, staleSig)
+	_, err = s.p.CreatePermitTransferFrom(s.ctx, staleBuilder, NewPermitTransferFromParams(s.contract, s.spender, permit, transferDetails, s.from, staleSig))
 	s.Require().Error(err)
 	s.Require().ErrorIs(err, ErrInvalidNonce)
 	s.T().Logf("Test13InvalidateUnorderedNonces: reused nonce correctly rejected: %v", err)
@@ -1206,7 +1206,7 @@ func (s *Permit2Suite) Test14AllowanceExpired() {
 	builder := tx.NewDynamicFeeBuilder()
 	builder.PriceBuffer(s.PriceBuffer)
 	builder.LimitBuffer(s.LimitBuffer)
-	unsigned, err := s.p.CreateApprove(s.ctx, builder, s.contract, s.from, s.token, s.spender, amount, expiration)
+	unsigned, err := s.p.CreateApprove(s.ctx, builder, NewApproveParams(s.contract, s.from, s.token, s.spender, amount, expiration))
 	s.Require().NoError(err)
 	s.Require().NoError(unsigned.Sign(s.signer))
 	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
@@ -1227,7 +1227,7 @@ func (s *Permit2Suite) Test14AllowanceExpired() {
 
 	var allowance *PackedAllowance
 	s.Require().Eventually(func() bool {
-		a, err := s.p.Allowance(s.ctx, s.contract, s.from, s.token, s.spender, rpc.BlockTagLatest)
+		a, err := s.p.Allowance(s.ctx, NewAllowanceParams(s.contract, s.from, s.token, s.spender), rpc.BlockTagLatest)
 		if err != nil || a.Amount.Cmp(amount) != 0 {
 			return false
 		}
@@ -1246,14 +1246,14 @@ func (s *Permit2Suite) Test14AllowanceExpired() {
 	expiredBuilder := tx.NewDynamicFeeBuilder()
 	expiredBuilder.PriceBuffer(s.PriceBuffer)
 	expiredBuilder.LimitBuffer(s.LimitBuffer)
-	_, err = s.p.CreateTransferFrom(s.ctx, expiredBuilder, s.contract, s.spender, s.from, s.spender, amount, s.token)
+	_, err = s.p.CreateTransferFrom(s.ctx, expiredBuilder, NewTransferFromParams(s.contract, s.spender, s.from, s.spender, amount, s.token))
 	s.Require().Error(err)
 	s.Require().ErrorIs(err, ErrAllowanceExpired)
 	s.T().Logf("Test14AllowanceExpired: expired-allowance transferFrom correctly rejected: %v", err)
 }
 
 func (s *Permit2Suite) Test15SignatureExpired() {
-	before, err := s.p.Allowance(s.ctx, s.contract, s.from, s.token, s.spender, rpc.BlockTagLatest)
+	before, err := s.p.Allowance(s.ctx, NewAllowanceParams(s.contract, s.from, s.token, s.spender), rpc.BlockTagLatest)
 	s.Require().NoError(err)
 
 	expiration := big.NewInt(time.Now().Add(1 * time.Hour).Unix())
@@ -1268,14 +1268,14 @@ func (s *Permit2Suite) Test15SignatureExpired() {
 	builder := tx.NewDynamicFeeBuilder()
 	builder.PriceBuffer(s.PriceBuffer)
 	builder.LimitBuffer(s.LimitBuffer)
-	_, err = s.p.CreatePermitSingle(s.ctx, builder, s.contract, s.spender, s.from, permitSingle, sig)
+	_, err = s.p.CreatePermitSingle(s.ctx, builder, NewPermitSingleParams(s.contract, s.spender, s.from, permitSingle, sig))
 	s.Require().Error(err)
 	s.Require().ErrorIs(err, ErrSignatureExpired)
 	s.T().Logf("Test15SignatureExpired: expired-deadline PermitSingle correctly rejected: %v", err)
 }
 
 func (s *Permit2Suite) Test16ExcessiveInvalidation() {
-	before, err := s.p.Allowance(s.ctx, s.contract, s.from, s.token, s.spender, rpc.BlockTagLatest)
+	before, err := s.p.Allowance(s.ctx, NewAllowanceParams(s.contract, s.from, s.token, s.spender), rpc.BlockTagLatest)
 	s.Require().NoError(err)
 
 	newNonce := new(big.Int).Add(before.Nonce, big.NewInt(70000))
@@ -1283,14 +1283,14 @@ func (s *Permit2Suite) Test16ExcessiveInvalidation() {
 	builder := tx.NewDynamicFeeBuilder()
 	builder.PriceBuffer(s.PriceBuffer)
 	builder.LimitBuffer(s.LimitBuffer)
-	_, err = s.p.CreateInvalidateNonces(s.ctx, builder, s.contract, s.from, s.token, s.spender, newNonce)
+	_, err = s.p.CreateInvalidateNonces(s.ctx, builder, NewInvalidateNoncesParams(s.contract, s.from, s.token, s.spender, newNonce))
 	s.Require().Error(err)
 	s.Require().ErrorIs(err, ErrExcessiveInvalidation)
 	s.T().Logf("Test16ExcessiveInvalidation: oversized nonce jump correctly rejected: %v", err)
 }
 
 func (s *Permit2Suite) Test17InvalidSignatureLength() {
-	before, err := s.p.Allowance(s.ctx, s.contract, s.from, s.token, s.spender, rpc.BlockTagLatest)
+	before, err := s.p.Allowance(s.ctx, NewAllowanceParams(s.contract, s.from, s.token, s.spender), rpc.BlockTagLatest)
 	s.Require().NoError(err)
 
 	expiration := big.NewInt(time.Now().Add(1 * time.Hour).Unix())
@@ -1314,7 +1314,7 @@ func (s *Permit2Suite) Test17InvalidSignatureLength() {
 }
 
 func (s *Permit2Suite) Test18InvalidSignature() {
-	before, err := s.p.Allowance(s.ctx, s.contract, s.from, s.token, s.spender, rpc.BlockTagLatest)
+	before, err := s.p.Allowance(s.ctx, NewAllowanceParams(s.contract, s.from, s.token, s.spender), rpc.BlockTagLatest)
 	s.Require().NoError(err)
 
 	expiration := big.NewInt(time.Now().Add(1 * time.Hour).Unix())
@@ -1344,7 +1344,7 @@ func (s *Permit2Suite) Test18InvalidSignature() {
 }
 
 func (s *Permit2Suite) Test19InvalidSigner() {
-	before, err := s.p.Allowance(s.ctx, s.contract, s.from, s.token, s.spender, rpc.BlockTagLatest)
+	before, err := s.p.Allowance(s.ctx, NewAllowanceParams(s.contract, s.from, s.token, s.spender), rpc.BlockTagLatest)
 	s.Require().NoError(err)
 
 	expiration := big.NewInt(time.Now().Add(1 * time.Hour).Unix())
@@ -1359,7 +1359,7 @@ func (s *Permit2Suite) Test19InvalidSigner() {
 	builder := tx.NewDynamicFeeBuilder()
 	builder.PriceBuffer(s.PriceBuffer)
 	builder.LimitBuffer(s.LimitBuffer)
-	_, err = s.p.CreatePermitSingle(s.ctx, builder, s.contract, s.spender, s.from, permitSingle, wrongSig)
+	_, err = s.p.CreatePermitSingle(s.ctx, builder, NewPermitSingleParams(s.contract, s.spender, s.from, permitSingle, wrongSig))
 	s.Require().Error(err)
 	s.Require().ErrorIs(err, ErrInvalidSigner)
 	s.T().Logf("Test19InvalidSigner: wrong-signer PermitSingle correctly rejected: %v", err)
@@ -1382,7 +1382,7 @@ func (s *Permit2Suite) Test20InvalidAmount() {
 	builder := tx.NewDynamicFeeBuilder()
 	builder.PriceBuffer(s.PriceBuffer)
 	builder.LimitBuffer(s.LimitBuffer)
-	_, err = s.p.CreatePermitTransferFrom(s.ctx, builder, s.contract, s.spender, permit, transferDetails, s.from, sig)
+	_, err = s.p.CreatePermitTransferFrom(s.ctx, builder, NewPermitTransferFromParams(s.contract, s.spender, permit, transferDetails, s.from, sig))
 	s.Require().Error(err)
 	s.Require().ErrorIs(err, ErrInvalidAmount)
 	s.T().Logf("Test20InvalidAmount: over-requested PermitTransferFrom correctly rejected: %v", err)
@@ -1406,7 +1406,7 @@ func (s *Permit2Suite) Test21LengthMismatch() {
 	builder := tx.NewDynamicFeeBuilder()
 	builder.PriceBuffer(s.PriceBuffer)
 	builder.LimitBuffer(s.LimitBuffer)
-	_, err = s.p.CreatePermitTransferFromBatch(s.ctx, builder, s.contract, s.spender, permit, transferDetails, s.from, sig)
+	_, err = s.p.CreatePermitTransferFromBatch(s.ctx, builder, NewPermitTransferFromBatchParams(s.contract, s.spender, permit, transferDetails, s.from, sig))
 	s.Require().Error(err)
 	s.Require().ErrorIs(err, ErrLengthMismatch)
 	s.T().Logf("Test21LengthMismatch: mismatched transferDetails length correctly rejected: %v", err)
@@ -1419,7 +1419,7 @@ func (s *Permit2Suite) Test22InsufficientAllowance() {
 	builder := tx.NewDynamicFeeBuilder()
 	builder.PriceBuffer(s.PriceBuffer)
 	builder.LimitBuffer(s.LimitBuffer)
-	unsigned, err := s.p.CreateApprove(s.ctx, builder, s.contract, s.from, s.token, s.spender, amount, expiration)
+	unsigned, err := s.p.CreateApprove(s.ctx, builder, NewApproveParams(s.contract, s.from, s.token, s.spender, amount, expiration))
 	s.Require().NoError(err)
 	s.Require().NoError(unsigned.Sign(s.signer))
 	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
@@ -1432,7 +1432,7 @@ func (s *Permit2Suite) Test22InsufficientAllowance() {
 	s.Require().True(receipt.Status, "approve transaction reverted")
 
 	s.Require().Eventually(func() bool {
-		a, err := s.p.Allowance(s.ctx, s.contract, s.from, s.token, s.spender, rpc.BlockTagLatest)
+		a, err := s.p.Allowance(s.ctx, NewAllowanceParams(s.contract, s.from, s.token, s.spender), rpc.BlockTagLatest)
 		return err == nil && a.Amount.Cmp(amount) == 0
 	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "allowance not visible after approve")
 
@@ -1446,7 +1446,7 @@ func (s *Permit2Suite) Test22InsufficientAllowance() {
 	overBuilder := tx.NewDynamicFeeBuilder()
 	overBuilder.PriceBuffer(s.PriceBuffer)
 	overBuilder.LimitBuffer(s.LimitBuffer)
-	_, err = s.p.CreateTransferFrom(s.ctx, overBuilder, s.contract, s.spender, s.from, s.spender, overAmount, s.token)
+	_, err = s.p.CreateTransferFrom(s.ctx, overBuilder, NewTransferFromParams(s.contract, s.spender, s.from, s.spender, overAmount, s.token))
 	s.Require().Error(err)
 	s.Require().ErrorIs(err, ErrInsufficientAllowance)
 	s.T().Logf("Test22InsufficientAllowance: over-amount transferFrom correctly rejected: %v", err)

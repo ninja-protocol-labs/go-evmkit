@@ -15,7 +15,7 @@ func TestNewDeposit(t *testing.T) {
 	wad := big.NewInt(1000)
 
 	d := NewDeposit(contract, dst, wad)
-	require.Same(t, contract, d.Contract)
+	require.Same(t, contract, d.WETH)
 	require.Same(t, dst, d.Dst)
 	require.Same(t, wad, d.Wad)
 }
@@ -26,7 +26,7 @@ func TestNewWithdrawal(t *testing.T) {
 	wad := big.NewInt(2000)
 
 	w := NewWithdrawal(contract, src, wad)
-	require.Same(t, contract, w.Contract)
+	require.Same(t, contract, w.WETH)
 	require.Same(t, src, w.Src)
 	require.Same(t, wad, w.Wad)
 }
