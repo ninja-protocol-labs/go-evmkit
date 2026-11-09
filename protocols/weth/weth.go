@@ -5,7 +5,6 @@ package weth
 import (
 	"context"
 	"fmt"
-	"math/big"
 
 	"github.com/ninja-protocol-labs/go-evmkit/core"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
@@ -40,8 +39,8 @@ func New(c rpc.Client) *WETH {
 }
 
 // CreateDeposit builds an unsigned deposit() transaction via b, wrapping value wei of sender's native balance.
-func (w *WETH) CreateDeposit(ctx context.Context, b tx.Builder, contract, sender *types.Address, value *big.Int) (core.Transaction, error) {
-	unsigned, err := b.Build(sender, contract, value, EncodeDeposit()).Pack(ctx, w.c)
+func (w *WETH) CreateDeposit(ctx context.Context, b tx.Builder, p *DepositParams) (core.Transaction, error) {
+	unsigned, err := b.Build(p.Sender, p.WETH, p.Value, EncodeDeposit()).Pack(ctx, w.c)
 	if err != nil {
 		return nil, fmt.Errorf("weth: createDeposit: %w", err)
 	}
@@ -62,13 +61,13 @@ func (w *WETH) Deposit(ctx context.Context, signedTx core.Transaction) (*types.H
 }
 
 // CreateWithdraw builds an unsigned withdraw(wad) transaction via b, unwrapping wad of sender's contract balance.
-func (w *WETH) CreateWithdraw(ctx context.Context, b tx.Builder, contract, sender *types.Address, wad *big.Int) (core.Transaction, error) {
-	calldata, err := EncodeWithdraw(wad)
+func (w *WETH) CreateWithdraw(ctx context.Context, b tx.Builder, p *WithdrawParams) (core.Transaction, error) {
+	calldata, err := EncodeWithdraw(p.Wad)
 	if err != nil {
 		return nil, fmt.Errorf("weth: createWithdraw: %w", err)
 	}
 
-	unsigned, err := b.Build(sender, contract, nil, calldata).Pack(ctx, w.c)
+	unsigned, err := b.Build(p.Sender, p.WETH, nil, calldata).Pack(ctx, w.c)
 	if err != nil {
 		return nil, fmt.Errorf("weth: createWithdraw: %w", err)
 	}

@@ -132,8 +132,184 @@ func NewSnapshotCumulativesInside(tickCumulativeInside, secondsPerLiquidityInsid
 	}
 }
 
-// Initialize mirrors IUniswapV3PoolEvents' Initialize event: Contract was initialized at
+// InitializeParams mirrors IUniswapV3PoolEvents' Initialize event: Contract was initialized at
 // SqrtPriceX96/Tick, emitted exactly once, before any Mint/Burn/Swap.
+// InitializeParams is CreateInitialize's argument list.
+type InitializeParams struct {
+	Pool         *types.Address
+	Sender       *types.Address
+	SqrtPriceX96 *big.Int
+}
+
+func NewInitializeParams(pool, sender *types.Address, sqrtPriceX96 *big.Int) *InitializeParams {
+	return &InitializeParams{
+		Pool:         pool,
+		Sender:       sender,
+		SqrtPriceX96: sqrtPriceX96,
+	}
+}
+
+// PoolMintParams is CreateMint's and CallMint's argument list.
+type PoolMintParams struct {
+	Pool         *types.Address
+	Sender       *types.Address
+	Recipient    *types.Address
+	TickLower    *big.Int
+	TickUpper    *big.Int
+	Amount       *big.Int
+	CallbackData []byte
+}
+
+func NewPoolMintParams(pool, sender, recipient *types.Address, tickLower, tickUpper, amount *big.Int, callbackData []byte) *PoolMintParams {
+	return &PoolMintParams{
+		Pool:         pool,
+		Sender:       sender,
+		Recipient:    recipient,
+		TickLower:    tickLower,
+		TickUpper:    tickUpper,
+		Amount:       amount,
+		CallbackData: callbackData,
+	}
+}
+
+// PoolCollectParams is CreateCollect's and CallCollect's argument list.
+type PoolCollectParams struct {
+	Pool             *types.Address
+	Sender           *types.Address
+	Recipient        *types.Address
+	TickLower        *big.Int
+	TickUpper        *big.Int
+	Amount0Requested *big.Int
+	Amount1Requested *big.Int
+}
+
+func NewPoolCollectParams(pool, sender, recipient *types.Address, tickLower, tickUpper, amount0Requested, amount1Requested *big.Int) *PoolCollectParams {
+	return &PoolCollectParams{
+		Pool:             pool,
+		Sender:           sender,
+		Recipient:        recipient,
+		TickLower:        tickLower,
+		TickUpper:        tickUpper,
+		Amount0Requested: amount0Requested,
+		Amount1Requested: amount1Requested,
+	}
+}
+
+// BurnParams is CreateBurn's and CallBurn's argument list.
+type BurnParams struct {
+	Pool      *types.Address
+	Sender    *types.Address
+	TickLower *big.Int
+	TickUpper *big.Int
+	Amount    *big.Int
+}
+
+func NewBurnParams(pool, sender *types.Address, tickLower, tickUpper, amount *big.Int) *BurnParams {
+	return &BurnParams{
+		Pool:      pool,
+		Sender:    sender,
+		TickLower: tickLower,
+		TickUpper: tickUpper,
+		Amount:    amount,
+	}
+}
+
+// SwapParams is CreateSwap's and CallSwap's argument list.
+type SwapParams struct {
+	Pool              *types.Address
+	Sender            *types.Address
+	Recipient         *types.Address
+	ZeroForOne        bool
+	AmountSpecified   *big.Int
+	SqrtPriceLimitX96 *big.Int
+	CallbackData      []byte
+}
+
+func NewSwapParams(pool, sender, recipient *types.Address, zeroForOne bool, amountSpecified, sqrtPriceLimitX96 *big.Int, callbackData []byte) *SwapParams {
+	return &SwapParams{
+		Pool:              pool,
+		Sender:            sender,
+		Recipient:         recipient,
+		ZeroForOne:        zeroForOne,
+		AmountSpecified:   amountSpecified,
+		SqrtPriceLimitX96: sqrtPriceLimitX96,
+		CallbackData:      callbackData,
+	}
+}
+
+// FlashParams is CreateFlash's argument list.
+type FlashParams struct {
+	Pool         *types.Address
+	Sender       *types.Address
+	Recipient    *types.Address
+	Amount0      *big.Int
+	Amount1      *big.Int
+	CallbackData []byte
+}
+
+func NewFlashParams(pool, sender, recipient *types.Address, amount0, amount1 *big.Int, callbackData []byte) *FlashParams {
+	return &FlashParams{
+		Pool:         pool,
+		Sender:       sender,
+		Recipient:    recipient,
+		Amount0:      amount0,
+		Amount1:      amount1,
+		CallbackData: callbackData,
+	}
+}
+
+// IncreaseObservationCardinalityNextParams is CreateIncreaseObservationCardinalityNext's
+// argument list.
+type IncreaseObservationCardinalityNextParams struct {
+	Pool                       *types.Address
+	Sender                     *types.Address
+	ObservationCardinalityNext uint16
+}
+
+func NewIncreaseObservationCardinalityNextParams(pool, sender *types.Address, observationCardinalityNext uint16) *IncreaseObservationCardinalityNextParams {
+	return &IncreaseObservationCardinalityNextParams{
+		Pool:                       pool,
+		Sender:                     sender,
+		ObservationCardinalityNext: observationCardinalityNext,
+	}
+}
+
+// SetFeeProtocolParams is CreateSetFeeProtocol's argument list.
+type SetFeeProtocolParams struct {
+	Pool         *types.Address
+	Sender       *types.Address
+	FeeProtocol0 uint8
+	FeeProtocol1 uint8
+}
+
+func NewSetFeeProtocolParams(pool, sender *types.Address, feeProtocol0, feeProtocol1 uint8) *SetFeeProtocolParams {
+	return &SetFeeProtocolParams{
+		Pool:         pool,
+		Sender:       sender,
+		FeeProtocol0: feeProtocol0,
+		FeeProtocol1: feeProtocol1,
+	}
+}
+
+// CollectProtocolParams is CreateCollectProtocol's and CallCollectProtocol's argument list.
+type CollectProtocolParams struct {
+	Pool             *types.Address
+	Sender           *types.Address
+	Recipient        *types.Address
+	Amount0Requested *big.Int
+	Amount1Requested *big.Int
+}
+
+func NewCollectProtocolParams(pool, sender, recipient *types.Address, amount0Requested, amount1Requested *big.Int) *CollectProtocolParams {
+	return &CollectProtocolParams{
+		Pool:             pool,
+		Sender:           sender,
+		Recipient:        recipient,
+		Amount0Requested: amount0Requested,
+		Amount1Requested: amount1Requested,
+	}
+}
+
 type Initialize struct {
 	Contract     *types.Address
 	SqrtPriceX96 *big.Int

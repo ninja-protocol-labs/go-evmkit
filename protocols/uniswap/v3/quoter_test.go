@@ -340,7 +340,7 @@ func (s *QuoterLifeCycleSuite) Test02CreateAndInitializePoolIfNecessary() {
 	sqrtPriceX96 := new(big.Int).Lsh(big.NewInt(1), 96)
 	s.T().Logf("Test02CreateAndInitializePoolIfNecessary: token0=%s token1=%s fee=%s sqrtPriceX96=%s", s.tokenA, s.tokenB, s.Fee, sqrtPriceX96)
 
-	predicted, err := s.v3Nfpm.CallCreateAndInitializePoolIfNecessary(s.ctx, s.nfpm, s.from, s.tokenA, s.tokenB, s.Fee, sqrtPriceX96, rpc.BlockTagLatest)
+	predicted, err := s.v3Nfpm.CallCreateAndInitializePoolIfNecessary(s.ctx, NewCreateAndInitializePoolIfNecessaryParams(s.nfpm, s.from, s.tokenA, s.tokenB, s.Fee, sqrtPriceX96), rpc.BlockTagLatest)
 	s.Require().NoError(err)
 	s.Require().False(predicted.IsZero())
 	s.T().Logf("Test02CreateAndInitializePoolIfNecessary: CallCreateAndInitializePoolIfNecessary predicted pool=%s", predicted)
@@ -348,7 +348,7 @@ func (s *QuoterLifeCycleSuite) Test02CreateAndInitializePoolIfNecessary() {
 	builder := tx.NewDynamicFeeBuilder()
 	builder.PriceBuffer(150)
 	builder.LimitBuffer(300)
-	unsigned, err := s.v3Nfpm.CreateCreateAndInitializePoolIfNecessary(s.ctx, builder, s.nfpm, s.from, s.tokenA, s.tokenB, s.Fee, sqrtPriceX96)
+	unsigned, err := s.v3Nfpm.CreateCreateAndInitializePoolIfNecessary(s.ctx, builder, NewCreateAndInitializePoolIfNecessaryParams(s.nfpm, s.from, s.tokenA, s.tokenB, s.Fee, sqrtPriceX96))
 	s.Require().NoError(err)
 	s.Require().NoError(unsigned.Sign(s.signer))
 	s.mu.Lock()
@@ -376,7 +376,7 @@ func (s *QuoterLifeCycleSuite) Test02CreateAndInitializePoolIfNecessary() {
 
 	var registeredPool *types.Address
 	s.Require().Eventually(func() bool {
-		registeredPool, err = s.v3Factory.GetPool(s.ctx, s.factory, s.tokenA, s.tokenB, s.Fee, rpc.BlockTagLatest)
+		registeredPool, err = s.v3Factory.GetPool(s.ctx, NewGetPoolParams(s.factory, s.tokenA, s.tokenB, s.Fee), rpc.BlockTagLatest)
 		return err == nil && registeredPool.Equal(s.pool)
 	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "Factory.getPool not yet reflecting the new pool")
 	s.T().Logf("Test02CreateAndInitializePoolIfNecessary: Factory.getPool(token0, token1, fee) = %s matches", registeredPool)
@@ -702,7 +702,7 @@ func (s *QuoterLifeCycleSuite) Test08CreateAndInitializePoolBC() {
 	sqrtPriceX96 := new(big.Int).Lsh(big.NewInt(1), 96)
 	s.T().Logf("Test08CreateAndInitializePoolBC: token0=%s token1=%s fee=%s sqrtPriceX96=%s", s.tokenB, s.tokenC, s.Fee, sqrtPriceX96)
 
-	predicted, err := s.v3Nfpm.CallCreateAndInitializePoolIfNecessary(s.ctx, s.nfpm, s.from, s.tokenB, s.tokenC, s.Fee, sqrtPriceX96, rpc.BlockTagLatest)
+	predicted, err := s.v3Nfpm.CallCreateAndInitializePoolIfNecessary(s.ctx, NewCreateAndInitializePoolIfNecessaryParams(s.nfpm, s.from, s.tokenB, s.tokenC, s.Fee, sqrtPriceX96), rpc.BlockTagLatest)
 	s.Require().NoError(err)
 	s.Require().False(predicted.IsZero())
 	s.T().Logf("Test08CreateAndInitializePoolBC: CallCreateAndInitializePoolIfNecessary predicted pool=%s", predicted)
@@ -710,7 +710,7 @@ func (s *QuoterLifeCycleSuite) Test08CreateAndInitializePoolBC() {
 	builder := tx.NewDynamicFeeBuilder()
 	builder.PriceBuffer(150)
 	builder.LimitBuffer(300)
-	unsigned, err := s.v3Nfpm.CreateCreateAndInitializePoolIfNecessary(s.ctx, builder, s.nfpm, s.from, s.tokenB, s.tokenC, s.Fee, sqrtPriceX96)
+	unsigned, err := s.v3Nfpm.CreateCreateAndInitializePoolIfNecessary(s.ctx, builder, NewCreateAndInitializePoolIfNecessaryParams(s.nfpm, s.from, s.tokenB, s.tokenC, s.Fee, sqrtPriceX96))
 	s.Require().NoError(err)
 	s.Require().NoError(unsigned.Sign(s.signer))
 	s.mu.Lock()
@@ -738,7 +738,7 @@ func (s *QuoterLifeCycleSuite) Test08CreateAndInitializePoolBC() {
 
 	var registeredPool *types.Address
 	s.Require().Eventually(func() bool {
-		registeredPool, err = s.v3Factory.GetPool(s.ctx, s.factory, s.tokenB, s.tokenC, s.Fee, rpc.BlockTagLatest)
+		registeredPool, err = s.v3Factory.GetPool(s.ctx, NewGetPoolParams(s.factory, s.tokenB, s.tokenC, s.Fee), rpc.BlockTagLatest)
 		return err == nil && registeredPool.Equal(s.poolBC)
 	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "Factory.getPool not yet reflecting the new pool")
 	s.T().Logf("Test08CreateAndInitializePoolBC: Factory.getPool(token0, token1, fee) = %s matches", registeredPool)

@@ -400,16 +400,14 @@ func (r *Router) ExactOutput(ctx context.Context, signedTx core.Transaction) (*t
 func (r *Router) CreateUnwrapWETH9(
 	ctx context.Context,
 	b tx.Builder,
-	contract, sender *types.Address,
-	amountMinimum *big.Int,
-	recipient *types.Address,
+	p *RouterUnwrapWETH9Params,
 ) (core.Transaction, error) {
-	calldata, err := EncodeRouterUnwrapWETH9(amountMinimum, recipient)
+	calldata, err := EncodeRouterUnwrapWETH9(p.AmountMinimum, p.Recipient)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: createUnwrapWETH9: %w", err)
 	}
 
-	unsigned, err := b.Build(sender, contract, nil, calldata).Pack(ctx, r.c)
+	unsigned, err := b.Build(p.Sender, p.Router, nil, calldata).Pack(ctx, r.c)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: createUnwrapWETH9: %w", r.wrapRevertError(err))
 	}
@@ -434,18 +432,14 @@ func (r *Router) UnwrapWETH9(ctx context.Context, signedTx core.Transaction) (*t
 func (r *Router) CreateUnwrapWETH9WithFee(
 	ctx context.Context,
 	b tx.Builder,
-	contract, sender *types.Address,
-	amountMinimum *big.Int,
-	recipient *types.Address,
-	feeBips *big.Int,
-	feeRecipient *types.Address,
+	p *RouterUnwrapWETH9WithFeeParams,
 ) (core.Transaction, error) {
-	calldata, err := EncodeUnwrapWETH9WithFee(amountMinimum, recipient, feeBips, feeRecipient)
+	calldata, err := EncodeUnwrapWETH9WithFee(p.AmountMinimum, p.Recipient, p.FeeBips, p.FeeRecipient)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: createUnwrapWETH9WithFee: %w", err)
 	}
 
-	unsigned, err := b.Build(sender, contract, nil, calldata).Pack(ctx, r.c)
+	unsigned, err := b.Build(p.Sender, p.Router, nil, calldata).Pack(ctx, r.c)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: createUnwrapWETH9WithFee: %w", r.wrapRevertError(err))
 	}
@@ -470,16 +464,14 @@ func (r *Router) UnwrapWETH9WithFee(ctx context.Context, signedTx core.Transacti
 func (r *Router) CreateSweepToken(
 	ctx context.Context,
 	b tx.Builder,
-	contract, sender, token *types.Address,
-	amountMinimum *big.Int,
-	recipient *types.Address,
+	p *RouterSweepTokenParams,
 ) (core.Transaction, error) {
-	calldata, err := EncodeRouterSweepToken(token, amountMinimum, recipient)
+	calldata, err := EncodeRouterSweepToken(p.Token, p.AmountMinimum, p.Recipient)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: createSweepToken: %w", err)
 	}
 
-	unsigned, err := b.Build(sender, contract, nil, calldata).Pack(ctx, r.c)
+	unsigned, err := b.Build(p.Sender, p.Router, nil, calldata).Pack(ctx, r.c)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: createSweepToken: %w", r.wrapRevertError(err))
 	}
@@ -504,18 +496,14 @@ func (r *Router) SweepToken(ctx context.Context, signedTx core.Transaction) (*ty
 func (r *Router) CreateSweepTokenWithFee(
 	ctx context.Context,
 	b tx.Builder,
-	contract, sender, token *types.Address,
-	amountMinimum *big.Int,
-	recipient *types.Address,
-	feeBips *big.Int,
-	feeRecipient *types.Address,
+	p *RouterSweepTokenWithFeeParams,
 ) (core.Transaction, error) {
-	calldata, err := EncodeSweepTokenWithFee(token, amountMinimum, recipient, feeBips, feeRecipient)
+	calldata, err := EncodeSweepTokenWithFee(p.Token, p.AmountMinimum, p.Recipient, p.FeeBips, p.FeeRecipient)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: createSweepTokenWithFee: %w", err)
 	}
 
-	unsigned, err := b.Build(sender, contract, nil, calldata).Pack(ctx, r.c)
+	unsigned, err := b.Build(p.Sender, p.Router, nil, calldata).Pack(ctx, r.c)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: createSweepTokenWithFee: %w", r.wrapRevertError(err))
 	}
@@ -539,9 +527,9 @@ func (r *Router) SweepTokenWithFee(ctx context.Context, signedTx core.Transactio
 func (r *Router) CreateRefundETH(
 	ctx context.Context,
 	b tx.Builder,
-	contract, sender *types.Address,
+	p *RouterRefundETHParams,
 ) (core.Transaction, error) {
-	unsigned, err := b.Build(sender, contract, nil, EncodeRouterRefundETH()).Pack(ctx, r.c)
+	unsigned, err := b.Build(p.Sender, p.Router, nil, EncodeRouterRefundETH()).Pack(ctx, r.c)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: createRefundETH: %w", r.wrapRevertError(err))
 	}
@@ -566,16 +554,14 @@ func (r *Router) RefundETH(ctx context.Context, signedTx core.Transaction) (*typ
 func (r *Router) CreateMulticall(
 	ctx context.Context,
 	b tx.Builder,
-	contract, sender *types.Address,
-	value *big.Int,
-	data [][]byte,
+	p *RouterMulticallParams,
 ) (core.Transaction, error) {
-	calldata, err := EncodeRouterMulticall(data)
+	calldata, err := EncodeRouterMulticall(p.Data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: createMulticall: %w", err)
 	}
 
-	unsigned, err := b.Build(sender, contract, value, calldata).Pack(ctx, r.c)
+	unsigned, err := b.Build(p.Sender, p.Router, p.Value, calldata).Pack(ctx, r.c)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: createMulticall: %w", r.wrapRevertError(err))
 	}
@@ -586,16 +572,14 @@ func (r *Router) CreateMulticall(
 // returning each sub-call's own return data -- without broadcasting anything.
 func (r *Router) CallMulticall(
 	ctx context.Context,
-	contract, sender *types.Address,
-	value *big.Int,
-	data [][]byte,
+	p *RouterMulticallParams,
 	block string,
 ) ([][]byte, error) {
-	calldata, err := EncodeRouterMulticall(data)
+	calldata, err := EncodeRouterMulticall(p.Data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: callMulticall: %w", err)
 	}
-	raw, err := r.call(ctx, sender, contract, value, calldata, block)
+	raw, err := r.call(ctx, p.Sender, p.Router, p.Value, calldata, block)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: callMulticall: %w", err)
 	}
@@ -624,16 +608,14 @@ func (r *Router) Multicall(ctx context.Context, signedTx core.Transaction) (*typ
 func (r *Router) CreateSelfPermit(
 	ctx context.Context,
 	b tx.Builder,
-	contract, sender, token *types.Address,
-	value, deadline *big.Int,
-	sig *types.Signature,
+	p *SelfPermitParams,
 ) (core.Transaction, error) {
-	calldata, err := EncodeSelfPermit(token, value, deadline, sig)
+	calldata, err := EncodeSelfPermit(p.Token, p.Value, p.Deadline, p.Sig)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: createSelfPermit: %w", err)
 	}
 
-	unsigned, err := b.Build(sender, contract, nil, calldata).Pack(ctx, r.c)
+	unsigned, err := b.Build(p.Sender, p.Router, nil, calldata).Pack(ctx, r.c)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: createSelfPermit: %w", r.wrapRevertError(err))
 	}
@@ -658,16 +640,14 @@ func (r *Router) SelfPermit(ctx context.Context, signedTx core.Transaction) (*ty
 func (r *Router) CreateSelfPermitIfNecessary(
 	ctx context.Context,
 	b tx.Builder,
-	contract, sender, token *types.Address,
-	value, deadline *big.Int,
-	sig *types.Signature,
+	p *SelfPermitIfNecessaryParams,
 ) (core.Transaction, error) {
-	calldata, err := EncodeSelfPermitIfNecessary(token, value, deadline, sig)
+	calldata, err := EncodeSelfPermitIfNecessary(p.Token, p.Value, p.Deadline, p.Sig)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: createSelfPermitIfNecessary: %w", err)
 	}
 
-	unsigned, err := b.Build(sender, contract, nil, calldata).Pack(ctx, r.c)
+	unsigned, err := b.Build(p.Sender, p.Router, nil, calldata).Pack(ctx, r.c)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: createSelfPermitIfNecessary: %w", r.wrapRevertError(err))
 	}
@@ -692,16 +672,14 @@ func (r *Router) SelfPermitIfNecessary(ctx context.Context, signedTx core.Transa
 func (r *Router) CreateSelfPermitAllowed(
 	ctx context.Context,
 	b tx.Builder,
-	contract, sender, token *types.Address,
-	nonce, expiry *big.Int,
-	sig *types.Signature,
+	p *SelfPermitAllowedParams,
 ) (core.Transaction, error) {
-	calldata, err := EncodeSelfPermitAllowed(token, nonce, expiry, sig)
+	calldata, err := EncodeSelfPermitAllowed(p.Token, p.Nonce, p.Expiry, p.Sig)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: createSelfPermitAllowed: %w", err)
 	}
 
-	unsigned, err := b.Build(sender, contract, nil, calldata).Pack(ctx, r.c)
+	unsigned, err := b.Build(p.Sender, p.Router, nil, calldata).Pack(ctx, r.c)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: createSelfPermitAllowed: %w", r.wrapRevertError(err))
 	}
@@ -726,16 +704,14 @@ func (r *Router) SelfPermitAllowed(ctx context.Context, signedTx core.Transactio
 func (r *Router) CreateSelfPermitAllowedIfNecessary(
 	ctx context.Context,
 	b tx.Builder,
-	contract, sender, token *types.Address,
-	nonce, expiry *big.Int,
-	sig *types.Signature,
+	p *SelfPermitAllowedIfNecessaryParams,
 ) (core.Transaction, error) {
-	calldata, err := EncodeSelfPermitAllowedIfNecessary(token, nonce, expiry, sig)
+	calldata, err := EncodeSelfPermitAllowedIfNecessary(p.Token, p.Nonce, p.Expiry, p.Sig)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: createSelfPermitAllowedIfNecessary: %w", err)
 	}
 
-	unsigned, err := b.Build(sender, contract, nil, calldata).Pack(ctx, r.c)
+	unsigned, err := b.Build(p.Sender, p.Router, nil, calldata).Pack(ctx, r.c)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: createSelfPermitAllowedIfNecessary: %w", r.wrapRevertError(err))
 	}

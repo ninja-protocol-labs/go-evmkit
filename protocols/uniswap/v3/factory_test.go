@@ -252,7 +252,7 @@ func (s *FactorySuite) Test01ReadMethods() {
 	s.Require().NoError(err)
 	s.Require().Zero(big.NewInt(200).Cmp(tickSpacingHigh))
 
-	pool, err := s.v3Factory.GetPool(s.ctx, s.factory, s.tokenA, s.tokenB, s.Fee, rpc.BlockTagLatest)
+	pool, err := s.v3Factory.GetPool(s.ctx, NewGetPoolParams(s.factory, s.tokenA, s.tokenB, s.Fee), rpc.BlockTagLatest)
 	s.Require().NoError(err)
 	s.Require().True(pool.IsZero(), "tokenA/tokenB shouldn't have a pool yet")
 
@@ -265,18 +265,18 @@ func (s *FactorySuite) Test01ReadMethods() {
 }
 
 func (s *FactorySuite) Test02CreatePool() {
-	before, err := s.v3Factory.GetPool(s.ctx, s.factory, s.tokenA, s.tokenB, s.Fee, rpc.BlockTagLatest)
+	before, err := s.v3Factory.GetPool(s.ctx, NewGetPoolParams(s.factory, s.tokenA, s.tokenB, s.Fee), rpc.BlockTagLatest)
 	s.Require().NoError(err)
 	s.Require().True(before.IsZero(), "tokenA/tokenB shouldn't have a pool yet")
 	s.T().Logf("Test02CreatePool: confirmed no pool yet for (%s, %s, %s)", s.tokenA, s.tokenB, s.Fee)
 
-	predicted, err := s.v3Factory.CallCreatePool(s.ctx, s.factory, s.from, s.tokenA, s.tokenB, s.Fee, rpc.BlockTagLatest)
+	predicted, err := s.v3Factory.CallCreatePool(s.ctx, NewCreatePoolParams(s.factory, s.from, s.tokenA, s.tokenB, s.Fee), rpc.BlockTagLatest)
 	s.Require().NoError(err)
 	s.T().Logf("Test02CreatePool: predicted pool address %s", predicted)
 
 	createBuilder := tx.NewDynamicFeeBuilder()
 	createBuilder.PriceBuffer(150)
-	unsigned, err := s.v3Factory.CreateCreatePool(s.ctx, createBuilder, s.factory, s.from, s.tokenA, s.tokenB, s.Fee)
+	unsigned, err := s.v3Factory.CreateCreatePool(s.ctx, createBuilder, NewCreatePoolParams(s.factory, s.from, s.tokenA, s.tokenB, s.Fee))
 	s.Require().NoError(err)
 	s.Require().NoError(unsigned.Sign(s.signer))
 	s.mu.Lock()
@@ -306,7 +306,7 @@ func (s *FactorySuite) Test02CreatePool() {
 
 	var after *types.Address
 	s.Require().Eventually(func() bool {
-		after, err = s.v3Factory.GetPool(s.ctx, s.factory, s.tokenA, s.tokenB, s.Fee, rpc.BlockTagLatest)
+		after, err = s.v3Factory.GetPool(s.ctx, NewGetPoolParams(s.factory, s.tokenA, s.tokenB, s.Fee), rpc.BlockTagLatest)
 		return err == nil && after.Equal(predicted)
 	}, 20*time.Second, time.Duration(s.Interval)*time.Millisecond, "pool not visible after createPool")
 	s.T().Logf("Test02CreatePool: getPool confirms pool %s visible", after)
@@ -323,14 +323,14 @@ func (s *FactorySuite) Test02CreatePool() {
 }
 
 func (s *FactorySuite) Test03CreatePoolAlreadyExists() {
-	_, err := s.v3Factory.CreateCreatePool(s.ctx, tx.NewDynamicFeeBuilder(), s.factory, s.from, s.tokenA, s.tokenB, s.Fee)
+	_, err := s.v3Factory.CreateCreatePool(s.ctx, tx.NewDynamicFeeBuilder(), NewCreatePoolParams(s.factory, s.from, s.tokenA, s.tokenB, s.Fee))
 	s.Require().Error(err)
 	s.Require().ErrorIs(err, ErrReverted)
 	s.T().Logf("Test03CreatePoolAlreadyExists: createPool(%s, %s, %s) reverted as expected: %v", s.tokenA, s.tokenB, s.Fee, err)
 }
 
 func (s *FactorySuite) Test04CreatePoolIdenticalTokens() {
-	_, err := s.v3Factory.CreateCreatePool(s.ctx, tx.NewDynamicFeeBuilder(), s.factory, s.from, s.tokenA, s.tokenA, s.Fee)
+	_, err := s.v3Factory.CreateCreatePool(s.ctx, tx.NewDynamicFeeBuilder(), NewCreatePoolParams(s.factory, s.from, s.tokenA, s.tokenA, s.Fee))
 	s.Require().Error(err)
 	s.Require().ErrorIs(err, ErrReverted)
 	s.T().Logf("Test04CreatePoolIdenticalTokens: createPool(%s, %s, %s) reverted as expected: %v", s.tokenA, s.tokenA, s.Fee, err)
@@ -338,7 +338,7 @@ func (s *FactorySuite) Test04CreatePoolIdenticalTokens() {
 
 func (s *FactorySuite) Test05CreatePoolZeroAddress() {
 	zero := types.MustNewAddressFromHex("0x0000000000000000000000000000000000000000")
-	_, err := s.v3Factory.CreateCreatePool(s.ctx, tx.NewDynamicFeeBuilder(), s.factory, s.from, s.tokenA, zero, s.Fee)
+	_, err := s.v3Factory.CreateCreatePool(s.ctx, tx.NewDynamicFeeBuilder(), NewCreatePoolParams(s.factory, s.from, s.tokenA, zero, s.Fee))
 	s.Require().Error(err)
 	s.Require().ErrorIs(err, ErrReverted)
 	s.T().Logf("Test05CreatePoolZeroAddress: createPool(%s, %s, %s) reverted as expected: %v", s.tokenA, zero, s.Fee, err)
@@ -351,7 +351,7 @@ func (s *FactorySuite) Test06CreatePoolUnsupportedFee() {
 	s.Require().NoError(err)
 	s.Require().Zero(tickSpacing.Sign(), "fee %s shouldn't be an enabled tier", unsupportedFee)
 
-	_, err = s.v3Factory.CreateCreatePool(s.ctx, tx.NewDynamicFeeBuilder(), s.factory, s.from, s.tokenA, s.tokenB, unsupportedFee)
+	_, err = s.v3Factory.CreateCreatePool(s.ctx, tx.NewDynamicFeeBuilder(), NewCreatePoolParams(s.factory, s.from, s.tokenA, s.tokenB, unsupportedFee))
 	s.Require().Error(err)
 	s.Require().ErrorIs(err, ErrReverted)
 	s.T().Logf("Test06CreatePoolUnsupportedFee: createPool(%s, %s, %s) reverted as expected: %v", s.tokenA, s.tokenB, unsupportedFee, err)
@@ -362,7 +362,7 @@ func (s *FactorySuite) Test07SetOwnerForbidden() {
 	s.Require().NoError(err)
 	s.Require().False(owner.Equal(s.from), "s.from shouldn't already be the factory owner")
 
-	_, err = s.v3Factory.CreateSetOwner(s.ctx, tx.NewDynamicFeeBuilder(), s.factory, s.from, s.from)
+	_, err = s.v3Factory.CreateSetOwner(s.ctx, tx.NewDynamicFeeBuilder(), NewSetOwnerParams(s.factory, s.from, s.from))
 	s.Require().Error(err)
 	s.Require().ErrorIs(err, ErrReverted)
 	s.T().Logf("Test07SetOwnerForbidden: setOwner(%s) from non-owner %s reverted as expected: %v", s.from, s.from, err)
@@ -374,7 +374,7 @@ func (s *FactorySuite) Test08EnableFeeAmountForbidden() {
 	s.Require().False(owner.Equal(s.from), "s.from shouldn't already be the factory owner")
 
 	newFee, newTickSpacing := big.NewInt(1234), big.NewInt(1)
-	_, err = s.v3Factory.CreateEnableFeeAmount(s.ctx, tx.NewDynamicFeeBuilder(), s.factory, s.from, newFee, newTickSpacing)
+	_, err = s.v3Factory.CreateEnableFeeAmount(s.ctx, tx.NewDynamicFeeBuilder(), NewEnableFeeAmountParams(s.factory, s.from, newFee, newTickSpacing))
 	s.Require().Error(err)
 	s.Require().ErrorIs(err, ErrReverted)
 	s.T().Logf("Test08EnableFeeAmountForbidden: enableFeeAmount(%s, %s) from non-owner %s reverted as expected: %v", newFee, newTickSpacing, s.from, err)

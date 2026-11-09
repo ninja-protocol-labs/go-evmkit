@@ -31,6 +31,145 @@ var nftPermitTypes = eip712.Types{
 	},
 }
 
+// TokenOfOwnerByIndexParams is TokenOfOwnerByIndex's argument list.
+type TokenOfOwnerByIndexParams struct {
+	NFPM  *types.Address
+	Owner *types.Address
+	Index *big.Int
+}
+
+func NewTokenOfOwnerByIndexParams(nfpm, owner *types.Address, index *big.Int) *TokenOfOwnerByIndexParams {
+	return &TokenOfOwnerByIndexParams{
+		NFPM:  nfpm,
+		Owner: owner,
+		Index: index,
+	}
+}
+
+// PermitParams is CreatePermit's argument list.
+type PermitParams struct {
+	NFPM     *types.Address
+	Sender   *types.Address
+	Spender  *types.Address
+	TokenId  *big.Int
+	Deadline *big.Int
+	Sig      *types.Signature
+}
+
+func NewPermitParams(nfpm, sender, spender *types.Address, tokenId, deadline *big.Int, sig *types.Signature) *PermitParams {
+	return &PermitParams{
+		NFPM:     nfpm,
+		Sender:   sender,
+		Spender:  spender,
+		TokenId:  tokenId,
+		Deadline: deadline,
+		Sig:      sig,
+	}
+}
+
+// CreateAndInitializePoolIfNecessaryParams is CreateCreateAndInitializePoolIfNecessary's and
+// CallCreateAndInitializePoolIfNecessary's argument list.
+type CreateAndInitializePoolIfNecessaryParams struct {
+	NFPM         *types.Address
+	Sender       *types.Address
+	Token0       *types.Address
+	Token1       *types.Address
+	Fee          *big.Int
+	SqrtPriceX96 *big.Int
+}
+
+func NewCreateAndInitializePoolIfNecessaryParams(nfpm, sender, token0, token1 *types.Address, fee, sqrtPriceX96 *big.Int) *CreateAndInitializePoolIfNecessaryParams {
+	return &CreateAndInitializePoolIfNecessaryParams{
+		NFPM:         nfpm,
+		Sender:       sender,
+		Token0:       token0,
+		Token1:       token1,
+		Fee:          fee,
+		SqrtPriceX96: sqrtPriceX96,
+	}
+}
+
+// NFPMUnwrapWETH9Params is CreateUnwrapWETH9's argument list.
+type NFPMUnwrapWETH9Params struct {
+	NFPM          *types.Address
+	Sender        *types.Address
+	AmountMinimum *big.Int
+	Recipient     *types.Address
+}
+
+func NewNFPMUnwrapWETH9Params(nfpm, sender *types.Address, amountMinimum *big.Int, recipient *types.Address) *NFPMUnwrapWETH9Params {
+	return &NFPMUnwrapWETH9Params{
+		NFPM:          nfpm,
+		Sender:        sender,
+		AmountMinimum: amountMinimum,
+		Recipient:     recipient,
+	}
+}
+
+// NFPMSweepTokenParams is CreateSweepToken's argument list.
+type NFPMSweepTokenParams struct {
+	NFPM          *types.Address
+	Sender        *types.Address
+	Token         *types.Address
+	AmountMinimum *big.Int
+	Recipient     *types.Address
+}
+
+func NewNFPMSweepTokenParams(nfpm, sender, token *types.Address, amountMinimum *big.Int, recipient *types.Address) *NFPMSweepTokenParams {
+	return &NFPMSweepTokenParams{
+		NFPM:          nfpm,
+		Sender:        sender,
+		Token:         token,
+		AmountMinimum: amountMinimum,
+		Recipient:     recipient,
+	}
+}
+
+// NFPMRefundETHParams is CreateRefundETH's argument list.
+type NFPMRefundETHParams struct {
+	NFPM   *types.Address
+	Sender *types.Address
+}
+
+func NewNFPMRefundETHParams(nfpm, sender *types.Address) *NFPMRefundETHParams {
+	return &NFPMRefundETHParams{
+		NFPM:   nfpm,
+		Sender: sender,
+	}
+}
+
+// NFPMMulticallParams is CreateMulticall's and CallMulticall's argument list.
+type NFPMMulticallParams struct {
+	NFPM   *types.Address
+	Sender *types.Address
+	Value  *big.Int
+	Data   [][]byte
+}
+
+func NewNFPMMulticallParams(nfpm, sender *types.Address, value *big.Int, data [][]byte) *NFPMMulticallParams {
+	return &NFPMMulticallParams{
+		NFPM:   nfpm,
+		Sender: sender,
+		Value:  value,
+		Data:   data,
+	}
+}
+
+// NFPMBurnParams is CreateBurn's argument list.
+type NFPMBurnParams struct {
+	NFPM    *types.Address
+	Sender  *types.Address
+	TokenId *big.Int
+}
+
+func NewNFPMBurnParams(nfpm, sender *types.Address, tokenId *big.Int) *NFPMBurnParams {
+	return &NFPMBurnParams{
+		NFPM:    nfpm,
+		Sender:  sender,
+		TokenId: tokenId,
+	}
+}
+
 // NewNFTPermitDomain returns the EIP-712 domain a NonfungiblePositionManager deployment signs
 // permits under: name, version, chainID, and verifyingContract -- no salt.
 func NewNFTPermitDomain(chainID *big.Int, verifyingContract *types.Address) *eip712.Domain {

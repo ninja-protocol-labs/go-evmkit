@@ -28,7 +28,7 @@ type IEIP712 interface {
 type IAllowanceTransfer interface {
 	IEIP712
 
-	Allowance(ctx context.Context, contract, owner, token, spender *types.Address, block string) (*PackedAllowance, error)
+	Allowance(ctx context.Context, params *AllowanceParams, block string) (*PackedAllowance, error)
 
 	Approve(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
 	PermitSingle(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
@@ -69,8 +69,8 @@ func New(c rpc.Client) *Permit2 {
 }
 
 // DomainSeparator returns contract's EIP-712 domain separator.
-func (p *Permit2) DomainSeparator(ctx context.Context, contract *types.Address, block string) (*types.Hash, error) {
-	data, err := p.call(ctx, nil, contract, EncodeDomainSeparator(), block)
+func (p2 *Permit2) DomainSeparator(ctx context.Context, contract *types.Address, block string) (*types.Hash, error) {
+	data, err := p2.call(ctx, nil, contract, EncodeDomainSeparator(), block)
 	if err != nil {
 		return nil, fmt.Errorf("permit2: domainSeparator: %w", err)
 	}
@@ -82,12 +82,12 @@ func (p *Permit2) DomainSeparator(ctx context.Context, contract *types.Address, 
 }
 
 // Allowance returns owner's current allowance of token for spender.
-func (p *Permit2) Allowance(ctx context.Context, contract, owner, token, spender *types.Address, block string) (*PackedAllowance, error) {
-	calldata, err := EncodeAllowance(owner, token, spender)
+func (p2 *Permit2) Allowance(ctx context.Context, p *AllowanceParams, block string) (*PackedAllowance, error) {
+	calldata, err := EncodeAllowance(p.Owner, p.Token, p.Spender)
 	if err != nil {
 		return nil, fmt.Errorf("permit2: allowance: %w", err)
 	}
-	data, err := p.call(ctx, nil, contract, calldata, block)
+	data, err := p2.call(ctx, nil, p.Contract, calldata, block)
 	if err != nil {
 		return nil, fmt.Errorf("permit2: allowance: %w", err)
 	}
@@ -99,26 +99,26 @@ func (p *Permit2) Allowance(ctx context.Context, contract, owner, token, spender
 }
 
 // CreateApprove builds an unsigned approve(token, spender, amount, expiration) transaction via b.
-func (p *Permit2) CreateApprove(ctx context.Context, b tx.Builder, contract, sender, token, spender *types.Address, amount, expiration *big.Int) (core.Transaction, error) {
-	calldata, err := EncodeApprove(token, spender, amount, expiration)
+func (p2 *Permit2) CreateApprove(ctx context.Context, b tx.Builder, p *ApproveParams) (core.Transaction, error) {
+	calldata, err := EncodeApprove(p.Token, p.Spender, p.Amount, p.Expiration)
 	if err != nil {
 		return nil, fmt.Errorf("permit2: createApprove: %w", err)
 	}
 
-	unsigned, err := b.Build(sender, contract, nil, calldata).Pack(ctx, p.c)
+	unsigned, err := b.Build(p.Sender, p.Contract, nil, calldata).Pack(ctx, p2.c)
 	if err != nil {
-		return nil, fmt.Errorf("permit2: createApprove: %w", p.wrapRevertError(err))
+		return nil, fmt.Errorf("permit2: createApprove: %w", p2.wrapRevertError(err))
 	}
 	return unsigned, nil
 }
 
 // Approve broadcasts an already-signed approve transaction.
-func (p *Permit2) Approve(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
+func (p2 *Permit2) Approve(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
 	raw, err := signedTx.EncodeRLP()
 	if err != nil {
 		return nil, fmt.Errorf("permit2: approve: %w", err)
 	}
-	hash, err := tx.Broadcast(ctx, p.c, raw)
+	hash, err := tx.Broadcast(ctx, p2.c, raw)
 	if err != nil {
 		return nil, fmt.Errorf("permit2: approve: %w", err)
 	}
@@ -126,26 +126,26 @@ func (p *Permit2) Approve(ctx context.Context, signedTx core.Transaction) (*type
 }
 
 // CreatePermitSingle builds an unsigned permit(owner, permitSingle, signature) transaction via b.
-func (p *Permit2) CreatePermitSingle(ctx context.Context, b tx.Builder, contract, sender, owner *types.Address, permitSingle *PermitSingle, sig *types.Signature) (core.Transaction, error) {
-	calldata, err := EncodePermitSingle(owner, permitSingle, sig)
+func (p2 *Permit2) CreatePermitSingle(ctx context.Context, b tx.Builder, p *PermitSingleParams) (core.Transaction, error) {
+	calldata, err := EncodePermitSingle(p.Owner, p.PermitSingle, p.Sig)
 	if err != nil {
 		return nil, fmt.Errorf("permit2: createPermitSingle: %w", err)
 	}
 
-	unsigned, err := b.Build(sender, contract, nil, calldata).Pack(ctx, p.c)
+	unsigned, err := b.Build(p.Sender, p.Contract, nil, calldata).Pack(ctx, p2.c)
 	if err != nil {
-		return nil, fmt.Errorf("permit2: createPermitSingle: %w", p.wrapRevertError(err))
+		return nil, fmt.Errorf("permit2: createPermitSingle: %w", p2.wrapRevertError(err))
 	}
 	return unsigned, nil
 }
 
 // PermitSingle broadcasts an already-signed permit(PermitSingle) transaction.
-func (p *Permit2) PermitSingle(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
+func (p2 *Permit2) PermitSingle(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
 	raw, err := signedTx.EncodeRLP()
 	if err != nil {
 		return nil, fmt.Errorf("permit2: permitSingle: %w", err)
 	}
-	hash, err := tx.Broadcast(ctx, p.c, raw)
+	hash, err := tx.Broadcast(ctx, p2.c, raw)
 	if err != nil {
 		return nil, fmt.Errorf("permit2: permitSingle: %w", err)
 	}
@@ -153,26 +153,26 @@ func (p *Permit2) PermitSingle(ctx context.Context, signedTx core.Transaction) (
 }
 
 // CreatePermitBatch builds an unsigned permit(owner, permitBatch, signature) transaction via b.
-func (p *Permit2) CreatePermitBatch(ctx context.Context, b tx.Builder, contract, sender, owner *types.Address, permitBatch *PermitBatch, sig *types.Signature) (core.Transaction, error) {
-	calldata, err := EncodePermitBatch(owner, permitBatch, sig)
+func (p2 *Permit2) CreatePermitBatch(ctx context.Context, b tx.Builder, p *PermitBatchParams) (core.Transaction, error) {
+	calldata, err := EncodePermitBatch(p.Owner, p.PermitBatch, p.Sig)
 	if err != nil {
 		return nil, fmt.Errorf("permit2: createPermitBatch: %w", err)
 	}
 
-	unsigned, err := b.Build(sender, contract, nil, calldata).Pack(ctx, p.c)
+	unsigned, err := b.Build(p.Sender, p.Contract, nil, calldata).Pack(ctx, p2.c)
 	if err != nil {
-		return nil, fmt.Errorf("permit2: createPermitBatch: %w", p.wrapRevertError(err))
+		return nil, fmt.Errorf("permit2: createPermitBatch: %w", p2.wrapRevertError(err))
 	}
 	return unsigned, nil
 }
 
 // PermitBatch broadcasts an already-signed permit(PermitBatch) transaction.
-func (p *Permit2) PermitBatch(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
+func (p2 *Permit2) PermitBatch(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
 	raw, err := signedTx.EncodeRLP()
 	if err != nil {
 		return nil, fmt.Errorf("permit2: permitBatch: %w", err)
 	}
-	hash, err := tx.Broadcast(ctx, p.c, raw)
+	hash, err := tx.Broadcast(ctx, p2.c, raw)
 	if err != nil {
 		return nil, fmt.Errorf("permit2: permitBatch: %w", err)
 	}
@@ -180,26 +180,26 @@ func (p *Permit2) PermitBatch(ctx context.Context, signedTx core.Transaction) (*
 }
 
 // CreateTransferFrom builds an unsigned transferFrom(from, to, amount, token) transaction via b.
-func (p *Permit2) CreateTransferFrom(ctx context.Context, b tx.Builder, contract, sender, from, to *types.Address, amount *big.Int, token *types.Address) (core.Transaction, error) {
-	calldata, err := EncodeTransferFrom(from, to, amount, token)
+func (p2 *Permit2) CreateTransferFrom(ctx context.Context, b tx.Builder, p *TransferFromParams) (core.Transaction, error) {
+	calldata, err := EncodeTransferFrom(p.From, p.To, p.Amount, p.Token)
 	if err != nil {
 		return nil, fmt.Errorf("permit2: createTransferFrom: %w", err)
 	}
 
-	unsigned, err := b.Build(sender, contract, nil, calldata).Pack(ctx, p.c)
+	unsigned, err := b.Build(p.Sender, p.Contract, nil, calldata).Pack(ctx, p2.c)
 	if err != nil {
-		return nil, fmt.Errorf("permit2: createTransferFrom: %w", p.wrapRevertError(err))
+		return nil, fmt.Errorf("permit2: createTransferFrom: %w", p2.wrapRevertError(err))
 	}
 	return unsigned, nil
 }
 
 // TransferFrom broadcasts an already-signed transferFrom transaction.
-func (p *Permit2) TransferFrom(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
+func (p2 *Permit2) TransferFrom(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
 	raw, err := signedTx.EncodeRLP()
 	if err != nil {
 		return nil, fmt.Errorf("permit2: transferFrom: %w", err)
 	}
-	hash, err := tx.Broadcast(ctx, p.c, raw)
+	hash, err := tx.Broadcast(ctx, p2.c, raw)
 	if err != nil {
 		return nil, fmt.Errorf("permit2: transferFrom: %w", err)
 	}
@@ -207,26 +207,26 @@ func (p *Permit2) TransferFrom(ctx context.Context, signedTx core.Transaction) (
 }
 
 // CreateTransferFromBatch builds an unsigned transferFrom(transferDetails) transaction via b.
-func (p *Permit2) CreateTransferFromBatch(ctx context.Context, b tx.Builder, contract, sender *types.Address, transferDetails []AllowanceTransferDetails) (core.Transaction, error) {
-	calldata, err := EncodeTransferFromBatch(transferDetails)
+func (p2 *Permit2) CreateTransferFromBatch(ctx context.Context, b tx.Builder, p *TransferFromBatchParams) (core.Transaction, error) {
+	calldata, err := EncodeTransferFromBatch(p.TransferDetails)
 	if err != nil {
 		return nil, fmt.Errorf("permit2: createTransferFromBatch: %w", err)
 	}
 
-	unsigned, err := b.Build(sender, contract, nil, calldata).Pack(ctx, p.c)
+	unsigned, err := b.Build(p.Sender, p.Contract, nil, calldata).Pack(ctx, p2.c)
 	if err != nil {
-		return nil, fmt.Errorf("permit2: createTransferFromBatch: %w", p.wrapRevertError(err))
+		return nil, fmt.Errorf("permit2: createTransferFromBatch: %w", p2.wrapRevertError(err))
 	}
 	return unsigned, nil
 }
 
 // TransferFromBatch broadcasts an already-signed transferFrom(batch) transaction.
-func (p *Permit2) TransferFromBatch(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
+func (p2 *Permit2) TransferFromBatch(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
 	raw, err := signedTx.EncodeRLP()
 	if err != nil {
 		return nil, fmt.Errorf("permit2: transferFromBatch: %w", err)
 	}
-	hash, err := tx.Broadcast(ctx, p.c, raw)
+	hash, err := tx.Broadcast(ctx, p2.c, raw)
 	if err != nil {
 		return nil, fmt.Errorf("permit2: transferFromBatch: %w", err)
 	}
@@ -234,26 +234,26 @@ func (p *Permit2) TransferFromBatch(ctx context.Context, signedTx core.Transacti
 }
 
 // CreateLockdown builds an unsigned lockdown(approvals) transaction via b.
-func (p *Permit2) CreateLockdown(ctx context.Context, b tx.Builder, contract, sender *types.Address, approvals []TokenSpenderPair) (core.Transaction, error) {
-	calldata, err := EncodeLockdown(approvals)
+func (p2 *Permit2) CreateLockdown(ctx context.Context, b tx.Builder, p *LockdownParams) (core.Transaction, error) {
+	calldata, err := EncodeLockdown(p.Approvals)
 	if err != nil {
 		return nil, fmt.Errorf("permit2: createLockdown: %w", err)
 	}
 
-	unsigned, err := b.Build(sender, contract, nil, calldata).Pack(ctx, p.c)
+	unsigned, err := b.Build(p.Sender, p.Contract, nil, calldata).Pack(ctx, p2.c)
 	if err != nil {
-		return nil, fmt.Errorf("permit2: createLockdown: %w", p.wrapRevertError(err))
+		return nil, fmt.Errorf("permit2: createLockdown: %w", p2.wrapRevertError(err))
 	}
 	return unsigned, nil
 }
 
 // Lockdown broadcasts an already-signed lockdown transaction.
-func (p *Permit2) Lockdown(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
+func (p2 *Permit2) Lockdown(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
 	raw, err := signedTx.EncodeRLP()
 	if err != nil {
 		return nil, fmt.Errorf("permit2: lockdown: %w", err)
 	}
-	hash, err := tx.Broadcast(ctx, p.c, raw)
+	hash, err := tx.Broadcast(ctx, p2.c, raw)
 	if err != nil {
 		return nil, fmt.Errorf("permit2: lockdown: %w", err)
 	}
@@ -261,26 +261,26 @@ func (p *Permit2) Lockdown(ctx context.Context, signedTx core.Transaction) (*typ
 }
 
 // CreateInvalidateNonces builds an unsigned invalidateNonces(token, spender, newNonce) transaction via b.
-func (p *Permit2) CreateInvalidateNonces(ctx context.Context, b tx.Builder, contract, sender, token, spender *types.Address, newNonce *big.Int) (core.Transaction, error) {
-	calldata, err := EncodeInvalidateNonces(token, spender, newNonce)
+func (p2 *Permit2) CreateInvalidateNonces(ctx context.Context, b tx.Builder, p *InvalidateNoncesParams) (core.Transaction, error) {
+	calldata, err := EncodeInvalidateNonces(p.Token, p.Spender, p.NewNonce)
 	if err != nil {
 		return nil, fmt.Errorf("permit2: createInvalidateNonces: %w", err)
 	}
 
-	unsigned, err := b.Build(sender, contract, nil, calldata).Pack(ctx, p.c)
+	unsigned, err := b.Build(p.Sender, p.Contract, nil, calldata).Pack(ctx, p2.c)
 	if err != nil {
-		return nil, fmt.Errorf("permit2: createInvalidateNonces: %w", p.wrapRevertError(err))
+		return nil, fmt.Errorf("permit2: createInvalidateNonces: %w", p2.wrapRevertError(err))
 	}
 	return unsigned, nil
 }
 
 // InvalidateNonces broadcasts an already-signed invalidateNonces transaction.
-func (p *Permit2) InvalidateNonces(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
+func (p2 *Permit2) InvalidateNonces(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
 	raw, err := signedTx.EncodeRLP()
 	if err != nil {
 		return nil, fmt.Errorf("permit2: invalidateNonces: %w", err)
 	}
-	hash, err := tx.Broadcast(ctx, p.c, raw)
+	hash, err := tx.Broadcast(ctx, p2.c, raw)
 	if err != nil {
 		return nil, fmt.Errorf("permit2: invalidateNonces: %w", err)
 	}
@@ -288,12 +288,12 @@ func (p *Permit2) InvalidateNonces(ctx context.Context, signedTx core.Transactio
 }
 
 // NonceBitmap returns owner's unordered-nonce bitmap word at wordPos.
-func (p *Permit2) NonceBitmap(ctx context.Context, contract, owner *types.Address, wordPos *big.Int, block string) (*big.Int, error) {
+func (p2 *Permit2) NonceBitmap(ctx context.Context, contract, owner *types.Address, wordPos *big.Int, block string) (*big.Int, error) {
 	calldata, err := EncodeNonceBitmap(owner, wordPos)
 	if err != nil {
 		return nil, fmt.Errorf("permit2: nonceBitmap: %w", err)
 	}
-	data, err := p.call(ctx, nil, contract, calldata, block)
+	data, err := p2.call(ctx, nil, contract, calldata, block)
 	if err != nil {
 		return nil, fmt.Errorf("permit2: nonceBitmap: %w", err)
 	}
@@ -306,26 +306,26 @@ func (p *Permit2) NonceBitmap(ctx context.Context, contract, owner *types.Addres
 
 // CreatePermitTransferFrom builds an unsigned
 // permitTransferFrom(permit, transferDetails, owner, signature) transaction via b.
-func (p *Permit2) CreatePermitTransferFrom(ctx context.Context, b tx.Builder, contract, sender *types.Address, permit *PermitTransferFrom, transferDetails *SignatureTransferDetails, owner *types.Address, sig *types.Signature) (core.Transaction, error) {
-	calldata, err := EncodePermitTransferFrom(permit, transferDetails, owner, sig)
+func (p2 *Permit2) CreatePermitTransferFrom(ctx context.Context, b tx.Builder, p *PermitTransferFromParams) (core.Transaction, error) {
+	calldata, err := EncodePermitTransferFrom(p.Permit, p.TransferDetails, p.Owner, p.Sig)
 	if err != nil {
 		return nil, fmt.Errorf("permit2: createPermitTransferFrom: %w", err)
 	}
 
-	unsigned, err := b.Build(sender, contract, nil, calldata).Pack(ctx, p.c)
+	unsigned, err := b.Build(p.Sender, p.Contract, nil, calldata).Pack(ctx, p2.c)
 	if err != nil {
-		return nil, fmt.Errorf("permit2: createPermitTransferFrom: %w", p.wrapRevertError(err))
+		return nil, fmt.Errorf("permit2: createPermitTransferFrom: %w", p2.wrapRevertError(err))
 	}
 	return unsigned, nil
 }
 
 // PermitTransferFrom broadcasts an already-signed permitTransferFrom transaction.
-func (p *Permit2) PermitTransferFrom(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
+func (p2 *Permit2) PermitTransferFrom(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
 	raw, err := signedTx.EncodeRLP()
 	if err != nil {
 		return nil, fmt.Errorf("permit2: permitTransferFrom: %w", err)
 	}
-	hash, err := tx.Broadcast(ctx, p.c, raw)
+	hash, err := tx.Broadcast(ctx, p2.c, raw)
 	if err != nil {
 		return nil, fmt.Errorf("permit2: permitTransferFrom: %w", err)
 	}
@@ -335,26 +335,26 @@ func (p *Permit2) PermitTransferFrom(ctx context.Context, signedTx core.Transact
 // CreatePermitWitnessTransferFrom builds an unsigned
 // permitWitnessTransferFrom(permit, transferDetails, owner, witness, witnessTypeString, signature)
 // transaction via b.
-func (p *Permit2) CreatePermitWitnessTransferFrom(ctx context.Context, b tx.Builder, contract, sender *types.Address, permit *PermitTransferFrom, transferDetails *SignatureTransferDetails, owner *types.Address, witness *types.Hash, witnessTypeString string, sig *types.Signature) (core.Transaction, error) {
-	calldata, err := EncodePermitWitnessTransferFrom(permit, transferDetails, owner, witness, witnessTypeString, sig)
+func (p2 *Permit2) CreatePermitWitnessTransferFrom(ctx context.Context, b tx.Builder, p *PermitWitnessTransferFromParams) (core.Transaction, error) {
+	calldata, err := EncodePermitWitnessTransferFrom(p.Permit, p.TransferDetails, p.Owner, p.Witness, p.WitnessTypeString, p.Sig)
 	if err != nil {
 		return nil, fmt.Errorf("permit2: createPermitWitnessTransferFrom: %w", err)
 	}
 
-	unsigned, err := b.Build(sender, contract, nil, calldata).Pack(ctx, p.c)
+	unsigned, err := b.Build(p.Sender, p.Contract, nil, calldata).Pack(ctx, p2.c)
 	if err != nil {
-		return nil, fmt.Errorf("permit2: createPermitWitnessTransferFrom: %w", p.wrapRevertError(err))
+		return nil, fmt.Errorf("permit2: createPermitWitnessTransferFrom: %w", p2.wrapRevertError(err))
 	}
 	return unsigned, nil
 }
 
 // PermitWitnessTransferFrom broadcasts an already-signed permitWitnessTransferFrom transaction.
-func (p *Permit2) PermitWitnessTransferFrom(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
+func (p2 *Permit2) PermitWitnessTransferFrom(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
 	raw, err := signedTx.EncodeRLP()
 	if err != nil {
 		return nil, fmt.Errorf("permit2: permitWitnessTransferFrom: %w", err)
 	}
-	hash, err := tx.Broadcast(ctx, p.c, raw)
+	hash, err := tx.Broadcast(ctx, p2.c, raw)
 	if err != nil {
 		return nil, fmt.Errorf("permit2: permitWitnessTransferFrom: %w", err)
 	}
@@ -363,26 +363,26 @@ func (p *Permit2) PermitWitnessTransferFrom(ctx context.Context, signedTx core.T
 
 // CreatePermitTransferFromBatch builds an unsigned
 // permitTransferFrom(permit, transferDetails, owner, signature) (batch overload) transaction via b.
-func (p *Permit2) CreatePermitTransferFromBatch(ctx context.Context, b tx.Builder, contract, sender *types.Address, permit *PermitBatchTransferFrom, transferDetails []SignatureTransferDetails, owner *types.Address, sig *types.Signature) (core.Transaction, error) {
-	calldata, err := EncodePermitTransferFromBatch(permit, transferDetails, owner, sig)
+func (p2 *Permit2) CreatePermitTransferFromBatch(ctx context.Context, b tx.Builder, p *PermitTransferFromBatchParams) (core.Transaction, error) {
+	calldata, err := EncodePermitTransferFromBatch(p.Permit, p.TransferDetails, p.Owner, p.Sig)
 	if err != nil {
 		return nil, fmt.Errorf("permit2: createPermitTransferFromBatch: %w", err)
 	}
 
-	unsigned, err := b.Build(sender, contract, nil, calldata).Pack(ctx, p.c)
+	unsigned, err := b.Build(p.Sender, p.Contract, nil, calldata).Pack(ctx, p2.c)
 	if err != nil {
-		return nil, fmt.Errorf("permit2: createPermitTransferFromBatch: %w", p.wrapRevertError(err))
+		return nil, fmt.Errorf("permit2: createPermitTransferFromBatch: %w", p2.wrapRevertError(err))
 	}
 	return unsigned, nil
 }
 
 // PermitTransferFromBatch broadcasts an already-signed permitTransferFrom(batch) transaction.
-func (p *Permit2) PermitTransferFromBatch(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
+func (p2 *Permit2) PermitTransferFromBatch(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
 	raw, err := signedTx.EncodeRLP()
 	if err != nil {
 		return nil, fmt.Errorf("permit2: permitTransferFromBatch: %w", err)
 	}
-	hash, err := tx.Broadcast(ctx, p.c, raw)
+	hash, err := tx.Broadcast(ctx, p2.c, raw)
 	if err != nil {
 		return nil, fmt.Errorf("permit2: permitTransferFromBatch: %w", err)
 	}
@@ -392,26 +392,26 @@ func (p *Permit2) PermitTransferFromBatch(ctx context.Context, signedTx core.Tra
 // CreatePermitWitnessTransferFromBatch builds an unsigned
 // permitWitnessTransferFrom(permit, transferDetails, owner, witness, witnessTypeString, signature)
 // (batch overload) transaction via b.
-func (p *Permit2) CreatePermitWitnessTransferFromBatch(ctx context.Context, b tx.Builder, contract, sender *types.Address, permit *PermitBatchTransferFrom, transferDetails []SignatureTransferDetails, owner *types.Address, witness *types.Hash, witnessTypeString string, sig *types.Signature) (core.Transaction, error) {
-	calldata, err := EncodePermitWitnessTransferFromBatch(permit, transferDetails, owner, witness, witnessTypeString, sig)
+func (p2 *Permit2) CreatePermitWitnessTransferFromBatch(ctx context.Context, b tx.Builder, p *PermitWitnessTransferFromBatchParams) (core.Transaction, error) {
+	calldata, err := EncodePermitWitnessTransferFromBatch(p.Permit, p.TransferDetails, p.Owner, p.Witness, p.WitnessTypeString, p.Sig)
 	if err != nil {
 		return nil, fmt.Errorf("permit2: createPermitWitnessTransferFromBatch: %w", err)
 	}
 
-	unsigned, err := b.Build(sender, contract, nil, calldata).Pack(ctx, p.c)
+	unsigned, err := b.Build(p.Sender, p.Contract, nil, calldata).Pack(ctx, p2.c)
 	if err != nil {
-		return nil, fmt.Errorf("permit2: createPermitWitnessTransferFromBatch: %w", p.wrapRevertError(err))
+		return nil, fmt.Errorf("permit2: createPermitWitnessTransferFromBatch: %w", p2.wrapRevertError(err))
 	}
 	return unsigned, nil
 }
 
 // PermitWitnessTransferFromBatch broadcasts an already-signed permitWitnessTransferFrom(batch) transaction.
-func (p *Permit2) PermitWitnessTransferFromBatch(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
+func (p2 *Permit2) PermitWitnessTransferFromBatch(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
 	raw, err := signedTx.EncodeRLP()
 	if err != nil {
 		return nil, fmt.Errorf("permit2: permitWitnessTransferFromBatch: %w", err)
 	}
-	hash, err := tx.Broadcast(ctx, p.c, raw)
+	hash, err := tx.Broadcast(ctx, p2.c, raw)
 	if err != nil {
 		return nil, fmt.Errorf("permit2: permitWitnessTransferFromBatch: %w", err)
 	}
@@ -419,33 +419,33 @@ func (p *Permit2) PermitWitnessTransferFromBatch(ctx context.Context, signedTx c
 }
 
 // CreateInvalidateUnorderedNonces builds an unsigned invalidateUnorderedNonces(wordPos, mask) transaction via b.
-func (p *Permit2) CreateInvalidateUnorderedNonces(ctx context.Context, b tx.Builder, contract, sender *types.Address, wordPos, mask *big.Int) (core.Transaction, error) {
-	calldata, err := EncodeInvalidateUnorderedNonces(wordPos, mask)
+func (p2 *Permit2) CreateInvalidateUnorderedNonces(ctx context.Context, b tx.Builder, p *InvalidateUnorderedNoncesParams) (core.Transaction, error) {
+	calldata, err := EncodeInvalidateUnorderedNonces(p.WordPos, p.Mask)
 	if err != nil {
 		return nil, fmt.Errorf("permit2: createInvalidateUnorderedNonces: %w", err)
 	}
 
-	unsigned, err := b.Build(sender, contract, nil, calldata).Pack(ctx, p.c)
+	unsigned, err := b.Build(p.Sender, p.Contract, nil, calldata).Pack(ctx, p2.c)
 	if err != nil {
-		return nil, fmt.Errorf("permit2: createInvalidateUnorderedNonces: %w", p.wrapRevertError(err))
+		return nil, fmt.Errorf("permit2: createInvalidateUnorderedNonces: %w", p2.wrapRevertError(err))
 	}
 	return unsigned, nil
 }
 
 // InvalidateUnorderedNonces broadcasts an already-signed invalidateUnorderedNonces transaction.
-func (p *Permit2) InvalidateUnorderedNonces(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
+func (p2 *Permit2) InvalidateUnorderedNonces(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
 	raw, err := signedTx.EncodeRLP()
 	if err != nil {
 		return nil, fmt.Errorf("permit2: invalidateUnorderedNonces: %w", err)
 	}
-	hash, err := tx.Broadcast(ctx, p.c, raw)
+	hash, err := tx.Broadcast(ctx, p2.c, raw)
 	if err != nil {
 		return nil, fmt.Errorf("permit2: invalidateUnorderedNonces: %w", err)
 	}
 	return hash, nil
 }
 
-func (p *Permit2) call(ctx context.Context, from, contract *types.Address, calldata []byte, block string) ([]byte, error) {
+func (p2 *Permit2) call(ctx context.Context, from, contract *types.Address, calldata []byte, block string) ([]byte, error) {
 	params := map[string]any{
 		"to":   contract.String(),
 		"data": encoding.Hex.EncodePrefixed(calldata),
@@ -455,14 +455,14 @@ func (p *Permit2) call(ctx context.Context, from, contract *types.Address, calld
 	}
 
 	var raw string
-	if err := p.c.Call(ctx, rpc.ETHCall("call", params, block, &raw)); err != nil {
-		return nil, p.wrapRevertError(err)
+	if err := p2.c.Call(ctx, rpc.ETHCall("call", params, block, &raw)); err != nil {
+		return nil, p2.wrapRevertError(err)
 	}
 	return encoding.Hex.Decode(raw)
 }
 
 // wrapRevertError maps a known Permit2 custom error in err to its sentinel.
-func (_ *Permit2) wrapRevertError(err error) error {
+func (p2 *Permit2) wrapRevertError(err error) error {
 	var rpcErr *rpc.ResponseError
 	if !errors.As(err, &rpcErr) || len(rpcErr.Data) == 0 {
 		return err

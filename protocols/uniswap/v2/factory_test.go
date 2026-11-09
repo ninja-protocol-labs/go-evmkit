@@ -74,7 +74,7 @@ func (s *FactorySuite) SetupSuite() {
 		s.T().Skip("disabled")
 	}
 
-	s.ctx, s.cancel = context.WithTimeout(context.Background(), 10*time.Minute)
+	s.ctx, s.cancel = context.WithTimeout(s.T().Context(), 10*time.Minute)
 
 	s.client = rpc.NewClient(s.RPCURL, rpc.WithRetry(5, rpc.ExponentialBackoff(500*time.Millisecond, 10*time.Second)))
 	s.deployer = deploy.NewNicksDeployer(s.client)
@@ -193,17 +193,17 @@ func (s *FactorySuite) TestReadMethods() {
 }
 
 func (s *FactorySuite) TestCreatePair() {
-	before, err := s.v2Factory.GetPair(s.ctx, s.factory, s.tokenA, s.tokenB, rpc.BlockTagLatest)
+	before, err := s.v2Factory.GetPair(s.ctx, NewGetPairParams(s.factory, s.tokenA, s.tokenB), rpc.BlockTagLatest)
 	s.Require().NoError(err)
 	s.Require().True(before.IsZero(), "tokenA/tokenB shouldn't have a pair yet")
 
 	allPairsLengthBefore, err := s.v2Factory.AllPairsLength(s.ctx, s.factory, rpc.BlockTagLatest)
 	s.Require().NoError(err)
 
-	predicted, err := s.v2Factory.CallCreatePair(s.ctx, s.factory, s.from, s.tokenA, s.tokenB, rpc.BlockTagLatest)
+	predicted, err := s.v2Factory.CallCreatePair(s.ctx, NewCreatePairParams(s.factory, s.from, s.tokenA, s.tokenB), rpc.BlockTagLatest)
 	s.Require().NoError(err)
 
-	unsigned, err := s.v2Factory.CreateCreatePair(s.ctx, tx.NewDynamicFeeBuilder(), s.factory, s.from, s.tokenA, s.tokenB)
+	unsigned, err := s.v2Factory.CreateCreatePair(s.ctx, tx.NewDynamicFeeBuilder(), NewCreatePairParams(s.factory, s.from, s.tokenA, s.tokenB))
 	s.Require().NoError(err)
 	s.Require().NoError(unsigned.Sign(s.signer))
 	s.mu.Lock()
@@ -220,7 +220,7 @@ func (s *FactorySuite) TestCreatePair() {
 	created, err := ExtractPairCreated(receipt.Logs)
 	s.Require().NoError(err)
 	s.Require().Len(created, 1)
-	s.Require().True(created[0].Contract.Equal(s.factory))
+	s.Require().True(created[0].Factory.Equal(s.factory))
 	s.Require().True(created[0].Token0.Equal(s.tokenA))
 	s.Require().True(created[0].Token1.Equal(s.tokenB))
 	s.Require().True(created[0].Pair.Equal(predicted))
@@ -228,7 +228,7 @@ func (s *FactorySuite) TestCreatePair() {
 
 	var after *types.Address
 	s.Require().Eventually(func() bool {
-		after, err = s.v2Factory.GetPair(s.ctx, s.factory, s.tokenA, s.tokenB, rpc.BlockTagLatest)
+		after, err = s.v2Factory.GetPair(s.ctx, NewGetPairParams(s.factory, s.tokenA, s.tokenB), rpc.BlockTagLatest)
 		return err == nil && after.Equal(predicted)
 	}, 20*time.Second, time.Duration(s.Interval)*time.Millisecond, "pair not visible after createPair")
 
@@ -247,32 +247,32 @@ func (s *FactorySuite) TestCreatePair() {
 }
 
 func (s *FactorySuite) TestCreatePairExists() {
-	_, err := s.v2Factory.CreateCreatePair(s.ctx, tx.NewDynamicFeeBuilder(), s.factory, s.from, s.tokenA, s.tokenB)
+	_, err := s.v2Factory.CreateCreatePair(s.ctx, tx.NewDynamicFeeBuilder(), NewCreatePairParams(s.factory, s.from, s.tokenA, s.tokenB))
 	s.Require().Error(err)
 	s.Require().ErrorIs(err, ErrPairExists)
 }
 
 func (s *FactorySuite) TestCreatePairIdenticalAddresses() {
-	_, err := s.v2Factory.CreateCreatePair(s.ctx, tx.NewDynamicFeeBuilder(), s.factory, s.from, s.tokenA, s.tokenA)
+	_, err := s.v2Factory.CreateCreatePair(s.ctx, tx.NewDynamicFeeBuilder(), NewCreatePairParams(s.factory, s.from, s.tokenA, s.tokenA))
 	s.Require().Error(err)
 	s.Require().ErrorIs(err, ErrIdenticalAddresses)
 }
 
 func (s *FactorySuite) TestCreatePairZeroAddress() {
 	zero := types.MustNewAddressFromHex("0x0000000000000000000000000000000000000000")
-	_, err := s.v2Factory.CreateCreatePair(s.ctx, tx.NewDynamicFeeBuilder(), s.factory, s.from, s.tokenA, zero)
+	_, err := s.v2Factory.CreateCreatePair(s.ctx, tx.NewDynamicFeeBuilder(), NewCreatePairParams(s.factory, s.from, s.tokenA, zero))
 	s.Require().Error(err)
 	s.Require().ErrorIs(err, ErrZeroAddress)
 }
 
 func (s *FactorySuite) TestSetFeeToForbidden() {
-	_, err := s.v2Factory.CreateSetFeeTo(s.ctx, tx.NewDynamicFeeBuilder(), s.factory, s.from, s.from)
+	_, err := s.v2Factory.CreateSetFeeTo(s.ctx, tx.NewDynamicFeeBuilder(), NewSetFeeToParams(s.factory, s.from, s.from))
 	s.Require().Error(err)
 	s.Require().ErrorIs(err, ErrForbidden)
 }
 
 func (s *FactorySuite) TestSetFeeToSetterForbidden() {
-	_, err := s.v2Factory.CreateSetFeeToSetter(s.ctx, tx.NewDynamicFeeBuilder(), s.factory, s.from, s.from)
+	_, err := s.v2Factory.CreateSetFeeToSetter(s.ctx, tx.NewDynamicFeeBuilder(), NewSetFeeToSetterParams(s.factory, s.from, s.from))
 	s.Require().Error(err)
 	s.Require().ErrorIs(err, ErrForbidden)
 }

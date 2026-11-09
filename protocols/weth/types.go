@@ -6,32 +6,62 @@ import (
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 )
 
-// Deposit mirrors WETH9's Deposit event.
-type Deposit struct {
-	Contract *types.Address
-	Dst      *types.Address
-	Wad      *big.Int
+// DepositParams is CreateDeposit's argument list.
+type DepositParams struct {
+	WETH   *types.Address
+	Sender *types.Address
+	Value  *big.Int
 }
 
-func NewDeposit(contract, dst *types.Address, wad *big.Int) *Deposit {
+func NewDepositParams(weth, sender *types.Address, value *big.Int) *DepositParams {
+	return &DepositParams{
+		WETH:   weth,
+		Sender: sender,
+		Value:  value,
+	}
+}
+
+// WithdrawParams is CreateWithdraw's argument list.
+type WithdrawParams struct {
+	WETH   *types.Address
+	Sender *types.Address
+	Wad    *big.Int
+}
+
+func NewWithdrawParams(weth, sender *types.Address, wad *big.Int) *WithdrawParams {
+	return &WithdrawParams{
+		WETH:   weth,
+		Sender: sender,
+		Wad:    wad,
+	}
+}
+
+// Deposit mirrors WETH9's Deposit event.
+type Deposit struct {
+	WETH *types.Address
+	Dst  *types.Address
+	Wad  *big.Int
+}
+
+func NewDeposit(weth, dst *types.Address, wad *big.Int) *Deposit {
 	return &Deposit{
-		Contract: contract,
-		Dst:      dst,
-		Wad:      wad,
+		WETH: weth,
+		Dst:  dst,
+		Wad:  wad,
 	}
 }
 
 // Withdrawal mirrors WETH9's Withdrawal event.
 type Withdrawal struct {
-	Contract *types.Address
-	Src      *types.Address
-	Wad      *big.Int
+	WETH *types.Address
+	Src  *types.Address
+	Wad  *big.Int
 }
 
-func NewWithdrawal(contract, src *types.Address, wad *big.Int) *Withdrawal {
+func NewWithdrawal(weth, src *types.Address, wad *big.Int) *Withdrawal {
 	return &Withdrawal{
-		Contract: contract,
-		Src:      src,
-		Wad:      wad,
+		WETH: weth,
+		Src:  src,
+		Wad:  wad,
 	}
 }

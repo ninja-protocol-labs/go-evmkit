@@ -34,7 +34,7 @@ func TestExtractPairCreatedSampleLog(t *testing.T) {
 	created, err := ExtractPairCreated([]tx.Log{log})
 	require.NoError(t, err)
 	require.Len(t, created, 1)
-	require.True(t, created[0].Contract.Equal(testFactory))
+	require.True(t, created[0].Factory.Equal(testFactory))
 	require.True(t, created[0].Token0.Equal(testTokenA))
 	require.True(t, created[0].Token1.Equal(testTokenB))
 	require.True(t, created[0].Pair.Equal(testPair))

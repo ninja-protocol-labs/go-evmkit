@@ -559,6 +559,261 @@ func (p *PermitBatchTransferFrom) tuple() []any {
 	return []any{permitted, p.Nonce, p.Deadline}
 }
 
+// AllowanceParams is Allowance's argument list.
+type AllowanceParams struct {
+	Contract *types.Address
+	Owner    *types.Address
+	Token    *types.Address
+	Spender  *types.Address
+}
+
+func NewAllowanceParams(contract, owner, token, spender *types.Address) *AllowanceParams {
+	return &AllowanceParams{
+		Contract: contract,
+		Owner:    owner,
+		Token:    token,
+		Spender:  spender,
+	}
+}
+
+// PermitSingleParams is CreatePermitSingle's argument list.
+type PermitSingleParams struct {
+	Contract     *types.Address
+	Sender       *types.Address
+	Owner        *types.Address
+	PermitSingle *PermitSingle
+	Sig          *types.Signature
+}
+
+func NewPermitSingleParams(contract, sender, owner *types.Address, permitSingle *PermitSingle, sig *types.Signature) *PermitSingleParams {
+	return &PermitSingleParams{
+		Contract:     contract,
+		Sender:       sender,
+		Owner:        owner,
+		PermitSingle: permitSingle,
+		Sig:          sig,
+	}
+}
+
+// PermitBatchParams is CreatePermitBatch's argument list.
+type PermitBatchParams struct {
+	Contract    *types.Address
+	Sender      *types.Address
+	Owner       *types.Address
+	PermitBatch *PermitBatch
+	Sig         *types.Signature
+}
+
+func NewPermitBatchParams(contract, sender, owner *types.Address, permitBatch *PermitBatch, sig *types.Signature) *PermitBatchParams {
+	return &PermitBatchParams{
+		Contract:    contract,
+		Sender:      sender,
+		Owner:       owner,
+		PermitBatch: permitBatch,
+		Sig:         sig,
+	}
+}
+
+// TransferFromBatchParams is CreateTransferFromBatch's argument list.
+type TransferFromBatchParams struct {
+	Contract        *types.Address
+	Sender          *types.Address
+	TransferDetails []AllowanceTransferDetails
+}
+
+func NewTransferFromBatchParams(contract, sender *types.Address, transferDetails []AllowanceTransferDetails) *TransferFromBatchParams {
+	return &TransferFromBatchParams{
+		Contract:        contract,
+		Sender:          sender,
+		TransferDetails: transferDetails,
+	}
+}
+
+// LockdownParams is CreateLockdown's argument list.
+type LockdownParams struct {
+	Contract  *types.Address
+	Sender    *types.Address
+	Approvals []TokenSpenderPair
+}
+
+func NewLockdownParams(contract, sender *types.Address, approvals []TokenSpenderPair) *LockdownParams {
+	return &LockdownParams{
+		Contract:  contract,
+		Sender:    sender,
+		Approvals: approvals,
+	}
+}
+
+// TransferFromParams is CreateTransferFrom's argument list.
+type TransferFromParams struct {
+	Contract *types.Address
+	Sender   *types.Address
+	From     *types.Address
+	To       *types.Address
+	Amount   *big.Int
+	Token    *types.Address
+}
+
+func NewTransferFromParams(contract, sender, from, to *types.Address, amount *big.Int, token *types.Address) *TransferFromParams {
+	return &TransferFromParams{
+		Contract: contract,
+		Sender:   sender,
+		From:     from,
+		To:       to,
+		Amount:   amount,
+		Token:    token,
+	}
+}
+
+// InvalidateNoncesParams is CreateInvalidateNonces's argument list.
+type InvalidateNoncesParams struct {
+	Contract *types.Address
+	Sender   *types.Address
+	Token    *types.Address
+	Spender  *types.Address
+	NewNonce *big.Int
+}
+
+func NewInvalidateNoncesParams(contract, sender, token, spender *types.Address, newNonce *big.Int) *InvalidateNoncesParams {
+	return &InvalidateNoncesParams{
+		Contract: contract,
+		Sender:   sender,
+		Token:    token,
+		Spender:  spender,
+		NewNonce: newNonce,
+	}
+}
+
+// PermitTransferFromParams is CreatePermitTransferFrom's argument list.
+type PermitTransferFromParams struct {
+	Contract        *types.Address
+	Sender          *types.Address
+	Permit          *PermitTransferFrom
+	TransferDetails *SignatureTransferDetails
+	Owner           *types.Address
+	Sig             *types.Signature
+}
+
+func NewPermitTransferFromParams(contract, sender *types.Address, permit *PermitTransferFrom, transferDetails *SignatureTransferDetails, owner *types.Address, sig *types.Signature) *PermitTransferFromParams {
+	return &PermitTransferFromParams{
+		Contract:        contract,
+		Sender:          sender,
+		Permit:          permit,
+		TransferDetails: transferDetails,
+		Owner:           owner,
+		Sig:             sig,
+	}
+}
+
+// PermitWitnessTransferFromParams is CreatePermitWitnessTransferFrom's argument list.
+type PermitWitnessTransferFromParams struct {
+	Contract          *types.Address
+	Sender            *types.Address
+	Permit            *PermitTransferFrom
+	TransferDetails   *SignatureTransferDetails
+	Owner             *types.Address
+	Witness           *types.Hash
+	WitnessTypeString string
+	Sig               *types.Signature
+}
+
+func NewPermitWitnessTransferFromParams(contract, sender *types.Address, permit *PermitTransferFrom, transferDetails *SignatureTransferDetails, owner *types.Address, witness *types.Hash, witnessTypeString string, sig *types.Signature) *PermitWitnessTransferFromParams {
+	return &PermitWitnessTransferFromParams{
+		Contract:          contract,
+		Sender:            sender,
+		Permit:            permit,
+		TransferDetails:   transferDetails,
+		Owner:             owner,
+		Witness:           witness,
+		WitnessTypeString: witnessTypeString,
+		Sig:               sig,
+	}
+}
+
+// PermitTransferFromBatchParams is CreatePermitTransferFromBatch's argument list.
+type PermitTransferFromBatchParams struct {
+	Contract        *types.Address
+	Sender          *types.Address
+	Permit          *PermitBatchTransferFrom
+	TransferDetails []SignatureTransferDetails
+	Owner           *types.Address
+	Sig             *types.Signature
+}
+
+func NewPermitTransferFromBatchParams(contract, sender *types.Address, permit *PermitBatchTransferFrom, transferDetails []SignatureTransferDetails, owner *types.Address, sig *types.Signature) *PermitTransferFromBatchParams {
+	return &PermitTransferFromBatchParams{
+		Contract:        contract,
+		Sender:          sender,
+		Permit:          permit,
+		TransferDetails: transferDetails,
+		Owner:           owner,
+		Sig:             sig,
+	}
+}
+
+// PermitWitnessTransferFromBatchParams is CreatePermitWitnessTransferFromBatch's argument list.
+type PermitWitnessTransferFromBatchParams struct {
+	Contract          *types.Address
+	Sender            *types.Address
+	Permit            *PermitBatchTransferFrom
+	TransferDetails   []SignatureTransferDetails
+	Owner             *types.Address
+	Witness           *types.Hash
+	WitnessTypeString string
+	Sig               *types.Signature
+}
+
+func NewPermitWitnessTransferFromBatchParams(contract, sender *types.Address, permit *PermitBatchTransferFrom, transferDetails []SignatureTransferDetails, owner *types.Address, witness *types.Hash, witnessTypeString string, sig *types.Signature) *PermitWitnessTransferFromBatchParams {
+	return &PermitWitnessTransferFromBatchParams{
+		Contract:          contract,
+		Sender:            sender,
+		Permit:            permit,
+		TransferDetails:   transferDetails,
+		Owner:             owner,
+		Witness:           witness,
+		WitnessTypeString: witnessTypeString,
+		Sig:               sig,
+	}
+}
+
+// InvalidateUnorderedNoncesParams is CreateInvalidateUnorderedNonces's argument list.
+type InvalidateUnorderedNoncesParams struct {
+	Contract *types.Address
+	Sender   *types.Address
+	WordPos  *big.Int
+	Mask     *big.Int
+}
+
+func NewInvalidateUnorderedNoncesParams(contract, sender *types.Address, wordPos, mask *big.Int) *InvalidateUnorderedNoncesParams {
+	return &InvalidateUnorderedNoncesParams{
+		Contract: contract,
+		Sender:   sender,
+		WordPos:  wordPos,
+		Mask:     mask,
+	}
+}
+
+// ApproveParams is CreateApprove's argument list.
+type ApproveParams struct {
+	Contract   *types.Address
+	Sender     *types.Address
+	Token      *types.Address
+	Spender    *types.Address
+	Amount     *big.Int
+	Expiration *big.Int
+}
+
+func NewApproveParams(contract, sender, token, spender *types.Address, amount, expiration *big.Int) *ApproveParams {
+	return &ApproveParams{
+		Contract:   contract,
+		Sender:     sender,
+		Token:      token,
+		Spender:    spender,
+		Amount:     amount,
+		Expiration: expiration,
+	}
+}
+
 // NonceInvalidation mirrors AllowanceTransfer's NonceInvalidation event.
 type NonceInvalidation struct {
 	Contract *types.Address

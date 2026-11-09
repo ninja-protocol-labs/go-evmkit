@@ -36,7 +36,7 @@ func TestExtractDepositsSampleLog(t *testing.T) {
 	deposits, err := ExtractDeposits([]tx.Log{log})
 	require.NoError(t, err)
 	require.Len(t, deposits, 1)
-	require.True(t, deposits[0].Contract.Equal(testWETH))
+	require.True(t, deposits[0].WETH.Equal(testWETH))
 	require.True(t, deposits[0].Dst.Equal(testUser))
 	require.Zero(t, big.NewInt(1000).Cmp(deposits[0].Wad))
 }
@@ -60,7 +60,7 @@ func TestExtractWithdrawalsSampleLog(t *testing.T) {
 	withdrawals, err := ExtractWithdrawals([]tx.Log{log})
 	require.NoError(t, err)
 	require.Len(t, withdrawals, 1)
-	require.True(t, withdrawals[0].Contract.Equal(testWETH))
+	require.True(t, withdrawals[0].WETH.Equal(testWETH))
 	require.True(t, withdrawals[0].Src.Equal(testUser))
 	require.Zero(t, big.NewInt(2000).Cmp(withdrawals[0].Wad))
 }

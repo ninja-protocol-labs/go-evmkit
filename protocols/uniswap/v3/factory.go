@@ -18,7 +18,7 @@ import (
 type IFactory interface {
 	Owner(ctx context.Context, contract *types.Address, block string) (*types.Address, error)
 	FeeAmountTickSpacing(ctx context.Context, contract *types.Address, fee *big.Int, block string) (*big.Int, error)
-	GetPool(ctx context.Context, contract, tokenA, tokenB *types.Address, fee *big.Int, block string) (*types.Address, error)
+	GetPool(ctx context.Context, p *GetPoolParams, block string) (*types.Address, error)
 
 	CreatePool(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
 	SetOwner(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
@@ -74,12 +74,12 @@ func (f *Factory) FeeAmountTickSpacing(ctx context.Context, contract *types.Addr
 
 // GetPool returns the pool contract deployed for (tokenA, tokenB, fee), or the zero address
 // if none exists yet.
-func (f *Factory) GetPool(ctx context.Context, contract, tokenA, tokenB *types.Address, fee *big.Int, block string) (*types.Address, error) {
-	calldata, err := EncodeGetPool(tokenA, tokenB, fee)
+func (f *Factory) GetPool(ctx context.Context, p *GetPoolParams, block string) (*types.Address, error) {
+	calldata, err := EncodeGetPool(p.TokenA, p.TokenB, p.Fee)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: getPool: %w", err)
 	}
-	data, err := f.call(ctx, nil, contract, calldata, block)
+	data, err := f.call(ctx, nil, p.Factory, calldata, block)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: getPool: %w", err)
 	}
@@ -91,13 +91,13 @@ func (f *Factory) GetPool(ctx context.Context, contract, tokenA, tokenB *types.A
 }
 
 // CreateCreatePool builds an unsigned createPool(tokenA, tokenB, fee) transaction via b, sent by sender.
-func (f *Factory) CreateCreatePool(ctx context.Context, b tx.Builder, contract, sender, tokenA, tokenB *types.Address, fee *big.Int) (core.Transaction, error) {
-	calldata, err := EncodeCreatePool(tokenA, tokenB, fee)
+func (f *Factory) CreateCreatePool(ctx context.Context, b tx.Builder, p *CreatePoolParams) (core.Transaction, error) {
+	calldata, err := EncodeCreatePool(p.TokenA, p.TokenB, p.Fee)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: createCreatePool: %w", err)
 	}
 
-	unsigned, err := b.Build(sender, contract, nil, calldata).Pack(ctx, f.c)
+	unsigned, err := b.Build(p.Sender, p.Factory, nil, calldata).Pack(ctx, f.c)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: createCreatePool: %w", f.wrapRevertError(err))
 	}
@@ -106,12 +106,12 @@ func (f *Factory) CreateCreatePool(ctx context.Context, b tx.Builder, contract, 
 
 // CallCreatePool simulates createPool(tokenA, tokenB, fee) via eth_call, as sender, returning the
 // pool address it would create -- without broadcasting anything.
-func (f *Factory) CallCreatePool(ctx context.Context, contract, sender, tokenA, tokenB *types.Address, fee *big.Int, block string) (*types.Address, error) {
-	calldata, err := EncodeCreatePool(tokenA, tokenB, fee)
+func (f *Factory) CallCreatePool(ctx context.Context, p *CreatePoolParams, block string) (*types.Address, error) {
+	calldata, err := EncodeCreatePool(p.TokenA, p.TokenB, p.Fee)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: callCreatePool: %w", err)
 	}
-	data, err := f.call(ctx, sender, contract, calldata, block)
+	data, err := f.call(ctx, p.Sender, p.Factory, calldata, block)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: callCreatePool: %w", err)
 	}
@@ -139,13 +139,13 @@ func (f *Factory) CreatePool(ctx context.Context, signedTx core.Transaction) (*t
 
 // CreateSetOwner builds an unsigned setOwner(_owner) transaction via b, sent by sender -- which
 // must be contract's current owner, or the transaction reverts with ErrReverted.
-func (f *Factory) CreateSetOwner(ctx context.Context, b tx.Builder, contract, sender, owner *types.Address) (core.Transaction, error) {
-	calldata, err := EncodeSetOwner(owner)
+func (f *Factory) CreateSetOwner(ctx context.Context, b tx.Builder, p *SetOwnerParams) (core.Transaction, error) {
+	calldata, err := EncodeSetOwner(p.Owner)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: createSetOwner: %w", err)
 	}
 
-	unsigned, err := b.Build(sender, contract, nil, calldata).Pack(ctx, f.c)
+	unsigned, err := b.Build(p.Sender, p.Factory, nil, calldata).Pack(ctx, f.c)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: createSetOwner: %w", f.wrapRevertError(err))
 	}
@@ -168,13 +168,13 @@ func (f *Factory) SetOwner(ctx context.Context, signedTx core.Transaction) (*typ
 // CreateEnableFeeAmount builds an unsigned enableFeeAmount(fee, tickSpacing) transaction via b,
 // sent by sender -- which must be contract's current owner, or the transaction reverts with
 // ErrReverted.
-func (f *Factory) CreateEnableFeeAmount(ctx context.Context, b tx.Builder, contract, sender *types.Address, fee, tickSpacing *big.Int) (core.Transaction, error) {
-	calldata, err := EncodeEnableFeeAmount(fee, tickSpacing)
+func (f *Factory) CreateEnableFeeAmount(ctx context.Context, b tx.Builder, p *EnableFeeAmountParams) (core.Transaction, error) {
+	calldata, err := EncodeEnableFeeAmount(p.Fee, p.TickSpacing)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: createEnableFeeAmount: %w", err)
 	}
 
-	unsigned, err := b.Build(sender, contract, nil, calldata).Pack(ctx, f.c)
+	unsigned, err := b.Build(p.Sender, p.Factory, nil, calldata).Pack(ctx, f.c)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: createEnableFeeAmount: %w", f.wrapRevertError(err))
 	}

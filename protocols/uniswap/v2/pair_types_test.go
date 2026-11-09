@@ -16,7 +16,7 @@ func TestNewMint(t *testing.T) {
 	amount1 := big.NewInt(200)
 
 	m := NewMint(contract, sender, amount0, amount1)
-	require.Same(t, contract, m.Contract)
+	require.Same(t, contract, m.Pair)
 	require.Same(t, sender, m.Sender)
 	require.Same(t, amount0, m.Amount0)
 	require.Same(t, amount1, m.Amount1)
@@ -30,7 +30,7 @@ func TestNewBurn(t *testing.T) {
 	amount1 := big.NewInt(200)
 
 	b := NewBurn(contract, sender, amount0, amount1, to)
-	require.Same(t, contract, b.Contract)
+	require.Same(t, contract, b.Pair)
 	require.Same(t, sender, b.Sender)
 	require.Same(t, amount0, b.Amount0)
 	require.Same(t, amount1, b.Amount1)
@@ -47,7 +47,7 @@ func TestNewSwap(t *testing.T) {
 	amount1Out := big.NewInt(95)
 
 	s := NewSwap(contract, sender, amount0In, amount1In, amount0Out, amount1Out, to)
-	require.Same(t, contract, s.Contract)
+	require.Same(t, contract, s.Pair)
 	require.Same(t, sender, s.Sender)
 	require.Same(t, amount0In, s.Amount0In)
 	require.Same(t, amount1In, s.Amount1In)
@@ -62,7 +62,7 @@ func TestNewSync(t *testing.T) {
 	reserve1 := big.NewInt(2000)
 
 	s := NewSync(contract, reserve0, reserve1)
-	require.Same(t, contract, s.Contract)
+	require.Same(t, contract, s.Pair)
 	require.Same(t, reserve0, s.Reserve0)
 	require.Same(t, reserve1, s.Reserve1)
 }

@@ -6,6 +6,74 @@ import (
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 )
 
+// GetPoolParams is GetPool's argument list.
+type GetPoolParams struct {
+	Factory *types.Address
+	TokenA  *types.Address
+	TokenB  *types.Address
+	Fee     *big.Int
+}
+
+func NewGetPoolParams(factory, tokenA, tokenB *types.Address, fee *big.Int) *GetPoolParams {
+	return &GetPoolParams{
+		Factory: factory,
+		TokenA:  tokenA,
+		TokenB:  tokenB,
+		Fee:     fee,
+	}
+}
+
+// CreatePoolParams is CreateCreatePool's and CallCreatePool's argument list.
+type CreatePoolParams struct {
+	Factory *types.Address
+	Sender  *types.Address
+	TokenA  *types.Address
+	TokenB  *types.Address
+	Fee     *big.Int
+}
+
+func NewCreatePoolParams(factory, sender, tokenA, tokenB *types.Address, fee *big.Int) *CreatePoolParams {
+	return &CreatePoolParams{
+		Factory: factory,
+		Sender:  sender,
+		TokenA:  tokenA,
+		TokenB:  tokenB,
+		Fee:     fee,
+	}
+}
+
+// SetOwnerParams is CreateSetOwner's argument list.
+type SetOwnerParams struct {
+	Factory *types.Address
+	Sender  *types.Address
+	Owner   *types.Address
+}
+
+func NewSetOwnerParams(factory, sender, owner *types.Address) *SetOwnerParams {
+	return &SetOwnerParams{
+		Factory: factory,
+		Sender:  sender,
+		Owner:   owner,
+	}
+}
+
+// EnableFeeAmountParams is CreateEnableFeeAmount's argument list.
+type EnableFeeAmountParams struct {
+	Factory     *types.Address
+	Sender      *types.Address
+	Fee         *big.Int
+	TickSpacing *big.Int
+}
+
+func NewEnableFeeAmountParams(factory, sender *types.Address, fee, tickSpacing *big.Int) *EnableFeeAmountParams {
+	return &EnableFeeAmountParams{
+		Factory:     factory,
+		Sender:      sender,
+		Fee:         fee,
+		TickSpacing: tickSpacing,
+	}
+}
+
 // OwnerChanged mirrors IUniswapV3Factory's OwnerChanged event: Contract's owner moved
 // from OldOwner to NewOwner via setOwner.
 type OwnerChanged struct {
