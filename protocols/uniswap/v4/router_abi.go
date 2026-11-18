@@ -9,24 +9,19 @@ import (
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 )
 
-// pathKeyTuple mirrors libraries/PathKey.sol's PathKey struct: (intermediateCurrency, fee,
-// tickSpacing, hooks, hookData); dynamic, since hookData is bytes.
+// pathKeyTuple mirrors libraries/PathKey.sol's PathKey struct.
 var pathKeyTuple = abi.Tuple(abi.Address, abi.Uint24, abi.Int24, abi.Address, abi.Bytes)
 
-// exactInputSingleParamsTuple mirrors IV4Router's ExactInputSingleParams: (poolKey, zeroForOne,
-// amountIn, amountOutMinimum, minHopPriceX36, hookData); dynamic, since it embeds bytes.
+// exactInputSingleParamsTuple mirrors IV4Router's ExactInputSingleParams.
 var exactInputSingleParamsTuple = abi.Tuple(poolKeyTuple, abi.Bool, abi.Uint128, abi.Uint128, abi.Uint256, abi.Bytes)
 
-// exactInputParamsTuple mirrors IV4Router's ExactInputParams: (currencyIn, path, minHopPriceX36,
-// amountIn, amountOutMinimum); dynamic, since it embeds slices.
+// exactInputParamsTuple mirrors IV4Router's ExactInputParams.
 var exactInputParamsTuple = abi.Tuple(abi.Address, abi.Slice(pathKeyTuple), abi.Slice(abi.Uint256), abi.Uint128, abi.Uint128)
 
-// exactOutputSingleParamsTuple mirrors IV4Router's ExactOutputSingleParams: (poolKey, zeroForOne,
-// amountOut, amountInMaximum, minHopPriceX36, hookData); dynamic, since it embeds bytes.
+// exactOutputSingleParamsTuple mirrors IV4Router's ExactOutputSingleParams.
 var exactOutputSingleParamsTuple = abi.Tuple(poolKeyTuple, abi.Bool, abi.Uint128, abi.Uint128, abi.Uint256, abi.Bytes)
 
-// exactOutputParamsTuple mirrors IV4Router's ExactOutputParams: (currencyOut, path,
-// minHopPriceX36, amountOut, amountInMaximum); dynamic, since it embeds slices.
+// exactOutputParamsTuple mirrors IV4Router's ExactOutputParams.
 var exactOutputParamsTuple = abi.Tuple(abi.Address, abi.Slice(pathKeyTuple), abi.Slice(abi.Uint256), abi.Uint128, abi.Uint128)
 
 // Action IDs from libraries/Actions.sol, the full set (0x00-0x19)
@@ -58,6 +53,28 @@ const (
 	ActionBurn6909                                // 0x18
 	ActionUnwindWithFallback
 )
+
+// MsgSender returns ActionConstants.sol's MSG_SENDER sentinel. Fresh value each call since
+// *types.Address is mutable in place.
+func MsgSender() *types.Address {
+	return types.MustNewAddressFromHex("0x0000000000000000000000000000000000000001")
+}
+
+// AddressThis returns ActionConstants.sol's ADDRESS_THIS sentinel.
+func AddressThis() *types.Address {
+	return types.MustNewAddressFromHex("0x0000000000000000000000000000000000000002")
+}
+
+// OpenDelta returns ActionConstants.sol's OPEN_DELTA sentinel. Fresh value each call since
+// *big.Int is mutable in place.
+func OpenDelta() *big.Int {
+	return big.NewInt(0)
+}
+
+// ContractBalance returns ActionConstants.sol's CONTRACT_BALANCE sentinel.
+func ContractBalance() *big.Int {
+	return new(big.Int).Lsh(big.NewInt(1), 255)
+}
 
 // executeActionsFn mirrors our own Kit router fixture's executeActions(bytes), the concrete
 // entry point that forwards its single argument to BaseActionsRouter._executeActions.

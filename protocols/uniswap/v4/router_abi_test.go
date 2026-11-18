@@ -270,3 +270,20 @@ func TestEncodeExecuteActions(t *testing.T) {
 	require.Equal(t, actions, decodedActions)
 	require.Equal(t, params, decodedParams)
 }
+
+func TestActionConstants(t *testing.T) {
+	require.True(t, MsgSender().Equal(types.MustNewAddressFromHex("0x0000000000000000000000000000000000000001")))
+	require.True(t, AddressThis().Equal(types.MustNewAddressFromHex("0x0000000000000000000000000000000000000002")))
+	require.Zero(t, big.NewInt(0).Cmp(OpenDelta()))
+	require.Zero(t, new(big.Int).Lsh(big.NewInt(1), 255).Cmp(ContractBalance()))
+}
+
+func TestActionConstantsReturnFreshValuesEachCall(t *testing.T) {
+	a := MsgSender()
+	a.SetBytes([]byte{0xff})
+	require.True(t, MsgSender().Equal(types.MustNewAddressFromHex("0x0000000000000000000000000000000000000001")), "mutating one MsgSender() call's result must not affect the next call")
+
+	d := OpenDelta()
+	d.Add(d, big.NewInt(1))
+	require.Zero(t, big.NewInt(0).Cmp(OpenDelta()), "mutating one OpenDelta() call's result must not affect the next call")
+}
