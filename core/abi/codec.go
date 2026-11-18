@@ -454,20 +454,21 @@ func encodeTupleValue(t Type, v any) ([]byte, error) {
 // decodeValue decodes a single static 32-byte ABI word into the same Go
 // type encodeValue expects for t. It only handles Kinds that are always
 // static and fit in one word: Bool, Uint, Int, Address, FixedBytes,
-// FunctionType.
+// FunctionType. Like Solidity's ABI decoder, it rejects words whose unused
+// bits are not the canonical padding (zero, or the sign extension for int).
 func decodeValue(t Type, word []byte) (any, error) {
 	if len(word) != 32 {
 		return nil, fmt.Errorf("%w: word must be 32 bytes, got %d", ErrByteLengthMismatch, len(word))
 	}
 	switch t.Kind {
 	case KindBool:
-		return decodeBool(word), nil
+		return decodeBool(word)
 	case KindAddress:
-		return decodeAddress(word), nil
+		return decodeAddress(word)
 	case KindFixedBytes:
-		return decodeFixedBytes(t.Size, word), nil
+		return decodeFixedBytes(t.Size, word)
 	case KindFunction:
-		return decodeFunction(word), nil
+		return decodeFunction(word)
 	case KindUint:
 		return decodeUint(t.Size, word)
 	case KindInt:
@@ -477,29 +478,58 @@ func decodeValue(t Type, word []byte) (any, error) {
 	}
 }
 
-func decodeBool(word []byte) bool {
-	return word[31] != 0
+func decodeBool(word []byte) (bool, error) {
+	if !allBytesEqual(word[:31], 0x00) || word[31] > 1 {
+		return false, fmt.Errorf("%w: bool word must be 0 or 1", ErrDirtyPadding)
+	}
+	return word[31] == 1, nil
 }
 
-func decodeAddress(word []byte) *types.Address {
-	return types.NewAddressFromBytes(word[32-types.AddressLength:])
+func decodeAddress(word []byte) (*types.Address, error) {
+	if !allBytesEqual(word[:32-types.AddressLength], 0x00) {
+		return nil, fmt.Errorf("%w: address word has non-zero high bytes", ErrDirtyPadding)
+	}
+	return types.NewAddressFromBytes(word[32-types.AddressLength:]), nil
 }
 
-func decodeFixedBytes(size int, word []byte) []byte {
+func decodeFixedBytes(size int, word []byte) ([]byte, error) {
+	if size < 1 || size > 32 {
+		return nil, fmt.Errorf("%w: bytes%d is not a standard ABI width", ErrUnsupportedKind, size)
+	}
+	if !allBytesEqual(word[size:], 0x00) {
+		return nil, fmt.Errorf("%w: bytes%d word has non-zero low bytes", ErrDirtyPadding, size)
+	}
 	b := make([]byte, size)
 	copy(b, word[:size])
-	return b
+	return b, nil
 }
 
-func decodeFunction(word []byte) []byte {
+func decodeFunction(word []byte) ([]byte, error) {
+	if !allBytesEqual(word[24:], 0x00) {
+		return nil, fmt.Errorf("%w: function word has non-zero low bytes", ErrDirtyPadding)
+	}
 	b := make([]byte, 24)
 	copy(b, word[:24])
-	return b
+	return b, nil
+}
+
+// allBytesEqual reports whether every byte of b is v.
+func allBytesEqual(b []byte, v byte) bool {
+	for _, x := range b {
+		if x != v {
+			return false
+		}
+	}
+	return true
 }
 
 // decodeUint decodes a 32-byte word into an unsigned integer, using the
-// same size<=64-native/size>64-*big.Int split as encodeUint.
+// same size<=64-native/size>64-*big.Int split as encodeUint. For native
+// sizes the bytes above the value must be zero.
 func decodeUint(size int, word []byte) (any, error) {
+	if size <= 64 && size%8 == 0 && size > 0 && !allBytesEqual(word[:32-size/8], 0x00) {
+		return nil, fmt.Errorf("%w: uint%d overflow: high bytes are non-zero", ErrIntegerOutOfRange, size)
+	}
 	switch size {
 	case 8:
 		return word[31], nil
@@ -525,8 +555,19 @@ func decodeUint(size int, word []byte) (any, error) {
 // decodeInt decodes a 32-byte two's complement word into a signed integer,
 // using the same size<=64-native/size>64-*big.Int split as encodeInt. An
 // int64's bit pattern is already two's complement, so the low 8 bytes can
-// be reinterpreted directly regardless of sign.
+// be reinterpreted directly regardless of sign. For native sizes the bytes
+// above the value must be its sign extension.
 func decodeInt(size int, word []byte) (any, error) {
+	if size <= 64 && size%8 == 0 && size > 0 {
+		valueStart := 32 - size/8
+		var ext byte
+		if word[valueStart]&0x80 != 0 {
+			ext = 0xff
+		}
+		if !allBytesEqual(word[:valueStart], ext) {
+			return nil, fmt.Errorf("%w: int%d overflow: high bytes are not a sign extension", ErrIntegerOutOfRange, size)
+		}
+	}
 	switch size {
 	case 8:
 		return int8(word[31]), nil

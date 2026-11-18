@@ -1,6 +1,7 @@
 package abi
 
 import (
+	"bytes"
 	"math/big"
 	"testing"
 
@@ -679,5 +680,32 @@ func FuzzEventDecodeCrashSafety(f *testing.F) {
 		// Must never panic, regardless of how many topics are given or
 		// how malformed data is: an error is a fine outcome for garbage input.
 		_, _ = e.Decode(toTopics(topicsRaw), data)
+	})
+}
+
+// go test -run '^$' -fuzz '^FuzzDecodeValueAcceptsOnlyCanonicalWords$' -fuzztime=10s ./core/abi
+func FuzzDecodeValueAcceptsOnlyCanonicalWords(f *testing.F) {
+	f.Add(make([]byte, 32))
+	f.Add(bytes.Repeat([]byte{0xff}, 32))
+	f.Add(append(make([]byte, 31), 0x01))
+	f.Add(append(make([]byte, 31), 0x02))
+	f.Add(append([]byte{0x01}, make([]byte, 31)...))
+	f.Add(append(bytes.Repeat([]byte{0xff}, 31), 0x7f))
+	f.Add(append(make([]byte, 12), bytes.Repeat([]byte{0xab}, 20)...))
+
+	kinds := []Type{Bool, Address, Uint8, Uint16, Uint24, Uint32, Uint64, Uint128, Uint256, Int8, Int16, Int24, Int32, Int64, Int128, Int256, Bytes1, Bytes4, Bytes20, Bytes31, Bytes32, FunctionType}
+
+	f.Fuzz(func(t *testing.T, raw []byte) {
+		word := make([]byte, 32)
+		copy(word, raw)
+		for _, typ := range kinds {
+			v, err := decodeValue(typ, word)
+			if err != nil {
+				continue
+			}
+			reencoded, err := encodeValue(typ, v)
+			require.NoError(t, err, "%s decoded but failed to re-encode", typ)
+			require.Equal(t, word, reencoded, "%s accepted a non-canonical word", typ)
+		}
 	})
 }

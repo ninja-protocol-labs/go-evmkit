@@ -276,3 +276,54 @@ func TestEventDecodeNoArgs(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, vals)
 }
+
+func TestEventDecodeRejectsDirtyIndexedAddressTopic(t *testing.T) {
+	e, err := ParseEvent("Transfer(address indexed from, address indexed to, uint256 value)")
+	require.NoError(t, err)
+
+	t0, _ := e.Topic0()
+	var dirtyFrom Topic
+	dirtyFrom[0] = 0x01
+	dirtyFrom[31] = 0x02
+	var cleanTo Topic
+	cleanTo[31] = 0x03
+	data, err := Pack(Types{Uint256}, big.NewInt(1))
+	require.NoError(t, err)
+
+	_, err = e.Decode([]Topic{t0, dirtyFrom, cleanTo}, data)
+	require.ErrorIs(t, err, ErrDirtyPadding)
+
+	var cleanFrom Topic
+	cleanFrom[31] = 0x02
+	vals, err := e.Decode([]Topic{t0, cleanFrom, cleanTo}, data)
+	require.NoError(t, err)
+	require.Len(t, vals, 3)
+}
+
+func TestEventDecodeRejectsDirtyIndexedBoolAndIntTopics(t *testing.T) {
+	e, err := ParseEvent("Flag(bool indexed on, int8 indexed delta)")
+	require.NoError(t, err)
+	t0, _ := e.Topic0()
+
+	var badBool Topic
+	badBool[31] = 0x02
+	var okInt Topic
+	_, err = e.Decode([]Topic{t0, badBool, okInt}, nil)
+	require.ErrorIs(t, err, ErrDirtyPadding)
+
+	var okBool Topic
+	okBool[31] = 0x01
+	var badInt Topic
+	badInt[31] = 0xff
+	_, err = e.Decode([]Topic{t0, okBool, badInt}, nil)
+	require.ErrorIs(t, err, ErrIntegerOutOfRange)
+
+	var negOneInt Topic
+	for i := range negOneInt {
+		negOneInt[i] = 0xff
+	}
+	vals, err := e.Decode([]Topic{t0, okBool, negOneInt}, nil)
+	require.NoError(t, err)
+	require.Equal(t, true, vals[0])
+	require.Equal(t, int8(-1), vals[1])
+}
