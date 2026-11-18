@@ -1,6 +1,7 @@
 package abi
 
 import (
+	"bytes"
 	"encoding/hex"
 	"math"
 	"math/big"
@@ -1429,4 +1430,116 @@ func TestUnpackDynamicArgs(t *testing.T) {
 	require.NoError(t, err)
 	require.Zero(t, big.NewInt(5).Cmp(got[0].(*big.Int)))
 	require.Equal(t, "hi", got[1])
+}
+
+func TestDecodeValueRejectsDirtyPadding(t *testing.T) {
+	cases := []struct {
+		name  string
+		typ   Type
+		dirty int
+		value byte
+		want  error
+	}{
+		{"boolTwo", Bool, 31, 0x02, ErrDirtyPadding},
+		{"boolHighByte", Bool, 0, 0x01, ErrDirtyPadding},
+		{"addressFirstByte", Address, 0, 0x01, ErrDirtyPadding},
+		{"addressLastPaddingByte", Address, 11, 0x80, ErrDirtyPadding},
+		{"bytes1SecondByte", Bytes1, 1, 0x01, ErrDirtyPadding},
+		{"bytes4FifthByte", Bytes4, 4, 0xff, ErrDirtyPadding},
+		{"bytes4LastByte", Bytes4, 31, 0x01, ErrDirtyPadding},
+		{"bytes31LastByte", Bytes31, 31, 0x01, ErrDirtyPadding},
+		{"functionByte24", FunctionType, 24, 0x01, ErrDirtyPadding},
+		{"functionLastByte", FunctionType, 31, 0x01, ErrDirtyPadding},
+		{"uint8HighByte", Uint8, 30, 0x01, ErrIntegerOutOfRange},
+		{"uint16FirstByte", Uint16, 0, 0x01, ErrIntegerOutOfRange},
+		{"uint32HighByte", Uint32, 27, 0x01, ErrIntegerOutOfRange},
+		{"uint64HighByte", Uint64, 23, 0x01, ErrIntegerOutOfRange},
+		{"int8PositiveHighByte", Int8, 30, 0x01, ErrIntegerOutOfRange},
+		{"int16PositiveFirstByte", Int16, 0, 0x80, ErrIntegerOutOfRange},
+		{"int32PositiveHighByte", Int32, 27, 0xff, ErrIntegerOutOfRange},
+		{"int64PositiveHighByte", Int64, 23, 0x01, ErrIntegerOutOfRange},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			word := make([]byte, 32)
+			word[c.dirty] = c.value
+			_, err := decodeValue(c.typ, word)
+			require.ErrorIs(t, err, c.want)
+		})
+	}
+}
+
+func TestDecodeIntRejectsBrokenSignExtension(t *testing.T) {
+	cases := []struct {
+		name string
+		typ  Type
+		word []byte
+	}{
+		{"int8NegativeValueZeroExtended", Int8, append(make([]byte, 31), 0xff)},
+		{"int16NegativeValueZeroExtended", Int16, append(make([]byte, 30), 0x80, 0x00)},
+		{"int32NegativeValueZeroExtended", Int32, append(make([]byte, 28), 0x80, 0x00, 0x00, 0x00)},
+		{"int64NegativeValueZeroExtended", Int64, append(make([]byte, 24), 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff)},
+		{"int8PositiveValueOneExtended", Int8, append(bytes.Repeat([]byte{0xff}, 31), 0x7f)},
+		{"int64PositiveValueOneExtended", Int64, append(bytes.Repeat([]byte{0xff}, 24), 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01)},
+		{"int16NegativeExtensionWithHole", Int16, append(append(bytes.Repeat([]byte{0xff}, 15), 0xfe), append(bytes.Repeat([]byte{0xff}, 14), 0x80, 0x00)...)},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			require.Len(t, c.word, 32)
+			_, err := decodeValue(c.typ, c.word)
+			require.ErrorIs(t, err, ErrIntegerOutOfRange)
+		})
+	}
+}
+
+func TestDecodeValueAcceptsCanonicalEdgeWords(t *testing.T) {
+	allFF := bytes.Repeat([]byte{0xff}, 32)
+
+	got, err := decodeValue(Int8, allFF)
+	require.NoError(t, err)
+	require.Equal(t, int8(-1), got)
+
+	got, err = decodeValue(Int64, allFF)
+	require.NoError(t, err)
+	require.Equal(t, int64(-1), got)
+
+	got, err = decodeValue(Int16, append(bytes.Repeat([]byte{0xff}, 30), 0x80, 0x00))
+	require.NoError(t, err)
+	require.Equal(t, int16(math.MinInt16), got)
+
+	got, err = decodeValue(Bool, append(make([]byte, 31), 0x01))
+	require.NoError(t, err)
+	require.Equal(t, true, got)
+
+	got, err = decodeValue(Bytes32, allFF)
+	require.NoError(t, err)
+	require.Equal(t, allFF, got)
+
+	got, err = decodeValue(Address, append(make([]byte, 12), bytes.Repeat([]byte{0xff}, 20)...))
+	require.NoError(t, err)
+	require.Equal(t, "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF", got.(*types.Address).String())
+
+	got, err = decodeValue(Bytes4, append([]byte{0xde, 0xad, 0xbe, 0xef}, make([]byte, 28)...))
+	require.NoError(t, err)
+	require.Equal(t, []byte{0xde, 0xad, 0xbe, 0xef}, got)
+}
+
+func TestUnpackRejectsDirtyPaddingInsideCompositeTypes(t *testing.T) {
+	dirtyAddress := append([]byte{0x01}, make([]byte, 31)...)
+
+	_, err := Unpack(Types{Uint256, Address}, append(make([]byte, 32), dirtyAddress...))
+	require.ErrorIs(t, err, ErrDirtyPadding)
+
+	_, err = Unpack(Types{Tuple(Address, Bool)}, append(dirtyAddress, make([]byte, 32)...))
+	require.ErrorIs(t, err, ErrDirtyPadding)
+
+	sliceData := append(append(append([]byte{}, make([]byte, 31)...), 0x20), append(make([]byte, 31), 0x01)...)
+	sliceData = append(sliceData, dirtyAddress...)
+	_, err = Unpack(Types{Slice(Address)}, sliceData)
+	require.ErrorIs(t, err, ErrDirtyPadding)
+
+	boolPair, err := Array(Bool, 2)
+	require.NoError(t, err)
+	_, err = Unpack(Types{boolPair}, append(append(make([]byte, 31), 0x01), append(make([]byte, 31), 0x02)...))
+	require.ErrorIs(t, err, ErrDirtyPadding)
 }

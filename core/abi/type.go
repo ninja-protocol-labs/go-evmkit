@@ -22,6 +22,7 @@ var (
 	ErrInvalidTypeString  = errors.New("abi: invalid type string")
 	ErrSelectorMismatch   = errors.New("abi: selector mismatch")
 	ErrTopicMismatch      = errors.New("abi: topic mismatch")
+	ErrDirtyPadding       = errors.New("abi: non-zero padding bits")
 )
 
 // Kind identifies which Solidity ABI type an Type represents.
