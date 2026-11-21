@@ -10,6 +10,7 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
+	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core"
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
@@ -213,20 +214,16 @@ func (s *Permit2Suite) SetupSuite() {
 	approveBuilder := tx.NewDynamicFeeBuilder()
 	approveBuilder.PriceBuffer(s.PriceBuffer)
 	approveBuilder.LimitBuffer(s.LimitBuffer)
-	unsignedApprove, err := s.erc20.CreateApprove(s.ctx, approveBuilder, s.token, s.from, s.contract, s.mintValue)
+	approveTx, approveHash, err := s.erc20.Approve(s.ctx, bind.NewTransactOptions(s.signer, approveBuilder), erc20.NewApproveRequest(s.token, s.contract, s.mintValue))
 	s.Require().NoError(err)
-	s.Require().NoError(unsignedApprove.Sign(s.signer))
-	s.totalFee.Add(s.totalFee, unsignedApprove.MaxFee())
-
-	approveHash, err := s.erc20.Approve(s.ctx, unsignedApprove)
-	s.Require().NoError(err)
+	s.totalFee.Add(s.totalFee, approveTx.MaxFee())
 
 	approveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, approveHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
 	s.Require().NoError(err)
 	s.Require().True(approveReceipt.Status, "approve transaction reverted")
 
 	s.Require().Eventually(func() bool {
-		a, err := s.erc20.Allowance(s.ctx, s.token, s.from, s.contract, rpc.BlockTagLatest)
+		a, err := s.erc20.Allowance(s.ctx, nil, erc20.NewAllowanceRequest(s.token, s.from, s.contract))
 		return err == nil && a.Cmp(s.mintValue) == 0
 	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "token allowance to permit2 not visible after approve")
 
@@ -240,7 +237,7 @@ func (s *Permit2Suite) SetupSuite() {
 
 func (s *Permit2Suite) TearDownSuite() {
 	if s.token != nil {
-		balance, err := s.erc20.BalanceOf(s.ctx, s.token, s.from, rpc.BlockTagLatest)
+		balance, err := s.erc20.BalanceOf(s.ctx, nil, erc20.NewBalanceOfRequest(s.token, s.from))
 		s.Require().NoError(err)
 		s.T().Logf("TearDownSuite: remaining balance")
 		s.T().Logf("\ttoken = %s", s.token.String())
@@ -470,7 +467,7 @@ func (s *Permit2Suite) Test04TransferFrom() {
 
 	amount := new(big.Int).Div(before.Amount, big.NewInt(2))
 
-	balancesBefore, err := s.erc20.TokenBalances(s.ctx, s.multicall, s.token, []*types.Address{s.from, s.spender}, false, rpc.BlockTagLatest)
+	balancesBefore, err := s.erc20.TokenBalances(s.ctx, nil, erc20.NewTokenBalancesRequest(s.multicall, s.token, []*types.Address{s.from, s.spender}, false))
 	s.Require().NoError(err)
 	fromBalanceBefore := balancesBefore.Addresses[0].Amount
 	toBalanceBefore := balancesBefore.Addresses[1].Amount
@@ -526,7 +523,7 @@ func (s *Permit2Suite) Test04TransferFrom() {
 	s.T().Logf("\texpiration = %s", allowance.Expiration.String())
 	s.T().Logf("\tnonce = %s", allowance.Nonce.String())
 
-	balancesAfter, err := s.erc20.TokenBalances(s.ctx, s.multicall, s.token, []*types.Address{s.from, s.spender}, false, rpc.BlockTagLatest)
+	balancesAfter, err := s.erc20.TokenBalances(s.ctx, nil, erc20.NewTokenBalancesRequest(s.multicall, s.token, []*types.Address{s.from, s.spender}, false))
 	s.Require().NoError(err)
 	fromBalanceAfter := balancesAfter.Addresses[0].Amount
 	toBalanceAfter := balancesAfter.Addresses[1].Amount
@@ -622,7 +619,7 @@ func (s *Permit2Suite) Test06TransferFromBatch() {
 	amount := new(big.Int).Div(before.Amount, big.NewInt(2))
 	transferDetails := []AllowanceTransferDetails{*NewAllowanceTransferDetails(s.from, s.spender, amount, s.token)}
 
-	balancesBefore, err := s.erc20.TokenBalances(s.ctx, s.multicall, s.token, []*types.Address{s.from, s.spender}, false, rpc.BlockTagLatest)
+	balancesBefore, err := s.erc20.TokenBalances(s.ctx, nil, erc20.NewTokenBalancesRequest(s.multicall, s.token, []*types.Address{s.from, s.spender}, false))
 	s.Require().NoError(err)
 	fromBalanceBefore := balancesBefore.Addresses[0].Amount
 	toBalanceBefore := balancesBefore.Addresses[1].Amount
@@ -678,7 +675,7 @@ func (s *Permit2Suite) Test06TransferFromBatch() {
 	s.T().Logf("\texpiration = %s", allowance.Expiration.String())
 	s.T().Logf("\tnonce = %s", allowance.Nonce.String())
 
-	balancesAfter, err := s.erc20.TokenBalances(s.ctx, s.multicall, s.token, []*types.Address{s.from, s.spender}, false, rpc.BlockTagLatest)
+	balancesAfter, err := s.erc20.TokenBalances(s.ctx, nil, erc20.NewTokenBalancesRequest(s.multicall, s.token, []*types.Address{s.from, s.spender}, false))
 	s.Require().NoError(err)
 	fromBalanceAfter := balancesAfter.Addresses[0].Amount
 	toBalanceAfter := balancesAfter.Addresses[1].Amount
@@ -849,7 +846,7 @@ func (s *Permit2Suite) Test09PermitTransferFrom() {
 	s.T().Logf("\tdeadline = %s", deadline.String())
 	s.T().Logf("\tspender = %s", s.spender.String())
 
-	balancesBefore, err := s.erc20.TokenBalances(s.ctx, s.multicall, s.token, []*types.Address{s.from, s.spender}, false, rpc.BlockTagLatest)
+	balancesBefore, err := s.erc20.TokenBalances(s.ctx, nil, erc20.NewTokenBalancesRequest(s.multicall, s.token, []*types.Address{s.from, s.spender}, false))
 	s.Require().NoError(err)
 	fromBalanceBefore := balancesBefore.Addresses[0].Amount
 	toBalanceBefore := balancesBefore.Addresses[1].Amount
@@ -888,7 +885,7 @@ func (s *Permit2Suite) Test09PermitTransferFrom() {
 	wantTo := new(big.Int).Add(toBalanceBefore, requestedAmount)
 	var balancesAfter *erc20.TokenBalances
 	s.Require().Eventually(func() bool {
-		b, err := s.erc20.TokenBalances(s.ctx, s.multicall, s.token, []*types.Address{s.from, s.spender}, false, rpc.BlockTagLatest)
+		b, err := s.erc20.TokenBalances(s.ctx, nil, erc20.NewTokenBalancesRequest(s.multicall, s.token, []*types.Address{s.from, s.spender}, false))
 		if err != nil || b.Addresses[0].Amount.Cmp(wantFrom) != 0 || b.Addresses[1].Amount.Cmp(wantTo) != 0 {
 			return false
 		}
@@ -925,7 +922,7 @@ func (s *Permit2Suite) Test10PermitWitnessTransferFrom() {
 	s.T().Logf("\twitness = 0x%x", witness.Bytes())
 	s.T().Logf("\twitnessTypeString = %s", witnessTypeString)
 
-	balancesBefore, err := s.erc20.TokenBalances(s.ctx, s.multicall, s.token, []*types.Address{s.from, s.spender}, false, rpc.BlockTagLatest)
+	balancesBefore, err := s.erc20.TokenBalances(s.ctx, nil, erc20.NewTokenBalancesRequest(s.multicall, s.token, []*types.Address{s.from, s.spender}, false))
 	s.Require().NoError(err)
 	fromBalanceBefore := balancesBefore.Addresses[0].Amount
 	toBalanceBefore := balancesBefore.Addresses[1].Amount
@@ -964,7 +961,7 @@ func (s *Permit2Suite) Test10PermitWitnessTransferFrom() {
 	wantTo := new(big.Int).Add(toBalanceBefore, requestedAmount)
 	var balancesAfter *erc20.TokenBalances
 	s.Require().Eventually(func() bool {
-		b, err := s.erc20.TokenBalances(s.ctx, s.multicall, s.token, []*types.Address{s.from, s.spender}, false, rpc.BlockTagLatest)
+		b, err := s.erc20.TokenBalances(s.ctx, nil, erc20.NewTokenBalancesRequest(s.multicall, s.token, []*types.Address{s.from, s.spender}, false))
 		if err != nil || b.Addresses[0].Amount.Cmp(wantFrom) != 0 || b.Addresses[1].Amount.Cmp(wantTo) != 0 {
 			return false
 		}
@@ -997,7 +994,7 @@ func (s *Permit2Suite) Test11PermitTransferFromBatch() {
 	s.T().Logf("\tdeadline = %s", deadline.String())
 	s.T().Logf("\tspender = %s", s.spender.String())
 
-	balancesBefore, err := s.erc20.TokenBalances(s.ctx, s.multicall, s.token, []*types.Address{s.from, s.spender}, false, rpc.BlockTagLatest)
+	balancesBefore, err := s.erc20.TokenBalances(s.ctx, nil, erc20.NewTokenBalancesRequest(s.multicall, s.token, []*types.Address{s.from, s.spender}, false))
 	s.Require().NoError(err)
 	fromBalanceBefore := balancesBefore.Addresses[0].Amount
 	toBalanceBefore := balancesBefore.Addresses[1].Amount
@@ -1036,7 +1033,7 @@ func (s *Permit2Suite) Test11PermitTransferFromBatch() {
 	wantTo := new(big.Int).Add(toBalanceBefore, requestedAmount)
 	var balancesAfter *erc20.TokenBalances
 	s.Require().Eventually(func() bool {
-		b, err := s.erc20.TokenBalances(s.ctx, s.multicall, s.token, []*types.Address{s.from, s.spender}, false, rpc.BlockTagLatest)
+		b, err := s.erc20.TokenBalances(s.ctx, nil, erc20.NewTokenBalancesRequest(s.multicall, s.token, []*types.Address{s.from, s.spender}, false))
 		if err != nil || b.Addresses[0].Amount.Cmp(wantFrom) != 0 || b.Addresses[1].Amount.Cmp(wantTo) != 0 {
 			return false
 		}
@@ -1073,7 +1070,7 @@ func (s *Permit2Suite) Test12PermitWitnessTransferFromBatch() {
 	s.T().Logf("\twitness = 0x%x", witness.Bytes())
 	s.T().Logf("\twitnessTypeString = %s", witnessTypeString)
 
-	balancesBefore, err := s.erc20.TokenBalances(s.ctx, s.multicall, s.token, []*types.Address{s.from, s.spender}, false, rpc.BlockTagLatest)
+	balancesBefore, err := s.erc20.TokenBalances(s.ctx, nil, erc20.NewTokenBalancesRequest(s.multicall, s.token, []*types.Address{s.from, s.spender}, false))
 	s.Require().NoError(err)
 	fromBalanceBefore := balancesBefore.Addresses[0].Amount
 	toBalanceBefore := balancesBefore.Addresses[1].Amount
@@ -1112,7 +1109,7 @@ func (s *Permit2Suite) Test12PermitWitnessTransferFromBatch() {
 	wantTo := new(big.Int).Add(toBalanceBefore, requestedAmount)
 	var balancesAfter *erc20.TokenBalances
 	s.Require().Eventually(func() bool {
-		b, err := s.erc20.TokenBalances(s.ctx, s.multicall, s.token, []*types.Address{s.from, s.spender}, false, rpc.BlockTagLatest)
+		b, err := s.erc20.TokenBalances(s.ctx, nil, erc20.NewTokenBalancesRequest(s.multicall, s.token, []*types.Address{s.from, s.spender}, false))
 		if err != nil || b.Addresses[0].Amount.Cmp(wantFrom) != 0 || b.Addresses[1].Amount.Cmp(wantTo) != 0 {
 			return false
 		}

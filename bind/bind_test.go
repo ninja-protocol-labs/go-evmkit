@@ -111,7 +111,8 @@ func TestCallNilTo(t *testing.T) {
 	defer srv.Close()
 
 	out, err := Call(t.Context(), rpc.NewClient(srv.URL), &CallOptions{}, nil, []byte{0x01})
-	require.ErrorIs(t, err, ErrNilTo)
+	require.ErrorIs(t, err, ErrInvalidRequest)
+	require.ErrorContains(t, err, "to is nil")
 	require.Nil(t, out)
 	require.Zero(t, hits)
 }
@@ -168,11 +169,13 @@ func TestTransactOptionsFrom(t *testing.T) {
 
 	var nilOpts *TransactOptions
 	from, err := nilOpts.From()
-	require.ErrorIs(t, err, ErrNilTransactOptions)
+	require.ErrorIs(t, err, ErrInvalidOptions)
+	require.ErrorContains(t, err, "options is nil")
 	require.Nil(t, from)
 
 	from, err = (&TransactOptions{}).From()
-	require.ErrorIs(t, err, ErrNilSigner)
+	require.ErrorIs(t, err, ErrInvalidOptions)
+	require.ErrorContains(t, err, "signer is nil")
 	require.Nil(t, from)
 
 	from, err = (&TransactOptions{Signer: key}).From()
@@ -189,12 +192,12 @@ func TestTransactRejectsIncompleteOptions(t *testing.T) {
 	cases := []struct {
 		name string
 		opts *TransactOptions
-		want error
+		want string
 	}{
-		{"nil options", nil, ErrNilTransactOptions},
-		{"nil signer", &TransactOptions{Builder: tx.NewDynamicFeeBuilder()}, ErrNilSigner},
-		{"nil builder", &TransactOptions{Signer: key}, ErrNilBuilder},
-		{"nil signer and builder", &TransactOptions{}, ErrNilSigner},
+		{"nil options", nil, "options is nil"},
+		{"nil signer", &TransactOptions{Builder: tx.NewDynamicFeeBuilder()}, "signer is nil"},
+		{"nil builder", &TransactOptions{Signer: key}, "builder is nil"},
+		{"nil signer and builder", &TransactOptions{}, "signer is nil"},
 	}
 
 	for _, tc := range cases {
@@ -206,7 +209,8 @@ func TestTransactRejectsIncompleteOptions(t *testing.T) {
 			defer srv.Close()
 
 			signed, hash, err := Transact(t.Context(), rpc.NewClient(srv.URL), tc.opts, to, []byte{0x01})
-			require.ErrorIs(t, err, tc.want)
+			require.ErrorIs(t, err, ErrInvalidOptions)
+			require.ErrorContains(t, err, tc.want)
 			require.Nil(t, signed)
 			require.Nil(t, hash)
 			require.Zero(t, hits)
@@ -525,12 +529,14 @@ func TestNewTransactOptions(t *testing.T) {
 	require.True(t, from.Equal(core.PubkeyToAddress(key.PublicKey())))
 
 	signed, hash, err := Transact(t.Context(), rpc.NewClient("http://127.0.0.1:0"), NewTransactOptions(nil, builder), nil, nil)
-	require.ErrorIs(t, err, ErrNilSigner)
+	require.ErrorIs(t, err, ErrInvalidOptions)
+	require.ErrorContains(t, err, "signer is nil")
 	require.Nil(t, signed)
 	require.Nil(t, hash)
 
 	signed, hash, err = Transact(t.Context(), rpc.NewClient("http://127.0.0.1:0"), NewTransactOptions(key, nil), nil, nil)
-	require.ErrorIs(t, err, ErrNilBuilder)
+	require.ErrorIs(t, err, ErrInvalidOptions)
+	require.ErrorContains(t, err, "builder is nil")
 	require.Nil(t, signed)
 	require.Nil(t, hash)
 }

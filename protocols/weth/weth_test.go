@@ -10,9 +10,11 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
+	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
+	"github.com/ninja-protocol-labs/go-evmkit/standards/erc20"
 	"github.com/ninja-protocol-labs/go-evmkit/standards/multicall3"
 	"github.com/ninja-protocol-labs/go-evmkit/tx"
 )
@@ -117,23 +119,23 @@ func (s *WETHSuite) TearDownSuite() {
 }
 
 func (s *WETHSuite) Test01ReadMethods() {
-	name, err := s.w.Name(s.ctx, s.contract, rpc.BlockTagLatest)
+	name, err := s.w.Name(s.ctx, nil, erc20.NewNameRequest(s.contract))
 	s.Require().NoError(err)
 	s.T().Logf("name: %s", name)
 
-	symbol, err := s.w.Symbol(s.ctx, s.contract, rpc.BlockTagLatest)
+	symbol, err := s.w.Symbol(s.ctx, nil, erc20.NewSymbolRequest(s.contract))
 	s.Require().NoError(err)
 	s.T().Logf("symbol: %s", symbol)
 
-	decimals, err := s.w.Decimals(s.ctx, s.contract, rpc.BlockTagLatest)
+	decimals, err := s.w.Decimals(s.ctx, nil, erc20.NewDecimalsRequest(s.contract))
 	s.Require().NoError(err)
 	s.Require().Equal(uint8(18), decimals)
 
-	totalSupply, err := s.w.TotalSupply(s.ctx, s.contract, rpc.BlockTagLatest)
+	totalSupply, err := s.w.TotalSupply(s.ctx, nil, erc20.NewTotalSupplyRequest(s.contract))
 	s.Require().NoError(err)
 	s.T().Logf("totalSupply: %s", totalSupply)
 
-	balances, err := s.w.TokenBalances(s.ctx, s.multicall, s.contract, []*types.Address{s.from, s.spender}, false, rpc.BlockTagLatest)
+	balances, err := s.w.TokenBalances(s.ctx, nil, erc20.NewTokenBalancesRequest(s.multicall, s.contract, []*types.Address{s.from, s.spender}, false))
 	s.Require().NoError(err)
 	for _, ab := range balances.Addresses {
 		s.T().Logf("balance of %s: %s", ab.Address, ab.Amount)
@@ -169,19 +171,16 @@ func (s *WETHSuite) Test02Deposit() {
 
 	var balance *big.Int
 	s.Require().Eventually(func() bool {
-		balance, err = s.w.BalanceOf(s.ctx, s.contract, s.from, rpc.BlockTagLatest)
+		balance, err = s.w.BalanceOf(s.ctx, nil, erc20.NewBalanceOfRequest(s.contract, s.from))
 		return err == nil && s.depositValue.Cmp(balance) == 0
 	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "balance not visible after deposit")
 }
 
 func (s *WETHSuite) Test03Approve() {
-	unsigned, err := s.w.CreateApprove(s.ctx, tx.NewDynamicFeeBuilder(), s.contract, s.from, s.spender, s.depositValue)
+	approveTx, hash, err := s.w.Approve(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), erc20.NewApproveRequest(s.contract, s.spender, s.depositValue))
 	s.Require().NoError(err)
-	s.Require().NoError(unsigned.Sign(s.signer))
-	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
+	s.totalFee.Add(s.totalFee, approveTx.MaxFee())
 
-	hash, err := s.w.Approve(s.ctx, unsigned)
-	s.Require().NoError(err)
 	s.T().Logf("approve: broadcast tx %s", hash)
 
 	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
@@ -191,19 +190,16 @@ func (s *WETHSuite) Test03Approve() {
 
 	var allowance *big.Int
 	s.Require().Eventually(func() bool {
-		allowance, err = s.w.Allowance(s.ctx, s.contract, s.from, s.spender, rpc.BlockTagLatest)
+		allowance, err = s.w.Allowance(s.ctx, nil, erc20.NewAllowanceRequest(s.contract, s.from, s.spender))
 		return err == nil && s.depositValue.Cmp(allowance) == 0
 	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "allowance not visible after approve")
 }
 
 func (s *WETHSuite) Test04TransferFrom() {
-	unsigned, err := s.w.CreateTransferFrom(s.ctx, tx.NewDynamicFeeBuilder(), s.contract, s.spender, s.from, s.spender, s.depositValue)
+	transferFromTx, hash, err := s.w.TransferFrom(s.ctx, bind.NewTransactOptions(s.spenderSigner, tx.NewDynamicFeeBuilder()), erc20.NewTransferFromRequest(s.contract, s.from, s.spender, s.depositValue))
 	s.Require().NoError(err)
-	s.Require().NoError(unsigned.Sign(s.spenderSigner))
-	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
+	s.totalFee.Add(s.totalFee, transferFromTx.MaxFee())
 
-	hash, err := s.w.TransferFrom(s.ctx, unsigned)
-	s.Require().NoError(err)
 	s.T().Logf("transferFrom: broadcast tx %s", hash)
 
 	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
@@ -213,15 +209,15 @@ func (s *WETHSuite) Test04TransferFrom() {
 
 	var fromBalance, spenderBalance, allowance *big.Int
 	s.Require().Eventually(func() bool {
-		fromBalance, err = s.w.BalanceOf(s.ctx, s.contract, s.from, rpc.BlockTagLatest)
+		fromBalance, err = s.w.BalanceOf(s.ctx, nil, erc20.NewBalanceOfRequest(s.contract, s.from))
 		if err != nil {
 			return false
 		}
-		spenderBalance, err = s.w.BalanceOf(s.ctx, s.contract, s.spender, rpc.BlockTagLatest)
+		spenderBalance, err = s.w.BalanceOf(s.ctx, nil, erc20.NewBalanceOfRequest(s.contract, s.spender))
 		if err != nil {
 			return false
 		}
-		allowance, err = s.w.Allowance(s.ctx, s.contract, s.from, s.spender, rpc.BlockTagLatest)
+		allowance, err = s.w.Allowance(s.ctx, nil, erc20.NewAllowanceRequest(s.contract, s.from, s.spender))
 		if err != nil {
 			return false
 		}
@@ -230,13 +226,10 @@ func (s *WETHSuite) Test04TransferFrom() {
 }
 
 func (s *WETHSuite) Test05Transfer() {
-	unsigned, err := s.w.CreateTransfer(s.ctx, tx.NewDynamicFeeBuilder(), s.contract, s.spender, s.from, s.depositValue)
+	transferTx, hash, err := s.w.Transfer(s.ctx, bind.NewTransactOptions(s.spenderSigner, tx.NewDynamicFeeBuilder()), erc20.NewTransferRequest(s.contract, s.from, s.depositValue))
 	s.Require().NoError(err)
-	s.Require().NoError(unsigned.Sign(s.spenderSigner))
-	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
+	s.totalFee.Add(s.totalFee, transferTx.MaxFee())
 
-	hash, err := s.w.Transfer(s.ctx, unsigned)
-	s.Require().NoError(err)
 	s.T().Logf("transfer: broadcast tx %s", hash)
 
 	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
@@ -246,11 +239,11 @@ func (s *WETHSuite) Test05Transfer() {
 
 	var spenderBalance, fromBalance *big.Int
 	s.Require().Eventually(func() bool {
-		spenderBalance, err = s.w.BalanceOf(s.ctx, s.contract, s.spender, rpc.BlockTagLatest)
+		spenderBalance, err = s.w.BalanceOf(s.ctx, nil, erc20.NewBalanceOfRequest(s.contract, s.spender))
 		if err != nil {
 			return false
 		}
-		fromBalance, err = s.w.BalanceOf(s.ctx, s.contract, s.from, rpc.BlockTagLatest)
+		fromBalance, err = s.w.BalanceOf(s.ctx, nil, erc20.NewBalanceOfRequest(s.contract, s.from))
 		if err != nil {
 			return false
 		}
@@ -287,13 +280,13 @@ func (s *WETHSuite) Test06Withdraw() {
 
 	var balance *big.Int
 	s.Require().Eventually(func() bool {
-		balance, err = s.w.BalanceOf(s.ctx, s.contract, s.from, rpc.BlockTagLatest)
+		balance, err = s.w.BalanceOf(s.ctx, nil, erc20.NewBalanceOfRequest(s.contract, s.from))
 		return err == nil && balance.Sign() == 0
 	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "balance not visible after withdraw")
 }
 
 func (s *WETHSuite) Test07WithdrawInsufficientBalance() {
-	balance, err := s.w.BalanceOf(s.ctx, s.contract, s.spender, rpc.BlockTagLatest)
+	balance, err := s.w.BalanceOf(s.ctx, nil, erc20.NewBalanceOfRequest(s.contract, s.spender))
 	s.Require().NoError(err)
 	s.Require().Zero(balance.Sign(), "spender must hold no WETH for this revert case")
 

@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/standards/deploy"
 	"github.com/ninja-protocol-labs/go-evmkit/standards/eip712"
@@ -230,7 +231,7 @@ func (s *NFPMSuite) SetupSuite() {
 
 func (s *NFPMSuite) TearDownSuite() {
 	if s.tokenA != nil && s.tokenB != nil {
-		balances, err := s.erc20.AddressBalances(s.ctx, s.multicall, s.from, []*types.Address{s.tokenA, s.tokenB}, false, rpc.BlockTagLatest)
+		balances, err := s.erc20.AddressBalances(s.ctx, nil, erc20.NewAddressBalancesRequest(s.multicall, s.from, []*types.Address{s.tokenA, s.tokenB}, false))
 		s.Require().NoError(err)
 
 		tokenBurnFn := abi.NewFunction("burn", abi.NewTypes(abi.Address, abi.Uint256), nil)
@@ -383,16 +384,13 @@ func (s *NFPMSuite) Test04Mint() {
 		builder := tx.NewDynamicFeeBuilder()
 		builder.PriceBuffer(150)
 		builder.LimitBuffer(300)
-		unsignedApprove, err := s.erc20.CreateApprove(s.ctx, builder, token, s.from, s.nfpm, amount)
+		approveTx, approveHash, err := s.erc20.Approve(s.ctx, bind.NewTransactOptions(s.signer, builder), erc20.NewApproveRequest(token, s.nfpm, amount))
 		s.Require().NoError(err)
-		s.Require().NoError(unsignedApprove.Sign(s.signer))
 		s.mu.Lock()
-		s.totalFee.Add(s.totalFee, unsignedApprove.MaxFee())
+		s.totalFee.Add(s.totalFee, approveTx.MaxFee())
 		s.mu.Unlock()
-		s.T().Logf("Test04Mint: signed approve of %s (nonce %d, maxFee %s)", token, unsignedApprove.AddressNonce(), unsignedApprove.MaxFee())
+		s.T().Logf("Test04Mint: signed approve of %s (nonce %d, maxFee %s)", token, approveTx.AddressNonce(), approveTx.MaxFee())
 
-		approveHash, err := s.erc20.Approve(s.ctx, unsignedApprove)
-		s.Require().NoError(err)
 		s.T().Logf("Test04Mint: approve %s to spend %s of %s, broadcast tx %s", s.nfpm, amount, token, approveHash)
 
 		approveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, approveHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
@@ -400,7 +398,7 @@ func (s *NFPMSuite) Test04Mint() {
 		s.Require().True(approveReceipt.Status, "approve transaction reverted")
 		var allowance *big.Int
 		s.Require().Eventually(func() bool {
-			allowance, err = s.erc20.Allowance(s.ctx, token, s.from, s.nfpm, rpc.BlockTagLatest)
+			allowance, err = s.erc20.Allowance(s.ctx, nil, erc20.NewAllowanceRequest(token, s.from, s.nfpm))
 			return err == nil && amount.Cmp(allowance) == 0
 		}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "allowance not visible after approve")
 		s.T().Logf("Test04Mint: approve of %s confirmed in block %d, allowance now %s", token, approveReceipt.BlockNumber, allowance)
@@ -514,16 +512,13 @@ func (s *NFPMSuite) Test06IncreaseLiquidity() {
 		builder := tx.NewDynamicFeeBuilder()
 		builder.PriceBuffer(150)
 		builder.LimitBuffer(300)
-		unsignedApprove, err := s.erc20.CreateApprove(s.ctx, builder, token, s.from, s.nfpm, amount)
+		approveTx, approveHash, err := s.erc20.Approve(s.ctx, bind.NewTransactOptions(s.signer, builder), erc20.NewApproveRequest(token, s.nfpm, amount))
 		s.Require().NoError(err)
-		s.Require().NoError(unsignedApprove.Sign(s.signer))
 		s.mu.Lock()
-		s.totalFee.Add(s.totalFee, unsignedApprove.MaxFee())
+		s.totalFee.Add(s.totalFee, approveTx.MaxFee())
 		s.mu.Unlock()
-		s.T().Logf("Test06IncreaseLiquidity: signed approve of %s (nonce %d, maxFee %s)", token, unsignedApprove.AddressNonce(), unsignedApprove.MaxFee())
+		s.T().Logf("Test06IncreaseLiquidity: signed approve of %s (nonce %d, maxFee %s)", token, approveTx.AddressNonce(), approveTx.MaxFee())
 
-		approveHash, err := s.erc20.Approve(s.ctx, unsignedApprove)
-		s.Require().NoError(err)
 		s.T().Logf("Test06IncreaseLiquidity: approve %s to spend %s of %s, broadcast tx %s", s.nfpm, amount, token, approveHash)
 
 		approveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, approveHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
@@ -531,7 +526,7 @@ func (s *NFPMSuite) Test06IncreaseLiquidity() {
 		s.Require().True(approveReceipt.Status, "approve transaction reverted")
 		var allowance *big.Int
 		s.Require().Eventually(func() bool {
-			allowance, err = s.erc20.Allowance(s.ctx, token, s.from, s.nfpm, rpc.BlockTagLatest)
+			allowance, err = s.erc20.Allowance(s.ctx, nil, erc20.NewAllowanceRequest(token, s.from, s.nfpm))
 			return err == nil && amount.Cmp(allowance) == 0
 		}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "allowance not visible after approve")
 		s.T().Logf("Test06IncreaseLiquidity: approve of %s confirmed in block %d, allowance now %s", token, approveReceipt.BlockNumber, allowance)
@@ -777,16 +772,13 @@ func (s *NFPMSuite) Test11Permit() {
 		builder := tx.NewDynamicFeeBuilder()
 		builder.PriceBuffer(150)
 		builder.LimitBuffer(300)
-		unsignedApprove, err := s.erc20.CreateApprove(s.ctx, builder, token, s.from, s.nfpm, amount)
+		approveTx, approveHash, err := s.erc20.Approve(s.ctx, bind.NewTransactOptions(s.signer, builder), erc20.NewApproveRequest(token, s.nfpm, amount))
 		s.Require().NoError(err)
-		s.Require().NoError(unsignedApprove.Sign(s.signer))
 		s.mu.Lock()
-		s.totalFee.Add(s.totalFee, unsignedApprove.MaxFee())
+		s.totalFee.Add(s.totalFee, approveTx.MaxFee())
 		s.mu.Unlock()
-		s.T().Logf("Test11Permit: signed approve of %s (nonce %d, maxFee %s)", token, unsignedApprove.AddressNonce(), unsignedApprove.MaxFee())
+		s.T().Logf("Test11Permit: signed approve of %s (nonce %d, maxFee %s)", token, approveTx.AddressNonce(), approveTx.MaxFee())
 
-		approveHash, err := s.erc20.Approve(s.ctx, unsignedApprove)
-		s.Require().NoError(err)
 		s.T().Logf("Test11Permit: approve %s to spend %s of %s, broadcast tx %s", s.nfpm, amount, token, approveHash)
 
 		approveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, approveHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
@@ -794,7 +786,7 @@ func (s *NFPMSuite) Test11Permit() {
 		s.Require().True(approveReceipt.Status, "approve transaction reverted")
 		var allowance *big.Int
 		s.Require().Eventually(func() bool {
-			allowance, err = s.erc20.Allowance(s.ctx, token, s.from, s.nfpm, rpc.BlockTagLatest)
+			allowance, err = s.erc20.Allowance(s.ctx, nil, erc20.NewAllowanceRequest(token, s.from, s.nfpm))
 			return err == nil && amount.Cmp(allowance) == 0
 		}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "allowance not visible after approve")
 		s.T().Logf("Test11Permit: approve of %s confirmed in block %d, allowance now %s", token, approveReceipt.BlockNumber, allowance)

@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/standards/deploy"
 	"github.com/ninja-protocol-labs/go-evmkit/standards/erc20"
@@ -247,7 +248,7 @@ func (s *QuoterLifeCycleSuite) SetupSuite() {
 
 func (s *QuoterLifeCycleSuite) TearDownSuite() {
 	if s.tokenA != nil && s.tokenB != nil && s.tokenC != nil {
-		balances, err := s.erc20.AddressBalances(s.ctx, s.multicall, s.from, []*types.Address{s.tokenA, s.tokenB, s.tokenC}, false, rpc.BlockTagLatest)
+		balances, err := s.erc20.AddressBalances(s.ctx, nil, erc20.NewAddressBalancesRequest(s.multicall, s.from, []*types.Address{s.tokenA, s.tokenB, s.tokenC}, false))
 		s.Require().NoError(err)
 
 		tokenBurnFn := abi.NewFunction("burn", abi.NewTypes(abi.Address, abi.Uint256), nil)
@@ -416,16 +417,13 @@ func (s *QuoterLifeCycleSuite) Test03Mint() {
 		builder := tx.NewDynamicFeeBuilder()
 		builder.PriceBuffer(150)
 		builder.LimitBuffer(300)
-		unsignedApprove, err := s.erc20.CreateApprove(s.ctx, builder, token, s.from, s.nfpm, amount)
+		approveTx, approveHash, err := s.erc20.Approve(s.ctx, bind.NewTransactOptions(s.signer, builder), erc20.NewApproveRequest(token, s.nfpm, amount))
 		s.Require().NoError(err)
-		s.Require().NoError(unsignedApprove.Sign(s.signer))
 		s.mu.Lock()
-		s.totalFee.Add(s.totalFee, unsignedApprove.MaxFee())
+		s.totalFee.Add(s.totalFee, approveTx.MaxFee())
 		s.mu.Unlock()
-		s.T().Logf("Test03Mint: signed approve of %s (nonce %d, maxFee %s)", token, unsignedApprove.AddressNonce(), unsignedApprove.MaxFee())
+		s.T().Logf("Test03Mint: signed approve of %s (nonce %d, maxFee %s)", token, approveTx.AddressNonce(), approveTx.MaxFee())
 
-		approveHash, err := s.erc20.Approve(s.ctx, unsignedApprove)
-		s.Require().NoError(err)
 		s.T().Logf("Test03Mint: approve %s to spend %s of %s, broadcast tx %s", s.nfpm, amount, token, approveHash)
 
 		approveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, approveHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
@@ -433,7 +431,7 @@ func (s *QuoterLifeCycleSuite) Test03Mint() {
 		s.Require().True(approveReceipt.Status, "approve transaction reverted")
 		var allowance *big.Int
 		s.Require().Eventually(func() bool {
-			allowance, err = s.erc20.Allowance(s.ctx, token, s.from, s.nfpm, rpc.BlockTagLatest)
+			allowance, err = s.erc20.Allowance(s.ctx, nil, erc20.NewAllowanceRequest(token, s.from, s.nfpm))
 			return err == nil && amount.Cmp(allowance) == 0
 		}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "allowance not visible after approve")
 		s.T().Logf("Test03Mint: approve of %s confirmed in block %d, allowance now %s", token, approveReceipt.BlockNumber, allowance)
@@ -495,19 +493,16 @@ func (s *QuoterLifeCycleSuite) Test04QuoteExactInputSingleMatchesRouterPreview()
 	builder := tx.NewDynamicFeeBuilder()
 	builder.PriceBuffer(150)
 	builder.LimitBuffer(300)
-	unsignedApprove, err := s.erc20.CreateApprove(s.ctx, builder, s.tokenA, s.from, s.router, amountIn)
+	approveTx, approveHash, err := s.erc20.Approve(s.ctx, bind.NewTransactOptions(s.signer, builder), erc20.NewApproveRequest(s.tokenA, s.router, amountIn))
 	s.Require().NoError(err)
-	s.Require().NoError(unsignedApprove.Sign(s.signer))
 	s.mu.Lock()
-	s.totalFee.Add(s.totalFee, unsignedApprove.MaxFee())
+	s.totalFee.Add(s.totalFee, approveTx.MaxFee())
 	s.mu.Unlock()
-	approveHash, err := s.erc20.Approve(s.ctx, unsignedApprove)
-	s.Require().NoError(err)
 	approveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, approveHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
 	s.Require().NoError(err)
 	s.Require().True(approveReceipt.Status, "approve transaction reverted")
 	s.Require().Eventually(func() bool {
-		allowance, err := s.erc20.Allowance(s.ctx, s.tokenA, s.from, s.router, rpc.BlockTagLatest)
+		allowance, err := s.erc20.Allowance(s.ctx, nil, erc20.NewAllowanceRequest(s.tokenA, s.from, s.router))
 		return err == nil && amountIn.Cmp(allowance) == 0
 	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "allowance not visible after approve")
 	s.T().Logf("Test04QuoteExactInputSingleMatchesRouterPreview: approve confirmed in block %d", approveReceipt.BlockNumber)
@@ -533,19 +528,16 @@ func (s *QuoterLifeCycleSuite) Test05QuoteExactInputSingleMatchesActualSwap() {
 	builder := tx.NewDynamicFeeBuilder()
 	builder.PriceBuffer(150)
 	builder.LimitBuffer(300)
-	unsignedApprove, err := s.erc20.CreateApprove(s.ctx, builder, s.tokenA, s.from, s.router, amountIn)
+	approveTx, approveHash, err := s.erc20.Approve(s.ctx, bind.NewTransactOptions(s.signer, builder), erc20.NewApproveRequest(s.tokenA, s.router, amountIn))
 	s.Require().NoError(err)
-	s.Require().NoError(unsignedApprove.Sign(s.signer))
 	s.mu.Lock()
-	s.totalFee.Add(s.totalFee, unsignedApprove.MaxFee())
+	s.totalFee.Add(s.totalFee, approveTx.MaxFee())
 	s.mu.Unlock()
-	approveHash, err := s.erc20.Approve(s.ctx, unsignedApprove)
-	s.Require().NoError(err)
 	approveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, approveHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
 	s.Require().NoError(err)
 	s.Require().True(approveReceipt.Status, "approve transaction reverted")
 	s.Require().Eventually(func() bool {
-		allowance, err := s.erc20.Allowance(s.ctx, s.tokenA, s.from, s.router, rpc.BlockTagLatest)
+		allowance, err := s.erc20.Allowance(s.ctx, nil, erc20.NewAllowanceRequest(s.tokenA, s.from, s.router))
 		return err == nil && amountIn.Cmp(allowance) == 0
 	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "allowance not visible after approve")
 	s.T().Logf("Test05QuoteExactInputSingleMatchesActualSwap: approve confirmed in block %d", approveReceipt.BlockNumber)
@@ -600,19 +592,16 @@ func (s *QuoterLifeCycleSuite) Test06QuoteExactOutputSingleMatchesRouterPreview(
 	builder := tx.NewDynamicFeeBuilder()
 	builder.PriceBuffer(150)
 	builder.LimitBuffer(300)
-	unsignedApprove, err := s.erc20.CreateApprove(s.ctx, builder, s.tokenB, s.from, s.router, approveCap)
+	approveTx, approveHash, err := s.erc20.Approve(s.ctx, bind.NewTransactOptions(s.signer, builder), erc20.NewApproveRequest(s.tokenB, s.router, approveCap))
 	s.Require().NoError(err)
-	s.Require().NoError(unsignedApprove.Sign(s.signer))
 	s.mu.Lock()
-	s.totalFee.Add(s.totalFee, unsignedApprove.MaxFee())
+	s.totalFee.Add(s.totalFee, approveTx.MaxFee())
 	s.mu.Unlock()
-	approveHash, err := s.erc20.Approve(s.ctx, unsignedApprove)
-	s.Require().NoError(err)
 	approveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, approveHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
 	s.Require().NoError(err)
 	s.Require().True(approveReceipt.Status, "approve transaction reverted")
 	s.Require().Eventually(func() bool {
-		allowance, err := s.erc20.Allowance(s.ctx, s.tokenB, s.from, s.router, rpc.BlockTagLatest)
+		allowance, err := s.erc20.Allowance(s.ctx, nil, erc20.NewAllowanceRequest(s.tokenB, s.from, s.router))
 		return err == nil && approveCap.Cmp(allowance) == 0
 	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "allowance not visible after approve")
 	s.T().Logf("Test06QuoteExactOutputSingleMatchesRouterPreview: approve confirmed in block %d", approveReceipt.BlockNumber)
@@ -639,19 +628,16 @@ func (s *QuoterLifeCycleSuite) Test07QuoteExactOutputSingleMatchesActualSwap() {
 	builder := tx.NewDynamicFeeBuilder()
 	builder.PriceBuffer(150)
 	builder.LimitBuffer(300)
-	unsignedApprove, err := s.erc20.CreateApprove(s.ctx, builder, s.tokenB, s.from, s.router, approveCap)
+	approveTx, approveHash, err := s.erc20.Approve(s.ctx, bind.NewTransactOptions(s.signer, builder), erc20.NewApproveRequest(s.tokenB, s.router, approveCap))
 	s.Require().NoError(err)
-	s.Require().NoError(unsignedApprove.Sign(s.signer))
 	s.mu.Lock()
-	s.totalFee.Add(s.totalFee, unsignedApprove.MaxFee())
+	s.totalFee.Add(s.totalFee, approveTx.MaxFee())
 	s.mu.Unlock()
-	approveHash, err := s.erc20.Approve(s.ctx, unsignedApprove)
-	s.Require().NoError(err)
 	approveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, approveHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
 	s.Require().NoError(err)
 	s.Require().True(approveReceipt.Status, "approve transaction reverted")
 	s.Require().Eventually(func() bool {
-		allowance, err := s.erc20.Allowance(s.ctx, s.tokenB, s.from, s.router, rpc.BlockTagLatest)
+		allowance, err := s.erc20.Allowance(s.ctx, nil, erc20.NewAllowanceRequest(s.tokenB, s.from, s.router))
 		return err == nil && approveCap.Cmp(allowance) == 0
 	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "allowance not visible after approve")
 	s.T().Logf("Test07QuoteExactOutputSingleMatchesActualSwap: approve confirmed in block %d", approveReceipt.BlockNumber)
@@ -755,16 +741,13 @@ func (s *QuoterLifeCycleSuite) Test09MintBC() {
 		builder := tx.NewDynamicFeeBuilder()
 		builder.PriceBuffer(150)
 		builder.LimitBuffer(300)
-		unsignedApprove, err := s.erc20.CreateApprove(s.ctx, builder, token, s.from, s.nfpm, amount)
+		approveTx, approveHash, err := s.erc20.Approve(s.ctx, bind.NewTransactOptions(s.signer, builder), erc20.NewApproveRequest(token, s.nfpm, amount))
 		s.Require().NoError(err)
-		s.Require().NoError(unsignedApprove.Sign(s.signer))
 		s.mu.Lock()
-		s.totalFee.Add(s.totalFee, unsignedApprove.MaxFee())
+		s.totalFee.Add(s.totalFee, approveTx.MaxFee())
 		s.mu.Unlock()
-		s.T().Logf("Test09MintBC: signed approve of %s (nonce %d, maxFee %s)", token, unsignedApprove.AddressNonce(), unsignedApprove.MaxFee())
+		s.T().Logf("Test09MintBC: signed approve of %s (nonce %d, maxFee %s)", token, approveTx.AddressNonce(), approveTx.MaxFee())
 
-		approveHash, err := s.erc20.Approve(s.ctx, unsignedApprove)
-		s.Require().NoError(err)
 		s.T().Logf("Test09MintBC: approve %s to spend %s of %s, broadcast tx %s", s.nfpm, amount, token, approveHash)
 
 		approveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, approveHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
@@ -772,7 +755,7 @@ func (s *QuoterLifeCycleSuite) Test09MintBC() {
 		s.Require().True(approveReceipt.Status, "approve transaction reverted")
 		var allowance *big.Int
 		s.Require().Eventually(func() bool {
-			allowance, err = s.erc20.Allowance(s.ctx, token, s.from, s.nfpm, rpc.BlockTagLatest)
+			allowance, err = s.erc20.Allowance(s.ctx, nil, erc20.NewAllowanceRequest(token, s.from, s.nfpm))
 			return err == nil && amount.Cmp(allowance) == 0
 		}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "allowance not visible after approve")
 		s.T().Logf("Test09MintBC: approve of %s confirmed in block %d, allowance now %s", token, approveReceipt.BlockNumber, allowance)
@@ -836,19 +819,16 @@ func (s *QuoterLifeCycleSuite) Test10QuoteExactInputMatchesActualMultihopSwap() 
 	builder := tx.NewDynamicFeeBuilder()
 	builder.PriceBuffer(150)
 	builder.LimitBuffer(300)
-	unsignedApprove, err := s.erc20.CreateApprove(s.ctx, builder, s.tokenA, s.from, s.router, amountIn)
+	approveTx, approveHash, err := s.erc20.Approve(s.ctx, bind.NewTransactOptions(s.signer, builder), erc20.NewApproveRequest(s.tokenA, s.router, amountIn))
 	s.Require().NoError(err)
-	s.Require().NoError(unsignedApprove.Sign(s.signer))
 	s.mu.Lock()
-	s.totalFee.Add(s.totalFee, unsignedApprove.MaxFee())
+	s.totalFee.Add(s.totalFee, approveTx.MaxFee())
 	s.mu.Unlock()
-	approveHash, err := s.erc20.Approve(s.ctx, unsignedApprove)
-	s.Require().NoError(err)
 	approveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, approveHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
 	s.Require().NoError(err)
 	s.Require().True(approveReceipt.Status, "approve transaction reverted")
 	s.Require().Eventually(func() bool {
-		allowance, err := s.erc20.Allowance(s.ctx, s.tokenA, s.from, s.router, rpc.BlockTagLatest)
+		allowance, err := s.erc20.Allowance(s.ctx, nil, erc20.NewAllowanceRequest(s.tokenA, s.from, s.router))
 		return err == nil && amountIn.Cmp(allowance) == 0
 	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "allowance not visible after approve")
 	s.T().Logf("Test10QuoteExactInputMatchesActualMultihopSwap: approve confirmed in block %d", approveReceipt.BlockNumber)
@@ -928,19 +908,16 @@ func (s *QuoterLifeCycleSuite) Test11QuoteExactOutputMatchesActualMultihopSwap()
 	builder := tx.NewDynamicFeeBuilder()
 	builder.PriceBuffer(150)
 	builder.LimitBuffer(300)
-	unsignedApprove, err := s.erc20.CreateApprove(s.ctx, builder, s.tokenC, s.from, s.router, approveCap)
+	approveTx, approveHash, err := s.erc20.Approve(s.ctx, bind.NewTransactOptions(s.signer, builder), erc20.NewApproveRequest(s.tokenC, s.router, approveCap))
 	s.Require().NoError(err)
-	s.Require().NoError(unsignedApprove.Sign(s.signer))
 	s.mu.Lock()
-	s.totalFee.Add(s.totalFee, unsignedApprove.MaxFee())
+	s.totalFee.Add(s.totalFee, approveTx.MaxFee())
 	s.mu.Unlock()
-	approveHash, err := s.erc20.Approve(s.ctx, unsignedApprove)
-	s.Require().NoError(err)
 	approveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, approveHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
 	s.Require().NoError(err)
 	s.Require().True(approveReceipt.Status, "approve transaction reverted")
 	s.Require().Eventually(func() bool {
-		allowance, err := s.erc20.Allowance(s.ctx, s.tokenC, s.from, s.router, rpc.BlockTagLatest)
+		allowance, err := s.erc20.Allowance(s.ctx, nil, erc20.NewAllowanceRequest(s.tokenC, s.from, s.router))
 		return err == nil && approveCap.Cmp(allowance) == 0
 	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "allowance not visible after approve")
 	s.T().Logf("Test11QuoteExactOutputMatchesActualMultihopSwap: approve confirmed in block %d", approveReceipt.BlockNumber)

@@ -49,13 +49,13 @@ var (
 
 // ErrInsufficientBalance, etc. mirror IERC20Errors' custom errors, for errors.Is.
 var (
-	ErrInsufficientBalance   = errors.New("erc20: insufficient balance")
-	ErrInvalidSender         = errors.New("erc20: invalid sender")
-	ErrInvalidReceiver       = errors.New("erc20: invalid receiver")
-	ErrInsufficientAllowance = errors.New("erc20: insufficient allowance")
-	ErrInvalidApprover       = errors.New("erc20: invalid approver")
-	ErrInvalidSpender        = errors.New("erc20: invalid spender")
-	ErrUnknown               = errors.New("erc20: unknown revert")
+	ErrInsufficientBalance   = errors.New("insufficient balance")
+	ErrInvalidSender         = errors.New("invalid sender")
+	ErrInvalidReceiver       = errors.New("invalid receiver")
+	ErrInsufficientAllowance = errors.New("insufficient allowance")
+	ErrInvalidApprover       = errors.New("invalid approver")
+	ErrInvalidSpender        = errors.New("invalid spender")
+	ErrUnknown               = errors.New("unknown revert")
 )
 
 // EncodeName returns the calldata for name().

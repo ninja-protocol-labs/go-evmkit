@@ -1,6 +1,5 @@
-// Package erc20 encodes calls to and decodes results from an ERC-20 token
-// contract. Go types mirror the interfaces in solidity/interfaces/IERC20.sol
-// and solidity/interfaces/IERC20Metadata.sol.
+// Package erc20 is a client for ERC-20 tokens, mirroring IERC20.sol and
+// IERC20Metadata.sol.
 package erc20
 
 import (
@@ -10,38 +9,54 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core"
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
-	"github.com/ninja-protocol-labs/go-evmkit/tx"
 	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
 // IERC20 is implemented by *ERC20.
 type IERC20 interface {
-	TotalSupply(ctx context.Context, token *types.Address, block string) (*big.Int, error)
-	BalanceOf(ctx context.Context, token, addr *types.Address, block string) (*big.Int, error)
-	Allowance(ctx context.Context, token, owner, spender *types.Address, block string) (*big.Int, error)
+	TotalSupply(ctx context.Context, opts *bind.CallOptions, req *TotalSupplyRequest) (*big.Int, error)
+	BalanceOf(ctx context.Context, opts *bind.CallOptions, req *BalanceOfRequest) (*big.Int, error)
+	Allowance(ctx context.Context, opts *bind.CallOptions, req *AllowanceRequest) (*big.Int, error)
+	CallTransfer(ctx context.Context, opts *bind.CallOptions, req *TransferRequest) (bool, error)
+	CallApprove(ctx context.Context, opts *bind.CallOptions, req *ApproveRequest) (bool, error)
+	CallTransferFrom(ctx context.Context, opts *bind.CallOptions, req *TransferFromRequest) (bool, error)
 
-	Transfer(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	Approve(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	TransferFrom(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
+	Transfer(ctx context.Context, opts *bind.TransactOptions, req *TransferRequest) (core.Transaction, *types.Hash, error)
+	Approve(ctx context.Context, opts *bind.TransactOptions, req *ApproveRequest) (core.Transaction, *types.Hash, error)
+	TransferFrom(ctx context.Context, opts *bind.TransactOptions, req *TransferFromRequest) (core.Transaction, *types.Hash, error)
 }
-
-var _ IERC20 = (*ERC20)(nil)
 
 // IERC20Metadata mirrors IERC20Metadata.sol, including its IERC20 embedding.
 // name/symbol/decimals are optional per EIP-20.
 type IERC20Metadata interface {
 	IERC20
 
-	Name(ctx context.Context, token *types.Address, block string) (string, error)
-	Symbol(ctx context.Context, token *types.Address, block string) (string, error)
-	Decimals(ctx context.Context, token *types.Address, block string) (uint8, error)
+	Name(ctx context.Context, opts *bind.CallOptions, req *NameRequest) (string, error)
+	Symbol(ctx context.Context, opts *bind.CallOptions, req *SymbolRequest) (string, error)
+	Decimals(ctx context.Context, opts *bind.CallOptions, req *DecimalsRequest) (uint8, error)
 }
 
-var _ IERC20Metadata = (*ERC20)(nil)
+// IERC20Batcher groups the Multicall3-backed batch reads; it mirrors no
+// Solidity interface.
+type IERC20Batcher interface {
+	Metadata(ctx context.Context, opts *bind.CallOptions, req *MetadataRequest) (*Metadata, error)
+	MetadataWithBalance(ctx context.Context, opts *bind.CallOptions, req *MetadataWithBalanceRequest) (*MetadataWithBalance, error)
+	AllowanceWithBalance(ctx context.Context, opts *bind.CallOptions, req *AllowanceWithBalanceRequest) (*AllowanceWithBalance, error)
+	TokenBalances(ctx context.Context, opts *bind.CallOptions, req *TokenBalancesRequest) (*TokenBalances, error)
+	AddressBalances(ctx context.Context, opts *bind.CallOptions, req *AddressBalancesRequest) (*AddressBalances, error)
+	BalancePairs(ctx context.Context, opts *bind.CallOptions, req *BalancePairsRequest) ([]TokenAddressBalance, error)
+}
+
+var (
+	_ IERC20         = (*ERC20)(nil)
+	_ IERC20Metadata = (*ERC20)(nil)
+	_ IERC20Batcher  = (*ERC20)(nil)
+)
 
 // ERC20 calls any ERC-20 token contract over a Client; it holds no token
 // address, so one instance serves every token.
@@ -56,11 +71,17 @@ func New(cli rpc.Client) *ERC20 {
 	}
 }
 
-// TotalSupply returns token's total supply.
-func (e *ERC20) TotalSupply(ctx context.Context, token *types.Address, block string) (*big.Int, error) {
-	data, err := e.call(ctx, nil, token, EncodeTotalSupply(), block)
+// TotalSupply returns req.Contract's total supply.
+func (e *ERC20) TotalSupply(ctx context.Context, opts *bind.CallOptions, req *TotalSupplyRequest) (*big.Int, error) {
+	if req == nil {
+		return nil, fmt.Errorf("erc20: totalSupply: %w: request is nil", bind.ErrInvalidRequest)
+	}
+	if req.Contract == nil {
+		return nil, fmt.Errorf("erc20: totalSupply: %w: contract is nil", bind.ErrInvalidRequest)
+	}
+	data, err := bind.Call(ctx, e.c, opts, req.Contract, EncodeTotalSupply())
 	if err != nil {
-		return nil, fmt.Errorf("erc20: totalSupply: %w", err)
+		return nil, fmt.Errorf("erc20: totalSupply: %w", e.wrapRevertError(err))
 	}
 	n, err := DecodeTotalSupply(data)
 	if err != nil {
@@ -69,15 +90,24 @@ func (e *ERC20) TotalSupply(ctx context.Context, token *types.Address, block str
 	return n, nil
 }
 
-// BalanceOf returns address's balance of token.
-func (e *ERC20) BalanceOf(ctx context.Context, token, addr *types.Address, block string) (*big.Int, error) {
-	calldata, err := EncodeBalanceOf(addr)
+// BalanceOf returns req.Account's balance of req.Contract.
+func (e *ERC20) BalanceOf(ctx context.Context, opts *bind.CallOptions, req *BalanceOfRequest) (*big.Int, error) {
+	if req == nil {
+		return nil, fmt.Errorf("erc20: balanceOf: %w: request is nil", bind.ErrInvalidRequest)
+	}
+	if req.Contract == nil {
+		return nil, fmt.Errorf("erc20: balanceOf: %w: contract is nil", bind.ErrInvalidRequest)
+	}
+	if req.Account == nil {
+		return nil, fmt.Errorf("erc20: balanceOf: %w: account is nil", bind.ErrInvalidRequest)
+	}
+	calldata, err := EncodeBalanceOf(req.Account)
 	if err != nil {
 		return nil, fmt.Errorf("erc20: balanceOf: %w", err)
 	}
-	data, err := e.call(ctx, nil, token, calldata, block)
+	data, err := bind.Call(ctx, e.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("erc20: balanceOf: %w", err)
+		return nil, fmt.Errorf("erc20: balanceOf: %w", e.wrapRevertError(err))
 	}
 	n, err := DecodeBalanceOf(data)
 	if err != nil {
@@ -86,15 +116,27 @@ func (e *ERC20) BalanceOf(ctx context.Context, token, addr *types.Address, block
 	return n, nil
 }
 
-// Allowance returns how much spender may still spend of owner's token.
-func (e *ERC20) Allowance(ctx context.Context, token, owner, spender *types.Address, block string) (*big.Int, error) {
-	calldata, err := EncodeAllowance(owner, spender)
+// Allowance returns how much req.Spender may still spend of req.Owner's req.Contract.
+func (e *ERC20) Allowance(ctx context.Context, opts *bind.CallOptions, req *AllowanceRequest) (*big.Int, error) {
+	if req == nil {
+		return nil, fmt.Errorf("erc20: allowance: %w: request is nil", bind.ErrInvalidRequest)
+	}
+	if req.Contract == nil {
+		return nil, fmt.Errorf("erc20: allowance: %w: contract is nil", bind.ErrInvalidRequest)
+	}
+	if req.Owner == nil {
+		return nil, fmt.Errorf("erc20: allowance: %w: owner is nil", bind.ErrInvalidRequest)
+	}
+	if req.Spender == nil {
+		return nil, fmt.Errorf("erc20: allowance: %w: spender is nil", bind.ErrInvalidRequest)
+	}
+	calldata, err := EncodeAllowance(req.Owner, req.Spender)
 	if err != nil {
 		return nil, fmt.Errorf("erc20: allowance: %w", err)
 	}
-	data, err := e.call(ctx, nil, token, calldata, block)
+	data, err := bind.Call(ctx, e.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("erc20: allowance: %w", err)
+		return nil, fmt.Errorf("erc20: allowance: %w", e.wrapRevertError(err))
 	}
 	n, err := DecodeAllowance(data)
 	if err != nil {
@@ -103,322 +145,421 @@ func (e *ERC20) Allowance(ctx context.Context, token, owner, spender *types.Addr
 	return n, nil
 }
 
-// Name returns token's name.
-func (e *ERC20) Name(ctx context.Context, token *types.Address, block string) (string, error) {
-	data, err := e.call(ctx, nil, token, EncodeName(), block)
+// CallTransfer runs transfer(to, value) via eth_call as opts.From, returning
+// its result or the revert a real transfer would hit.
+func (e *ERC20) CallTransfer(ctx context.Context, opts *bind.CallOptions, req *TransferRequest) (bool, error) {
+	if req == nil {
+		return false, fmt.Errorf("erc20: callTransfer: %w: request is nil", bind.ErrInvalidRequest)
+	}
+	if req.Contract == nil {
+		return false, fmt.Errorf("erc20: callTransfer: %w: contract is nil", bind.ErrInvalidRequest)
+	}
+	if req.To == nil {
+		return false, fmt.Errorf("erc20: callTransfer: %w: to is nil", bind.ErrInvalidRequest)
+	}
+	if req.Amount == nil {
+		return false, fmt.Errorf("erc20: callTransfer: %w: amount is nil", bind.ErrInvalidRequest)
+	}
+	calldata, err := EncodeTransfer(req.To, req.Amount)
+	if err != nil {
+		return false, fmt.Errorf("erc20: callTransfer: %w", err)
+	}
+	data, err := bind.Call(ctx, e.c, opts, req.Contract, calldata)
+	if err != nil {
+		return false, fmt.Errorf("erc20: callTransfer: %w", e.wrapRevertError(err))
+	}
+	out, err := DecodeTransfer(data)
+	if err != nil {
+		return false, fmt.Errorf("erc20: callTransfer: %w", err)
+	}
+	return out, nil
+}
+
+// CallApprove runs approve(spender, value) via eth_call as opts.From,
+// returning its result or the revert a real approve would hit.
+func (e *ERC20) CallApprove(ctx context.Context, opts *bind.CallOptions, req *ApproveRequest) (bool, error) {
+	if req == nil {
+		return false, fmt.Errorf("erc20: callApprove: %w: request is nil", bind.ErrInvalidRequest)
+	}
+	if req.Contract == nil {
+		return false, fmt.Errorf("erc20: callApprove: %w: contract is nil", bind.ErrInvalidRequest)
+	}
+	if req.Spender == nil {
+		return false, fmt.Errorf("erc20: callApprove: %w: spender is nil", bind.ErrInvalidRequest)
+	}
+	if req.Amount == nil {
+		return false, fmt.Errorf("erc20: callApprove: %w: amount is nil", bind.ErrInvalidRequest)
+	}
+	calldata, err := EncodeApprove(req.Spender, req.Amount)
+	if err != nil {
+		return false, fmt.Errorf("erc20: callApprove: %w", err)
+	}
+	data, err := bind.Call(ctx, e.c, opts, req.Contract, calldata)
+	if err != nil {
+		return false, fmt.Errorf("erc20: callApprove: %w", e.wrapRevertError(err))
+	}
+	out, err := DecodeApprove(data)
+	if err != nil {
+		return false, fmt.Errorf("erc20: callApprove: %w", err)
+	}
+	return out, nil
+}
+
+// CallTransferFrom runs transferFrom(from, to, value) via eth_call as opts.From
+// (the spender), returning its result or the revert a real call would hit.
+func (e *ERC20) CallTransferFrom(ctx context.Context, opts *bind.CallOptions, req *TransferFromRequest) (bool, error) {
+	if req == nil {
+		return false, fmt.Errorf("erc20: callTransferFrom: %w: request is nil", bind.ErrInvalidRequest)
+	}
+	if req.Contract == nil {
+		return false, fmt.Errorf("erc20: callTransferFrom: %w: contract is nil", bind.ErrInvalidRequest)
+	}
+	if req.From == nil {
+		return false, fmt.Errorf("erc20: callTransferFrom: %w: from is nil", bind.ErrInvalidRequest)
+	}
+	if req.To == nil {
+		return false, fmt.Errorf("erc20: callTransferFrom: %w: to is nil", bind.ErrInvalidRequest)
+	}
+	if req.Amount == nil {
+		return false, fmt.Errorf("erc20: callTransferFrom: %w: amount is nil", bind.ErrInvalidRequest)
+	}
+	calldata, err := EncodeTransferFrom(req.From, req.To, req.Amount)
+	if err != nil {
+		return false, fmt.Errorf("erc20: callTransferFrom: %w", err)
+	}
+	data, err := bind.Call(ctx, e.c, opts, req.Contract, calldata)
+	if err != nil {
+		return false, fmt.Errorf("erc20: callTransferFrom: %w", e.wrapRevertError(err))
+	}
+	out, err := DecodeTransferFrom(data)
+	if err != nil {
+		return false, fmt.Errorf("erc20: callTransferFrom: %w", err)
+	}
+	return out, nil
+}
+
+// Transfer sends transfer(to, value) on req.Contract, signed by opts.Signer.
+func (e *ERC20) Transfer(ctx context.Context, opts *bind.TransactOptions, req *TransferRequest) (core.Transaction, *types.Hash, error) {
+	if req == nil {
+		return nil, nil, fmt.Errorf("erc20: transfer: %w: request is nil", bind.ErrInvalidRequest)
+	}
+	if req.Contract == nil {
+		return nil, nil, fmt.Errorf("erc20: transfer: %w: contract is nil", bind.ErrInvalidRequest)
+	}
+	if req.To == nil {
+		return nil, nil, fmt.Errorf("erc20: transfer: %w: to is nil", bind.ErrInvalidRequest)
+	}
+	if req.Amount == nil {
+		return nil, nil, fmt.Errorf("erc20: transfer: %w: amount is nil", bind.ErrInvalidRequest)
+	}
+	calldata, err := EncodeTransfer(req.To, req.Amount)
+	if err != nil {
+		return nil, nil, fmt.Errorf("erc20: transfer: %w", err)
+	}
+	signed, hash, err := bind.Transact(ctx, e.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("erc20: transfer: %w", e.wrapRevertError(err))
+	}
+	return signed, hash, nil
+}
+
+// Approve sends approve(spender, value) on req.Contract, signed by opts.Signer.
+func (e *ERC20) Approve(ctx context.Context, opts *bind.TransactOptions, req *ApproveRequest) (core.Transaction, *types.Hash, error) {
+	if req == nil {
+		return nil, nil, fmt.Errorf("erc20: approve: %w: request is nil", bind.ErrInvalidRequest)
+	}
+	if req.Contract == nil {
+		return nil, nil, fmt.Errorf("erc20: approve: %w: contract is nil", bind.ErrInvalidRequest)
+	}
+	if req.Spender == nil {
+		return nil, nil, fmt.Errorf("erc20: approve: %w: spender is nil", bind.ErrInvalidRequest)
+	}
+	if req.Amount == nil {
+		return nil, nil, fmt.Errorf("erc20: approve: %w: amount is nil", bind.ErrInvalidRequest)
+	}
+	calldata, err := EncodeApprove(req.Spender, req.Amount)
+	if err != nil {
+		return nil, nil, fmt.Errorf("erc20: approve: %w", err)
+	}
+	signed, hash, err := bind.Transact(ctx, e.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("erc20: approve: %w", e.wrapRevertError(err))
+	}
+	return signed, hash, nil
+}
+
+// TransferFrom sends transferFrom(from, to, value) on req.Contract, signed by
+// opts.Signer as the spender.
+func (e *ERC20) TransferFrom(ctx context.Context, opts *bind.TransactOptions, req *TransferFromRequest) (core.Transaction, *types.Hash, error) {
+	if req == nil {
+		return nil, nil, fmt.Errorf("erc20: transferFrom: %w: request is nil", bind.ErrInvalidRequest)
+	}
+	if req.Contract == nil {
+		return nil, nil, fmt.Errorf("erc20: transferFrom: %w: contract is nil", bind.ErrInvalidRequest)
+	}
+	if req.From == nil {
+		return nil, nil, fmt.Errorf("erc20: transferFrom: %w: from is nil", bind.ErrInvalidRequest)
+	}
+	if req.To == nil {
+		return nil, nil, fmt.Errorf("erc20: transferFrom: %w: to is nil", bind.ErrInvalidRequest)
+	}
+	if req.Amount == nil {
+		return nil, nil, fmt.Errorf("erc20: transferFrom: %w: amount is nil", bind.ErrInvalidRequest)
+	}
+	calldata, err := EncodeTransferFrom(req.From, req.To, req.Amount)
+	if err != nil {
+		return nil, nil, fmt.Errorf("erc20: transferFrom: %w", err)
+	}
+	signed, hash, err := bind.Transact(ctx, e.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("erc20: transferFrom: %w", e.wrapRevertError(err))
+	}
+	return signed, hash, nil
+}
+
+// Name returns req.Contract's name.
+func (e *ERC20) Name(ctx context.Context, opts *bind.CallOptions, req *NameRequest) (string, error) {
+	if req == nil {
+		return "", fmt.Errorf("erc20: name: %w: request is nil", bind.ErrInvalidRequest)
+	}
+	if req.Contract == nil {
+		return "", fmt.Errorf("erc20: name: %w: contract is nil", bind.ErrInvalidRequest)
+	}
+	calldata := EncodeName()
+	data, err := bind.Call(ctx, e.c, opts, req.Contract, calldata)
+	if err != nil {
+		return "", fmt.Errorf("erc20: name: %w", e.wrapRevertError(err))
+	}
+	out, err := DecodeName(data)
 	if err != nil {
 		return "", fmt.Errorf("erc20: name: %w", err)
 	}
-	s, err := DecodeName(data)
-	if err != nil {
-		return "", fmt.Errorf("erc20: name: %w", err)
-	}
-	return s, nil
+	return out, nil
 }
 
-// Symbol returns token's symbol.
-func (e *ERC20) Symbol(ctx context.Context, token *types.Address, block string) (string, error) {
-	data, err := e.call(ctx, nil, token, EncodeSymbol(), block)
+// Symbol returns req.Contract's symbol.
+func (e *ERC20) Symbol(ctx context.Context, opts *bind.CallOptions, req *SymbolRequest) (string, error) {
+	if req == nil {
+		return "", fmt.Errorf("erc20: symbol: %w: request is nil", bind.ErrInvalidRequest)
+	}
+	if req.Contract == nil {
+		return "", fmt.Errorf("erc20: symbol: %w: contract is nil", bind.ErrInvalidRequest)
+	}
+	calldata := EncodeSymbol()
+	data, err := bind.Call(ctx, e.c, opts, req.Contract, calldata)
+	if err != nil {
+		return "", fmt.Errorf("erc20: symbol: %w", e.wrapRevertError(err))
+	}
+	out, err := DecodeSymbol(data)
 	if err != nil {
 		return "", fmt.Errorf("erc20: symbol: %w", err)
 	}
-	s, err := DecodeSymbol(data)
-	if err != nil {
-		return "", fmt.Errorf("erc20: symbol: %w", err)
-	}
-	return s, nil
+	return out, nil
 }
 
-// Decimals returns token's decimals.
-func (e *ERC20) Decimals(ctx context.Context, token *types.Address, block string) (uint8, error) {
-	data, err := e.call(ctx, nil, token, EncodeDecimals(), block)
+// Decimals returns req.Contract's decimals.
+func (e *ERC20) Decimals(ctx context.Context, opts *bind.CallOptions, req *DecimalsRequest) (uint8, error) {
+	if req == nil {
+		return 0, fmt.Errorf("erc20: decimals: %w: request is nil", bind.ErrInvalidRequest)
+	}
+	if req.Contract == nil {
+		return 0, fmt.Errorf("erc20: decimals: %w: contract is nil", bind.ErrInvalidRequest)
+	}
+	calldata := EncodeDecimals()
+	data, err := bind.Call(ctx, e.c, opts, req.Contract, calldata)
+	if err != nil {
+		return 0, fmt.Errorf("erc20: decimals: %w", e.wrapRevertError(err))
+	}
+	out, err := DecodeDecimals(data)
 	if err != nil {
 		return 0, fmt.Errorf("erc20: decimals: %w", err)
 	}
-	d, err := DecodeDecimals(data)
-	if err != nil {
-		return 0, fmt.Errorf("erc20: decimals: %w", err)
-	}
-	return d, nil
+	return out, nil
 }
 
-// CreateTransfer builds an unsigned transfer(to, value) transaction via b.
-func (e *ERC20) CreateTransfer(ctx context.Context, b tx.Builder, token, from, to *types.Address, value *big.Int) (core.Transaction, error) {
-	calldata, err := EncodeTransfer(to, value)
-	if err != nil {
-		return nil, fmt.Errorf("erc20: createTransfer: %w", err)
+// Metadata batches name/symbol/decimals/totalSupply on req.Token via Multicall3 at req.Multicall.
+func (e *ERC20) Metadata(ctx context.Context, opts *bind.CallOptions, req *MetadataRequest) (*Metadata, error) {
+	if req == nil {
+		return nil, fmt.Errorf("erc20: metadata: %w: request is nil", bind.ErrInvalidRequest)
 	}
-
-	unsigned, err := b.Build(from, token, nil, calldata).Pack(ctx, e.c)
-	if err != nil {
-		return nil, fmt.Errorf("erc20: createTransfer: %w", e.wrapRevertError(err))
+	if req.Multicall == nil {
+		return nil, fmt.Errorf("erc20: metadata: %w: multicall is nil", bind.ErrInvalidRequest)
 	}
-	return unsigned, nil
-}
-
-// Transfer broadcasts an already-signed transfer transaction.
-func (e *ERC20) Transfer(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("erc20: transfer: %w", err)
+	if req.Token == nil {
+		return nil, fmt.Errorf("erc20: metadata: %w: token is nil", bind.ErrInvalidRequest)
 	}
-	hash, err := tx.Broadcast(ctx, e.c, raw)
-	if err != nil {
-		return nil, fmt.Errorf("erc20: transfer: %w", err)
-	}
-	return hash, nil
-}
-
-// CallTransfer simulates transfer(to, value) as from via eth_call, catching
-// a revert before spending gas on a real transfer.
-func (e *ERC20) CallTransfer(ctx context.Context, token, from, to *types.Address, value *big.Int, block string) (bool, error) {
-	calldata, err := EncodeTransfer(to, value)
-	if err != nil {
-		return false, fmt.Errorf("erc20: callTransfer: %w", err)
-	}
-
-	data, err := e.call(ctx, from, token, calldata, block)
-	if err != nil {
-		return false, fmt.Errorf("erc20: callTransfer: %w", err)
-	}
-
-	ok, err := DecodeTransfer(data)
-	if err != nil {
-		return false, fmt.Errorf("erc20: callTransfer: %w", err)
-	}
-	return ok, nil
-}
-
-// CreateApprove builds an unsigned approve(spender, value) transaction via b.
-func (e *ERC20) CreateApprove(ctx context.Context, b tx.Builder, token, from, spender *types.Address, value *big.Int) (core.Transaction, error) {
-	calldata, err := EncodeApprove(spender, value)
-	if err != nil {
-		return nil, fmt.Errorf("erc20: createApprove: %w", err)
-	}
-
-	unsigned, err := b.Build(from, token, nil, calldata).Pack(ctx, e.c)
-	if err != nil {
-		return nil, fmt.Errorf("erc20: createApprove: %w", e.wrapRevertError(err))
-	}
-	return unsigned, nil
-}
-
-// Approve broadcasts an already-signed approve transaction.
-func (e *ERC20) Approve(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("erc20: approve: %w", err)
-	}
-	hash, err := tx.Broadcast(ctx, e.c, raw)
-	if err != nil {
-		return nil, fmt.Errorf("erc20: approve: %w", err)
-	}
-	return hash, nil
-}
-
-// CallApprove simulates approve(spender, value) as from via eth_call,
-// catching a revert before spending gas on a real approve.
-func (e *ERC20) CallApprove(ctx context.Context, token, from, spender *types.Address, value *big.Int, block string) (bool, error) {
-	calldata, err := EncodeApprove(spender, value)
-	if err != nil {
-		return false, fmt.Errorf("erc20: callApprove: %w", err)
-	}
-
-	data, err := e.call(ctx, from, token, calldata, block)
-	if err != nil {
-		return false, fmt.Errorf("erc20: callApprove: %w", err)
-	}
-
-	ok, err := DecodeApprove(data)
-	if err != nil {
-		return false, fmt.Errorf("erc20: callApprove: %w", err)
-	}
-	return ok, nil
-}
-
-// CreateTransferFrom builds an unsigned transferFrom(from, to, value) transaction via b, sent by sender.
-func (e *ERC20) CreateTransferFrom(ctx context.Context, b tx.Builder, token, sender, from, to *types.Address, value *big.Int) (core.Transaction, error) {
-	calldata, err := EncodeTransferFrom(from, to, value)
-	if err != nil {
-		return nil, fmt.Errorf("erc20: createTransferFrom: %w", err)
-	}
-
-	unsigned, err := b.Build(sender, token, nil, calldata).Pack(ctx, e.c)
-	if err != nil {
-		return nil, fmt.Errorf("erc20: createTransferFrom: %w", e.wrapRevertError(err))
-	}
-	return unsigned, nil
-}
-
-// TransferFrom broadcasts an already-signed transferFrom transaction.
-func (e *ERC20) TransferFrom(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("erc20: transferFrom: %w", err)
-	}
-	hash, err := tx.Broadcast(ctx, e.c, raw)
-	if err != nil {
-		return nil, fmt.Errorf("erc20: transferFrom: %w", err)
-	}
-	return hash, nil
-}
-
-// CallTransferFrom simulates transferFrom(from, to, value) as sender via eth_call,
-// catching a revert before spending gas on a real transferFrom.
-func (e *ERC20) CallTransferFrom(ctx context.Context, token, sender, from, to *types.Address, value *big.Int, block string) (bool, error) {
-	calldata, err := EncodeTransferFrom(from, to, value)
-	if err != nil {
-		return false, fmt.Errorf("erc20: callTransferFrom: %w", err)
-	}
-
-	data, err := e.call(ctx, sender, token, calldata, block)
-	if err != nil {
-		return false, fmt.Errorf("erc20: callTransferFrom: %w", err)
-	}
-
-	ok, err := DecodeTransferFrom(data)
-	if err != nil {
-		return false, fmt.Errorf("erc20: callTransferFrom: %w", err)
-	}
-	return ok, nil
-}
-
-// Metadata batches name/symbol/decimals/totalSupply on token into one call
-// via the Multicall3 contract deployed at multicall.
-func (e *ERC20) Metadata(ctx context.Context, multicall, token *types.Address, allowFailure bool, block string) (*Metadata, error) {
-	calldata, err := EncodeMetadata(token, allowFailure)
+	calldata, err := EncodeMetadata(req.Token, req.AllowFailure)
 	if err != nil {
 		return nil, fmt.Errorf("erc20: metadata: %w", err)
 	}
-
-	data, err := e.call(ctx, nil, multicall, calldata, block)
+	data, err := bind.Call(ctx, e.c, opts, req.Multicall, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("erc20: metadata: %w", e.wrapRevertError(err))
+	}
+	out, err := DecodeMetadata(data)
 	if err != nil {
 		return nil, fmt.Errorf("erc20: metadata: %w", err)
 	}
-
-	m, err := DecodeMetadata(data)
-	if err != nil {
-		return nil, fmt.Errorf("erc20: metadata: %w", err)
-	}
-	return m, nil
+	return out, nil
 }
 
-// MetadataWithBalance is Metadata plus addr's balance in the same call, via
-// the Multicall3 contract deployed at multicall.
-func (e *ERC20) MetadataWithBalance(ctx context.Context, multicall, token, addr *types.Address, allowFailure bool, block string) (*MetadataWithBalance, error) {
-	calldata, err := EncodeMetadataWithBalance(token, addr, allowFailure)
+// MetadataWithBalance is Metadata plus req.Account's balance in the same call.
+func (e *ERC20) MetadataWithBalance(ctx context.Context, opts *bind.CallOptions, req *MetadataWithBalanceRequest) (*MetadataWithBalance, error) {
+	if req == nil {
+		return nil, fmt.Errorf("erc20: metadataWithBalance: %w: request is nil", bind.ErrInvalidRequest)
+	}
+	if req.Multicall == nil {
+		return nil, fmt.Errorf("erc20: metadataWithBalance: %w: multicall is nil", bind.ErrInvalidRequest)
+	}
+	if req.Token == nil {
+		return nil, fmt.Errorf("erc20: metadataWithBalance: %w: token is nil", bind.ErrInvalidRequest)
+	}
+	if req.Account == nil {
+		return nil, fmt.Errorf("erc20: metadataWithBalance: %w: account is nil", bind.ErrInvalidRequest)
+	}
+	calldata, err := EncodeMetadataWithBalance(req.Token, req.Account, req.AllowFailure)
 	if err != nil {
 		return nil, fmt.Errorf("erc20: metadataWithBalance: %w", err)
 	}
-
-	data, err := e.call(ctx, nil, multicall, calldata, block)
+	data, err := bind.Call(ctx, e.c, opts, req.Multicall, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("erc20: metadataWithBalance: %w", e.wrapRevertError(err))
+	}
+	out, err := DecodeMetadataWithBalance(data)
 	if err != nil {
 		return nil, fmt.Errorf("erc20: metadataWithBalance: %w", err)
 	}
-
-	m, err := DecodeMetadataWithBalance(data)
-	if err != nil {
-		return nil, fmt.Errorf("erc20: metadataWithBalance: %w", err)
-	}
-	return m, nil
+	return out, nil
 }
 
-// AllowanceWithBalance batches allowance(owner, spender) and both their
-// balances into one call, via the Multicall3 contract deployed at multicall.
-func (e *ERC20) AllowanceWithBalance(ctx context.Context, multicall, token, owner, spender *types.Address, allowFailure bool, block string) (*AllowanceWithBalance, error) {
-	calldata, err := EncodeAllowanceWithBalance(token, owner, spender, allowFailure)
+// AllowanceWithBalance batches allowance(owner, spender) and both balances on req.Token.
+func (e *ERC20) AllowanceWithBalance(ctx context.Context, opts *bind.CallOptions, req *AllowanceWithBalanceRequest) (*AllowanceWithBalance, error) {
+	if req == nil {
+		return nil, fmt.Errorf("erc20: allowanceWithBalance: %w: request is nil", bind.ErrInvalidRequest)
+	}
+	if req.Multicall == nil {
+		return nil, fmt.Errorf("erc20: allowanceWithBalance: %w: multicall is nil", bind.ErrInvalidRequest)
+	}
+	if req.Token == nil {
+		return nil, fmt.Errorf("erc20: allowanceWithBalance: %w: token is nil", bind.ErrInvalidRequest)
+	}
+	if req.Owner == nil {
+		return nil, fmt.Errorf("erc20: allowanceWithBalance: %w: owner is nil", bind.ErrInvalidRequest)
+	}
+	if req.Spender == nil {
+		return nil, fmt.Errorf("erc20: allowanceWithBalance: %w: spender is nil", bind.ErrInvalidRequest)
+	}
+	calldata, err := EncodeAllowanceWithBalance(req.Token, req.Owner, req.Spender, req.AllowFailure)
 	if err != nil {
 		return nil, fmt.Errorf("erc20: allowanceWithBalance: %w", err)
 	}
-
-	data, err := e.call(ctx, nil, multicall, calldata, block)
+	data, err := bind.Call(ctx, e.c, opts, req.Multicall, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("erc20: allowanceWithBalance: %w", e.wrapRevertError(err))
+	}
+	out, err := DecodeAllowanceWithBalance(data)
 	if err != nil {
 		return nil, fmt.Errorf("erc20: allowanceWithBalance: %w", err)
 	}
-
-	awb, err := DecodeAllowanceWithBalance(data)
-	if err != nil {
-		return nil, fmt.Errorf("erc20: allowanceWithBalance: %w", err)
-	}
-	return awb, nil
+	return out, nil
 }
 
-// TokenBalances batches balanceOf(address) for each address on token into
-// one call, via the Multicall3 contract deployed at multicall.
-func (e *ERC20) TokenBalances(ctx context.Context, multicall, token *types.Address, addresses []*types.Address, allowFailure bool, block string) (*TokenBalances, error) {
-	calldata, err := EncodeTokenBalances(token, addresses, allowFailure)
+// TokenBalances batches balanceOf(account) on req.Token for each of req.Accounts.
+func (e *ERC20) TokenBalances(ctx context.Context, opts *bind.CallOptions, req *TokenBalancesRequest) (*TokenBalances, error) {
+	if req == nil {
+		return nil, fmt.Errorf("erc20: tokenBalances: %w: request is nil", bind.ErrInvalidRequest)
+	}
+	if req.Multicall == nil {
+		return nil, fmt.Errorf("erc20: tokenBalances: %w: multicall is nil", bind.ErrInvalidRequest)
+	}
+	if req.Token == nil {
+		return nil, fmt.Errorf("erc20: tokenBalances: %w: token is nil", bind.ErrInvalidRequest)
+	}
+	for i, addr := range req.Accounts {
+		if addr == nil {
+			return nil, fmt.Errorf("erc20: tokenBalances: %w: accounts[%d] is nil", bind.ErrInvalidRequest, i)
+		}
+	}
+	calldata, err := EncodeTokenBalances(req.Token, req.Accounts, req.AllowFailure)
 	if err != nil {
 		return nil, fmt.Errorf("erc20: tokenBalances: %w", err)
 	}
-
-	data, err := e.call(ctx, nil, multicall, calldata, block)
+	data, err := bind.Call(ctx, e.c, opts, req.Multicall, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("erc20: tokenBalances: %w", e.wrapRevertError(err))
+	}
+	out, err := DecodeTokenBalances(req.Token, req.Accounts, data)
 	if err != nil {
 		return nil, fmt.Errorf("erc20: tokenBalances: %w", err)
 	}
-
-	tb, err := DecodeTokenBalances(token, addresses, data)
-	if err != nil {
-		return nil, fmt.Errorf("erc20: tokenBalances: %w", err)
-	}
-	return tb, nil
+	return out, nil
 }
 
-// AddressBalances batches balanceOf(address) across each token in tokens
-// into one call, via the Multicall3 contract deployed at multicall.
-func (e *ERC20) AddressBalances(ctx context.Context, multicall, address *types.Address, tokens []*types.Address, allowFailure bool, block string) (*AddressBalances, error) {
-	calldata, err := EncodeAddressBalances(address, tokens, allowFailure)
+// AddressBalances batches balanceOf(req.Account) on each of req.Tokens.
+func (e *ERC20) AddressBalances(ctx context.Context, opts *bind.CallOptions, req *AddressBalancesRequest) (*AddressBalances, error) {
+	if req == nil {
+		return nil, fmt.Errorf("erc20: addressBalances: %w: request is nil", bind.ErrInvalidRequest)
+	}
+	if req.Multicall == nil {
+		return nil, fmt.Errorf("erc20: addressBalances: %w: multicall is nil", bind.ErrInvalidRequest)
+	}
+	if req.Account == nil {
+		return nil, fmt.Errorf("erc20: addressBalances: %w: account is nil", bind.ErrInvalidRequest)
+	}
+	for i, addr := range req.Tokens {
+		if addr == nil {
+			return nil, fmt.Errorf("erc20: addressBalances: %w: tokens[%d] is nil", bind.ErrInvalidRequest, i)
+		}
+	}
+	calldata, err := EncodeAddressBalances(req.Account, req.Tokens, req.AllowFailure)
 	if err != nil {
 		return nil, fmt.Errorf("erc20: addressBalances: %w", err)
 	}
-
-	data, err := e.call(ctx, nil, multicall, calldata, block)
+	data, err := bind.Call(ctx, e.c, opts, req.Multicall, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("erc20: addressBalances: %w", e.wrapRevertError(err))
+	}
+	out, err := DecodeAddressBalances(req.Account, req.Tokens, data)
 	if err != nil {
 		return nil, fmt.Errorf("erc20: addressBalances: %w", err)
 	}
-
-	ab, err := DecodeAddressBalances(address, tokens, data)
-	if err != nil {
-		return nil, fmt.Errorf("erc20: addressBalances: %w", err)
-	}
-	return ab, nil
+	return out, nil
 }
 
-// BalancePairs batches balanceOf(addresses[i]) on tokens[i] for each i into
-// one call (paired positionally, not every combination), via the Multicall3
-// contract deployed at multicall.
-func (e *ERC20) BalancePairs(ctx context.Context, multicall *types.Address, tokens, addresses []*types.Address, allowFailure bool, block string) ([]TokenAddressBalance, error) {
-	calldata, err := EncodeBalancePairs(tokens, addresses, allowFailure)
+// BalancePairs batches balanceOf(req.Accounts[i]) on req.Tokens[i], paired by index.
+func (e *ERC20) BalancePairs(ctx context.Context, opts *bind.CallOptions, req *BalancePairsRequest) ([]TokenAddressBalance, error) {
+	if req == nil {
+		return nil, fmt.Errorf("erc20: balancePairs: %w: request is nil", bind.ErrInvalidRequest)
+	}
+	if req.Multicall == nil {
+		return nil, fmt.Errorf("erc20: balancePairs: %w: multicall is nil", bind.ErrInvalidRequest)
+	}
+	if len(req.Tokens) != len(req.Accounts) {
+		return nil, fmt.Errorf("erc20: balancePairs: %w: tokens and accounts differ in length", bind.ErrInvalidRequest)
+	}
+	for i, addr := range req.Tokens {
+		if addr == nil {
+			return nil, fmt.Errorf("erc20: balancePairs: %w: tokens[%d] is nil", bind.ErrInvalidRequest, i)
+		}
+	}
+	for i, addr := range req.Accounts {
+		if addr == nil {
+			return nil, fmt.Errorf("erc20: balancePairs: %w: accounts[%d] is nil", bind.ErrInvalidRequest, i)
+		}
+	}
+	calldata, err := EncodeBalancePairs(req.Tokens, req.Accounts, req.AllowFailure)
 	if err != nil {
 		return nil, fmt.Errorf("erc20: balancePairs: %w", err)
 	}
-
-	data, err := e.call(ctx, nil, multicall, calldata, block)
+	data, err := bind.Call(ctx, e.c, opts, req.Multicall, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("erc20: balancePairs: %w", e.wrapRevertError(err))
+	}
+	out, err := DecodeBalancePairs(req.Tokens, req.Accounts, data)
 	if err != nil {
 		return nil, fmt.Errorf("erc20: balancePairs: %w", err)
 	}
-
-	pairs, err := DecodeBalancePairs(tokens, addresses, data)
-	if err != nil {
-		return nil, fmt.Errorf("erc20: balancePairs: %w", err)
-	}
-	return pairs, nil
-}
-
-// call eth_calls token with calldata (from msg.sender from, if non-nil), decoding a reverted custom error to its sentinel.
-func (e *ERC20) call(ctx context.Context, from, token *types.Address, calldata []byte, block string) ([]byte, error) {
-	params := map[string]any{
-		"to":   token.String(),
-		"data": encoding.Hex.EncodePrefixed(calldata),
-	}
-	if from != nil {
-		params["from"] = from.String()
-	}
-
-	var raw string
-	if err := e.c.Call(ctx, rpc.ETHCall("call", params, block, &raw)); err != nil {
-		return nil, e.wrapRevertError(err)
-	}
-	return encoding.Hex.Decode(raw)
+	return out, nil
 }
 
 // wrapRevertError maps a known IERC20Errors custom error in err to its sentinel.
