@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -66,7 +66,7 @@ func (s *HyperEVMRPCSuite) networks() []hyperevmNetwork {
 func (s *HyperEVMRPCSuite) TestETHChainID() {
 	for _, n := range s.networks() {
 		var result string
-		elems := Elements{ETHChainID(uuid.NewString(), &result)}
+		elems := Elements{ETHChainID(uuid.New().String(), &result)}
 		s.Require().NoError(n.client.Batch(s.ctx, elems), n.name)
 	}
 }
@@ -74,7 +74,7 @@ func (s *HyperEVMRPCSuite) TestETHChainID() {
 func (s *HyperEVMRPCSuite) TestETHGasPrice() {
 	for _, n := range s.networks() {
 		var result string
-		elems := Elements{ETHGasPrice(uuid.NewString(), &result)}
+		elems := Elements{ETHGasPrice(uuid.New().String(), &result)}
 		s.Require().NoError(n.client.Batch(s.ctx, elems), n.name)
 	}
 }
@@ -82,7 +82,7 @@ func (s *HyperEVMRPCSuite) TestETHGasPrice() {
 func (s *HyperEVMRPCSuite) TestETHBlockNumber() {
 	for _, n := range s.networks() {
 		var result string
-		elems := Elements{ETHBlockNumber(uuid.NewString(), &result)}
+		elems := Elements{ETHBlockNumber(uuid.New().String(), &result)}
 		s.Require().NoError(n.client.Batch(s.ctx, elems), n.name)
 	}
 }
@@ -90,7 +90,7 @@ func (s *HyperEVMRPCSuite) TestETHBlockNumber() {
 func (s *HyperEVMRPCSuite) TestETHGetBalance() {
 	for _, n := range s.networks() {
 		var result string
-		elems := Elements{ETHGetBalance(uuid.NewString(), n.address, "latest", &result)}
+		elems := Elements{ETHGetBalance(uuid.New().String(), n.address, "latest", &result)}
 		s.Require().NoError(n.client.Batch(s.ctx, elems), n.name)
 	}
 }
@@ -98,7 +98,7 @@ func (s *HyperEVMRPCSuite) TestETHGetBalance() {
 func (s *HyperEVMRPCSuite) TestETHGetCode() {
 	for _, n := range s.networks() {
 		var result string
-		elems := Elements{ETHGetCode(uuid.NewString(), n.address, "latest", &result)}
+		elems := Elements{ETHGetCode(uuid.New().String(), n.address, "latest", &result)}
 		s.Require().NoError(n.client.Batch(s.ctx, elems), n.name)
 	}
 }
@@ -107,7 +107,7 @@ func (s *HyperEVMRPCSuite) TestETHCall() {
 	for _, n := range s.networks() {
 		var result string
 		params := map[string]any{"to": n.address}
-		elems := Elements{ETHCall(uuid.NewString(), params, "latest", &result)}
+		elems := Elements{ETHCall(uuid.New().String(), params, "latest", &result)}
 		s.Require().NoError(n.client.Batch(s.ctx, elems), n.name)
 	}
 }
@@ -116,7 +116,7 @@ func (s *HyperEVMRPCSuite) TestETHEstimateGas() {
 	for _, n := range s.networks() {
 		var result string
 		params := map[string]any{"from": n.address, "to": n.address, "value": "0x0"}
-		elems := Elements{ETHEstimateGas(uuid.NewString(), params, "latest", &result)}
+		elems := Elements{ETHEstimateGas(uuid.New().String(), params, "latest", &result)}
 		s.Require().NoError(n.client.Batch(s.ctx, elems), n.name)
 	}
 }
@@ -124,7 +124,7 @@ func (s *HyperEVMRPCSuite) TestETHEstimateGas() {
 func (s *HyperEVMRPCSuite) TestETHGetTransactionCount() {
 	for _, n := range s.networks() {
 		var result string
-		elems := Elements{ETHGetTransactionCount(uuid.NewString(), n.address, "latest", &result)}
+		elems := Elements{ETHGetTransactionCount(uuid.New().String(), n.address, "latest", &result)}
 		s.Require().NoError(n.client.Batch(s.ctx, elems), n.name)
 	}
 }
@@ -132,7 +132,7 @@ func (s *HyperEVMRPCSuite) TestETHGetTransactionCount() {
 func (s *HyperEVMRPCSuite) TestETHMaxPriorityFeePerGas() {
 	for _, n := range s.networks() {
 		var result string
-		elems := Elements{ETHMaxPriorityFeePerGas(uuid.NewString(), &result)}
+		elems := Elements{ETHMaxPriorityFeePerGas(uuid.New().String(), &result)}
 		s.Require().NoError(n.client.Batch(s.ctx, elems), n.name)
 	}
 }
@@ -140,7 +140,7 @@ func (s *HyperEVMRPCSuite) TestETHMaxPriorityFeePerGas() {
 func (s *HyperEVMRPCSuite) TestETHGetBlockByNumber() {
 	for _, n := range s.networks() {
 		var result map[string]any
-		elems := Elements{ETHGetBlockByNumber(uuid.NewString(), "latest", true, &result)}
+		elems := Elements{ETHGetBlockByNumber(uuid.New().String(), "latest", true, &result)}
 		s.Require().NoError(n.client.Batch(s.ctx, elems), n.name)
 	}
 }
@@ -148,7 +148,7 @@ func (s *HyperEVMRPCSuite) TestETHGetBlockByNumber() {
 func (s *HyperEVMRPCSuite) TestETHGetBlockByHash() {
 	for _, n := range s.networks() {
 		var result map[string]any
-		elems := Elements{ETHGetBlockByHash(uuid.NewString(), n.blockHash, false, &result)}
+		elems := Elements{ETHGetBlockByHash(uuid.New().String(), n.blockHash, false, &result)}
 		s.Require().NoError(n.client.Batch(s.ctx, elems), n.name)
 	}
 }
@@ -159,7 +159,7 @@ func (s *HyperEVMRPCSuite) TestETHGetTransactionByHash() {
 			continue
 		}
 		var result map[string]any
-		elems := Elements{ETHGetTransactionByHash(uuid.NewString(), n.txHash, &result)}
+		elems := Elements{ETHGetTransactionByHash(uuid.New().String(), n.txHash, &result)}
 		s.Require().NoError(n.client.Batch(s.ctx, elems), n.name)
 	}
 }
@@ -170,7 +170,7 @@ func (s *HyperEVMRPCSuite) TestETHGetTransactionReceipt() {
 			continue
 		}
 		var result map[string]any
-		elems := Elements{ETHGetTransactionReceipt(uuid.NewString(), n.txHash, &result)}
+		elems := Elements{ETHGetTransactionReceipt(uuid.New().String(), n.txHash, &result)}
 		s.Require().NoError(n.client.Batch(s.ctx, elems), n.name)
 	}
 }
@@ -178,7 +178,7 @@ func (s *HyperEVMRPCSuite) TestETHGetTransactionReceipt() {
 func (s *HyperEVMRPCSuite) TestETHGetTransactionByBlockHashAndIndex() {
 	for _, n := range s.networks() {
 		var result map[string]any
-		elems := Elements{ETHGetTransactionByBlockHashAndIndex(uuid.NewString(), n.blockHash, "0x0", &result)}
+		elems := Elements{ETHGetTransactionByBlockHashAndIndex(uuid.New().String(), n.blockHash, "0x0", &result)}
 		s.Require().NoError(n.client.Batch(s.ctx, elems), n.name)
 	}
 }
@@ -186,7 +186,7 @@ func (s *HyperEVMRPCSuite) TestETHGetTransactionByBlockHashAndIndex() {
 func (s *HyperEVMRPCSuite) TestETHGetTransactionByBlockNumberAndIndex() {
 	for _, n := range s.networks() {
 		var result map[string]any
-		elems := Elements{ETHGetTransactionByBlockNumberAndIndex(uuid.NewString(), "latest", "0x0", &result)}
+		elems := Elements{ETHGetTransactionByBlockNumberAndIndex(uuid.New().String(), "latest", "0x0", &result)}
 		s.Require().NoError(n.client.Batch(s.ctx, elems), n.name)
 	}
 }
@@ -194,7 +194,7 @@ func (s *HyperEVMRPCSuite) TestETHGetTransactionByBlockNumberAndIndex() {
 func (s *HyperEVMRPCSuite) TestETHGetBlockReceipts() {
 	for _, n := range s.networks() {
 		var latest string
-		elems := Elements{ETHBlockNumber(uuid.NewString(), &latest)}
+		elems := Elements{ETHBlockNumber(uuid.New().String(), &latest)}
 		s.Require().NoError(n.client.Batch(s.ctx, elems), n.name)
 
 		latestNum, err := strconv.ParseInt(strings.TrimPrefix(latest, "0x"), 16, 64)
@@ -202,7 +202,7 @@ func (s *HyperEVMRPCSuite) TestETHGetBlockReceipts() {
 		block := fmt.Sprintf("0x%x", latestNum-100)
 
 		var result []map[string]any
-		elems = Elements{ETHGetBlockReceipts(uuid.NewString(), block, &result)}
+		elems = Elements{ETHGetBlockReceipts(uuid.New().String(), block, &result)}
 		s.Require().NoError(n.client.Batch(s.ctx, elems), n.name)
 	}
 }
@@ -210,7 +210,7 @@ func (s *HyperEVMRPCSuite) TestETHGetBlockReceipts() {
 func (s *HyperEVMRPCSuite) TestETHGetBlockTransactionCountByHash() {
 	for _, n := range s.networks() {
 		var result string
-		elems := Elements{ETHGetBlockTransactionCountByHash(uuid.NewString(), n.blockHash, &result)}
+		elems := Elements{ETHGetBlockTransactionCountByHash(uuid.New().String(), n.blockHash, &result)}
 		s.Require().NoError(n.client.Batch(s.ctx, elems), n.name)
 	}
 }
@@ -218,7 +218,7 @@ func (s *HyperEVMRPCSuite) TestETHGetBlockTransactionCountByHash() {
 func (s *HyperEVMRPCSuite) TestETHGetBlockTransactionCountByNumber() {
 	for _, n := range s.networks() {
 		var result string
-		elems := Elements{ETHGetBlockTransactionCountByNumber(uuid.NewString(), "latest", &result)}
+		elems := Elements{ETHGetBlockTransactionCountByNumber(uuid.New().String(), "latest", &result)}
 		s.Require().NoError(n.client.Batch(s.ctx, elems), n.name)
 	}
 }
@@ -226,7 +226,7 @@ func (s *HyperEVMRPCSuite) TestETHGetBlockTransactionCountByNumber() {
 func (s *HyperEVMRPCSuite) TestETHGetStorageAt() {
 	for _, n := range s.networks() {
 		var result string
-		elems := Elements{ETHGetStorageAt(uuid.NewString(), n.address, "0x0", "latest", &result)}
+		elems := Elements{ETHGetStorageAt(uuid.New().String(), n.address, "0x0", "latest", &result)}
 		s.Require().NoError(n.client.Batch(s.ctx, elems), n.name)
 	}
 }
@@ -234,7 +234,7 @@ func (s *HyperEVMRPCSuite) TestETHGetStorageAt() {
 func (s *HyperEVMRPCSuite) TestETHFeeHistory() {
 	for _, n := range s.networks() {
 		var result map[string]any
-		elems := Elements{ETHFeeHistory(uuid.NewString(), "0x4", "latest", []float64{25, 50, 75}, &result)}
+		elems := Elements{ETHFeeHistory(uuid.New().String(), "0x4", "latest", []float64{25, 50, 75}, &result)}
 		s.Require().NoError(n.client.Batch(s.ctx, elems), n.name)
 	}
 }
@@ -242,7 +242,7 @@ func (s *HyperEVMRPCSuite) TestETHFeeHistory() {
 func (s *HyperEVMRPCSuite) TestETHSyncing() {
 	for _, n := range s.networks() {
 		var result any
-		elems := Elements{ETHSyncing(uuid.NewString(), &result)}
+		elems := Elements{ETHSyncing(uuid.New().String(), &result)}
 		s.Require().NoError(n.client.Batch(s.ctx, elems), n.name)
 	}
 }
@@ -250,7 +250,7 @@ func (s *HyperEVMRPCSuite) TestETHSyncing() {
 func (s *HyperEVMRPCSuite) TestNetVersion() {
 	for _, n := range s.networks() {
 		var result string
-		elems := Elements{NetVersion(uuid.NewString(), &result)}
+		elems := Elements{NetVersion(uuid.New().String(), &result)}
 		s.Require().NoError(n.client.Batch(s.ctx, elems), n.name)
 	}
 }
@@ -258,7 +258,7 @@ func (s *HyperEVMRPCSuite) TestNetVersion() {
 func (s *HyperEVMRPCSuite) TestWeb3ClientVersion() {
 	for _, n := range s.networks() {
 		var result string
-		elems := Elements{Web3ClientVersion(uuid.NewString(), &result)}
+		elems := Elements{Web3ClientVersion(uuid.New().String(), &result)}
 		s.Require().NoError(n.client.Batch(s.ctx, elems), n.name)
 	}
 }
@@ -267,10 +267,10 @@ func (s *HyperEVMRPCSuite) TestBatchEIP1559FeeData() {
 	for _, n := range s.networks() {
 		var nonce, maxPriorityFeePerGas, gasPrice, chainID string
 		elems := Elements{
-			ETHGetTransactionCount(uuid.NewString(), n.address, "latest", &nonce),
-			ETHMaxPriorityFeePerGas(uuid.NewString(), &maxPriorityFeePerGas),
-			ETHGasPrice(uuid.NewString(), &gasPrice),
-			ETHChainID(uuid.NewString(), &chainID),
+			ETHGetTransactionCount(uuid.New().String(), n.address, "latest", &nonce),
+			ETHMaxPriorityFeePerGas(uuid.New().String(), &maxPriorityFeePerGas),
+			ETHGasPrice(uuid.New().String(), &gasPrice),
+			ETHChainID(uuid.New().String(), &chainID),
 		}
 		s.Require().NoError(n.client.Batch(s.ctx, elems), n.name)
 		s.Require().NotEmpty(nonce, n.name)
