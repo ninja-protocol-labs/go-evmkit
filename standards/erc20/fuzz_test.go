@@ -84,7 +84,10 @@ func FuzzDecodeBalanceOfRoundTrip(f *testing.F) {
 	f.Add(make([]byte, 32))
 
 	f.Fuzz(func(t *testing.T, raw []byte) {
-		value := clampUint256(raw)
+		if len(raw) > 32 {
+			raw = raw[len(raw)-32:]
+		}
+		value := new(big.Int).SetBytes(raw)
 
 		data, err := abi.Pack(abi.Types{abi.Uint256}, value)
 		require.NoError(t, err)
@@ -103,8 +106,6 @@ func FuzzExtractTransfersCrashSafety(f *testing.F) {
 	f.Add(t0[:], fuzzAddr1.Bytes(), fuzzAddr2.Bytes(), []byte{0x2a})
 	f.Add([]byte{}, []byte{}, []byte{}, []byte{})
 	f.Add(make([]byte, 32), make([]byte, 20), make([]byte, 20), make([]byte, 32))
-	// a real production incident: a hand-written Yul contract emitting a
-	// Transfer-shaped log with a 1-byte data payload instead of a 32-byte word.
 	f.Add(t0[:], fuzzAddr1.Bytes(), fuzzAddr2.Bytes(), []byte{0x01})
 
 	f.Fuzz(func(t *testing.T, topic0Raw, topic1Raw, topic2Raw, data []byte) {
@@ -134,7 +135,10 @@ func FuzzExtractTransfersRoundTrip(f *testing.F) {
 	f.Fuzz(func(t *testing.T, fromRaw, toRaw, valueRaw []byte) {
 		from := types.NewAddressFromBytes(fromRaw)
 		to := types.NewAddressFromBytes(toRaw)
-		value := clampUint256(valueRaw)
+		if len(valueRaw) > 32 {
+			valueRaw = valueRaw[len(valueRaw)-32:]
+		}
+		value := new(big.Int).SetBytes(valueRaw)
 
 		data, err := abi.Pack(abi.Types{abi.Uint256}, value)
 		require.NoError(t, err)
@@ -166,11 +170,4 @@ func FuzzExtractTransfersRoundTrip(f *testing.F) {
 		require.NoError(t, err)
 		require.Empty(t, approvals)
 	})
-}
-
-func clampUint256(raw []byte) *big.Int {
-	if len(raw) > 32 {
-		raw = raw[len(raw)-32:]
-	}
-	return new(big.Int).SetBytes(raw)
 }

@@ -17,6 +17,7 @@ import (
 	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
+// go test -run '^$' -fuzz '^FuzzCallParams$' -fuzztime=10s ./bind
 func FuzzCallParams(f *testing.F) {
 	f.Add([]byte{}, []byte{}, false, false, "", []byte{})
 	f.Add(make([]byte, 20), []byte{0x00}, true, true, "latest", []byte{0x70, 0xa0, 0x82, 0x31})
@@ -90,6 +91,7 @@ func FuzzCallParams(f *testing.F) {
 	})
 }
 
+// go test -run '^$' -fuzz '^FuzzTransactRoundTrip$' -fuzztime=10s ./bind
 func FuzzTransactRoundTrip(f *testing.F) {
 	f.Add([]byte{}, false, []byte{}, []byte{}, uint64(0), uint64(21_000), true)
 	f.Add(make([]byte, 20), true, []byte{0x01}, []byte{0xa9, 0x05, 0x9c, 0xbb}, uint64(42), uint64(100_000), true)

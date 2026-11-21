@@ -17,33 +17,20 @@ var (
 	baseUSDC = types.MustNewAddressFromHex("0x833589fcd6edb6e08f4c7c32d4f71b54bda02913")
 )
 
-func realBaseReceiptLogs(t *testing.T) []tx.Log {
-	t.Helper()
-
-	mustTestData := func(t *testing.T, hexStr string) []byte {
-		t.Helper()
-		b, err := encoding.Hex.Decode(hexStr)
-		if err != nil {
-			panic(err)
-		}
-		return b
-	}
-
-	return []tx.Log{
+func TestExtractTransfersRealReceipt(t *testing.T) {
+	logs := []tx.Log{
 		{
 			Address: types.MustNewAddressFromHex("0x675d5cebae87ecb8acc7f057e95156f7be9697d1"),
 			Topics: []*types.Hash{
 				types.MustNewHashFromHex("0x3d0ce9bfc3ed7d6862dbb28b2dea94561fe714a1b4d019aa8af39730d1ad7c3d"),
 				types.MustNewHashFromHex("0x000000000000000000000000a5c1ce365ddb5a91ff466774ec4bdf8f97cb9f55"),
 			},
-			Data: mustTestData(t, "0x000000000000000000000000000000000000000000000000000011a77417621c"),
 		},
 		{
 			Address: types.MustNewAddressFromHex("0xa5c1ce365ddb5a91ff466774ec4bdf8f97cb9f55"),
 			Topics: []*types.Hash{
 				types.MustNewHashFromHex("0x6ded982279c8387ad8a63e73385031a3807c1862e633f06e09d11bcb6e282f60"),
 			},
-			Data: mustTestData(t, "0x0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000675d5cebae87ecb8acc7f057e95156f7be9697d1000000000000000000000000000000000000000000000000000011a77417621c"),
 		},
 		{
 			Address: weth,
@@ -52,7 +39,6 @@ func realBaseReceiptLogs(t *testing.T) []tx.Log {
 				types.MustNewHashFromHex("0x00000000000000000000000067d03631fe51b741c0c00c4e16eb662ac84381df"),
 				types.MustNewHashFromHex("0x0000000000000000000000006667c8dc9fbfec411e7c1ee2b24de960149f930f"),
 			},
-			Data: mustTestData(t, "0x0000000000000000000000000000000000000000000000000007cabcaef955e9"),
 		},
 		{
 			Address: weth,
@@ -61,7 +47,6 @@ func realBaseReceiptLogs(t *testing.T) []tx.Log {
 				types.MustNewHashFromHex("0x0000000000000000000000006667c8dc9fbfec411e7c1ee2b24de960149f930f"),
 				types.MustNewHashFromHex("0x000000000000000000000000ba12222222228d8ba445958a75a0704d566bf2c8"),
 			},
-			Data: mustTestData(t, "0x0000000000000000000000000000000000000000000000000007cabcaef955e9"),
 		},
 		{
 			Address: weth,
@@ -70,7 +55,6 @@ func realBaseReceiptLogs(t *testing.T) []tx.Log {
 				types.MustNewHashFromHex("0x0000000000000000000000006667c8dc9fbfec411e7c1ee2b24de960149f930f"),
 				types.MustNewHashFromHex("0x000000000000000000000000ba12222222228d8ba445958a75a0704d566bf2c8"),
 			},
-			Data: mustTestData(t, "0x0000000000000000000000000000000000000000000000000007cabcaef955e9"),
 		},
 		{
 			Address: baseUSDC,
@@ -79,7 +63,6 @@ func realBaseReceiptLogs(t *testing.T) []tx.Log {
 				types.MustNewHashFromHex("0x000000000000000000000000ba12222222228d8ba445958a75a0704d566bf2c8"),
 				types.MustNewHashFromHex("0x0000000000000000000000001231deb6f5749ef6ce6943a275a1d3e7486f4eae"),
 			},
-			Data: mustTestData(t, "0x000000000000000000000000000000000000000000000000000000000059d67d"),
 		},
 		{
 			Address: baseUSDC,
@@ -88,13 +71,23 @@ func realBaseReceiptLogs(t *testing.T) []tx.Log {
 				types.MustNewHashFromHex("0x0000000000000000000000001231deb6f5749ef6ce6943a275a1d3e7486f4eae"),
 				types.MustNewHashFromHex("0x00000000000000000000000009aea4b2242abc8bb4bb78d537a67a245a7bec64"),
 			},
-			Data: mustTestData(t, "0x000000000000000000000000000000000000000000000000000000000059d67d"),
 		},
 	}
-}
+	for i, hexData := range []string{
+		"0x000000000000000000000000000000000000000000000000000011a77417621c",
+		"0x0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000675d5cebae87ecb8acc7f057e95156f7be9697d1000000000000000000000000000000000000000000000000000011a77417621c",
+		"0x0000000000000000000000000000000000000000000000000007cabcaef955e9",
+		"0x0000000000000000000000000000000000000000000000000007cabcaef955e9",
+		"0x0000000000000000000000000000000000000000000000000007cabcaef955e9",
+		"0x000000000000000000000000000000000000000000000000000000000059d67d",
+		"0x000000000000000000000000000000000000000000000000000000000059d67d",
+	} {
+		data, err := encoding.Hex.Decode(hexData)
+		require.NoError(t, err)
+		logs[i].Data = data
+	}
 
-func TestExtractTransfersRealReceipt(t *testing.T) {
-	transfers, err := ExtractTransfers(realBaseReceiptLogs(t))
+	transfers, err := ExtractTransfers(logs)
 	require.NoError(t, err)
 	require.Len(t, transfers, 4)
 
@@ -114,7 +107,76 @@ func TestExtractTransfersRealReceipt(t *testing.T) {
 }
 
 func TestExtractApprovalsRealReceipt(t *testing.T) {
-	approvals, err := ExtractApprovals(realBaseReceiptLogs(t))
+	logs := []tx.Log{
+		{
+			Address: types.MustNewAddressFromHex("0x675d5cebae87ecb8acc7f057e95156f7be9697d1"),
+			Topics: []*types.Hash{
+				types.MustNewHashFromHex("0x3d0ce9bfc3ed7d6862dbb28b2dea94561fe714a1b4d019aa8af39730d1ad7c3d"),
+				types.MustNewHashFromHex("0x000000000000000000000000a5c1ce365ddb5a91ff466774ec4bdf8f97cb9f55"),
+			},
+		},
+		{
+			Address: types.MustNewAddressFromHex("0xa5c1ce365ddb5a91ff466774ec4bdf8f97cb9f55"),
+			Topics: []*types.Hash{
+				types.MustNewHashFromHex("0x6ded982279c8387ad8a63e73385031a3807c1862e633f06e09d11bcb6e282f60"),
+			},
+		},
+		{
+			Address: weth,
+			Topics: []*types.Hash{
+				types.MustNewHashFromHex("0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"),
+				types.MustNewHashFromHex("0x00000000000000000000000067d03631fe51b741c0c00c4e16eb662ac84381df"),
+				types.MustNewHashFromHex("0x0000000000000000000000006667c8dc9fbfec411e7c1ee2b24de960149f930f"),
+			},
+		},
+		{
+			Address: weth,
+			Topics: []*types.Hash{
+				types.MustNewHashFromHex("0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925"),
+				types.MustNewHashFromHex("0x0000000000000000000000006667c8dc9fbfec411e7c1ee2b24de960149f930f"),
+				types.MustNewHashFromHex("0x000000000000000000000000ba12222222228d8ba445958a75a0704d566bf2c8"),
+			},
+		},
+		{
+			Address: weth,
+			Topics: []*types.Hash{
+				types.MustNewHashFromHex("0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"),
+				types.MustNewHashFromHex("0x0000000000000000000000006667c8dc9fbfec411e7c1ee2b24de960149f930f"),
+				types.MustNewHashFromHex("0x000000000000000000000000ba12222222228d8ba445958a75a0704d566bf2c8"),
+			},
+		},
+		{
+			Address: baseUSDC,
+			Topics: []*types.Hash{
+				types.MustNewHashFromHex("0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"),
+				types.MustNewHashFromHex("0x000000000000000000000000ba12222222228d8ba445958a75a0704d566bf2c8"),
+				types.MustNewHashFromHex("0x0000000000000000000000001231deb6f5749ef6ce6943a275a1d3e7486f4eae"),
+			},
+		},
+		{
+			Address: baseUSDC,
+			Topics: []*types.Hash{
+				types.MustNewHashFromHex("0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"),
+				types.MustNewHashFromHex("0x0000000000000000000000001231deb6f5749ef6ce6943a275a1d3e7486f4eae"),
+				types.MustNewHashFromHex("0x00000000000000000000000009aea4b2242abc8bb4bb78d537a67a245a7bec64"),
+			},
+		},
+	}
+	for i, hexData := range []string{
+		"0x000000000000000000000000000000000000000000000000000011a77417621c",
+		"0x0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000675d5cebae87ecb8acc7f057e95156f7be9697d1000000000000000000000000000000000000000000000000000011a77417621c",
+		"0x0000000000000000000000000000000000000000000000000007cabcaef955e9",
+		"0x0000000000000000000000000000000000000000000000000007cabcaef955e9",
+		"0x0000000000000000000000000000000000000000000000000007cabcaef955e9",
+		"0x000000000000000000000000000000000000000000000000000000000059d67d",
+		"0x000000000000000000000000000000000000000000000000000000000059d67d",
+	} {
+		data, err := encoding.Hex.Decode(hexData)
+		require.NoError(t, err)
+		logs[i].Data = data
+	}
+
+	approvals, err := ExtractApprovals(logs)
 	require.NoError(t, err)
 	require.Len(t, approvals, 1)
 	require.True(t, approvals[0].Contract.Equal(weth))

@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/standards/deploy"
 	"github.com/ninja-protocol-labs/go-evmkit/standards/eip712"
@@ -221,7 +222,7 @@ func (s *ERC2612Suite) TearDownSuite() {
 
 		for _, token := range s.tokens {
 			for _, holder := range []*types.Address{s.from, s.spender, s.to} {
-				balance, err := s.erc20.BalanceOf(s.ctx, token, holder, rpc.BlockTagLatest)
+				balance, err := s.erc20.BalanceOf(s.ctx, nil, erc20.NewBalanceOfRequest(token, holder))
 				s.Require().NoError(err)
 				if balance.Sign() == 0 {
 					continue
@@ -278,7 +279,7 @@ func (s *ERC2612Suite) TestReadMethods() {
 		domainSeparator, err := s.erc2612.DomainSeparator(s.ctx, token, rpc.BlockTagLatest)
 		s.Require().NoError(err)
 
-		balances, err := s.erc20.TokenBalances(s.ctx, s.multicall, token, []*types.Address{s.from, s.spender, s.to}, false, rpc.BlockTagLatest)
+		balances, err := s.erc20.TokenBalances(s.ctx, nil, erc20.NewTokenBalancesRequest(s.multicall, token, []*types.Address{s.from, s.spender, s.to}, false))
 		s.Require().NoError(err)
 
 		s.T().Logf("ERC2612 %s TestReadMethods Result", token)
@@ -293,7 +294,7 @@ func (s *ERC2612Suite) TestReadMethods() {
 
 func (s *ERC2612Suite) TestDomainSeparatorMatchesOnChain() {
 	for _, token := range s.tokens {
-		name, err := s.erc20.Name(s.ctx, token, rpc.BlockTagLatest)
+		name, err := s.erc20.Name(s.ctx, nil, erc20.NewNameRequest(token))
 		s.Require().NoError(err)
 
 		domain := eip712.NewDomain(name, DefaultVersion, s.chainID, token, nil)
@@ -314,7 +315,7 @@ func (s *ERC2612Suite) TestDomainSeparatorMatchesOnChain() {
 
 func (s *ERC2612Suite) TestPermit() {
 	for _, token := range s.tokens {
-		name, err := s.erc20.Name(s.ctx, token, rpc.BlockTagLatest)
+		name, err := s.erc20.Name(s.ctx, nil, erc20.NewNameRequest(token))
 		s.Require().NoError(err)
 		domain := eip712.NewDomain(name, DefaultVersion, s.chainID, token, nil)
 
@@ -357,7 +358,7 @@ func (s *ERC2612Suite) TestPermit() {
 
 		var allowance *big.Int
 		s.Require().Eventually(func() bool {
-			allowance, err = s.erc20.Allowance(s.ctx, token, s.from, s.spender, rpc.BlockTagLatest)
+			allowance, err = s.erc20.Allowance(s.ctx, nil, erc20.NewAllowanceRequest(token, s.from, s.spender))
 			return err == nil && s.value.Cmp(allowance) == 0
 		}, 10*time.Second, 500*time.Millisecond, "allowance not visible after permit")
 
@@ -368,15 +369,11 @@ func (s *ERC2612Suite) TestPermit() {
 		s.T().Logf("\tNonce: %s -> %s", nonceBefore, nonceAfter)
 		s.T().Logf("\tTx: %s", permitHash)
 
-		transferFromTx, err := s.erc20.CreateTransferFrom(s.ctx, tx.NewDynamicFeeBuilder(), token, s.spender, s.from, s.to, s.value)
+		transferFromTx, transferHash, err := s.erc20.TransferFrom(s.ctx, bind.NewTransactOptions(s.spenderSigner, tx.NewDynamicFeeBuilder()), erc20.NewTransferFromRequest(token, s.from, s.to, s.value))
 		s.Require().NoError(err)
-		s.Require().NoError(transferFromTx.Sign(s.spenderSigner))
 		s.mu.Lock()
 		s.totalFee.Add(s.totalFee, transferFromTx.MaxFee())
 		s.mu.Unlock()
-
-		transferHash, err := s.erc20.TransferFrom(s.ctx, transferFromTx)
-		s.Require().NoError(err)
 
 		transferReceipt, err := tx.WaitForReceipt(s.ctx, s.client, transferHash, time.Duration(s.Interval)*time.Millisecond, 15*time.Second)
 		s.Require().NoError(err)
@@ -392,13 +389,13 @@ func (s *ERC2612Suite) TestPermit() {
 
 		var allowanceAfter *big.Int
 		s.Require().Eventually(func() bool {
-			allowanceAfter, err = s.erc20.Allowance(s.ctx, token, s.from, s.spender, rpc.BlockTagLatest)
+			allowanceAfter, err = s.erc20.Allowance(s.ctx, nil, erc20.NewAllowanceRequest(token, s.from, s.spender))
 			return err == nil && allowanceAfter.Sign() == 0
 		}, 10*time.Second, time.Duration(s.Interval)*time.Millisecond, "allowance not visible as consumed after transferFrom")
 
 		var toBalance *big.Int
 		s.Require().Eventually(func() bool {
-			toBalance, err = s.erc20.BalanceOf(s.ctx, token, s.to, rpc.BlockTagLatest)
+			toBalance, err = s.erc20.BalanceOf(s.ctx, nil, erc20.NewBalanceOfRequest(token, s.to))
 			return err == nil && s.value.Cmp(toBalance) == 0
 		}, 10*time.Second, time.Duration(s.Interval)*time.Millisecond, "balance not visible after transferFrom")
 
@@ -414,7 +411,7 @@ func (s *ERC2612Suite) TestPermit() {
 
 func (s *ERC2612Suite) TestPermitExpiredDeadline() {
 	for _, token := range s.tokens {
-		name, err := s.erc20.Name(s.ctx, token, rpc.BlockTagLatest)
+		name, err := s.erc20.Name(s.ctx, nil, erc20.NewNameRequest(token))
 		s.Require().NoError(err)
 		domain := eip712.NewDomain(name, DefaultVersion, s.chainID, token, nil)
 
@@ -438,7 +435,7 @@ func (s *ERC2612Suite) TestPermitExpiredDeadline() {
 
 func (s *ERC2612Suite) TestPermitWrongSigner() {
 	for _, token := range s.tokens {
-		name, err := s.erc20.Name(s.ctx, token, rpc.BlockTagLatest)
+		name, err := s.erc20.Name(s.ctx, nil, erc20.NewNameRequest(token))
 		s.Require().NoError(err)
 		domain := eip712.NewDomain(name, DefaultVersion, s.chainID, token, nil)
 
@@ -461,7 +458,7 @@ func (s *ERC2612Suite) TestPermitWrongSigner() {
 
 func (s *ERC2612Suite) TestPermitReplayRejected() {
 	for _, token := range s.tokens {
-		name, err := s.erc20.Name(s.ctx, token, rpc.BlockTagLatest)
+		name, err := s.erc20.Name(s.ctx, nil, erc20.NewNameRequest(token))
 		s.Require().NoError(err)
 		domain := eip712.NewDomain(name, DefaultVersion, s.chainID, token, nil)
 
@@ -508,7 +505,7 @@ func (s *ERC2612Suite) TestPermitOverwritesAllowance() {
 	secondValue := new(big.Int).Quo(s.value, big.NewInt(2))
 
 	for _, token := range s.tokens {
-		name, err := s.erc20.Name(s.ctx, token, rpc.BlockTagLatest)
+		name, err := s.erc20.Name(s.ctx, nil, erc20.NewNameRequest(token))
 		s.Require().NoError(err)
 		domain := eip712.NewDomain(name, DefaultVersion, s.chainID, token, nil)
 
@@ -542,13 +539,13 @@ func (s *ERC2612Suite) TestPermitOverwritesAllowance() {
 		firstHash := submit(s.value, deadline)
 		var allowance *big.Int
 		s.Require().Eventually(func() bool {
-			allowance, err = s.erc20.Allowance(s.ctx, token, s.from, s.spender, rpc.BlockTagLatest)
+			allowance, err = s.erc20.Allowance(s.ctx, nil, erc20.NewAllowanceRequest(token, s.from, s.spender))
 			return err == nil && s.value.Cmp(allowance) == 0
 		}, 10*time.Second, time.Duration(s.Interval)*time.Millisecond, "allowance not visible after first permit")
 
 		secondHash := submit(secondValue, deadline)
 		s.Require().Eventually(func() bool {
-			allowance, err = s.erc20.Allowance(s.ctx, token, s.from, s.spender, rpc.BlockTagLatest)
+			allowance, err = s.erc20.Allowance(s.ctx, nil, erc20.NewAllowanceRequest(token, s.from, s.spender))
 			return err == nil && secondValue.Cmp(allowance) == 0
 		}, 10*time.Second, time.Duration(s.Interval)*time.Millisecond, "allowance not visible after second permit")
 

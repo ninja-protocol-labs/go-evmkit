@@ -11,6 +11,7 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
+	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core"
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
@@ -214,15 +215,11 @@ func (s *StateViewSuite) SetupSuite() {
 		s.Require().True(mintReceipt.Status, "mint transaction reverted")
 
 		for _, spender := range []*types.Address{s.permit2Contract, s.poolSwapTest} {
-			unsignedApprove, err := s.erc20.CreateApprove(s.ctx, tx.NewDynamicFeeBuilder(), token, s.from, spender, s.MintValue)
+			approveTx, approveHash, err := s.erc20.Approve(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), erc20.NewApproveRequest(token, spender, s.MintValue))
 			s.Require().NoError(err)
-			s.Require().NoError(unsignedApprove.Sign(s.signer))
 			s.mu.Lock()
-			s.totalFee.Add(s.totalFee, unsignedApprove.MaxFee())
+			s.totalFee.Add(s.totalFee, approveTx.MaxFee())
 			s.mu.Unlock()
-
-			approveHash, err := s.erc20.Approve(s.ctx, unsignedApprove)
-			s.Require().NoError(err)
 
 			approveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, approveHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
 			s.Require().NoError(err)
@@ -357,7 +354,7 @@ func (s *StateViewSuite) TearDownSuite() {
 	}
 
 	if s.tokens[0] != nil && s.tokens[1] != nil {
-		balances, err := s.erc20.AddressBalances(s.ctx, s.multicall, s.from, s.tokens[:], false, rpc.BlockTagLatest)
+		balances, err := s.erc20.AddressBalances(s.ctx, nil, erc20.NewAddressBalancesRequest(s.multicall, s.from, s.tokens[:], false))
 		s.Require().NoError(err)
 
 		tokenBurnFn := abi.NewFunction("burn", abi.NewTypes(abi.Address, abi.Uint256), nil)

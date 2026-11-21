@@ -6,30 +6,32 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
+	"github.com/ninja-protocol-labs/go-evmkit/rpc"
 )
 
-func TestNewTransfer(t *testing.T) {
+func TestNewTransferEvent(t *testing.T) {
 	contract := types.MustNewAddressFromHex("0x4200000000000000000000000000000000000006")
 	from := types.MustNewAddressFromHex("0x67d03631fe51b741c0c00c4e16eb662ac84381df")
 	to := types.MustNewAddressFromHex("0x6667c8dc9fbfec411e7c1ee2b24de960149f930f")
 	value := big.NewInt(42)
 
-	tr := NewTransfer(contract, from, to, value)
+	tr := NewTransferEvent(contract, from, to, value)
 	require.Same(t, contract, tr.Contract)
 	require.Same(t, from, tr.From)
 	require.Same(t, to, tr.To)
 	require.Same(t, value, tr.Value)
 }
 
-func TestNewApproval(t *testing.T) {
+func TestNewApprovalEvent(t *testing.T) {
 	contract := types.MustNewAddressFromHex("0x4200000000000000000000000000000000000006")
 	owner := types.MustNewAddressFromHex("0x6667c8dc9fbfec411e7c1ee2b24de960149f930f")
 	spender := types.MustNewAddressFromHex("0xba12222222228d8ba445958a75a0704d566bf2c8")
 	value := big.NewInt(7)
 
-	ap := NewApproval(contract, owner, spender, value)
+	ap := NewApprovalEvent(contract, owner, spender, value)
 	require.Same(t, contract, ap.Contract)
 	require.Same(t, owner, ap.Owner)
 	require.Same(t, spender, ap.Spender)
@@ -188,5 +190,357 @@ func TestCustomErrorSignatures(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, tc.err.Selector(), parsed.Selector())
 		})
+	}
+}
+
+func TestNewTotalSupplyRequest(t *testing.T) {
+	contract := types.MustNewAddressFromHex("0x4200000000000000000000000000000000000006")
+
+	req := NewTotalSupplyRequest(contract)
+	require.Equal(t, &TotalSupplyRequest{Contract: contract}, req)
+}
+
+func TestNewBalanceOfRequest(t *testing.T) {
+	contract := types.MustNewAddressFromHex("0x4200000000000000000000000000000000000006")
+	account := types.MustNewAddressFromHex("0x6667c8dc9fbfec411e7c1ee2b24de960149f930f")
+
+	req := NewBalanceOfRequest(contract, account)
+	require.Equal(t, &BalanceOfRequest{Contract: contract, Account: account}, req)
+}
+
+func TestNewAllowanceRequest(t *testing.T) {
+	contract := types.MustNewAddressFromHex("0x4200000000000000000000000000000000000006")
+	owner := types.MustNewAddressFromHex("0x6667c8dc9fbfec411e7c1ee2b24de960149f930f")
+	spender := types.MustNewAddressFromHex("0xba12222222228d8ba445958a75a0704d566bf2c8")
+
+	req := NewAllowanceRequest(contract, owner, spender)
+	require.Equal(t, &AllowanceRequest{Contract: contract, Owner: owner, Spender: spender}, req)
+}
+
+func TestNewMetadataRequests(t *testing.T) {
+	contract := types.MustNewAddressFromHex("0x4200000000000000000000000000000000000006")
+
+	require.Equal(t, &NameRequest{Contract: contract}, NewNameRequest(contract))
+	require.Equal(t, &SymbolRequest{Contract: contract}, NewSymbolRequest(contract))
+	require.Equal(t, &DecimalsRequest{Contract: contract}, NewDecimalsRequest(contract))
+}
+
+func TestNewTransferRequests(t *testing.T) {
+	contract := types.MustNewAddressFromHex("0x4200000000000000000000000000000000000006")
+	from := types.MustNewAddressFromHex("0x6667c8dc9fbfec411e7c1ee2b24de960149f930f")
+	to := types.MustNewAddressFromHex("0xba12222222228d8ba445958a75a0704d566bf2c8")
+	value := big.NewInt(12345)
+
+	require.Equal(t, &TransferRequest{Contract: contract, To: to, Amount: value}, NewTransferRequest(contract, to, value))
+	require.Equal(t, &ApproveRequest{Contract: contract, Spender: to, Amount: value}, NewApproveRequest(contract, to, value))
+	require.Equal(t, &TransferFromRequest{Contract: contract, From: from, To: to, Amount: value}, NewTransferFromRequest(contract, from, to, value))
+}
+
+func TestReadsRejectInvalidRequest(t *testing.T) {
+	contract := types.MustNewAddressFromHex("0x4200000000000000000000000000000000000006")
+	owner := types.MustNewAddressFromHex("0x6667c8dc9fbfec411e7c1ee2b24de960149f930f")
+	value := big.NewInt(1)
+	e := New(rpc.NewClient("http://127.0.0.1:0"))
+
+	for _, tc := range []struct {
+		req  *TotalSupplyRequest
+		want string
+	}{
+		{nil, "request is nil"},
+		{NewTotalSupplyRequest(nil), "contract is nil"},
+	} {
+		n, err := e.TotalSupply(t.Context(), nil, tc.req)
+		require.ErrorIs(t, err, bind.ErrInvalidRequest)
+		require.ErrorContains(t, err, tc.want)
+		require.Nil(t, n)
+	}
+
+	for _, tc := range []struct {
+		req  *BalanceOfRequest
+		want string
+	}{
+		{nil, "request is nil"},
+		{NewBalanceOfRequest(nil, owner), "contract is nil"},
+		{NewBalanceOfRequest(contract, nil), "account is nil"},
+	} {
+		n, err := e.BalanceOf(t.Context(), nil, tc.req)
+		require.ErrorIs(t, err, bind.ErrInvalidRequest)
+		require.ErrorContains(t, err, tc.want)
+		require.Nil(t, n)
+	}
+
+	for _, tc := range []struct {
+		req  *AllowanceRequest
+		want string
+	}{
+		{nil, "request is nil"},
+		{NewAllowanceRequest(nil, owner, owner), "contract is nil"},
+		{NewAllowanceRequest(contract, nil, owner), "owner is nil"},
+		{NewAllowanceRequest(contract, owner, nil), "spender is nil"},
+	} {
+		n, err := e.Allowance(t.Context(), nil, tc.req)
+		require.ErrorIs(t, err, bind.ErrInvalidRequest)
+		require.ErrorContains(t, err, tc.want)
+		require.Nil(t, n)
+	}
+
+	for _, tc := range []struct {
+		req  *NameRequest
+		want string
+	}{
+		{nil, "request is nil"},
+		{NewNameRequest(nil), "contract is nil"},
+	} {
+		out, err := e.Name(t.Context(), nil, tc.req)
+		require.ErrorIs(t, err, bind.ErrInvalidRequest)
+		require.ErrorContains(t, err, tc.want)
+		require.Empty(t, out)
+	}
+
+	for _, tc := range []struct {
+		req  *SymbolRequest
+		want string
+	}{
+		{nil, "request is nil"},
+		{NewSymbolRequest(nil), "contract is nil"},
+	} {
+		out, err := e.Symbol(t.Context(), nil, tc.req)
+		require.ErrorIs(t, err, bind.ErrInvalidRequest)
+		require.ErrorContains(t, err, tc.want)
+		require.Empty(t, out)
+	}
+
+	for _, tc := range []struct {
+		req  *DecimalsRequest
+		want string
+	}{
+		{nil, "request is nil"},
+		{NewDecimalsRequest(nil), "contract is nil"},
+	} {
+		out, err := e.Decimals(t.Context(), nil, tc.req)
+		require.ErrorIs(t, err, bind.ErrInvalidRequest)
+		require.ErrorContains(t, err, tc.want)
+		require.Zero(t, out)
+	}
+
+	for _, tc := range []struct {
+		req  *TransferRequest
+		want string
+	}{
+		{nil, "request is nil"},
+		{NewTransferRequest(nil, owner, value), "contract is nil"},
+		{NewTransferRequest(contract, nil, value), "to is nil"},
+		{NewTransferRequest(contract, owner, nil), "amount is nil"},
+	} {
+		ok, err := e.CallTransfer(t.Context(), nil, tc.req)
+		require.ErrorIs(t, err, bind.ErrInvalidRequest)
+		require.ErrorContains(t, err, tc.want)
+		require.False(t, ok)
+	}
+
+	for _, tc := range []struct {
+		req  *ApproveRequest
+		want string
+	}{
+		{nil, "request is nil"},
+		{NewApproveRequest(nil, owner, value), "contract is nil"},
+		{NewApproveRequest(contract, nil, value), "spender is nil"},
+		{NewApproveRequest(contract, owner, nil), "amount is nil"},
+	} {
+		ok, err := e.CallApprove(t.Context(), nil, tc.req)
+		require.ErrorIs(t, err, bind.ErrInvalidRequest)
+		require.ErrorContains(t, err, tc.want)
+		require.False(t, ok)
+	}
+
+	for _, tc := range []struct {
+		req  *TransferFromRequest
+		want string
+	}{
+		{nil, "request is nil"},
+		{NewTransferFromRequest(nil, owner, owner, value), "contract is nil"},
+		{NewTransferFromRequest(contract, nil, owner, value), "from is nil"},
+		{NewTransferFromRequest(contract, owner, nil, value), "to is nil"},
+		{NewTransferFromRequest(contract, owner, owner, nil), "amount is nil"},
+	} {
+		ok, err := e.CallTransferFrom(t.Context(), nil, tc.req)
+		require.ErrorIs(t, err, bind.ErrInvalidRequest)
+		require.ErrorContains(t, err, tc.want)
+		require.False(t, ok)
+	}
+}
+
+func TestWritesRejectInvalidRequest(t *testing.T) {
+	contract := types.MustNewAddressFromHex("0x4200000000000000000000000000000000000006")
+	owner := types.MustNewAddressFromHex("0x6667c8dc9fbfec411e7c1ee2b24de960149f930f")
+	value := big.NewInt(1)
+	e := New(rpc.NewClient("http://127.0.0.1:0"))
+
+	for _, tc := range []struct {
+		req  *TransferRequest
+		want string
+	}{
+		{nil, "request is nil"},
+		{NewTransferRequest(nil, owner, value), "contract is nil"},
+		{NewTransferRequest(contract, nil, value), "to is nil"},
+		{NewTransferRequest(contract, owner, nil), "amount is nil"},
+	} {
+		signed, hash, err := e.Transfer(t.Context(), nil, tc.req)
+		require.ErrorIs(t, err, bind.ErrInvalidRequest)
+		require.ErrorContains(t, err, tc.want)
+		require.Nil(t, signed)
+		require.Nil(t, hash)
+	}
+
+	for _, tc := range []struct {
+		req  *ApproveRequest
+		want string
+	}{
+		{nil, "request is nil"},
+		{NewApproveRequest(nil, owner, value), "contract is nil"},
+		{NewApproveRequest(contract, nil, value), "spender is nil"},
+		{NewApproveRequest(contract, owner, nil), "amount is nil"},
+	} {
+		signed, hash, err := e.Approve(t.Context(), nil, tc.req)
+		require.ErrorIs(t, err, bind.ErrInvalidRequest)
+		require.ErrorContains(t, err, tc.want)
+		require.Nil(t, signed)
+		require.Nil(t, hash)
+	}
+
+	for _, tc := range []struct {
+		req  *TransferFromRequest
+		want string
+	}{
+		{nil, "request is nil"},
+		{NewTransferFromRequest(nil, owner, owner, value), "contract is nil"},
+		{NewTransferFromRequest(contract, nil, owner, value), "from is nil"},
+		{NewTransferFromRequest(contract, owner, nil, value), "to is nil"},
+		{NewTransferFromRequest(contract, owner, owner, nil), "amount is nil"},
+	} {
+		signed, hash, err := e.TransferFrom(t.Context(), nil, tc.req)
+		require.ErrorIs(t, err, bind.ErrInvalidRequest)
+		require.ErrorContains(t, err, tc.want)
+		require.Nil(t, signed)
+		require.Nil(t, hash)
+	}
+
+	signed, hash, err := e.Transfer(t.Context(), nil, NewTransferRequest(contract, owner, value))
+	require.ErrorIs(t, err, bind.ErrInvalidOptions)
+	require.ErrorContains(t, err, "options is nil")
+	require.Nil(t, signed)
+	require.Nil(t, hash)
+}
+
+func TestNewBatcherRequests(t *testing.T) {
+	multicall := types.MustNewAddressFromHex("0xca11bde05977b3631167028862be2a173976ca11")
+	token := types.MustNewAddressFromHex("0x4200000000000000000000000000000000000006")
+	owner := types.MustNewAddressFromHex("0x6667c8dc9fbfec411e7c1ee2b24de960149f930f")
+	spender := types.MustNewAddressFromHex("0xba12222222228d8ba445958a75a0704d566bf2c8")
+	list := []*types.Address{owner, spender}
+
+	require.Equal(t, &MetadataRequest{Multicall: multicall, Token: token, AllowFailure: true}, NewMetadataRequest(multicall, token, true))
+	require.Equal(t, &MetadataWithBalanceRequest{Multicall: multicall, Token: token, Account: owner, AllowFailure: true}, NewMetadataWithBalanceRequest(multicall, token, owner, true))
+	require.Equal(t, &AllowanceWithBalanceRequest{Multicall: multicall, Token: token, Owner: owner, Spender: spender}, NewAllowanceWithBalanceRequest(multicall, token, owner, spender, false))
+	require.Equal(t, &TokenBalancesRequest{Multicall: multicall, Token: token, Accounts: list}, NewTokenBalancesRequest(multicall, token, list, false))
+	require.Equal(t, &AddressBalancesRequest{Multicall: multicall, Account: owner, Tokens: list}, NewAddressBalancesRequest(multicall, owner, list, false))
+	require.Equal(t, &BalancePairsRequest{Multicall: multicall, Tokens: list, Accounts: list, AllowFailure: true}, NewBalancePairsRequest(multicall, list, list, true))
+}
+
+func TestBatcherRejectsInvalidRequest(t *testing.T) {
+	multicall := types.MustNewAddressFromHex("0xca11bde05977b3631167028862be2a173976ca11")
+	token := types.MustNewAddressFromHex("0x4200000000000000000000000000000000000006")
+	owner := types.MustNewAddressFromHex("0x6667c8dc9fbfec411e7c1ee2b24de960149f930f")
+	e := New(rpc.NewClient("http://127.0.0.1:0"))
+
+	for _, tc := range []struct {
+		req  *MetadataRequest
+		want string
+	}{
+		{nil, "request is nil"},
+		{NewMetadataRequest(nil, token, false), "multicall is nil"},
+		{NewMetadataRequest(multicall, nil, false), "token is nil"},
+	} {
+		out, err := e.Metadata(t.Context(), nil, tc.req)
+		require.ErrorIs(t, err, bind.ErrInvalidRequest)
+		require.ErrorContains(t, err, tc.want)
+		require.Nil(t, out)
+	}
+
+	for _, tc := range []struct {
+		req  *MetadataWithBalanceRequest
+		want string
+	}{
+		{nil, "request is nil"},
+		{NewMetadataWithBalanceRequest(nil, token, owner, false), "multicall is nil"},
+		{NewMetadataWithBalanceRequest(multicall, nil, owner, false), "token is nil"},
+		{NewMetadataWithBalanceRequest(multicall, token, nil, false), "account is nil"},
+	} {
+		out, err := e.MetadataWithBalance(t.Context(), nil, tc.req)
+		require.ErrorIs(t, err, bind.ErrInvalidRequest)
+		require.ErrorContains(t, err, tc.want)
+		require.Nil(t, out)
+	}
+
+	for _, tc := range []struct {
+		req  *AllowanceWithBalanceRequest
+		want string
+	}{
+		{nil, "request is nil"},
+		{NewAllowanceWithBalanceRequest(nil, token, owner, owner, false), "multicall is nil"},
+		{NewAllowanceWithBalanceRequest(multicall, nil, owner, owner, false), "token is nil"},
+		{NewAllowanceWithBalanceRequest(multicall, token, nil, owner, false), "owner is nil"},
+		{NewAllowanceWithBalanceRequest(multicall, token, owner, nil, false), "spender is nil"},
+	} {
+		out, err := e.AllowanceWithBalance(t.Context(), nil, tc.req)
+		require.ErrorIs(t, err, bind.ErrInvalidRequest)
+		require.ErrorContains(t, err, tc.want)
+		require.Nil(t, out)
+	}
+
+	for _, tc := range []struct {
+		req  *TokenBalancesRequest
+		want string
+	}{
+		{nil, "request is nil"},
+		{NewTokenBalancesRequest(nil, token, []*types.Address{owner}, false), "multicall is nil"},
+		{NewTokenBalancesRequest(multicall, nil, []*types.Address{owner}, false), "token is nil"},
+		{NewTokenBalancesRequest(multicall, token, []*types.Address{owner, nil}, false), "accounts[1] is nil"},
+	} {
+		out, err := e.TokenBalances(t.Context(), nil, tc.req)
+		require.ErrorIs(t, err, bind.ErrInvalidRequest)
+		require.ErrorContains(t, err, tc.want)
+		require.Nil(t, out)
+	}
+
+	for _, tc := range []struct {
+		req  *AddressBalancesRequest
+		want string
+	}{
+		{nil, "request is nil"},
+		{NewAddressBalancesRequest(nil, owner, []*types.Address{token}, false), "multicall is nil"},
+		{NewAddressBalancesRequest(multicall, nil, []*types.Address{token}, false), "account is nil"},
+		{NewAddressBalancesRequest(multicall, owner, []*types.Address{nil, token}, false), "tokens[0] is nil"},
+	} {
+		out, err := e.AddressBalances(t.Context(), nil, tc.req)
+		require.ErrorIs(t, err, bind.ErrInvalidRequest)
+		require.ErrorContains(t, err, tc.want)
+		require.Nil(t, out)
+	}
+
+	for _, tc := range []struct {
+		req  *BalancePairsRequest
+		want string
+	}{
+		{nil, "request is nil"},
+		{NewBalancePairsRequest(nil, []*types.Address{token}, []*types.Address{owner}, false), "multicall is nil"},
+		{NewBalancePairsRequest(multicall, []*types.Address{token}, []*types.Address{owner, owner}, false), "tokens and accounts differ in length"},
+		{NewBalancePairsRequest(multicall, []*types.Address{token, nil}, []*types.Address{owner, owner}, false), "tokens[1] is nil"},
+		{NewBalancePairsRequest(multicall, []*types.Address{token, token}, []*types.Address{nil, owner}, false), "accounts[0] is nil"},
+	} {
+		out, err := e.BalancePairs(t.Context(), nil, tc.req)
+		require.ErrorIs(t, err, bind.ErrInvalidRequest)
+		require.ErrorContains(t, err, tc.want)
+		require.Nil(t, out)
 	}
 }

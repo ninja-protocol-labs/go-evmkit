@@ -16,10 +16,8 @@ import (
 )
 
 var (
-	ErrNilTransactOptions = errors.New("bind: transact options must not be nil")
-	ErrNilSigner          = errors.New("bind: signer must not be nil")
-	ErrNilBuilder         = errors.New("bind: builder must not be nil")
-	ErrNilTo              = errors.New("bind: to address must not be nil")
+	ErrInvalidOptions = errors.New("invalid options")
+	ErrInvalidRequest = errors.New("invalid request")
 )
 
 // CallOptions configures an eth_call. A nil *CallOptions is the zero value:
@@ -84,10 +82,10 @@ func (o *TransactOptions) WithValue(value *big.Int) *TransactOptions {
 // From returns the address Signer signs for.
 func (o *TransactOptions) From() (*types.Address, error) {
 	if o == nil {
-		return nil, ErrNilTransactOptions
+		return nil, fmt.Errorf("bind: from: %w: options is nil", ErrInvalidOptions)
 	}
 	if o.Signer == nil {
-		return nil, ErrNilSigner
+		return nil, fmt.Errorf("bind: from: %w: signer is nil", ErrInvalidOptions)
 	}
 	return core.PubkeyToAddress(o.Signer.PublicKey()), nil
 }
@@ -96,7 +94,7 @@ func (o *TransactOptions) From() (*types.Address, error) {
 // errors are returned unwrapped so callers can map revert data to sentinels.
 func Call(ctx context.Context, c rpc.Client, opts *CallOptions, to *types.Address, calldata []byte) ([]byte, error) {
 	if to == nil {
-		return nil, ErrNilTo
+		return nil, fmt.Errorf("bind: call: %w: to is nil", ErrInvalidRequest)
 	}
 	if opts == nil {
 		opts = NewCallOptions()
@@ -122,21 +120,26 @@ func Call(ctx context.Context, c rpc.Client, opts *CallOptions, to *types.Addres
 	if err := c.Call(ctx, rpc.ETHCall("call", params, block, &raw)); err != nil {
 		return nil, err
 	}
-	return encoding.Hex.Decode(raw)
+	data, err := encoding.Hex.Decode(raw)
+	if err != nil {
+		return nil, fmt.Errorf("bind: call: %w", err)
+	}
+	return data, nil
 }
 
-// Transact builds, signs and broadcasts a transaction to "to" with
-// calldata. A nil to creates a contract, with calldata as init code. It
-// returns the signed transaction (e.g. for its nonce) and its hash.
+// Transact builds, signs and broadcasts calldata to "to" (nil deploys a contract),
+// returning the signed transaction and its hash.
 func Transact(ctx context.Context, c rpc.Client, opts *TransactOptions, to *types.Address, calldata []byte) (core.Transaction, *types.Hash, error) {
-	from, err := opts.From()
-	if err != nil {
-		return nil, nil, err
+	if opts == nil {
+		return nil, nil, fmt.Errorf("bind: transact: %w: options is nil", ErrInvalidOptions)
 	}
-
+	if opts.Signer == nil {
+		return nil, nil, fmt.Errorf("bind: transact: %w: signer is nil", ErrInvalidOptions)
+	}
 	if opts.Builder == nil {
-		return nil, nil, ErrNilBuilder
+		return nil, nil, fmt.Errorf("bind: transact: %w: builder is nil", ErrInvalidOptions)
 	}
+	from := core.PubkeyToAddress(opts.Signer.PublicKey())
 
 	value := opts.Value
 	if value == nil {

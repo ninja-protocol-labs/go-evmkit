@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/standards/deploy"
 	"github.com/ninja-protocol-labs/go-evmkit/standards/erc20"
@@ -226,7 +227,7 @@ func (s *PairLifeCycleSuite) TearDownSuite() {
 		tokenBurnFn := abi.NewFunction("burn", abi.NewTypes(abi.Address, abi.Uint256), nil)
 
 		for _, token := range []*types.Address{s.token0, s.token1} {
-			balance, err := s.erc20.BalanceOf(s.ctx, token, s.from, rpc.BlockTagLatest)
+			balance, err := s.erc20.BalanceOf(s.ctx, nil, erc20.NewBalanceOfRequest(token, s.from))
 			s.Require().NoError(err)
 			if balance.Sign() == 0 {
 				continue
@@ -310,15 +311,15 @@ func (s *PairLifeCycleSuite) Test01ReadMethods() {
 	s.Require().NoError(err)
 	s.Require().Zero(price1.Sign())
 
-	name, err := s.v2Pair.Name(s.ctx, s.pair, rpc.BlockTagLatest)
+	name, err := s.v2Pair.Name(s.ctx, nil, erc20.NewNameRequest(s.pair))
 	s.Require().NoError(err)
 	s.Require().Equal("Uniswap V2", name)
 
-	symbol, err := s.v2Pair.Symbol(s.ctx, s.pair, rpc.BlockTagLatest)
+	symbol, err := s.v2Pair.Symbol(s.ctx, nil, erc20.NewSymbolRequest(s.pair))
 	s.Require().NoError(err)
 	s.Require().Equal("UNI-V2", symbol)
 
-	decimals, err := s.v2Pair.Decimals(s.ctx, s.pair, rpc.BlockTagLatest)
+	decimals, err := s.v2Pair.Decimals(s.ctx, nil, erc20.NewDecimalsRequest(s.pair))
 	s.Require().NoError(err)
 	s.Require().Equal(uint8(18), decimals)
 
@@ -342,15 +343,11 @@ func (s *PairLifeCycleSuite) Test02Mint() {
 		s.token1: amount1,
 	}
 	for token, amount := range tokens {
-		unsignedTransfer, err := s.erc20.CreateTransfer(s.ctx, tx.NewDynamicFeeBuilder(), token, s.from, s.pair, amount)
+		transferTx, transferHash, err := s.erc20.Transfer(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), erc20.NewTransferRequest(token, s.pair, amount))
 		s.Require().NoError(err)
-		s.Require().NoError(unsignedTransfer.Sign(s.signer))
 		s.mu.Lock()
-		s.totalFee.Add(s.totalFee, unsignedTransfer.MaxFee())
+		s.totalFee.Add(s.totalFee, transferTx.MaxFee())
 		s.mu.Unlock()
-
-		transferHash, err := s.erc20.Transfer(s.ctx, unsignedTransfer)
-		s.Require().NoError(err)
 
 		transferReceipt, err := tx.WaitForReceipt(s.ctx, s.client, transferHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
 		s.Require().NoError(err)
@@ -393,7 +390,7 @@ func (s *PairLifeCycleSuite) Test02Mint() {
 		return err == nil && amount0.Cmp(reserves.Reserve0) == 0 && amount1.Cmp(reserves.Reserve1) == 0
 	}, 10*time.Second, time.Duration(s.Interval)*time.Millisecond, "reserves not visible after mint")
 
-	lpBalance, err := s.v2Pair.BalanceOf(s.ctx, s.pair, s.from, rpc.BlockTagLatest)
+	lpBalance, err := s.v2Pair.BalanceOf(s.ctx, nil, erc20.NewBalanceOfRequest(s.pair, s.from))
 	s.Require().NoError(err)
 	s.Require().Zero(predicted.Cmp(lpBalance))
 	s.Require().True(lpBalance.Sign() > 0)
@@ -414,13 +411,13 @@ func (s *PairLifeCycleSuite) Test03ReadMethodsAfterMint() {
 	kLast, err := s.v2Pair.KLast(s.ctx, s.pair, rpc.BlockTagLatest)
 	s.Require().NoError(err)
 
-	lpBalance, err := s.v2Pair.BalanceOf(s.ctx, s.pair, s.from, rpc.BlockTagLatest)
+	lpBalance, err := s.v2Pair.BalanceOf(s.ctx, nil, erc20.NewBalanceOfRequest(s.pair, s.from))
 	s.Require().NoError(err)
 
 	minimumLiquidity, err := s.v2Pair.MinimumLiquidity(s.ctx, s.pair, rpc.BlockTagLatest)
 	s.Require().NoError(err)
 
-	totalSupply, err := s.v2Pair.TotalSupply(s.ctx, s.pair, rpc.BlockTagLatest)
+	totalSupply, err := s.v2Pair.TotalSupply(s.ctx, nil, erc20.NewTotalSupplyRequest(s.pair))
 	s.Require().NoError(err)
 	s.Require().Zero(new(big.Int).Add(lpBalance, minimumLiquidity).Cmp(totalSupply))
 
@@ -442,15 +439,11 @@ func (s *PairLifeCycleSuite) Test04Swap() {
 	denominator := new(big.Int).Add(new(big.Int).Mul(reservesBefore.Reserve0, big.NewInt(1000)), amountInWithFee)
 	amountOut := new(big.Int).Div(numerator, denominator)
 
-	unsignedTransfer, err := s.erc20.CreateTransfer(s.ctx, tx.NewDynamicFeeBuilder(), s.token0, s.from, s.pair, amountIn)
+	transferTx, transferHash, err := s.erc20.Transfer(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), erc20.NewTransferRequest(s.token0, s.pair, amountIn))
 	s.Require().NoError(err)
-	s.Require().NoError(unsignedTransfer.Sign(s.signer))
 	s.mu.Lock()
-	s.totalFee.Add(s.totalFee, unsignedTransfer.MaxFee())
+	s.totalFee.Add(s.totalFee, transferTx.MaxFee())
 	s.mu.Unlock()
-
-	transferHash, err := s.erc20.Transfer(s.ctx, unsignedTransfer)
-	s.Require().NoError(err)
 
 	transferReceipt, err := tx.WaitForReceipt(s.ctx, s.client, transferHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
 	s.Require().NoError(err)
@@ -523,28 +516,24 @@ func (s *PairLifeCycleSuite) Test05ReadMethodsAfterSwap() {
 }
 
 func (s *PairLifeCycleSuite) Test06Burn() {
-	lpBalanceBefore, err := s.v2Pair.BalanceOf(s.ctx, s.pair, s.from, rpc.BlockTagLatest)
+	lpBalanceBefore, err := s.v2Pair.BalanceOf(s.ctx, nil, erc20.NewBalanceOfRequest(s.pair, s.from))
 	s.Require().NoError(err)
 	burnAmount := new(big.Int).Div(lpBalanceBefore, big.NewInt(2))
 
 	reservesBefore, err := s.v2Pair.GetReserves(s.ctx, s.pair, rpc.BlockTagLatest)
 	s.Require().NoError(err)
 
-	totalSupplyBefore, err := s.v2Pair.TotalSupply(s.ctx, s.pair, rpc.BlockTagLatest)
+	totalSupplyBefore, err := s.v2Pair.TotalSupply(s.ctx, nil, erc20.NewTotalSupplyRequest(s.pair))
 	s.Require().NoError(err)
 
 	wantAmount0 := new(big.Int).Div(new(big.Int).Mul(burnAmount, reservesBefore.Reserve0), totalSupplyBefore)
 	wantAmount1 := new(big.Int).Div(new(big.Int).Mul(burnAmount, reservesBefore.Reserve1), totalSupplyBefore)
 
-	unsignedTransfer, err := s.v2Pair.CreateTransfer(s.ctx, tx.NewDynamicFeeBuilder(), s.pair, s.from, s.pair, burnAmount)
+	transferTx, transferHash, err := s.v2Pair.Transfer(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), erc20.NewTransferRequest(s.pair, s.pair, burnAmount))
 	s.Require().NoError(err)
-	s.Require().NoError(unsignedTransfer.Sign(s.signer))
 	s.mu.Lock()
-	s.totalFee.Add(s.totalFee, unsignedTransfer.MaxFee())
+	s.totalFee.Add(s.totalFee, transferTx.MaxFee())
 	s.mu.Unlock()
-
-	transferHash, err := s.v2Pair.Transfer(s.ctx, unsignedTransfer)
-	s.Require().NoError(err)
 
 	transferReceipt, err := tx.WaitForReceipt(s.ctx, s.client, transferHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
 	s.Require().NoError(err)
@@ -589,7 +578,7 @@ func (s *PairLifeCycleSuite) Test06Burn() {
 		return err == nil && wantReserve0.Cmp(reservesAfter.Reserve0) == 0 && wantReserve1.Cmp(reservesAfter.Reserve1) == 0
 	}, 10*time.Second, time.Duration(s.Interval)*time.Millisecond, "reserves not visible after burn")
 
-	lpBalanceAfter, err := s.v2Pair.BalanceOf(s.ctx, s.pair, s.from, rpc.BlockTagLatest)
+	lpBalanceAfter, err := s.v2Pair.BalanceOf(s.ctx, nil, erc20.NewBalanceOfRequest(s.pair, s.from))
 	s.Require().NoError(err)
 	s.Require().Zero(new(big.Int).Sub(lpBalanceBefore, burnAmount).Cmp(lpBalanceAfter))
 
@@ -640,15 +629,11 @@ func (s *PairLifeCycleSuite) Test11SwapK() {
 	correctAmountOut := new(big.Int).Div(numerator, denominator)
 	tooMuchAmountOut := new(big.Int).Add(correctAmountOut, big.NewInt(1))
 
-	unsignedTransfer, err := s.erc20.CreateTransfer(s.ctx, tx.NewDynamicFeeBuilder(), s.token0, s.from, s.pair, amountIn)
+	transferTx, transferHash, err := s.erc20.Transfer(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), erc20.NewTransferRequest(s.token0, s.pair, amountIn))
 	s.Require().NoError(err)
-	s.Require().NoError(unsignedTransfer.Sign(s.signer))
 	s.mu.Lock()
-	s.totalFee.Add(s.totalFee, unsignedTransfer.MaxFee())
+	s.totalFee.Add(s.totalFee, transferTx.MaxFee())
 	s.mu.Unlock()
-
-	transferHash, err := s.erc20.Transfer(s.ctx, unsignedTransfer)
-	s.Require().NoError(err)
 
 	transferReceipt, err := tx.WaitForReceipt(s.ctx, s.client, transferHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
 	s.Require().NoError(err)
@@ -656,7 +641,7 @@ func (s *PairLifeCycleSuite) Test11SwapK() {
 
 	expectedBalance := new(big.Int).Add(reserves.Reserve0, amountIn)
 	s.Require().Eventually(func() bool {
-		balance, err := s.erc20.BalanceOf(s.ctx, s.token0, s.pair, rpc.BlockTagLatest)
+		balance, err := s.erc20.BalanceOf(s.ctx, nil, erc20.NewBalanceOfRequest(s.token0, s.pair))
 		return err == nil && expectedBalance.Cmp(balance) == 0
 	}, 10*time.Second, time.Duration(s.Interval)*time.Millisecond, "deposited balance not visible before swap")
 
@@ -784,13 +769,13 @@ func (s *PairSwapSuite) TearDownSuite() {
 }
 
 func (s *PairSwapSuite) TestSwap() {
-	tokenInMeta, err := s.erc20.MetadataWithBalance(s.ctx, s.multicall, s.tokenIn, s.from, false, rpc.BlockTagLatest)
+	tokenInMeta, err := s.erc20.MetadataWithBalance(s.ctx, nil, erc20.NewMetadataWithBalanceRequest(s.multicall, s.tokenIn, s.from, false))
 	s.Require().NoError(err)
 	s.T().Logf("TestSwap: TokenIn %s", s.tokenIn)
 	s.T().Logf("\t %s (%s), decimals: %d", tokenInMeta.Name, tokenInMeta.Symbol, tokenInMeta.Decimals)
 	s.T().Logf("\t %s amounts: %s", s.tokenIn, tokenInMeta.Balance.String())
 
-	tokenOutMeta, err := s.erc20.MetadataWithBalance(s.ctx, s.multicall, s.tokenOut, s.from, false, rpc.BlockTagLatest)
+	tokenOutMeta, err := s.erc20.MetadataWithBalance(s.ctx, nil, erc20.NewMetadataWithBalanceRequest(s.multicall, s.tokenOut, s.from, false))
 	s.Require().NoError(err)
 	s.T().Logf("TestSwap: TokenOut %s", s.tokenOut)
 	s.T().Logf("\t %s (%s), decimals: %d", tokenOutMeta.Name, tokenOutMeta.Symbol, tokenOutMeta.Decimals)
@@ -804,7 +789,7 @@ func (s *PairSwapSuite) TestSwap() {
 	final := s.swap(s.tokenOut, s.tokenIn, received)
 	s.T().Logf("TestSwap: round trip %s -> %s -> %s: sent %s, received back %s", s.tokenIn, s.tokenOut, s.tokenIn, s.amount, final)
 
-	tokenOutBalanceAfter, err := s.erc20.BalanceOf(s.ctx, s.tokenOut, s.from, rpc.BlockTagLatest)
+	tokenOutBalanceAfter, err := s.erc20.BalanceOf(s.ctx, nil, erc20.NewBalanceOfRequest(s.tokenOut, s.from))
 	s.Require().NoError(err)
 	s.Require().Zero(tokenOutBalanceAfter.Cmp(tokenOutMeta.Balance), "wallet's TokenOut balance changed (%s -> %s) after swapping it all back", tokenOutMeta.Balance, tokenOutBalanceAfter)
 }
@@ -824,18 +809,15 @@ func (s *PairSwapSuite) swap(tokenIn, tokenOut *types.Address, amountIn *big.Int
 	}
 	s.T().Logf("swap %s -> %s: token0=%s token1=%s (tokenIn is token0: %v)", tokenIn, tokenOut, token0, token1, inIsToken0)
 
-	balance, err := s.erc20.BalanceOf(s.ctx, tokenIn, s.from, rpc.BlockTagLatest)
+	balance, err := s.erc20.BalanceOf(s.ctx, nil, erc20.NewBalanceOfRequest(tokenIn, s.from))
 	s.Require().NoError(err)
 	s.Require().True(balance.Cmp(amountIn) >= 0, "wallet holds %s of tokenIn, less than amountIn %s", balance, amountIn)
 	s.T().Logf("swap %s -> %s: wallet balance of tokenIn: %s", tokenIn, tokenOut, balance)
 
-	unsignedTransfer, err := s.erc20.CreateTransfer(s.ctx, tx.NewDynamicFeeBuilder(), tokenIn, s.from, s.pair, amountIn)
+	transferTx, transferHash, err := s.erc20.Transfer(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), erc20.NewTransferRequest(tokenIn, s.pair, amountIn))
 	s.Require().NoError(err)
-	s.Require().NoError(unsignedTransfer.Sign(s.signer))
-	s.totalFee.Add(s.totalFee, unsignedTransfer.MaxFee())
+	s.totalFee.Add(s.totalFee, transferTx.MaxFee())
 
-	transferHash, err := s.erc20.Transfer(s.ctx, unsignedTransfer)
-	s.Require().NoError(err)
 	s.T().Logf("swap %s -> %s: broadcast transfer of %s tokenIn to pair, tx %s", tokenIn, tokenOut, amountIn, transferHash)
 
 	transferReceipt, err := tx.WaitForReceipt(s.ctx, s.client, transferHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)

@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/standards/deploy"
 	"github.com/ninja-protocol-labs/go-evmkit/standards/erc721"
 	"github.com/stretchr/testify/suite"
@@ -205,15 +206,11 @@ func (s *PositionManagerSuite) SetupSuite() {
 		s.Require().True(mintReceipt.Status, "mint transaction reverted")
 
 		approveBuilder := tx.NewDynamicFeeBuilder()
-		unsignedApprove, err := s.erc20.CreateApprove(s.ctx, approveBuilder, token, s.from, s.permit2Contract, s.MintValue)
+		approveTx, approveHash, err := s.erc20.Approve(s.ctx, bind.NewTransactOptions(s.signer, approveBuilder), erc20.NewApproveRequest(token, s.permit2Contract, s.MintValue))
 		s.Require().NoError(err)
-		s.Require().NoError(unsignedApprove.Sign(s.signer))
 		s.mu.Lock()
-		s.totalFee.Add(s.totalFee, unsignedApprove.MaxFee())
+		s.totalFee.Add(s.totalFee, approveTx.MaxFee())
 		s.mu.Unlock()
-
-		approveHash, err := s.erc20.Approve(s.ctx, unsignedApprove)
-		s.Require().NoError(err)
 
 		approveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, approveHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
 		s.Require().NoError(err)

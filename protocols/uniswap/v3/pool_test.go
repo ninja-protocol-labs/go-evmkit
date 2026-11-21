@@ -204,7 +204,7 @@ func (s *PoolSuite) SetupSuite() {
 
 func (s *PoolSuite) TearDownSuite() {
 	if s.tokenA != nil && s.tokenB != nil {
-		balances, err := s.erc20.AddressBalances(s.ctx, s.multicall, s.from, []*types.Address{s.tokenA, s.tokenB}, false, rpc.BlockTagLatest)
+		balances, err := s.erc20.AddressBalances(s.ctx, nil, erc20.NewAddressBalancesRequest(s.multicall, s.from, []*types.Address{s.tokenA, s.tokenB}, false))
 		s.Require().NoError(err)
 
 		tokenBurnFn := abi.NewFunction("burn", abi.NewTypes(abi.Address, abi.Uint256), nil)

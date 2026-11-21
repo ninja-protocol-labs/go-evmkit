@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/standards/deploy"
 	"github.com/ninja-protocol-labs/go-evmkit/standards/erc20"
 	"github.com/ninja-protocol-labs/go-evmkit/standards/multicall3"
@@ -189,15 +190,11 @@ func (s *RouterSuite) SetupSuite() {
 
 		for _, spender := range []*types.Address{s.poolModifyLiquidityTest, s.poolSwapTest} {
 			approveBuilder := tx.NewDynamicFeeBuilder()
-			unsignedApprove, err := s.erc20.CreateApprove(s.ctx, approveBuilder, token, s.from, spender, s.MintValue)
+			approveTx, approveHash, err := s.erc20.Approve(s.ctx, bind.NewTransactOptions(s.signer, approveBuilder), erc20.NewApproveRequest(token, spender, s.MintValue))
 			s.Require().NoError(err)
-			s.Require().NoError(unsignedApprove.Sign(s.signer))
 			s.mu.Lock()
-			s.totalFee.Add(s.totalFee, unsignedApprove.MaxFee())
+			s.totalFee.Add(s.totalFee, approveTx.MaxFee())
 			s.mu.Unlock()
-
-			approveHash, err := s.erc20.Approve(s.ctx, unsignedApprove)
-			s.Require().NoError(err)
 
 			approveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, approveHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
 			s.Require().NoError(err)
@@ -532,7 +529,7 @@ func (s *RouterSuite) Test07PoolNotInitialized() {
 }
 
 func (s *RouterSuite) Test08SwapUpdatesBalances() {
-	before, err := s.erc20.AddressBalances(s.ctx, s.multicall, s.from, []*types.Address{s.currency0, s.currency1}, false, rpc.BlockTagLatest)
+	before, err := s.erc20.AddressBalances(s.ctx, nil, erc20.NewAddressBalancesRequest(s.multicall, s.from, []*types.Address{s.currency0, s.currency1}, false))
 	s.Require().NoError(err)
 	s.Require().Len(before.Tokens, 2)
 	balanceBefore0 := before.Tokens[0].Amount
@@ -578,7 +575,7 @@ func (s *RouterSuite) Test08SwapUpdatesBalances() {
 
 	var after *erc20.AddressBalances
 	s.Require().Eventually(func() bool {
-		after, err = s.erc20.AddressBalances(s.ctx, s.multicall, s.from, []*types.Address{s.currency0, s.currency1}, false, rpc.BlockTagLatest)
+		after, err = s.erc20.AddressBalances(s.ctx, nil, erc20.NewAddressBalancesRequest(s.multicall, s.from, []*types.Address{s.currency0, s.currency1}, false))
 		return err == nil
 	}, 10*time.Second, 500*time.Millisecond, "balances not readable after swap")
 	s.Require().Len(after.Tokens, 2)
