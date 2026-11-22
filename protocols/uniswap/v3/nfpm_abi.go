@@ -367,10 +367,7 @@ func EncodeNfpmMint(
 }
 
 // DecodeNfpmMint decodes the return data of mint -- tokenId, liquidity, amount0, amount1.
-func DecodeNfpmMint(data []byte) (
-	tokenId, liquidity, amount0, amount1 *big.Int,
-	err error,
-) {
+func DecodeNfpmMint(data []byte) (*big.Int, *big.Int, *big.Int, *big.Int, error) {
 	vals, err := nfpmMintFn.DecodeReturn(data)
 	if err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("uniswapv3: decodeNfpmMint: %w", err)
@@ -382,15 +379,15 @@ func DecodeNfpmMint(data []byte) (
 	if !ok {
 		return nil, nil, nil, nil, fmt.Errorf("uniswapv3: decodeNfpmMint: unexpected decoded type for tokenId: %T", vals[0])
 	}
-	liquidity, ok = vals[1].(*big.Int)
+	liquidity, ok := vals[1].(*big.Int)
 	if !ok {
 		return nil, nil, nil, nil, fmt.Errorf("uniswapv3: decodeNfpmMint: unexpected decoded type for liquidity: %T", vals[1])
 	}
-	amount0, ok = vals[2].(*big.Int)
+	amount0, ok := vals[2].(*big.Int)
 	if !ok {
 		return nil, nil, nil, nil, fmt.Errorf("uniswapv3: decodeNfpmMint: unexpected decoded type for amount0: %T", vals[2])
 	}
-	amount1, ok = vals[3].(*big.Int)
+	amount1, ok := vals[3].(*big.Int)
 	if !ok {
 		return nil, nil, nil, nil, fmt.Errorf("uniswapv3: decodeNfpmMint: unexpected decoded type for amount1: %T", vals[3])
 	}
@@ -407,7 +404,7 @@ func EncodeIncreaseLiquidity(tokenId, amount0Desired, amount1Desired, amount0Min
 }
 
 // DecodeIncreaseLiquidity decodes the return data of increaseLiquidity -- liquidity, amount0, amount1.
-func DecodeIncreaseLiquidity(data []byte) (liquidity, amount0, amount1 *big.Int, err error) {
+func DecodeIncreaseLiquidity(data []byte) (*big.Int, *big.Int, *big.Int, error) {
 	vals, err := increaseLiquidityFn.DecodeReturn(data)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("uniswapv3: decodeIncreaseLiquidity: %w", err)
@@ -419,11 +416,11 @@ func DecodeIncreaseLiquidity(data []byte) (liquidity, amount0, amount1 *big.Int,
 	if !ok {
 		return nil, nil, nil, fmt.Errorf("uniswapv3: decodeIncreaseLiquidity: unexpected decoded type for liquidity: %T", vals[0])
 	}
-	amount0, ok = vals[1].(*big.Int)
+	amount0, ok := vals[1].(*big.Int)
 	if !ok {
 		return nil, nil, nil, fmt.Errorf("uniswapv3: decodeIncreaseLiquidity: unexpected decoded type for amount0: %T", vals[1])
 	}
-	amount1, ok = vals[2].(*big.Int)
+	amount1, ok := vals[2].(*big.Int)
 	if !ok {
 		return nil, nil, nil, fmt.Errorf("uniswapv3: decodeIncreaseLiquidity: unexpected decoded type for amount1: %T", vals[2])
 	}
@@ -440,7 +437,7 @@ func EncodeDecreaseLiquidity(tokenId, liquidity, amount0Min, amount1Min, deadlin
 }
 
 // DecodeDecreaseLiquidity decodes the return data of decreaseLiquidity -- amount0, amount1.
-func DecodeDecreaseLiquidity(data []byte) (amount0, amount1 *big.Int, err error) {
+func DecodeDecreaseLiquidity(data []byte) (*big.Int, *big.Int, error) {
 	vals, err := decreaseLiquidityFn.DecodeReturn(data)
 	if err != nil {
 		return nil, nil, fmt.Errorf("uniswapv3: decodeDecreaseLiquidity: %w", err)
@@ -452,7 +449,7 @@ func DecodeDecreaseLiquidity(data []byte) (amount0, amount1 *big.Int, err error)
 	if !ok {
 		return nil, nil, fmt.Errorf("uniswapv3: decodeDecreaseLiquidity: unexpected decoded type for amount0: %T", vals[0])
 	}
-	amount1, ok = vals[1].(*big.Int)
+	amount1, ok := vals[1].(*big.Int)
 	if !ok {
 		return nil, nil, fmt.Errorf("uniswapv3: decodeDecreaseLiquidity: unexpected decoded type for amount1: %T", vals[1])
 	}
@@ -469,7 +466,7 @@ func EncodeNfpmCollect(tokenId *big.Int, recipient *types.Address, amount0Max, a
 }
 
 // DecodeNfpmCollect decodes the return data of collect -- amount0, amount1.
-func DecodeNfpmCollect(data []byte) (amount0, amount1 *big.Int, err error) {
+func DecodeNfpmCollect(data []byte) (*big.Int, *big.Int, error) {
 	vals, err := nfpmCollectFn.DecodeReturn(data)
 	if err != nil {
 		return nil, nil, fmt.Errorf("uniswapv3: decodeNfpmCollect: %w", err)
@@ -481,7 +478,7 @@ func DecodeNfpmCollect(data []byte) (amount0, amount1 *big.Int, err error) {
 	if !ok {
 		return nil, nil, fmt.Errorf("uniswapv3: decodeNfpmCollect: unexpected decoded type for amount0: %T", vals[0])
 	}
-	amount1, ok = vals[1].(*big.Int)
+	amount1, ok := vals[1].(*big.Int)
 	if !ok {
 		return nil, nil, fmt.Errorf("uniswapv3: decodeNfpmCollect: unexpected decoded type for amount1: %T", vals[1])
 	}

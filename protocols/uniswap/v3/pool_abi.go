@@ -656,7 +656,7 @@ func EncodeMint(recipient *types.Address, tickLower, tickUpper, amount *big.Int,
 }
 
 // DecodeMint decodes the return data of mint -- the amounts of token0/token1 paid.
-func DecodeMint(data []byte) (amount0, amount1 *big.Int, err error) {
+func DecodeMint(data []byte) (*big.Int, *big.Int, error) {
 	vals, err := mintFn.DecodeReturn(data)
 	if err != nil {
 		return nil, nil, fmt.Errorf("uniswapv3: decodeMint: %w", err)
@@ -668,7 +668,7 @@ func DecodeMint(data []byte) (amount0, amount1 *big.Int, err error) {
 	if !ok {
 		return nil, nil, fmt.Errorf("uniswapv3: decodeMint: unexpected decoded type for amount0: %T", vals[0])
 	}
-	amount1, ok = vals[1].(*big.Int)
+	amount1, ok := vals[1].(*big.Int)
 	if !ok {
 		return nil, nil, fmt.Errorf("uniswapv3: decodeMint: unexpected decoded type for amount1: %T", vals[1])
 	}
@@ -685,7 +685,7 @@ func EncodeCollect(recipient *types.Address, tickLower, tickUpper, amount0Reques
 }
 
 // DecodeCollect decodes the return data of collect -- the amounts of token0/token1 collected.
-func DecodeCollect(data []byte) (amount0, amount1 *big.Int, err error) {
+func DecodeCollect(data []byte) (*big.Int, *big.Int, error) {
 	vals, err := collectFn.DecodeReturn(data)
 	if err != nil {
 		return nil, nil, fmt.Errorf("uniswapv3: decodeCollect: %w", err)
@@ -697,7 +697,7 @@ func DecodeCollect(data []byte) (amount0, amount1 *big.Int, err error) {
 	if !ok {
 		return nil, nil, fmt.Errorf("uniswapv3: decodeCollect: unexpected decoded type for amount0: %T", vals[0])
 	}
-	amount1, ok = vals[1].(*big.Int)
+	amount1, ok := vals[1].(*big.Int)
 	if !ok {
 		return nil, nil, fmt.Errorf("uniswapv3: decodeCollect: unexpected decoded type for amount1: %T", vals[1])
 	}
@@ -714,7 +714,7 @@ func EncodeBurn(tickLower, tickUpper, amount *big.Int) ([]byte, error) {
 }
 
 // DecodeBurn decodes the return data of burn -- the amounts of token0/token1 owed to the caller.
-func DecodeBurn(data []byte) (amount0, amount1 *big.Int, err error) {
+func DecodeBurn(data []byte) (*big.Int, *big.Int, error) {
 	vals, err := burnFn.DecodeReturn(data)
 	if err != nil {
 		return nil, nil, fmt.Errorf("uniswapv3: decodeBurn: %w", err)
@@ -726,7 +726,7 @@ func DecodeBurn(data []byte) (amount0, amount1 *big.Int, err error) {
 	if !ok {
 		return nil, nil, fmt.Errorf("uniswapv3: decodeBurn: unexpected decoded type for amount0: %T", vals[0])
 	}
-	amount1, ok = vals[1].(*big.Int)
+	amount1, ok := vals[1].(*big.Int)
 	if !ok {
 		return nil, nil, fmt.Errorf("uniswapv3: decodeBurn: unexpected decoded type for amount1: %T", vals[1])
 	}
@@ -743,7 +743,7 @@ func EncodeSwap(recipient *types.Address, zeroForOne bool, amountSpecified, sqrt
 }
 
 // DecodeSwap decodes the return data of swap -- the pool's balance deltas for token0/token1.
-func DecodeSwap(data []byte) (amount0, amount1 *big.Int, err error) {
+func DecodeSwap(data []byte) (*big.Int, *big.Int, error) {
 	vals, err := swapFn.DecodeReturn(data)
 	if err != nil {
 		return nil, nil, fmt.Errorf("uniswapv3: decodeSwap: %w", err)
@@ -755,7 +755,7 @@ func DecodeSwap(data []byte) (amount0, amount1 *big.Int, err error) {
 	if !ok {
 		return nil, nil, fmt.Errorf("uniswapv3: decodeSwap: unexpected decoded type for amount0: %T", vals[0])
 	}
-	amount1, ok = vals[1].(*big.Int)
+	amount1, ok := vals[1].(*big.Int)
 	if !ok {
 		return nil, nil, fmt.Errorf("uniswapv3: decodeSwap: unexpected decoded type for amount1: %T", vals[1])
 	}
@@ -803,7 +803,7 @@ func EncodeCollectProtocol(recipient *types.Address, amount0Requested, amount1Re
 }
 
 // DecodeCollectProtocol decodes the return data of collectProtocol -- the protocol fees collected.
-func DecodeCollectProtocol(data []byte) (amount0, amount1 *big.Int, err error) {
+func DecodeCollectProtocol(data []byte) (*big.Int, *big.Int, error) {
 	vals, err := collectProtocolFn.DecodeReturn(data)
 	if err != nil {
 		return nil, nil, fmt.Errorf("uniswapv3: decodeCollectProtocol: %w", err)
@@ -815,7 +815,7 @@ func DecodeCollectProtocol(data []byte) (amount0, amount1 *big.Int, err error) {
 	if !ok {
 		return nil, nil, fmt.Errorf("uniswapv3: decodeCollectProtocol: unexpected decoded type for amount0: %T", vals[0])
 	}
-	amount1, ok = vals[1].(*big.Int)
+	amount1, ok := vals[1].(*big.Int)
 	if !ok {
 		return nil, nil, fmt.Errorf("uniswapv3: decodeCollectProtocol: unexpected decoded type for amount1: %T", vals[1])
 	}

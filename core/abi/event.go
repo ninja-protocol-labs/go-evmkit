@@ -79,7 +79,7 @@ func (e *Event) Signature() string {
 
 // Topic0 returns topics[0]: keccak256(Signature()). Anonymous events have none
 // ok reports whether one exists.
-func (e *Event) Topic0() (topic Topic, ok bool) {
+func (e *Event) Topic0() (Topic, bool) {
 	if e.t0 == nil {
 		return Topic{}, false
 	}

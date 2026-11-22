@@ -869,7 +869,7 @@ func EncodeActionIncreaseLiquidity(tokenID, liquidity, amount0Max, amount1Max *b
 }
 
 // DecodeActionIncreaseLiquidity decodes a Actions.INCREASE_LIQUIDITY params blob.
-func DecodeActionIncreaseLiquidity(data []byte) (tokenID, liquidity, amount0Max, amount1Max *big.Int, hookData []byte, err error) {
+func DecodeActionIncreaseLiquidity(data []byte) (*big.Int, *big.Int, *big.Int, *big.Int, []byte, error) {
 	vals, err := abi.Unpack(abi.NewTypes(abi.Uint256, abi.Uint256, abi.Uint128, abi.Uint128, abi.Bytes), data)
 	if err != nil {
 		return nil, nil, nil, nil, nil, fmt.Errorf("uniswapv4: decodeActionIncreaseLiquidity: %w", err)
@@ -878,19 +878,19 @@ func DecodeActionIncreaseLiquidity(data []byte) (tokenID, liquidity, amount0Max,
 	if !ok {
 		return nil, nil, nil, nil, nil, fmt.Errorf("uniswapv4: decodeActionIncreaseLiquidity: unexpected decoded type for tokenId: %T", vals[0])
 	}
-	liquidity, ok = vals[1].(*big.Int)
+	liquidity, ok := vals[1].(*big.Int)
 	if !ok {
 		return nil, nil, nil, nil, nil, fmt.Errorf("uniswapv4: decodeActionIncreaseLiquidity: unexpected decoded type for liquidity: %T", vals[1])
 	}
-	amount0Max, ok = vals[2].(*big.Int)
+	amount0Max, ok := vals[2].(*big.Int)
 	if !ok {
 		return nil, nil, nil, nil, nil, fmt.Errorf("uniswapv4: decodeActionIncreaseLiquidity: unexpected decoded type for amount0Max: %T", vals[2])
 	}
-	amount1Max, ok = vals[3].(*big.Int)
+	amount1Max, ok := vals[3].(*big.Int)
 	if !ok {
 		return nil, nil, nil, nil, nil, fmt.Errorf("uniswapv4: decodeActionIncreaseLiquidity: unexpected decoded type for amount1Max: %T", vals[3])
 	}
-	hookData, ok = vals[4].([]byte)
+	hookData, ok := vals[4].([]byte)
 	if !ok {
 		return nil, nil, nil, nil, nil, fmt.Errorf("uniswapv4: decodeActionIncreaseLiquidity: unexpected decoded type for hookData: %T", vals[4])
 	}
@@ -909,7 +909,7 @@ func EncodeActionIncreaseLiquidityFromDeltas(tokenID, amount0Max, amount1Max *bi
 }
 
 // DecodeActionIncreaseLiquidityFromDeltas decodes a Actions.INCREASE_LIQUIDITY_FROM_DELTAS params blob.
-func DecodeActionIncreaseLiquidityFromDeltas(data []byte) (tokenID, amount0Max, amount1Max *big.Int, hookData []byte, err error) {
+func DecodeActionIncreaseLiquidityFromDeltas(data []byte) (*big.Int, *big.Int, *big.Int, []byte, error) {
 	vals, err := abi.Unpack(abi.NewTypes(abi.Uint256, abi.Uint128, abi.Uint128, abi.Bytes), data)
 	if err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("uniswapv4: decodeActionIncreaseLiquidityFromDeltas: %w", err)
@@ -918,15 +918,15 @@ func DecodeActionIncreaseLiquidityFromDeltas(data []byte) (tokenID, amount0Max, 
 	if !ok {
 		return nil, nil, nil, nil, fmt.Errorf("uniswapv4: decodeActionIncreaseLiquidityFromDeltas: unexpected decoded type for tokenId: %T", vals[0])
 	}
-	amount0Max, ok = vals[1].(*big.Int)
+	amount0Max, ok := vals[1].(*big.Int)
 	if !ok {
 		return nil, nil, nil, nil, fmt.Errorf("uniswapv4: decodeActionIncreaseLiquidityFromDeltas: unexpected decoded type for amount0Max: %T", vals[1])
 	}
-	amount1Max, ok = vals[2].(*big.Int)
+	amount1Max, ok := vals[2].(*big.Int)
 	if !ok {
 		return nil, nil, nil, nil, fmt.Errorf("uniswapv4: decodeActionIncreaseLiquidityFromDeltas: unexpected decoded type for amount1Max: %T", vals[2])
 	}
-	hookData, ok = vals[3].([]byte)
+	hookData, ok := vals[3].([]byte)
 	if !ok {
 		return nil, nil, nil, nil, fmt.Errorf("uniswapv4: decodeActionIncreaseLiquidityFromDeltas: unexpected decoded type for hookData: %T", vals[3])
 	}
@@ -944,7 +944,7 @@ func EncodeActionDecreaseLiquidity(tokenID, liquidity, amount0Min, amount1Min *b
 }
 
 // DecodeActionDecreaseLiquidity decodes a Actions.DECREASE_LIQUIDITY params blob.
-func DecodeActionDecreaseLiquidity(data []byte) (tokenID, liquidity, amount0Min, amount1Min *big.Int, hookData []byte, err error) {
+func DecodeActionDecreaseLiquidity(data []byte) (*big.Int, *big.Int, *big.Int, *big.Int, []byte, error) {
 	vals, err := abi.Unpack(abi.NewTypes(abi.Uint256, abi.Uint256, abi.Uint128, abi.Uint128, abi.Bytes), data)
 	if err != nil {
 		return nil, nil, nil, nil, nil, fmt.Errorf("uniswapv4: decodeActionDecreaseLiquidity: %w", err)
@@ -953,19 +953,19 @@ func DecodeActionDecreaseLiquidity(data []byte) (tokenID, liquidity, amount0Min,
 	if !ok {
 		return nil, nil, nil, nil, nil, fmt.Errorf("uniswapv4: decodeActionDecreaseLiquidity: unexpected decoded type for tokenId: %T", vals[0])
 	}
-	liquidity, ok = vals[1].(*big.Int)
+	liquidity, ok := vals[1].(*big.Int)
 	if !ok {
 		return nil, nil, nil, nil, nil, fmt.Errorf("uniswapv4: decodeActionDecreaseLiquidity: unexpected decoded type for liquidity: %T", vals[1])
 	}
-	amount0Min, ok = vals[2].(*big.Int)
+	amount0Min, ok := vals[2].(*big.Int)
 	if !ok {
 		return nil, nil, nil, nil, nil, fmt.Errorf("uniswapv4: decodeActionDecreaseLiquidity: unexpected decoded type for amount0Min: %T", vals[2])
 	}
-	amount1Min, ok = vals[3].(*big.Int)
+	amount1Min, ok := vals[3].(*big.Int)
 	if !ok {
 		return nil, nil, nil, nil, nil, fmt.Errorf("uniswapv4: decodeActionDecreaseLiquidity: unexpected decoded type for amount1Min: %T", vals[3])
 	}
-	hookData, ok = vals[4].([]byte)
+	hookData, ok := vals[4].([]byte)
 	if !ok {
 		return nil, nil, nil, nil, nil, fmt.Errorf("uniswapv4: decodeActionDecreaseLiquidity: unexpected decoded type for hookData: %T", vals[4])
 	}
@@ -983,7 +983,7 @@ func EncodeActionBurnPosition(tokenID, amount0Min, amount1Min *big.Int, hookData
 }
 
 // DecodeActionBurnPosition decodes a Actions.BURN_POSITION params blob.
-func DecodeActionBurnPosition(data []byte) (tokenID, amount0Min, amount1Min *big.Int, hookData []byte, err error) {
+func DecodeActionBurnPosition(data []byte) (*big.Int, *big.Int, *big.Int, []byte, error) {
 	vals, err := abi.Unpack(abi.NewTypes(abi.Uint256, abi.Uint128, abi.Uint128, abi.Bytes), data)
 	if err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("uniswapv4: decodeActionBurnPosition: %w", err)
@@ -992,15 +992,15 @@ func DecodeActionBurnPosition(data []byte) (tokenID, amount0Min, amount1Min *big
 	if !ok {
 		return nil, nil, nil, nil, fmt.Errorf("uniswapv4: decodeActionBurnPosition: unexpected decoded type for tokenId: %T", vals[0])
 	}
-	amount0Min, ok = vals[1].(*big.Int)
+	amount0Min, ok := vals[1].(*big.Int)
 	if !ok {
 		return nil, nil, nil, nil, fmt.Errorf("uniswapv4: decodeActionBurnPosition: unexpected decoded type for amount0Min: %T", vals[1])
 	}
-	amount1Min, ok = vals[2].(*big.Int)
+	amount1Min, ok := vals[2].(*big.Int)
 	if !ok {
 		return nil, nil, nil, nil, fmt.Errorf("uniswapv4: decodeActionBurnPosition: unexpected decoded type for amount1Min: %T", vals[2])
 	}
-	hookData, ok = vals[3].([]byte)
+	hookData, ok := vals[3].([]byte)
 	if !ok {
 		return nil, nil, nil, nil, fmt.Errorf("uniswapv4: decodeActionBurnPosition: unexpected decoded type for hookData: %T", vals[3])
 	}
@@ -1017,7 +1017,7 @@ func EncodeActionSettlePair(currency0, currency1 Currency) ([]byte, error) {
 }
 
 // DecodeActionSettlePair decodes a Actions.SETTLE_PAIR params blob.
-func DecodeActionSettlePair(data []byte) (currency0, currency1 Currency, err error) {
+func DecodeActionSettlePair(data []byte) (Currency, Currency, error) {
 	vals, err := abi.Unpack(abi.NewTypes(abi.Address, abi.Address), data)
 	if err != nil {
 		return nil, nil, fmt.Errorf("uniswapv4: decodeActionSettlePair: %w", err)
@@ -1026,7 +1026,7 @@ func DecodeActionSettlePair(data []byte) (currency0, currency1 Currency, err err
 	if !ok {
 		return nil, nil, fmt.Errorf("uniswapv4: decodeActionSettlePair: unexpected decoded type for currency0: %T", vals[0])
 	}
-	currency1, ok = vals[1].(*types.Address)
+	currency1, ok := vals[1].(*types.Address)
 	if !ok {
 		return nil, nil, fmt.Errorf("uniswapv4: decodeActionSettlePair: unexpected decoded type for currency1: %T", vals[1])
 	}
@@ -1043,7 +1043,7 @@ func EncodeActionTakePair(currency0, currency1, recipient Currency) ([]byte, err
 }
 
 // DecodeActionTakePair decodes a Actions.TAKE_PAIR params blob.
-func DecodeActionTakePair(data []byte) (currency0, currency1, recipient Currency, err error) {
+func DecodeActionTakePair(data []byte) (Currency, Currency, Currency, error) {
 	vals, err := abi.Unpack(abi.NewTypes(abi.Address, abi.Address, abi.Address), data)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("uniswapv4: decodeActionTakePair: %w", err)
@@ -1052,11 +1052,11 @@ func DecodeActionTakePair(data []byte) (currency0, currency1, recipient Currency
 	if !ok {
 		return nil, nil, nil, fmt.Errorf("uniswapv4: decodeActionTakePair: unexpected decoded type for currency0: %T", vals[0])
 	}
-	currency1, ok = vals[1].(*types.Address)
+	currency1, ok := vals[1].(*types.Address)
 	if !ok {
 		return nil, nil, nil, fmt.Errorf("uniswapv4: decodeActionTakePair: unexpected decoded type for currency1: %T", vals[1])
 	}
-	recipient, ok = vals[2].(*types.Address)
+	recipient, ok := vals[2].(*types.Address)
 	if !ok {
 		return nil, nil, nil, fmt.Errorf("uniswapv4: decodeActionTakePair: unexpected decoded type for recipient: %T", vals[2])
 	}
@@ -1095,7 +1095,7 @@ func EncodeActionClearOrTake(currency Currency, amountMax *big.Int) ([]byte, err
 }
 
 // DecodeActionClearOrTake decodes a Actions.CLEAR_OR_TAKE params blob.
-func DecodeActionClearOrTake(data []byte) (currency Currency, amountMax *big.Int, err error) {
+func DecodeActionClearOrTake(data []byte) (Currency, *big.Int, error) {
 	vals, err := abi.Unpack(abi.NewTypes(abi.Address, abi.Uint256), data)
 	if err != nil {
 		return nil, nil, fmt.Errorf("uniswapv4: decodeActionClearOrTake: %w", err)
@@ -1104,7 +1104,7 @@ func DecodeActionClearOrTake(data []byte) (currency Currency, amountMax *big.Int
 	if !ok {
 		return nil, nil, fmt.Errorf("uniswapv4: decodeActionClearOrTake: unexpected decoded type for currency: %T", vals[0])
 	}
-	amountMax, ok = vals[1].(*big.Int)
+	amountMax, ok := vals[1].(*big.Int)
 	if !ok {
 		return nil, nil, fmt.Errorf("uniswapv4: decodeActionClearOrTake: unexpected decoded type for amountMax: %T", vals[1])
 	}
@@ -1121,7 +1121,7 @@ func EncodeActionSweep(currency Currency, to *types.Address) ([]byte, error) {
 }
 
 // DecodeActionSweep decodes a Actions.SWEEP params blob.
-func DecodeActionSweep(data []byte) (currency Currency, to *types.Address, err error) {
+func DecodeActionSweep(data []byte) (Currency, *types.Address, error) {
 	vals, err := abi.Unpack(abi.NewTypes(abi.Address, abi.Address), data)
 	if err != nil {
 		return nil, nil, fmt.Errorf("uniswapv4: decodeActionSweep: %w", err)
@@ -1130,7 +1130,7 @@ func DecodeActionSweep(data []byte) (currency Currency, to *types.Address, err e
 	if !ok {
 		return nil, nil, fmt.Errorf("uniswapv4: decodeActionSweep: unexpected decoded type for currency: %T", vals[0])
 	}
-	to, ok = vals[1].(*types.Address)
+	to, ok := vals[1].(*types.Address)
 	if !ok {
 		return nil, nil, fmt.Errorf("uniswapv4: decodeActionSweep: unexpected decoded type for to: %T", vals[1])
 	}

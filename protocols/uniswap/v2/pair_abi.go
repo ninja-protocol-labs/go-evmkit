@@ -247,7 +247,7 @@ func EncodeBurn(to *types.Address) ([]byte, error) {
 
 // DecodeBurn decodes the return data of burn -- (amount0, amount1) withdrawn. Only meaningful
 // from an eth_call simulation; a mined transaction's return value isn't retrievable.
-func DecodeBurn(data []byte) (amount0, amount1 *big.Int, err error) {
+func DecodeBurn(data []byte) (*big.Int, *big.Int, error) {
 	vals, err := burnFn.DecodeReturn(data)
 	if err != nil {
 		return nil, nil, fmt.Errorf("uniswapv2: decodeBurn: %w", err)
@@ -256,7 +256,7 @@ func DecodeBurn(data []byte) (amount0, amount1 *big.Int, err error) {
 	if !ok {
 		return nil, nil, fmt.Errorf("uniswapv2: decodeBurn: unexpected decoded type for amount0: %T", vals[0])
 	}
-	amount1, ok = vals[1].(*big.Int)
+	amount1, ok := vals[1].(*big.Int)
 	if !ok {
 		return nil, nil, fmt.Errorf("uniswapv2: decodeBurn: unexpected decoded type for amount1: %T", vals[1])
 	}

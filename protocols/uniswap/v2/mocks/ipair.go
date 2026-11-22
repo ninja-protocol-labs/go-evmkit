@@ -509,8 +509,8 @@ func (_c *IPair_CallBurn_Call) Run(run func(ctx context.Context, opts *bind.Call
 	return _c
 }
 
-func (_c *IPair_CallBurn_Call) Return(amount0 *big.Int, amount1 *big.Int, err error) *IPair_CallBurn_Call {
-	_c.Call.Return(amount0, amount1, err)
+func (_c *IPair_CallBurn_Call) Return(intParam *big.Int, intParam1 *big.Int, err error) *IPair_CallBurn_Call {
+	_c.Call.Return(intParam, intParam1, err)
 	return _c
 }
 

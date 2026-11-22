@@ -45,7 +45,7 @@ func init() {
 // covers every width encodeUint/encodeInt's *big.Int path can be asked for, including widths
 // between 1 and 64 that aren't 8/16/32/64 (e.g. uint48) -- those used to fall through to this
 // same default path but boundsFor only recognized 65..256, so they errored as unsupported.
-func boundsFor(size int) (b bounds, ok bool) {
+func boundsFor(size int) (bounds, bool) {
 	if size < 1 || size > 256 {
 		return bounds{}, false
 	}

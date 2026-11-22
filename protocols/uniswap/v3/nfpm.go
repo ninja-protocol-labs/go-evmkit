@@ -39,7 +39,7 @@ type INFPMPermit interface {
 
 // INFPMPoolInitializer mirrors IPoolInitializer.
 type INFPMPoolInitializer interface {
-	CallCreateAndInitializePoolIfNecessary(ctx context.Context, opts *bind.CallOptions, req *CreateAndInitializePoolIfNecessaryRequest) (pool *types.Address, err error)
+	CallCreateAndInitializePoolIfNecessary(ctx context.Context, opts *bind.CallOptions, req *CreateAndInitializePoolIfNecessaryRequest) (*types.Address, error)
 
 	CreateAndInitializePoolIfNecessary(ctx context.Context, opts *bind.TransactOptions, req *CreateAndInitializePoolIfNecessaryRequest) (core.Transaction, *types.Hash, error)
 }
@@ -53,7 +53,7 @@ type INFPMPayments interface {
 
 // INFPMMulticall mirrors Multicall.
 type INFPMMulticall interface {
-	CallMulticall(ctx context.Context, opts *bind.CallOptions, req *NFPMMulticallRequest) (results [][]byte, err error)
+	CallMulticall(ctx context.Context, opts *bind.CallOptions, req *NFPMMulticallRequest) ([][]byte, error)
 
 	Multicall(ctx context.Context, opts *bind.TransactOptions, req *NFPMMulticallRequest) (core.Transaction, *types.Hash, error)
 }
@@ -61,10 +61,10 @@ type INFPMMulticall interface {
 // INFPMActions mirrors INonfungiblePositionManager's own position-management surface.
 type INFPMActions interface {
 	Positions(ctx context.Context, opts *bind.CallOptions, req *NFPMPositionsRequest) (*Position, error)
-	CallMint(ctx context.Context, opts *bind.CallOptions, req *NFPMMintRequest) (tokenID, liquidity, amount0, amount1 *big.Int, err error)
-	CallIncreaseLiquidity(ctx context.Context, opts *bind.CallOptions, req *IncreaseLiquidityRequest) (liquidity, amount0, amount1 *big.Int, err error)
-	CallDecreaseLiquidity(ctx context.Context, opts *bind.CallOptions, req *DecreaseLiquidityRequest) (amount0, amount1 *big.Int, err error)
-	CallCollect(ctx context.Context, opts *bind.CallOptions, req *NFPMCollectRequest) (amount0, amount1 *big.Int, err error)
+	CallMint(ctx context.Context, opts *bind.CallOptions, req *NFPMMintRequest) (*big.Int, *big.Int, *big.Int, *big.Int, error)
+	CallIncreaseLiquidity(ctx context.Context, opts *bind.CallOptions, req *IncreaseLiquidityRequest) (*big.Int, *big.Int, *big.Int, error)
+	CallDecreaseLiquidity(ctx context.Context, opts *bind.CallOptions, req *DecreaseLiquidityRequest) (*big.Int, *big.Int, error)
+	CallCollect(ctx context.Context, opts *bind.CallOptions, req *NFPMCollectRequest) (*big.Int, *big.Int, error)
 
 	Mint(ctx context.Context, opts *bind.TransactOptions, req *NFPMMintRequest) (core.Transaction, *types.Hash, error)
 	IncreaseLiquidity(ctx context.Context, opts *bind.TransactOptions, req *IncreaseLiquidityRequest) (core.Transaction, *types.Hash, error)
@@ -270,7 +270,7 @@ func (n *NFPM) Positions(ctx context.Context, opts *bind.CallOptions, req *NFPMP
 }
 
 // CallCreateAndInitializePoolIfNecessary runs createAndInitializePoolIfNecessary via eth_call as opts.From, returning its result or the revert.
-func (n *NFPM) CallCreateAndInitializePoolIfNecessary(ctx context.Context, opts *bind.CallOptions, req *CreateAndInitializePoolIfNecessaryRequest) (pool *types.Address, err error) {
+func (n *NFPM) CallCreateAndInitializePoolIfNecessary(ctx context.Context, opts *bind.CallOptions, req *CreateAndInitializePoolIfNecessaryRequest) (*types.Address, error) {
 	if err := req.Validate(); err != nil {
 		return nil, fmt.Errorf("uniswapv3: callCreateAndInitializePoolIfNecessary: %w", err)
 	}
@@ -289,7 +289,7 @@ func (n *NFPM) CallCreateAndInitializePoolIfNecessary(ctx context.Context, opts 
 		return nil, fmt.Errorf("uniswapv3: callCreateAndInitializePoolIfNecessary: %w", n.wrapRevertError(err))
 	}
 
-	pool, err = DecodeCreateAndInitializePoolIfNecessary(data)
+	pool, err := DecodeCreateAndInitializePoolIfNecessary(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: callCreateAndInitializePoolIfNecessary: %w", err)
 	}
@@ -298,7 +298,7 @@ func (n *NFPM) CallCreateAndInitializePoolIfNecessary(ctx context.Context, opts 
 }
 
 // CallMulticall runs multicall via eth_call as opts.From with req.NativeAmount as msg.value, returning its result or the revert.
-func (n *NFPM) CallMulticall(ctx context.Context, opts *bind.CallOptions, req *NFPMMulticallRequest) (results [][]byte, err error) {
+func (n *NFPM) CallMulticall(ctx context.Context, opts *bind.CallOptions, req *NFPMMulticallRequest) ([][]byte, error) {
 	if err := req.Validate(); err != nil {
 		return nil, fmt.Errorf("uniswapv3: callMulticall: %w", err)
 	}
@@ -323,7 +323,7 @@ func (n *NFPM) CallMulticall(ctx context.Context, opts *bind.CallOptions, req *N
 		return nil, fmt.Errorf("uniswapv3: callMulticall: %w", n.wrapRevertError(err))
 	}
 
-	results, err = DecodeMulticall(data)
+	results, err := DecodeMulticall(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: callMulticall: %w", err)
 	}
@@ -332,7 +332,7 @@ func (n *NFPM) CallMulticall(ctx context.Context, opts *bind.CallOptions, req *N
 }
 
 // CallMint runs mint via eth_call as opts.From with req.NativeAmount as msg.value, returning its result or the revert.
-func (n *NFPM) CallMint(ctx context.Context, opts *bind.CallOptions, req *NFPMMintRequest) (tokenID, liquidity, amount0, amount1 *big.Int, err error) {
+func (n *NFPM) CallMint(ctx context.Context, opts *bind.CallOptions, req *NFPMMintRequest) (*big.Int, *big.Int, *big.Int, *big.Int, error) {
 	if err := req.Validate(); err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("uniswapv3: callMint: %w", err)
 	}
@@ -357,7 +357,7 @@ func (n *NFPM) CallMint(ctx context.Context, opts *bind.CallOptions, req *NFPMMi
 		return nil, nil, nil, nil, fmt.Errorf("uniswapv3: callMint: %w", n.wrapRevertError(err))
 	}
 
-	tokenID, liquidity, amount0, amount1, err = DecodeNfpmMint(data)
+	tokenID, liquidity, amount0, amount1, err := DecodeNfpmMint(data)
 	if err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("uniswapv3: callMint: %w", err)
 	}
@@ -366,7 +366,7 @@ func (n *NFPM) CallMint(ctx context.Context, opts *bind.CallOptions, req *NFPMMi
 }
 
 // CallIncreaseLiquidity runs increaseLiquidity via eth_call as opts.From with req.NativeAmount as msg.value, returning its result or the revert.
-func (n *NFPM) CallIncreaseLiquidity(ctx context.Context, opts *bind.CallOptions, req *IncreaseLiquidityRequest) (liquidity, amount0, amount1 *big.Int, err error) {
+func (n *NFPM) CallIncreaseLiquidity(ctx context.Context, opts *bind.CallOptions, req *IncreaseLiquidityRequest) (*big.Int, *big.Int, *big.Int, error) {
 	if err := req.Validate(); err != nil {
 		return nil, nil, nil, fmt.Errorf("uniswapv3: callIncreaseLiquidity: %w", err)
 	}
@@ -391,7 +391,7 @@ func (n *NFPM) CallIncreaseLiquidity(ctx context.Context, opts *bind.CallOptions
 		return nil, nil, nil, fmt.Errorf("uniswapv3: callIncreaseLiquidity: %w", n.wrapRevertError(err))
 	}
 
-	liquidity, amount0, amount1, err = DecodeIncreaseLiquidity(data)
+	liquidity, amount0, amount1, err := DecodeIncreaseLiquidity(data)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("uniswapv3: callIncreaseLiquidity: %w", err)
 	}
@@ -400,7 +400,7 @@ func (n *NFPM) CallIncreaseLiquidity(ctx context.Context, opts *bind.CallOptions
 }
 
 // CallDecreaseLiquidity runs decreaseLiquidity via eth_call as opts.From, returning its result or the revert.
-func (n *NFPM) CallDecreaseLiquidity(ctx context.Context, opts *bind.CallOptions, req *DecreaseLiquidityRequest) (amount0, amount1 *big.Int, err error) {
+func (n *NFPM) CallDecreaseLiquidity(ctx context.Context, opts *bind.CallOptions, req *DecreaseLiquidityRequest) (*big.Int, *big.Int, error) {
 	if err := req.Validate(); err != nil {
 		return nil, nil, fmt.Errorf("uniswapv3: callDecreaseLiquidity: %w", err)
 	}
@@ -415,7 +415,7 @@ func (n *NFPM) CallDecreaseLiquidity(ctx context.Context, opts *bind.CallOptions
 		return nil, nil, fmt.Errorf("uniswapv3: callDecreaseLiquidity: %w", n.wrapRevertError(err))
 	}
 
-	amount0, amount1, err = DecodeDecreaseLiquidity(data)
+	amount0, amount1, err := DecodeDecreaseLiquidity(data)
 	if err != nil {
 		return nil, nil, fmt.Errorf("uniswapv3: callDecreaseLiquidity: %w", err)
 	}
@@ -424,7 +424,7 @@ func (n *NFPM) CallDecreaseLiquidity(ctx context.Context, opts *bind.CallOptions
 }
 
 // CallCollect runs collect via eth_call as opts.From, returning its result or the revert.
-func (n *NFPM) CallCollect(ctx context.Context, opts *bind.CallOptions, req *NFPMCollectRequest) (amount0, amount1 *big.Int, err error) {
+func (n *NFPM) CallCollect(ctx context.Context, opts *bind.CallOptions, req *NFPMCollectRequest) (*big.Int, *big.Int, error) {
 	if err := req.Validate(); err != nil {
 		return nil, nil, fmt.Errorf("uniswapv3: callCollect: %w", err)
 	}
@@ -439,7 +439,7 @@ func (n *NFPM) CallCollect(ctx context.Context, opts *bind.CallOptions, req *NFP
 		return nil, nil, fmt.Errorf("uniswapv3: callCollect: %w", n.wrapRevertError(err))
 	}
 
-	amount0, amount1, err = DecodeNfpmCollect(data)
+	amount0, amount1, err := DecodeNfpmCollect(data)
 	if err != nil {
 		return nil, nil, fmt.Errorf("uniswapv3: callCollect: %w", err)
 	}
