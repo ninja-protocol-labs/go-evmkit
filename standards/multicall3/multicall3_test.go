@@ -118,22 +118,18 @@ func (s *Multicall3Suite) SetupSuite() {
 		salt,
 	)
 
-	unsigned, err := s.deployer.CreateDeployment(s.ctx, tx.NewDynamicFeeBuilder(), s.from, s.factory, big.NewInt(0), deployment)
+	deployTx, hash, err := s.deployer.Deploy(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), deploy.NewCreate2Request(s.factory, deployment))
 	s.Require().NoError(err)
 
-	s.Require().NoError(unsigned.Sign(s.signer))
 	s.mu.Lock()
-	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
+	s.totalFee.Add(s.totalFee, deployTx.MaxFee())
 	s.mu.Unlock()
-
-	hash, err := s.deployer.Deploy(s.ctx, unsigned)
-	s.Require().NoError(err)
 
 	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(receipt.Status, "deploy transaction reverted")
 
-	token, err := s.deployer.DeployAddress(s.factory, deployment)
+	token, err := s.deployer.DeployAddress(deploy.NewCreate2Request(s.factory, deployment))
 	s.Require().NoError(err)
 	s.token = token
 
@@ -146,7 +142,7 @@ func (s *Multicall3Suite) SetupSuite() {
 		return err == nil && len(code) > 0
 	}, 10*time.Second, s.ReceiptPollInterval, "no code visible at deployed token %s", token)
 
-	s.T().Logf("SetupSuite: deployed token %s (nonce %d, tx %s)", token, unsigned.AddressNonce(), hash)
+	s.T().Logf("SetupSuite: deployed token %s (nonce %d, tx %s)", token, deployTx.AddressNonce(), hash)
 }
 
 func (s *Multicall3Suite) TearDownSuite() {

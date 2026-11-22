@@ -506,19 +506,15 @@ func (s *RouterLifeCycleSuite) SetupSuite() {
 		builder.PriceBuffer(s.PriceBuffer)
 		builder.LimitBuffer(s.LimitBuffer)
 
-		unsigned, err := s.deployer.CreateDeployment(s.ctx, builder, s.from, deploy.DefaultNicksMethodFactory, big.NewInt(0), deployment)
+		deployTx, hash, err := s.deployer.Deploy(s.ctx, bind.NewTransactOptions(s.signer, builder), deploy.NewCreate2Request(deploy.DefaultNicksMethodFactory, deployment))
 		s.Require().NoError(err)
-		s.Require().NoError(unsigned.Sign(s.signer))
-		s.totalFee.Add(s.totalFee, unsigned.MaxFee())
-
-		hash, err := s.deployer.Deploy(s.ctx, unsigned)
-		s.Require().NoError(err)
+		s.totalFee.Add(s.totalFee, deployTx.MaxFee())
 
 		receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
 		s.Require().NoError(err)
 		s.Require().True(receipt.Status, "deploy transaction reverted")
 
-		token, err := s.deployer.DeployAddress(deploy.DefaultNicksMethodFactory, deployment)
+		token, err := s.deployer.DeployAddress(deploy.NewCreate2Request(deploy.DefaultNicksMethodFactory, deployment))
 		s.Require().NoError(err)
 		tokens[i] = token
 
@@ -531,7 +527,7 @@ func (s *RouterLifeCycleSuite) SetupSuite() {
 			return err == nil && len(code) > 0
 		}, 10*time.Second, time.Duration(s.Interval)*time.Millisecond, "no code visible at deployed token %s", token)
 
-		s.T().Logf("SetupSuite: deployed token %s %s (nonce %d, tx %s)", symbols[i], token, unsigned.AddressNonce(), hash)
+		s.T().Logf("SetupSuite: deployed token %s %s (nonce %d, tx %s)", symbols[i], token, deployTx.AddressNonce(), hash)
 
 		calldata, err := tokenMintFn.EncodeCall(s.from, s.mintValue)
 		s.Require().NoError(err)

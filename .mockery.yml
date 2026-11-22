@@ -29,3 +29,7 @@ packages:
     config:
       all: true
       filename: "{{.InterfaceName | lower}}.go"
+  github.com/ninja-protocol-labs/go-evmkit/standards/deploy:
+    config:
+      all: true
+      filename: "{{.InterfaceName | lower}}.go"

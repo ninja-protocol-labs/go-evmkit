@@ -100,8 +100,7 @@ type Config struct {
 	ReceiptTimeout      time.Duration
 }
 
-// MustLoad returns n's config on nt with the API key and actor key filled in, panicking when
-// the network or a required secret is missing.
+// MustLoad returns n's config on nt with the API key and actor key filled in.
 func MustLoad(t *testing.T, nt NetworkType, n Network) *Config {
 	t.Helper()
 
