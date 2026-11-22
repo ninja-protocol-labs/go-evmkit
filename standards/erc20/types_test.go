@@ -957,26 +957,26 @@ func TestClientMethodsWrapValidateError(t *testing.T) {
 		{
 			"name",
 			func() error {
-				_, err := e.Name(t.Context(), nil, nil)
+				_, err := e.Name(t.Context(), nil, &NameRequest{})
 				return err
 			},
-			(*NameRequest)(nil).Validate(),
+			(&NameRequest{}).Validate(),
 		},
 		{
 			"symbol",
 			func() error {
-				_, err := e.Symbol(t.Context(), nil, nil)
+				_, err := e.Symbol(t.Context(), nil, &SymbolRequest{})
 				return err
 			},
-			(*SymbolRequest)(nil).Validate(),
+			(&SymbolRequest{}).Validate(),
 		},
 		{
 			"decimals",
 			func() error {
-				_, err := e.Decimals(t.Context(), nil, nil)
+				_, err := e.Decimals(t.Context(), nil, &DecimalsRequest{})
 				return err
 			},
-			(*DecimalsRequest)(nil).Validate(),
+			(&DecimalsRequest{}).Validate(),
 		},
 		{
 			"callTransfer",
