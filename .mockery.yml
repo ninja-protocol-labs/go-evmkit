@@ -25,3 +25,7 @@ packages:
   github.com/ninja-protocol-labs/go-evmkit/standards/erc6909:
     config:
       all: true
+  github.com/ninja-protocol-labs/go-evmkit/standards/multicall3:
+    config:
+      all: true
+      filename: "{{.InterfaceName | lower}}.go"

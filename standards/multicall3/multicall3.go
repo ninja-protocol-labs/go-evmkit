@@ -1,6 +1,5 @@
-// Package multicall3 encodes calls to and decodes results from the Multicall3
-// contract (https://github.com/mds1/multicall). Go types mirror the structs
-// in solidity/interfaces/IMulticall3.sol.
+// Package multicall3 is a client for the Multicall3 contract (https://github.com/mds1/multicall),
+// mirroring solidity/interfaces/IMulticall3.sol.
 package multicall3
 
 import (
@@ -10,6 +9,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ninja-protocol-labs/go-evmkit/bind"
+	"github.com/ninja-protocol-labs/go-evmkit/core"
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
@@ -20,344 +21,546 @@ import (
 // deployed at on most EVM chains (https://github.com/mds1/multicall).
 var DefaultMulticall3Address = types.MustNewAddressFromHex("0xcA11bde05977b3631167028862bE2a173976CA11")
 
-// IMulticall3 is implemented by *Multicall3.
+// IMulticall3 mirrors IMulticall3.sol.
 type IMulticall3 interface {
-	Aggregate(ctx context.Context, multicall *types.Address, calls []Call, block string) (*AggregateResult, error)
-	TryAggregate(ctx context.Context, multicall *types.Address, requireSuccess bool, calls []Call, block string) ([]Result, error)
-	TryBlockAndAggregate(ctx context.Context, multicall *types.Address, requireSuccess bool, calls []Call, block string) (*BlockResults, error)
-	BlockAndAggregate(ctx context.Context, multicall *types.Address, calls []Call, block string) (*BlockResults, error)
-	Aggregate3(ctx context.Context, multicall *types.Address, calls []Call3, block string) ([]Result, error)
-	Aggregate3Value(ctx context.Context, multicall *types.Address, calls []Call3Value, block string) ([]Result, error)
-	GetBlockHash(ctx context.Context, multicall *types.Address, blockNumber *big.Int, block string) (*types.Hash, error)
-	GetBlockNumber(ctx context.Context, multicall *types.Address, block string) (*big.Int, error)
-	GetCurrentBlockCoinbase(ctx context.Context, multicall *types.Address, block string) (*types.Address, error)
-	GetCurrentBlockDifficulty(ctx context.Context, multicall *types.Address, block string) (*big.Int, error)
-	GetCurrentBlockGasLimit(ctx context.Context, multicall *types.Address, block string) (*big.Int, error)
-	GetCurrentBlockTimestamp(ctx context.Context, multicall *types.Address, block string) (*big.Int, error)
-	GetEthBalance(ctx context.Context, multicall, addr *types.Address, block string) (*big.Int, error)
-	GetLastBlockHash(ctx context.Context, multicall *types.Address, block string) (*types.Hash, error)
-	GetBasefee(ctx context.Context, multicall *types.Address, block string) (*big.Int, error)
-	GetChainID(ctx context.Context, multicall *types.Address, block string) (*big.Int, error)
+	CallAggregate(ctx context.Context, opts *bind.CallOptions, req *AggregateRequest) (*AggregateResult, error)
+	CallTryAggregate(ctx context.Context, opts *bind.CallOptions, req *TryAggregateRequest) ([]Result, error)
+	CallBlockAndAggregate(ctx context.Context, opts *bind.CallOptions, req *BlockAndAggregateRequest) (*BlockResults, error)
+	CallTryBlockAndAggregate(ctx context.Context, opts *bind.CallOptions, req *TryBlockAndAggregateRequest) (*BlockResults, error)
+	CallAggregate3(ctx context.Context, opts *bind.CallOptions, req *Aggregate3Request) ([]Result, error)
+	CallAggregate3Value(ctx context.Context, opts *bind.CallOptions, req *Aggregate3ValueRequest) ([]Result, error)
+
+	Aggregate(ctx context.Context, opts *bind.TransactOptions, req *AggregateRequest) (core.Transaction, *types.Hash, error)
+	TryAggregate(ctx context.Context, opts *bind.TransactOptions, req *TryAggregateRequest) (core.Transaction, *types.Hash, error)
+	BlockAndAggregate(ctx context.Context, opts *bind.TransactOptions, req *BlockAndAggregateRequest) (core.Transaction, *types.Hash, error)
+	TryBlockAndAggregate(ctx context.Context, opts *bind.TransactOptions, req *TryBlockAndAggregateRequest) (core.Transaction, *types.Hash, error)
+	Aggregate3(ctx context.Context, opts *bind.TransactOptions, req *Aggregate3Request) (core.Transaction, *types.Hash, error)
+	Aggregate3Value(ctx context.Context, opts *bind.TransactOptions, req *Aggregate3ValueRequest) (core.Transaction, *types.Hash, error)
+
+	GetBasefee(ctx context.Context, opts *bind.CallOptions, req *GetBasefeeRequest) (*big.Int, error)
+	GetBlockHash(ctx context.Context, opts *bind.CallOptions, req *GetBlockHashRequest) (*types.Hash, error)
+	GetBlockNumber(ctx context.Context, opts *bind.CallOptions, req *GetBlockNumberRequest) (*big.Int, error)
+	GetChainID(ctx context.Context, opts *bind.CallOptions, req *GetChainIDRequest) (*big.Int, error)
+	GetCurrentBlockCoinbase(ctx context.Context, opts *bind.CallOptions, req *GetCurrentBlockCoinbaseRequest) (*types.Address, error)
+	GetCurrentBlockDifficulty(ctx context.Context, opts *bind.CallOptions, req *GetCurrentBlockDifficultyRequest) (*big.Int, error)
+	GetCurrentBlockGasLimit(ctx context.Context, opts *bind.CallOptions, req *GetCurrentBlockGasLimitRequest) (*big.Int, error)
+	GetCurrentBlockTimestamp(ctx context.Context, opts *bind.CallOptions, req *GetCurrentBlockTimestampRequest) (*big.Int, error)
+	GetEthBalance(ctx context.Context, opts *bind.CallOptions, req *GetEthBalanceRequest) (*big.Int, error)
+	GetLastBlockHash(ctx context.Context, opts *bind.CallOptions, req *GetLastBlockHashRequest) (*types.Hash, error)
 }
 
 var _ IMulticall3 = (*Multicall3)(nil)
 
-// Multicall3 calls a deployed Multicall3 contract over a Client. It holds no
-// contract address, so one instance serves every deployment.
+// Multicall3 calls any Multicall3 deployment over a Client.
 type Multicall3 struct {
 	c rpc.Client
 }
 
-// New returns a Multicall3 calling standards via cli.
+// New returns a Multicall3 calling contracts via cli.
 func New(cli rpc.Client) *Multicall3 {
 	return &Multicall3{
 		c: cli,
 	}
 }
 
-// Aggregate calls aggregate(calls) on multicall. Any single call failing reverts the whole call.
-func (m *Multicall3) Aggregate(ctx context.Context, multicall *types.Address, calls []Call, block string) (*AggregateResult, error) {
-	calldata, err := EncodeAggregate(calls)
-	if err != nil {
-		return nil, fmt.Errorf("multicall3: aggregate: %w", err)
+// CallAggregate runs aggregate(calls) via eth_call; any failing call reverts the whole call with ErrCallFailed.
+func (m *Multicall3) CallAggregate(ctx context.Context, opts *bind.CallOptions, req *AggregateRequest) (*AggregateResult, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("multicall3: callAggregate: %w", err)
 	}
 
-	data, err := m.callMulticall3(ctx, multicall, calldata, nil, block)
+	calldata, err := EncodeAggregate(req.Calls)
 	if err != nil {
-		return nil, fmt.Errorf("multicall3: aggregate: %w", err)
+		return nil, fmt.Errorf("multicall3: callAggregate: %w", err)
 	}
 
-	result, err := DecodeAggregate(data)
+	data, err := bind.Call(ctx, m.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("multicall3: aggregate: %w", err)
+		return nil, fmt.Errorf("multicall3: callAggregate: %w", m.wrapRevertError(err))
 	}
 
-	return result, nil
+	out, err := DecodeAggregate(data)
+	if err != nil {
+		return nil, fmt.Errorf("multicall3: callAggregate: %w", err)
+	}
+
+	return out, nil
 }
 
-// TryAggregate calls tryAggregate(requireSuccess, calls) on multicall.
-func (m *Multicall3) TryAggregate(ctx context.Context, multicall *types.Address, requireSuccess bool, calls []Call, block string) ([]Result, error) {
-	calldata, err := EncodeTryAggregate(requireSuccess, calls)
-	if err != nil {
-		return nil, fmt.Errorf("multicall3: tryAggregate: %w", err)
+// CallTryAggregate runs tryAggregate(requireSuccess, calls) via eth_call, returning each call's result.
+func (m *Multicall3) CallTryAggregate(ctx context.Context, opts *bind.CallOptions, req *TryAggregateRequest) ([]Result, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("multicall3: callTryAggregate: %w", err)
 	}
 
-	data, err := m.callMulticall3(ctx, multicall, calldata, nil, block)
+	calldata, err := EncodeTryAggregate(req.RequireSuccess, req.Calls)
 	if err != nil {
-		return nil, fmt.Errorf("multicall3: tryAggregate: %w", err)
+		return nil, fmt.Errorf("multicall3: callTryAggregate: %w", err)
 	}
 
-	results, err := DecodeResults(data)
+	data, err := bind.Call(ctx, m.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("multicall3: tryAggregate: %w", err)
+		return nil, fmt.Errorf("multicall3: callTryAggregate: %w", m.wrapRevertError(err))
 	}
 
-	return results, nil
+	out, err := DecodeResults(data)
+	if err != nil {
+		return nil, fmt.Errorf("multicall3: callTryAggregate: %w", err)
+	}
+
+	return out, nil
 }
 
-// TryBlockAndAggregate calls tryBlockAndAggregate(requireSuccess, calls) on multicall.
-func (m *Multicall3) TryBlockAndAggregate(ctx context.Context, multicall *types.Address, requireSuccess bool, calls []Call, block string) (*BlockResults, error) {
-	calldata, err := EncodeTryBlockAndAggregate(requireSuccess, calls)
-	if err != nil {
-		return nil, fmt.Errorf("multicall3: tryBlockAndAggregate: %w", err)
+// CallBlockAndAggregate runs blockAndAggregate(calls) via eth_call: tryBlockAndAggregate with requireSuccess true.
+func (m *Multicall3) CallBlockAndAggregate(ctx context.Context, opts *bind.CallOptions, req *BlockAndAggregateRequest) (*BlockResults, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("multicall3: callBlockAndAggregate: %w", err)
 	}
 
-	data, err := m.callMulticall3(ctx, multicall, calldata, nil, block)
+	calldata, err := EncodeBlockAndAggregate(req.Calls)
 	if err != nil {
-		return nil, fmt.Errorf("multicall3: tryBlockAndAggregate: %w", err)
+		return nil, fmt.Errorf("multicall3: callBlockAndAggregate: %w", err)
 	}
 
-	result, err := DecodeBlockAndAggregate(data)
+	data, err := bind.Call(ctx, m.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("multicall3: tryBlockAndAggregate: %w", err)
+		return nil, fmt.Errorf("multicall3: callBlockAndAggregate: %w", m.wrapRevertError(err))
 	}
 
-	return result, nil
+	out, err := DecodeBlockAndAggregate(data)
+	if err != nil {
+		return nil, fmt.Errorf("multicall3: callBlockAndAggregate: %w", err)
+	}
+
+	return out, nil
 }
 
-// BlockAndAggregate calls blockAndAggregate(calls) on multicall: tryBlockAndAggregate with requireSuccess true.
-func (m *Multicall3) BlockAndAggregate(ctx context.Context, multicall *types.Address, calls []Call, block string) (*BlockResults, error) {
-	calldata, err := EncodeBlockAndAggregate(calls)
-	if err != nil {
-		return nil, fmt.Errorf("multicall3: blockAndAggregate: %w", err)
+// CallTryBlockAndAggregate runs tryBlockAndAggregate(requireSuccess, calls) via eth_call, returning the block and each call's result.
+func (m *Multicall3) CallTryBlockAndAggregate(ctx context.Context, opts *bind.CallOptions, req *TryBlockAndAggregateRequest) (*BlockResults, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("multicall3: callTryBlockAndAggregate: %w", err)
 	}
 
-	data, err := m.callMulticall3(ctx, multicall, calldata, nil, block)
+	calldata, err := EncodeTryBlockAndAggregate(req.RequireSuccess, req.Calls)
 	if err != nil {
-		return nil, fmt.Errorf("multicall3: blockAndAggregate: %w", err)
+		return nil, fmt.Errorf("multicall3: callTryBlockAndAggregate: %w", err)
 	}
 
-	result, err := DecodeBlockAndAggregate(data)
+	data, err := bind.Call(ctx, m.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("multicall3: blockAndAggregate: %w", err)
+		return nil, fmt.Errorf("multicall3: callTryBlockAndAggregate: %w", m.wrapRevertError(err))
 	}
 
-	return result, nil
+	out, err := DecodeBlockAndAggregate(data)
+	if err != nil {
+		return nil, fmt.Errorf("multicall3: callTryBlockAndAggregate: %w", err)
+	}
+
+	return out, nil
 }
 
-// Aggregate3 calls aggregate3(calls) on multicall.
-func (m *Multicall3) Aggregate3(ctx context.Context, multicall *types.Address, calls []Call3, block string) ([]Result, error) {
-	calldata, err := EncodeAggregate3(calls)
-	if err != nil {
-		return nil, fmt.Errorf("multicall3: aggregate3: %w", err)
+// CallAggregate3 runs aggregate3(calls) via eth_call; a failing call without AllowFailure reverts with ErrCallFailed.
+func (m *Multicall3) CallAggregate3(ctx context.Context, opts *bind.CallOptions, req *Aggregate3Request) ([]Result, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("multicall3: callAggregate3: %w", err)
 	}
 
-	data, err := m.callMulticall3(ctx, multicall, calldata, nil, block)
+	calldata, err := EncodeAggregate3(req.Calls)
 	if err != nil {
-		return nil, fmt.Errorf("multicall3: aggregate3: %w", err)
+		return nil, fmt.Errorf("multicall3: callAggregate3: %w", err)
 	}
 
-	results, err := DecodeResults(data)
+	data, err := bind.Call(ctx, m.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("multicall3: aggregate3: %w", err)
+		return nil, fmt.Errorf("multicall3: callAggregate3: %w", m.wrapRevertError(err))
 	}
 
-	return results, nil
+	out, err := DecodeResults(data)
+	if err != nil {
+		return nil, fmt.Errorf("multicall3: callAggregate3: %w", err)
+	}
+
+	return out, nil
 }
 
-// Aggregate3Value calls aggregate3Value(calls) on multicall, sending the sum of calls' Value fields as the call's value.
-func (m *Multicall3) Aggregate3Value(ctx context.Context, multicall *types.Address, calls []Call3Value, block string) ([]Result, error) {
-	calldata, err := EncodeAggregate3Value(calls)
-	if err != nil {
-		return nil, fmt.Errorf("multicall3: aggregate3Value: %w", err)
+// CallAggregate3Value runs aggregate3Value(calls) via eth_call with msg.value set to req.TotalValue();
+// opts.Value must be nil.
+func (m *Multicall3) CallAggregate3Value(ctx context.Context, opts *bind.CallOptions, req *Aggregate3ValueRequest) ([]Result, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("multicall3: callAggregate3Value: %w", err)
 	}
 
-	total := new(big.Int)
-	for _, c := range calls {
-		if c.Value != nil {
-			total.Add(total, c.Value)
+	if opts != nil && opts.Value != nil {
+		return nil, fmt.Errorf("multicall3: callAggregate3Value: %w: value must be nil", bind.ErrInvalidOptions)
+	}
+
+	calldata, err := EncodeAggregate3Value(req.Calls)
+	if err != nil {
+		return nil, fmt.Errorf("multicall3: callAggregate3Value: %w", err)
+	}
+
+	callOpts := bind.NewCallOptions()
+	if opts != nil {
+		*callOpts = *opts
+	}
+	callOpts.Value = req.TotalValue()
+
+	data, err := bind.Call(ctx, m.c, callOpts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("multicall3: callAggregate3Value: %w", m.wrapRevertError(err))
+	}
+
+	out, err := DecodeResults(data)
+	if err != nil {
+		return nil, fmt.Errorf("multicall3: callAggregate3Value: %w", err)
+	}
+
+	return out, nil
+}
+
+// Aggregate sends aggregate(calls) on req.Contract, signed by opts.Signer; any failing call reverts the whole transaction.
+func (m *Multicall3) Aggregate(ctx context.Context, opts *bind.TransactOptions, req *AggregateRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("multicall3: aggregate: %w", err)
+	}
+
+	calldata, err := EncodeAggregate(req.Calls)
+	if err != nil {
+		return nil, nil, fmt.Errorf("multicall3: aggregate: %w", err)
+	}
+
+	signed, hash, err := bind.Transact(ctx, m.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("multicall3: aggregate: %w", m.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
+}
+
+// TryAggregate sends tryAggregate(requireSuccess, calls) on req.Contract, signed by opts.Signer.
+func (m *Multicall3) TryAggregate(ctx context.Context, opts *bind.TransactOptions, req *TryAggregateRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("multicall3: tryAggregate: %w", err)
+	}
+
+	calldata, err := EncodeTryAggregate(req.RequireSuccess, req.Calls)
+	if err != nil {
+		return nil, nil, fmt.Errorf("multicall3: tryAggregate: %w", err)
+	}
+
+	signed, hash, err := bind.Transact(ctx, m.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("multicall3: tryAggregate: %w", m.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
+}
+
+// BlockAndAggregate sends blockAndAggregate(calls) on req.Contract, signed by opts.Signer.
+func (m *Multicall3) BlockAndAggregate(ctx context.Context, opts *bind.TransactOptions, req *BlockAndAggregateRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("multicall3: blockAndAggregate: %w", err)
+	}
+
+	calldata, err := EncodeBlockAndAggregate(req.Calls)
+	if err != nil {
+		return nil, nil, fmt.Errorf("multicall3: blockAndAggregate: %w", err)
+	}
+
+	signed, hash, err := bind.Transact(ctx, m.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("multicall3: blockAndAggregate: %w", m.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
+}
+
+// TryBlockAndAggregate sends tryBlockAndAggregate(requireSuccess, calls) on req.Contract, signed by opts.Signer.
+func (m *Multicall3) TryBlockAndAggregate(ctx context.Context, opts *bind.TransactOptions, req *TryBlockAndAggregateRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("multicall3: tryBlockAndAggregate: %w", err)
+	}
+
+	calldata, err := EncodeTryBlockAndAggregate(req.RequireSuccess, req.Calls)
+	if err != nil {
+		return nil, nil, fmt.Errorf("multicall3: tryBlockAndAggregate: %w", err)
+	}
+
+	signed, hash, err := bind.Transact(ctx, m.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("multicall3: tryBlockAndAggregate: %w", m.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
+}
+
+// Aggregate3 sends aggregate3(calls) on req.Contract, signed by opts.Signer.
+func (m *Multicall3) Aggregate3(ctx context.Context, opts *bind.TransactOptions, req *Aggregate3Request) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("multicall3: aggregate3: %w", err)
+	}
+
+	calldata, err := EncodeAggregate3(req.Calls)
+	if err != nil {
+		return nil, nil, fmt.Errorf("multicall3: aggregate3: %w", err)
+	}
+
+	signed, hash, err := bind.Transact(ctx, m.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("multicall3: aggregate3: %w", m.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
+}
+
+// Aggregate3Value sends aggregate3Value(calls) on req.Contract with msg.value set to req.TotalValue(),
+// signed by opts.Signer; opts.Value must be nil.
+func (m *Multicall3) Aggregate3Value(ctx context.Context, opts *bind.TransactOptions, req *Aggregate3ValueRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("multicall3: aggregate3Value: %w", err)
+	}
+
+	if opts != nil && opts.Value != nil {
+		return nil, nil, fmt.Errorf("multicall3: aggregate3Value: %w: value must be nil", bind.ErrInvalidOptions)
+	}
+
+	calldata, err := EncodeAggregate3Value(req.Calls)
+	if err != nil {
+		return nil, nil, fmt.Errorf("multicall3: aggregate3Value: %w", err)
+	}
+
+	var txOpts *bind.TransactOptions
+	if opts != nil {
+		o := *opts
+		o.Value = req.TotalValue()
+		txOpts = &o
+	}
+
+	signed, hash, err := bind.Transact(ctx, m.c, txOpts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("multicall3: aggregate3Value: %w", m.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
+}
+
+// GetBasefee returns the block's base fee; a revert maps to ErrBasefeeNotImplemented on chains without BASEFEE.
+func (m *Multicall3) GetBasefee(ctx context.Context, opts *bind.CallOptions, req *GetBasefeeRequest) (*big.Int, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("multicall3: getBasefee: %w", err)
+	}
+
+	calldata := EncodeGetBasefee()
+
+	data, err := bind.Call(ctx, m.c, opts, req.Contract, calldata)
+	if err != nil {
+		if _, ok := errors.AsType[*rpc.ResponseError](err); ok {
+			return nil, fmt.Errorf("multicall3: getBasefee: %w: %w", ErrBasefeeNotImplemented, err)
 		}
+		return nil, fmt.Errorf("multicall3: getBasefee: %w", err)
 	}
 
-	data, err := m.callMulticall3(ctx, multicall, calldata, total, block)
-	if err != nil {
-		return nil, fmt.Errorf("multicall3: aggregate3Value: %w", err)
-	}
-
-	results, err := DecodeResults(data)
-	if err != nil {
-		return nil, fmt.Errorf("multicall3: aggregate3Value: %w", err)
-	}
-
-	return results, nil
-}
-
-// GetBlockHash calls getBlockHash(blockNumber) on multicall: the BLOCKHASH opcode, zero outside the last 256 blocks.
-func (m *Multicall3) GetBlockHash(ctx context.Context, multicall *types.Address, blockNumber *big.Int, block string) (*types.Hash, error) {
-	calldata, err := EncodeGetBlockHash(blockNumber)
-	if err != nil {
-		return nil, fmt.Errorf("multicall3: getBlockHash: %w", err)
-	}
-
-	data, err := m.callMulticall3(ctx, multicall, calldata, nil, block)
-	if err != nil {
-		return nil, fmt.Errorf("multicall3: getBlockHash: %w", err)
-	}
-
-	hash, err := DecodeGetBlockHash(data)
-	if err != nil {
-		return nil, fmt.Errorf("multicall3: getBlockHash: %w", err)
-	}
-
-	return hash, nil
-}
-
-// GetBlockNumber calls getBlockNumber() on multicall.
-func (m *Multicall3) GetBlockNumber(ctx context.Context, multicall *types.Address, block string) (*big.Int, error) {
-	data, err := m.callMulticall3(ctx, multicall, EncodeGetBlockNumber(), nil, block)
-	if err != nil {
-		return nil, fmt.Errorf("multicall3: getBlockNumber: %w", err)
-	}
-
-	n, err := DecodeGetBlockNumber(data)
-	if err != nil {
-		return nil, fmt.Errorf("multicall3: getBlockNumber: %w", err)
-	}
-
-	return n, nil
-}
-
-// GetCurrentBlockCoinbase calls getCurrentBlockCoinbase() on multicall.
-func (m *Multicall3) GetCurrentBlockCoinbase(ctx context.Context, multicall *types.Address, block string) (*types.Address, error) {
-	data, err := m.callMulticall3(ctx, multicall, EncodeGetCurrentBlockCoinbase(), nil, block)
-	if err != nil {
-		return nil, fmt.Errorf("multicall3: getCurrentBlockCoinbase: %w", err)
-	}
-
-	addr, err := DecodeGetCurrentBlockCoinbase(data)
-	if err != nil {
-		return nil, fmt.Errorf("multicall3: getCurrentBlockCoinbase: %w", err)
-	}
-
-	return addr, nil
-}
-
-// GetCurrentBlockDifficulty calls getCurrentBlockDifficulty() on multicall.
-func (m *Multicall3) GetCurrentBlockDifficulty(ctx context.Context, multicall *types.Address, block string) (*big.Int, error) {
-	data, err := m.callMulticall3(ctx, multicall, EncodeGetCurrentBlockDifficulty(), nil, block)
-	if err != nil {
-		return nil, fmt.Errorf("multicall3: getCurrentBlockDifficulty: %w", err)
-	}
-
-	n, err := DecodeGetCurrentBlockDifficulty(data)
-	if err != nil {
-		return nil, fmt.Errorf("multicall3: getCurrentBlockDifficulty: %w", err)
-	}
-
-	return n, nil
-}
-
-// GetCurrentBlockGasLimit calls getCurrentBlockGasLimit() on multicall.
-func (m *Multicall3) GetCurrentBlockGasLimit(ctx context.Context, multicall *types.Address, block string) (*big.Int, error) {
-	data, err := m.callMulticall3(ctx, multicall, EncodeGetCurrentBlockGasLimit(), nil, block)
-	if err != nil {
-		return nil, fmt.Errorf("multicall3: getCurrentBlockGasLimit: %w", err)
-	}
-
-	n, err := DecodeGetCurrentBlockGasLimit(data)
-	if err != nil {
-		return nil, fmt.Errorf("multicall3: getCurrentBlockGasLimit: %w", err)
-	}
-
-	return n, nil
-}
-
-// GetCurrentBlockTimestamp calls getCurrentBlockTimestamp() on multicall.
-func (m *Multicall3) GetCurrentBlockTimestamp(ctx context.Context, multicall *types.Address, block string) (*big.Int, error) {
-	data, err := m.callMulticall3(ctx, multicall, EncodeGetCurrentBlockTimestamp(), nil, block)
-	if err != nil {
-		return nil, fmt.Errorf("multicall3: getCurrentBlockTimestamp: %w", err)
-	}
-
-	n, err := DecodeGetCurrentBlockTimestamp(data)
-	if err != nil {
-		return nil, fmt.Errorf("multicall3: getCurrentBlockTimestamp: %w", err)
-	}
-
-	return n, nil
-}
-
-// GetEthBalance calls getEthBalance(addr) on multicall.
-func (m *Multicall3) GetEthBalance(ctx context.Context, multicall, addr *types.Address, block string) (*big.Int, error) {
-	calldata, err := EncodeGetEthBalance(addr)
-	if err != nil {
-		return nil, fmt.Errorf("multicall3: getEthBalance: %w", err)
-	}
-
-	data, err := m.callMulticall3(ctx, multicall, calldata, nil, block)
-	if err != nil {
-		return nil, fmt.Errorf("multicall3: getEthBalance: %w", err)
-	}
-
-	n, err := DecodeGetEthBalance(data)
-	if err != nil {
-		return nil, fmt.Errorf("multicall3: getEthBalance: %w", err)
-	}
-
-	return n, nil
-}
-
-// GetLastBlockHash calls getLastBlockHash() on multicall.
-func (m *Multicall3) GetLastBlockHash(ctx context.Context, multicall *types.Address, block string) (*types.Hash, error) {
-	data, err := m.callMulticall3(ctx, multicall, EncodeGetLastBlockHash(), nil, block)
-	if err != nil {
-		return nil, fmt.Errorf("multicall3: getLastBlockHash: %w", err)
-	}
-
-	hash, err := DecodeGetLastBlockHash(data)
-	if err != nil {
-		return nil, fmt.Errorf("multicall3: getLastBlockHash: %w", err)
-	}
-
-	return hash, nil
-}
-
-// GetBasefee calls getBasefee() on multicall. Fails with ErrBasefeeNotImplemented if the chain has no BASEFEE opcode.
-func (m *Multicall3) GetBasefee(ctx context.Context, multicall *types.Address, block string) (*big.Int, error) {
-	data, err := m.callMulticall3(ctx, multicall, EncodeGetBasefee(), nil, block)
-	if err != nil {
-		return nil, fmt.Errorf("multicall3: getBasefee: %w: %w", ErrBasefeeNotImplemented, err)
-	}
-
-	n, err := DecodeGetBasefee(data)
+	out, err := DecodeGetBasefee(data)
 	if err != nil {
 		return nil, fmt.Errorf("multicall3: getBasefee: %w", err)
 	}
 
-	return n, nil
+	return out, nil
 }
 
-// GetChainID calls getChainId() on multicall.
-func (m *Multicall3) GetChainID(ctx context.Context, multicall *types.Address, block string) (*big.Int, error) {
-	data, err := m.callMulticall3(ctx, multicall, EncodeGetChainID(), nil, block)
+// GetBlockHash returns blockhash(req.BlockNumber), zero outside the last 256 blocks.
+func (m *Multicall3) GetBlockHash(ctx context.Context, opts *bind.CallOptions, req *GetBlockHashRequest) (*types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("multicall3: getBlockHash: %w", err)
+	}
+
+	calldata, err := EncodeGetBlockHash(req.BlockNumber)
+	if err != nil {
+		return nil, fmt.Errorf("multicall3: getBlockHash: %w", err)
+	}
+
+	data, err := bind.Call(ctx, m.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("multicall3: getBlockHash: %w", m.wrapRevertError(err))
+	}
+
+	out, err := DecodeGetBlockHash(data)
+	if err != nil {
+		return nil, fmt.Errorf("multicall3: getBlockHash: %w", err)
+	}
+
+	return out, nil
+}
+
+// GetBlockNumber returns block.number.
+func (m *Multicall3) GetBlockNumber(ctx context.Context, opts *bind.CallOptions, req *GetBlockNumberRequest) (*big.Int, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("multicall3: getBlockNumber: %w", err)
+	}
+
+	calldata := EncodeGetBlockNumber()
+
+	data, err := bind.Call(ctx, m.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("multicall3: getBlockNumber: %w", m.wrapRevertError(err))
+	}
+
+	out, err := DecodeGetBlockNumber(data)
+	if err != nil {
+		return nil, fmt.Errorf("multicall3: getBlockNumber: %w", err)
+	}
+
+	return out, nil
+}
+
+// GetChainID returns block.chainid.
+func (m *Multicall3) GetChainID(ctx context.Context, opts *bind.CallOptions, req *GetChainIDRequest) (*big.Int, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("multicall3: getChainId: %w", err)
+	}
+
+	calldata := EncodeGetChainID()
+
+	data, err := bind.Call(ctx, m.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("multicall3: getChainId: %w", m.wrapRevertError(err))
+	}
+
+	out, err := DecodeGetChainID(data)
 	if err != nil {
 		return nil, fmt.Errorf("multicall3: getChainId: %w", err)
 	}
 
-	n, err := DecodeGetChainID(data)
-	if err != nil {
-		return nil, fmt.Errorf("multicall3: getChainId: %w", err)
-	}
-
-	return n, nil
+	return out, nil
 }
 
-// callMulticall3 eth_calls multicall with calldata and an optional value.
-func (m *Multicall3) callMulticall3(ctx context.Context, multicall *types.Address, calldata []byte, value *big.Int, block string) ([]byte, error) {
-	params := map[string]any{
-		"to":   multicall.String(),
-		"data": encoding.Hex.EncodePrefixed(calldata),
-	}
-	if value != nil && value.Sign() != 0 {
-		params["value"] = "0x" + value.Text(16)
+// GetCurrentBlockCoinbase returns block.coinbase.
+func (m *Multicall3) GetCurrentBlockCoinbase(ctx context.Context, opts *bind.CallOptions, req *GetCurrentBlockCoinbaseRequest) (*types.Address, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("multicall3: getCurrentBlockCoinbase: %w", err)
 	}
 
-	var raw string
-	if err := m.c.Call(ctx, rpc.ETHCall("call", params, block, &raw)); err != nil {
-		return nil, m.wrapRevertError(err)
+	calldata := EncodeGetCurrentBlockCoinbase()
+
+	data, err := bind.Call(ctx, m.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("multicall3: getCurrentBlockCoinbase: %w", m.wrapRevertError(err))
 	}
 
-	return encoding.Hex.Decode(raw)
+	out, err := DecodeGetCurrentBlockCoinbase(data)
+	if err != nil {
+		return nil, fmt.Errorf("multicall3: getCurrentBlockCoinbase: %w", err)
+	}
+
+	return out, nil
+}
+
+// GetCurrentBlockDifficulty returns block.difficulty (prevrandao after the merge).
+func (m *Multicall3) GetCurrentBlockDifficulty(ctx context.Context, opts *bind.CallOptions, req *GetCurrentBlockDifficultyRequest) (*big.Int, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("multicall3: getCurrentBlockDifficulty: %w", err)
+	}
+
+	calldata := EncodeGetCurrentBlockDifficulty()
+
+	data, err := bind.Call(ctx, m.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("multicall3: getCurrentBlockDifficulty: %w", m.wrapRevertError(err))
+	}
+
+	out, err := DecodeGetCurrentBlockDifficulty(data)
+	if err != nil {
+		return nil, fmt.Errorf("multicall3: getCurrentBlockDifficulty: %w", err)
+	}
+
+	return out, nil
+}
+
+// GetCurrentBlockGasLimit returns block.gaslimit.
+func (m *Multicall3) GetCurrentBlockGasLimit(ctx context.Context, opts *bind.CallOptions, req *GetCurrentBlockGasLimitRequest) (*big.Int, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("multicall3: getCurrentBlockGasLimit: %w", err)
+	}
+
+	calldata := EncodeGetCurrentBlockGasLimit()
+
+	data, err := bind.Call(ctx, m.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("multicall3: getCurrentBlockGasLimit: %w", m.wrapRevertError(err))
+	}
+
+	out, err := DecodeGetCurrentBlockGasLimit(data)
+	if err != nil {
+		return nil, fmt.Errorf("multicall3: getCurrentBlockGasLimit: %w", err)
+	}
+
+	return out, nil
+}
+
+// GetCurrentBlockTimestamp returns block.timestamp.
+func (m *Multicall3) GetCurrentBlockTimestamp(ctx context.Context, opts *bind.CallOptions, req *GetCurrentBlockTimestampRequest) (*big.Int, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("multicall3: getCurrentBlockTimestamp: %w", err)
+	}
+
+	calldata := EncodeGetCurrentBlockTimestamp()
+
+	data, err := bind.Call(ctx, m.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("multicall3: getCurrentBlockTimestamp: %w", m.wrapRevertError(err))
+	}
+
+	out, err := DecodeGetCurrentBlockTimestamp(data)
+	if err != nil {
+		return nil, fmt.Errorf("multicall3: getCurrentBlockTimestamp: %w", err)
+	}
+
+	return out, nil
+}
+
+// GetEthBalance returns req.Addr's native balance.
+func (m *Multicall3) GetEthBalance(ctx context.Context, opts *bind.CallOptions, req *GetEthBalanceRequest) (*big.Int, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("multicall3: getEthBalance: %w", err)
+	}
+
+	calldata, err := EncodeGetEthBalance(req.Addr)
+	if err != nil {
+		return nil, fmt.Errorf("multicall3: getEthBalance: %w", err)
+	}
+
+	data, err := bind.Call(ctx, m.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("multicall3: getEthBalance: %w", m.wrapRevertError(err))
+	}
+
+	out, err := DecodeGetEthBalance(data)
+	if err != nil {
+		return nil, fmt.Errorf("multicall3: getEthBalance: %w", err)
+	}
+
+	return out, nil
+}
+
+// GetLastBlockHash returns blockhash(block.number - 1).
+func (m *Multicall3) GetLastBlockHash(ctx context.Context, opts *bind.CallOptions, req *GetLastBlockHashRequest) (*types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("multicall3: getLastBlockHash: %w", err)
+	}
+
+	calldata := EncodeGetLastBlockHash()
+
+	data, err := bind.Call(ctx, m.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("multicall3: getLastBlockHash: %w", m.wrapRevertError(err))
+	}
+
+	out, err := DecodeGetLastBlockHash(data)
+	if err != nil {
+		return nil, fmt.Errorf("multicall3: getLastBlockHash: %w", err)
+	}
+
+	return out, nil
 }
 
 // wrapRevertError maps a known Multicall3 revert reason in err to its sentinel.
@@ -373,13 +576,13 @@ func (_ *Multicall3) wrapRevertError(err error) error {
 	}
 
 	data, decErr := encoding.Hex.Decode(hexData)
-	if decErr != nil {
+	if decErr != nil || len(data) == 0 {
 		return err
 	}
 
 	reason, revertErr := abi.DecodeRevert(data)
 	if revertErr != nil {
-		return err
+		return fmt.Errorf("%w: %w", ErrUnknown, err)
 	}
 
 	switch reason {
@@ -388,6 +591,6 @@ func (_ *Multicall3) wrapRevertError(err error) error {
 	case ErrValueMismatchString:
 		return fmt.Errorf("%w: %w", ErrValueMismatch, err)
 	default:
-		return err
+		return fmt.Errorf("%w: %w", ErrUnknown, err)
 	}
 }

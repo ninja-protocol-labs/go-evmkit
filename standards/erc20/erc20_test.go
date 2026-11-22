@@ -64,7 +64,7 @@ type ERC20Suite struct {
 }
 
 func TestERC20Suite(t *testing.T) {
-	c := testenv.MustLoad(t, testenv.UnknownNetworkType, testenv.UnknownNetwork)
+	c := testenv.MustLoad(t, testenv.Testnet, testenv.UnknownNetwork)
 
 	suite.Run(t, &ERC20Suite{
 		RPCURL:              c.RPCURL,

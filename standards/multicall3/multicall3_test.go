@@ -3,251 +3,571 @@ package multicall3
 import (
 	"context"
 	"fmt"
+	"math/big"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
+	"github.com/ninja-protocol-labs/go-evmkit/bind"
+	"github.com/ninja-protocol-labs/go-evmkit/core"
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
+	"github.com/ninja-protocol-labs/go-evmkit/internal/testenv"
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
+	"github.com/ninja-protocol-labs/go-evmkit/standards/deploy"
+	"github.com/ninja-protocol-labs/go-evmkit/tx"
+	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
-
-var (
-	ethereum = []string{
-		"0xdAC17F958D2ee523a2206206994597C13D831ec7", // USDT
-		"0xA0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", // USDC
-		"0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2", // WETH
-		"0xae7ab96520de3a18e5e111b5eaab095312d7fe84", // stETH
-		"0x95aD61b0a150d79219dCF64E1E6Cc01f0B64C4cE", // SHIB
-		"0x514910771af9ca656af840dff83e8264ecf986ca", // LINK
-		"0x1f9840a85d5af5bf1d1762f925bdaddc4201f984", // UNI
-		"0x2260fac5e5542a773aa44fbcfedf7c193bc2c599", // WBTC
-		"0x7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9", // AAVE
-		"0x6982508145454ce325ddbe47a25d4ec3d2311933", // PEPE
-	}
-	base = []string{
-		"0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", // USDC
-		"0x4200000000000000000000000000000000000006", // WETH
-		"0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf", // cbBTC
-		"0x940181a94A35A4569E4529A3CDfB74e38FD98631", // AERO
-		"0x532f27101965dd16442e59d40670faf5ebb142e4", // BRETT
-		"0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b", // VIRTUAL
-		"0x4ed4e862860bed51a9570b96d89af5e1b0efefed", // DEGEN
-		"0xAC1Bd2486aAf3B5C0fc3Fd868558b082a531B2B4", // TOSHI
-		"0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA", // USDbC
-		"0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb", // DAI
-	}
-	robinhood = []string{
-		"0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73", // WETH
-		"0x492641F648a4986844848E0beFE66D14817bCE34", // LINK
-		"0xcec185eb182c47d1ba1efc84e6959e18cd620be4", // cbBTC
-		"0x5d3a1ff2b6bab83b63cd9ad0787074081a52ef34", // USDe
-		"0x39dBED3a2bd333467115dE45665cC57F813C4571", // PONS
-		"0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC", // NVDA
-		"0xaF3D76f1834A1d425780943C99Ea8A608f8a93f9", // AAPL
-		"0x12f190a9F9d7D37a250758b26824B97CE941bF54", // AMZN
-		"0x86923f96303D656E4aa86D9d42D1e57ad2023fdC", // AMD
-		"0x2F62fC9fAbb470C690f141c28340eD832bB27020", // BND
-	}
-	arbitrum = []string{
-		"0x912CE59144191C1204E64559FE8253a0e49E6548", // ARB
-		"0xaf88d065e77c8cC2239327C5EDb3A432268e5831", // USDC
-		"0x82aF49447D8a07e3bd95BD0d56f35241523fBab1", // WETH
-		"0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9", // USDT
-		"0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f", // WBTC
-		"0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8", // USDC.e
-		"0x5979D7b546E38E414F7E9822514be443A4800529", // wstETH
-		"0xf97f4df75117a78c1A5a0DBb814Af92458539FB4", // LINK
-		"0xFa7F8980b0f1E64A2062791cc3b0871572f1F7f0", // UNI
-		"0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1", // DAI
-	}
-	avalanche = []string{
-		"0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7", // WAVAX
-		"0x9702230A8Ea53601f5cD2dc00fDBc13d4dF4A8c7", // USDt
-		"0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E", // USDC
-		"0x6e84a6216eA6dACC71eE8E6b0a5B7322EEbC0fDd", // JOE
-		"0x50b7545627a5162f82a992c33b87adc75187b218", // WBTC.e
-		"0x49D5c2BdFfac6CE2BFdB6640F4F80f226bc10bAB", // WETH.e
-		"0x2b2C81e08f1Af8835a78Bb2A90AE924ACE0eA4bE", // sAVAX
-		"0x5947bb275c521040051d82396192181b413227a3", // LINK.e
-		"0xA7D7079b0FEaD91F3e65f86E8915Cb59c1a4C664", // USDC.e
-		"0x420FcA0121DC28039145009570975747295f2329", // COQ
-	}
-)
-
-// network is one chain to query: its default public RPC endpoint and the
-// tokens to look up on it.
-type network struct {
-	name   string
-	rpcURL string
-	tokens []string
-}
-
-var networks = []network{
-	{name: "ethereum", rpcURL: "https://ethereum-rpc.publicnode.com", tokens: ethereum},
-	{name: "base", rpcURL: "https://mainnet.base.org", tokens: base},
-	{name: "arbitrum", rpcURL: "https://arb1.arbitrum.io/rpc", tokens: arbitrum},
-	{name: "avalanche", rpcURL: "https://api.avax.network/ext/bc/C/rpc", tokens: avalanche},
-	{name: "robinhood", rpcURL: "https://rpc.mainnet.chain.robinhood.com", tokens: robinhood},
-}
 
 type Multicall3Suite struct {
 	suite.Suite
 
-	Enable    bool
-	HolderHex string
+	RPCURL              string
+	PrivateKeyHex       string
+	MulticallHex        string
+	NicksFactoryHex     string
+	ChainID             int
+	NativeSymbol        string
+	NativeDecimals      int
+	Timeout             time.Duration
+	ReceiptPollInterval time.Duration
+	ReceiptTimeout      time.Duration
+	ToHex               string
+	Value               *big.Int
+	ByteCode            string
+	Constructor         *abi.Function
+	Args                []any
+	Salt                *types.Hash
 
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	holder *types.Address
+	client    rpc.Client
+	signer    core.Signer
+	deployer  *deploy.NicksDeployer
+	from      *types.Address
+	to        *types.Address
+	multicall *types.Address
+	factory   *types.Address
+	token     *types.Address
+
+	multicall3 *Multicall3
+
+	mu       *sync.Mutex
+	totalFee *big.Int
 }
 
 func TestMulticall3Suite(t *testing.T) {
+	c := testenv.MustLoad(t, testenv.Testnet, testenv.UnknownNetwork)
+
 	suite.Run(t, &Multicall3Suite{
-		Enable:    false,
-		HolderHex: "0x833e1D0b8Bc979D49d57b65dCF18364694B16D52",
+		RPCURL:              c.RPCURL,
+		PrivateKeyHex:       c.ActorPrivateKeyHex,
+		MulticallHex:        c.Multicall,
+		NicksFactoryHex:     c.NicksFactory,
+		ChainID:             c.ChainID,
+		NativeSymbol:        c.NativeSymbol,
+		NativeDecimals:      c.NativeDecimals,
+		Timeout:             10 * time.Minute,
+		ReceiptPollInterval: c.ReceiptPollInterval,
+		ReceiptTimeout:      c.ReceiptTimeout,
+		ToHex:               "0x432311F8926294B3C525634d204a7F1145272282",
+		Value:               big.NewInt(1),
+		ByteCode:            testenv.ERC20ByteCodeHex,
+		Constructor:         abi.NewFunction("constructor", abi.NewTypes(abi.String, abi.String, abi.Uint8), nil),
+		Args:                []any{"evmkit test ERC20", "EVK20", uint8(18)},
+		Salt:                core.Keccak256([]byte("go-evmkit")),
 	})
 }
 
 func (s *Multicall3Suite) SetupSuite() {
-	if !s.Enable {
-		s.T().Skip("disabled")
-	}
+	s.ctx, s.cancel = context.WithTimeout(s.T().Context(), s.Timeout)
 
-	s.ctx, s.cancel = context.WithTimeout(context.Background(), 60*time.Second)
+	s.client = rpc.NewClient(s.RPCURL, rpc.WithRetry(5, rpc.ExponentialBackoff(500*time.Millisecond, 10*time.Second)))
+	s.deployer = deploy.NewNicksDeployer(s.client)
+	s.multicall3 = New(s.client)
 
-	var err error
-	s.holder, err = types.NewAddressFromHex(s.HolderHex)
+	s.mu = &sync.Mutex{}
+	s.totalFee = big.NewInt(0)
+
+	privKey, err := types.NewPrivateKeyFromHex(s.PrivateKeyHex)
 	s.Require().NoError(err)
+	s.signer = privKey
+	s.from = core.PubkeyToAddress(privKey.PublicKey())
+
+	s.to, err = types.NewAddressFromHex(s.ToHex)
+	s.Require().NoError(err)
+
+	s.multicall, err = types.NewAddressFromHex(s.MulticallHex)
+	s.Require().NoError(err)
+
+	s.factory, err = types.NewAddressFromHex(s.NicksFactoryHex)
+	s.Require().NoError(err)
+
+	bytecode, err := encoding.Hex.Decode(s.ByteCode)
+	s.Require().NoError(err)
+
+	var salt [32]byte
+	copy(salt[:], core.Keccak256(fmt.Appendf(nil, "%s-%d", s.Salt, time.Now().UnixNano())).Bytes())
+
+	deployment := deploy.NewDeterministicContractDeployment(
+		deploy.NewContractDeployment(bytecode, s.Constructor.Inputs, s.Args),
+		salt,
+	)
+
+	unsigned, err := s.deployer.CreateDeployment(s.ctx, tx.NewDynamicFeeBuilder(), s.from, s.factory, big.NewInt(0), deployment)
+	s.Require().NoError(err)
+
+	s.Require().NoError(unsigned.Sign(s.signer))
+	s.mu.Lock()
+	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
+	s.mu.Unlock()
+
+	hash, err := s.deployer.Deploy(s.ctx, unsigned)
+	s.Require().NoError(err)
+
+	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, s.ReceiptPollInterval, s.ReceiptTimeout)
+	s.Require().NoError(err)
+	s.Require().True(receipt.Status, "deploy transaction reverted")
+
+	token, err := s.deployer.DeployAddress(s.factory, deployment)
+	s.Require().NoError(err)
+	s.token = token
+
+	s.Require().Eventually(func() bool {
+		var codeHex string
+		if err := s.client.Call(s.ctx, rpc.ETHGetCode("code", token.String(), rpc.BlockTagLatest, &codeHex)); err != nil {
+			return false
+		}
+		code, err := encoding.Hex.Decode(codeHex)
+		return err == nil && len(code) > 0
+	}, 10*time.Second, s.ReceiptPollInterval, "no code visible at deployed token %s", token)
+
+	s.T().Logf("SetupSuite: deployed token %s (nonce %d, tx %s)", token, unsigned.AddressNonce(), hash)
 }
 
 func (s *Multicall3Suite) TearDownSuite() {
+	ctx, cancel := context.WithTimeout(s.T().Context(), s.Timeout)
+	defer cancel()
+
+	if s.token != nil {
+		balanceOfFn := abi.NewFunction("balanceOf", abi.NewTypes(abi.Address), abi.NewTypes(abi.Uint256))
+		burnFn := abi.NewFunction("burn", abi.NewTypes(abi.Address, abi.Uint256), nil)
+
+		holders := []*types.Address{s.from, s.to}
+		reads := make([]Call3, len(holders))
+		for i, holder := range holders {
+			calldata, err := balanceOfFn.EncodeCall(holder)
+			s.Require().NoError(err)
+			reads[i] = NewCall3(s.token, false, calldata)
+		}
+
+		results, err := s.multicall3.CallAggregate3(ctx, nil, NewAggregate3Request(s.multicall, reads))
+		s.Require().NoError(err)
+
+		var burns []Call3
+		for i, holder := range holders {
+			balance, err := balanceOfFn.DecodeSingleReturn[*big.Int](results[i].ReturnData)
+			s.Require().NoError(err)
+			if balance.Sign() == 0 {
+				continue
+			}
+
+			calldata, err := burnFn.EncodeCall(holder, balance)
+			s.Require().NoError(err)
+			burns = append(burns, NewCall3(s.token, false, calldata))
+		}
+
+		if len(burns) > 0 {
+			sentTx, hash, err := s.multicall3.Aggregate3(ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewAggregate3Request(s.multicall, burns))
+			s.Require().NoError(err)
+			s.mu.Lock()
+			s.totalFee.Add(s.totalFee, sentTx.MaxFee())
+			s.mu.Unlock()
+
+			receipt, err := tx.WaitForReceipt(ctx, s.client, hash, s.ReceiptPollInterval, s.ReceiptTimeout)
+			s.Require().NoError(err)
+			s.Require().True(receipt.Status, "burn transaction reverted")
+
+			s.T().Logf("TearDownSuite: burned %d balances of %s (tx %s)", len(burns), s.token, hash)
+		}
+	}
+
+	if s.totalFee != nil {
+		base := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(s.NativeDecimals)), nil)
+		whole, frac := new(big.Int), new(big.Int)
+		whole.DivMod(s.totalFee, base, frac)
+
+		fracStr := strings.TrimRight(fmt.Sprintf("%0*s", s.NativeDecimals, frac.String()), "0")
+		decimal := whole.String()
+		if fracStr != "" {
+			decimal += "." + fracStr
+		}
+
+		s.T().Logf("Multicall3Suite total fee spent: %s %s", decimal, s.NativeSymbol)
+	}
+
 	if s.cancel != nil {
 		s.cancel()
 	}
 }
 
-func (s *Multicall3Suite) decodeOrUnknown(fn *abi.Function, r Result) string {
-	if !r.Success || len(r.ReturnData) == 0 {
-		return "?"
-	}
-	vals, err := fn.DecodeReturn(r.ReturnData)
+func (s *Multicall3Suite) Test01Aggregate3MintsInOneTransaction() {
+	mintFn := abi.NewFunction("mint", abi.NewTypes(abi.Address, abi.Uint256), nil)
+	balanceOfFn := abi.NewFunction("balanceOf", abi.NewTypes(abi.Address), abi.NewTypes(abi.Uint256))
+	transferTopic := core.Keccak256([]byte("Transfer(address,address,uint256)"))
+
+	mintTo, err := mintFn.EncodeCall(s.to, big.NewInt(1))
 	s.Require().NoError(err)
-	return fmt.Sprint(vals[0])
+	mintFrom, err := mintFn.EncodeCall(s.from, big.NewInt(2))
+	s.Require().NoError(err)
+
+	sentTx, hash, err := s.multicall3.Aggregate3(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewAggregate3Request(s.multicall, []Call3{
+		NewCall3(s.token, false, mintTo),
+		NewCall3(s.token, false, mintFrom),
+	}))
+	s.Require().NoError(err)
+	s.mu.Lock()
+	s.totalFee.Add(s.totalFee, sentTx.MaxFee())
+	s.mu.Unlock()
+
+	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, s.ReceiptPollInterval, s.ReceiptTimeout)
+	s.Require().NoError(err)
+	s.Require().True(receipt.Status, "transaction reverted")
+
+	var recipients []*types.Address
+	var amounts []*big.Int
+	for _, log := range receipt.Logs {
+		if !log.Address.Equal(s.token) || len(log.Topics) != 3 || !log.Topics[0].Equal(transferTopic) {
+			continue
+		}
+		s.Require().True(log.TxHash.Equal(hash))
+		s.Require().True(types.NewAddressFromBytes(log.Topics[1].Bytes()[12:]).Equal(types.ZeroAddress()))
+
+		vals, err := abi.Unpack(abi.NewTypes(abi.Uint256), log.Data)
+		s.Require().NoError(err)
+		recipients = append(recipients, types.NewAddressFromBytes(log.Topics[2].Bytes()[12:]))
+		amounts = append(amounts, vals[0].(*big.Int))
+	}
+	s.Require().Len(recipients, 2)
+	s.Require().True(recipients[0].Equal(s.to))
+	s.Require().Zero(big.NewInt(1).Cmp(amounts[0]))
+	s.Require().True(recipients[1].Equal(s.from))
+	s.Require().Zero(big.NewInt(2).Cmp(amounts[1]))
+
+	balanceOfTo, err := balanceOfFn.EncodeCall(s.to)
+	s.Require().NoError(err)
+	balanceOfFrom, err := balanceOfFn.EncodeCall(s.from)
+	s.Require().NoError(err)
+	reads := NewAggregate3Request(s.multicall, []Call3{
+		NewCall3(s.token, false, balanceOfTo),
+		NewCall3(s.token, false, balanceOfFrom),
+	})
+
+	before, err := s.multicall3.CallAggregate3(s.ctx, bind.NewCallOptions().WithBlock(fmt.Sprintf("0x%x", receipt.BlockNumber-1)), reads)
+	s.Require().NoError(err)
+	after, err := s.multicall3.CallAggregate3(s.ctx, bind.NewCallOptions().WithBlock(fmt.Sprintf("0x%x", receipt.BlockNumber)), reads)
+	s.Require().NoError(err)
+
+	toBefore, err := balanceOfFn.DecodeSingleReturn[*big.Int](before[0].ReturnData)
+	s.Require().NoError(err)
+	toAfter, err := balanceOfFn.DecodeSingleReturn[*big.Int](after[0].ReturnData)
+	s.Require().NoError(err)
+	fromBefore, err := balanceOfFn.DecodeSingleReturn[*big.Int](before[1].ReturnData)
+	s.Require().NoError(err)
+	fromAfter, err := balanceOfFn.DecodeSingleReturn[*big.Int](after[1].ReturnData)
+	s.Require().NoError(err)
+	s.Require().Zero(big.NewInt(1).Cmp(new(big.Int).Sub(toAfter, toBefore)))
+	s.Require().Zero(big.NewInt(2).Cmp(new(big.Int).Sub(fromAfter, fromBefore)))
+
+	s.T().Logf("Multicall3 %s Test01Aggregate3MintsInOneTransaction Result", s.multicall)
+	s.T().Logf("\tTx: %s (block %d, gas used %d)", hash, receipt.BlockNumber, receipt.GasUsed)
+	s.T().Logf("\tTo(%s) balance: %s -> %s", s.to, toBefore, toAfter)
+	s.T().Logf("\tFrom(%s) balance: %s -> %s", s.from, fromBefore, fromAfter)
 }
 
-func decodeValueOrUnknown[T any](t require.TestingT, decode func([]byte) (T, error), r Result) string {
-	if !r.Success || len(r.ReturnData) == 0 {
-		return "?"
-	}
-	v, err := decode(r.ReturnData)
-	require.NoError(t, err)
-	return fmt.Sprint(v)
+func (s *Multicall3Suite) Test02Aggregate3RevertsWithCallFailed() {
+	mintFn := abi.NewFunction("mint", abi.NewTypes(abi.Address, abi.Uint256), nil)
+
+	mintTo, err := mintFn.EncodeCall(s.to, big.NewInt(1))
+	s.Require().NoError(err)
+
+	sentTx, hash, err := s.multicall3.Aggregate3(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewAggregate3Request(s.multicall, []Call3{
+		NewCall3(s.token, false, mintTo),
+		NewCall3(s.token, false, []byte{0xde, 0xad, 0xbe, 0xef}),
+	}))
+	s.Require().ErrorIs(err, ErrCallFailed)
+	s.Require().Nil(sentTx)
+	s.Require().Nil(hash)
+
+	s.T().Logf("Multicall3 %s Test02Aggregate3RevertsWithCallFailed Result", s.multicall)
+	s.T().Logf("\tError: %v", err)
 }
 
-// call sends calls to the Multicall3 contract at multicall via Aggregate3
-// and returns the decoded results.
-func (s *Multicall3Suite) call(m IMulticall3, multicall *types.Address, calls []Call3) []Result {
-	results, err := m.Aggregate3(s.ctx, multicall, calls, rpc.BlockTagLatest)
+func (s *Multicall3Suite) Test03Aggregate3ToleratesAllowedFailure() {
+	mintFn := abi.NewFunction("mint", abi.NewTypes(abi.Address, abi.Uint256), nil)
+	transferTopic := core.Keccak256([]byte("Transfer(address,address,uint256)"))
+
+	mintTo, err := mintFn.EncodeCall(s.to, big.NewInt(3))
 	s.Require().NoError(err)
-	return results
+
+	sentTx, hash, err := s.multicall3.Aggregate3(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewAggregate3Request(s.multicall, []Call3{
+		NewCall3(s.token, true, []byte{0xde, 0xad, 0xbe, 0xef}),
+		NewCall3(s.token, false, mintTo),
+	}))
+	s.Require().NoError(err)
+	s.mu.Lock()
+	s.totalFee.Add(s.totalFee, sentTx.MaxFee())
+	s.mu.Unlock()
+
+	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, s.ReceiptPollInterval, s.ReceiptTimeout)
+	s.Require().NoError(err)
+	s.Require().True(receipt.Status, "transaction reverted")
+
+	var amounts []*big.Int
+	for _, log := range receipt.Logs {
+		if !log.Address.Equal(s.token) || len(log.Topics) != 3 || !log.Topics[0].Equal(transferTopic) {
+			continue
+		}
+		s.Require().True(types.NewAddressFromBytes(log.Topics[2].Bytes()[12:]).Equal(s.to))
+
+		vals, err := abi.Unpack(abi.NewTypes(abi.Uint256), log.Data)
+		s.Require().NoError(err)
+		amounts = append(amounts, vals[0].(*big.Int))
+	}
+	s.Require().Len(amounts, 1)
+	s.Require().Zero(big.NewInt(3).Cmp(amounts[0]))
+
+	s.T().Logf("Multicall3 %s Test03Aggregate3ToleratesAllowedFailure Result", s.multicall)
+	s.T().Logf("\tTx: %s (block %d, %d logs)", hash, receipt.BlockNumber, len(receipt.Logs))
 }
 
-func (s *Multicall3Suite) TestAcrossNetworks() {
-	balanceOf, err := abi.ParseFunction("balanceOf(address) returns (uint256)", nil)
+func (s *Multicall3Suite) Test04Aggregate3ValueSendsValue() {
+	sentTx, hash, err := s.multicall3.Aggregate3Value(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewAggregate3ValueRequest(s.multicall, []Call3Value{
+		NewCall3Value(s.to, false, s.Value, nil),
+		NewCall3Value(s.multicall, false, big.NewInt(0), EncodeGetBlockNumber()),
+	}))
 	s.Require().NoError(err)
-	symbolFn, err := abi.ParseFunction("symbol() returns (string)", nil)
+	s.mu.Lock()
+	s.totalFee.Add(s.totalFee, sentTx.MaxFee())
+	s.totalFee.Add(s.totalFee, s.Value)
+	s.mu.Unlock()
+
+	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
-	totalSupplyFn, err := abi.ParseFunction("totalSupply() returns (uint256)", nil)
+	s.Require().True(receipt.Status, "transaction reverted")
+
+	before, err := s.multicall3.GetEthBalance(s.ctx, bind.NewCallOptions().WithBlock(fmt.Sprintf("0x%x", receipt.BlockNumber-1)), NewGetEthBalanceRequest(s.multicall, s.to))
 	s.Require().NoError(err)
-	decimalsFn, err := abi.ParseFunction("decimals() returns (uint8)", nil)
+	after, err := s.multicall3.GetEthBalance(s.ctx, bind.NewCallOptions().WithBlock(fmt.Sprintf("0x%x", receipt.BlockNumber)), NewGetEthBalanceRequest(s.multicall, s.to))
 	s.Require().NoError(err)
+	s.Require().Zero(s.Value.Cmp(new(big.Int).Sub(after, before)))
 
-	for _, n := range networks {
-		s.Run(n.name, func() {
-			client := rpc.NewClient(n.rpcURL, rpc.WithTimeout(15*time.Second))
-			m := New(client)
-
-			tokens := make([]*types.Address, len(n.tokens))
-			var calls []Call3
-			for i, tk := range n.tokens {
-				token, err := types.NewAddressFromHex(tk)
-				s.Require().NoError(err)
-				tokens[i] = token
-
-				b, err := balanceOf.EncodeCall(s.holder)
-				s.Require().NoError(err)
-				calls = append(calls, NewCall3(token, true, b))
-
-				b, err = symbolFn.EncodeCall()
-				s.Require().NoError(err)
-				calls = append(calls, NewCall3(token, false, b))
-
-				b, err = totalSupplyFn.EncodeCall()
-				s.Require().NoError(err)
-				calls = append(calls, NewCall3(token, true, b))
-
-				b, err = decimalsFn.EncodeCall()
-				s.Require().NoError(err)
-				calls = append(calls, NewCall3(token, true, b))
-			}
-
-			results := s.call(m, DefaultMulticall3Address, calls)
-			s.Require().Len(results, len(calls))
-
-			for i, token := range tokens {
-				base := i * 4
-				balance := s.decodeOrUnknown(balanceOf, results[base])
-				symbol := s.decodeOrUnknown(symbolFn, results[base+1])
-				totalSupply := s.decodeOrUnknown(totalSupplyFn, results[base+2])
-				decimals := s.decodeOrUnknown(decimalsFn, results[base+3])
-
-				s.T().Logf("[%s] %s(%s): decimals(%s), totalSupply(%s), balanceOf(%s)",
-					n.name, token, symbol, decimals, totalSupply, balance)
-			}
-		})
-	}
+	s.T().Logf("Multicall3 %s Test04Aggregate3ValueSendsValue Result", s.multicall)
+	s.T().Logf("\tTx: %s (block %d)", hash, receipt.BlockNumber)
+	s.T().Logf("\tTo(%s) balance: %s -> %s", s.to, before, after)
 }
 
-func (s *Multicall3Suite) TestChainInfoAcrossNetworks() {
-	ethBalanceData, err := EncodeGetEthBalance(s.holder)
+func (s *Multicall3Suite) Test05CallAggregate() {
+	result, err := s.multicall3.CallAggregate(s.ctx, nil, NewAggregateRequest(s.multicall, []Call{
+		NewCall(s.multicall, EncodeGetChainID()),
+		NewCall(s.multicall, EncodeGetBlockNumber()),
+	}))
+	s.Require().NoError(err)
+	s.Require().Len(result.ReturnData, 2)
+
+	chainID, err := DecodeGetChainID(result.ReturnData[0])
+	s.Require().NoError(err)
+	s.Require().Equal(int64(s.ChainID), chainID.Int64())
+
+	blockNumber, err := DecodeGetBlockNumber(result.ReturnData[1])
+	s.Require().NoError(err)
+	s.Require().Zero(result.BlockNumber.Cmp(blockNumber))
+
+	s.T().Logf("Multicall3 %s Test05CallAggregate Result", s.multicall)
+	s.T().Logf("\tBlockNumber: %s", result.BlockNumber)
+	s.T().Logf("\tChainID: %s", chainID)
+}
+
+func (s *Multicall3Suite) Test06CallAggregate3() {
+	ethBalanceData, err := EncodeGetEthBalance(s.from)
 	s.Require().NoError(err)
 
-	calls := []Call3{
-		NewCall3(DefaultMulticall3Address, true, EncodeGetChainID()),
-		NewCall3(DefaultMulticall3Address, true, EncodeGetBlockNumber()),
-		NewCall3(DefaultMulticall3Address, true, EncodeGetCurrentBlockCoinbase()),
-		NewCall3(DefaultMulticall3Address, true, EncodeGetCurrentBlockDifficulty()),
-		NewCall3(DefaultMulticall3Address, true, EncodeGetCurrentBlockGasLimit()),
-		NewCall3(DefaultMulticall3Address, true, EncodeGetCurrentBlockTimestamp()),
-		NewCall3(DefaultMulticall3Address, true, EncodeGetBasefee()), // can revert if BASEFEE isn't implemented
-		NewCall3(DefaultMulticall3Address, true, EncodeGetLastBlockHash()),
-		NewCall3(DefaultMulticall3Address, true, ethBalanceData),
+	results, err := s.multicall3.CallAggregate3(s.ctx, nil, NewAggregate3Request(s.multicall, []Call3{
+		NewCall3(s.multicall, false, EncodeGetChainID()),
+		NewCall3(s.multicall, true, []byte{0xde, 0xad, 0xbe, 0xef}),
+		NewCall3(s.multicall, false, ethBalanceData),
+	}))
+	s.Require().NoError(err)
+	s.Require().Len(results, 3)
+	s.Require().True(results[0].Success)
+	s.Require().False(results[1].Success)
+	s.Require().True(results[2].Success)
+
+	chainID, err := DecodeGetChainID(results[0].ReturnData)
+	s.Require().NoError(err)
+	s.Require().Equal(int64(s.ChainID), chainID.Int64())
+
+	balance, err := DecodeGetEthBalance(results[2].ReturnData)
+	s.Require().NoError(err)
+
+	s.T().Logf("Multicall3 %s Test06CallAggregate3 Result", s.multicall)
+	s.T().Logf("\tChainID: %s", chainID)
+	s.T().Logf("\tFailing call: success=%v", results[1].Success)
+	s.T().Logf("\tFrom(%s) balance: %s", s.from, balance)
+}
+
+func (s *Multicall3Suite) Test07CallAggregate3RevertsWithCallFailed() {
+	results, err := s.multicall3.CallAggregate3(s.ctx, nil, NewAggregate3Request(s.multicall, []Call3{
+		NewCall3(s.multicall, false, EncodeGetChainID()),
+		NewCall3(s.multicall, false, []byte{0xde, 0xad, 0xbe, 0xef}),
+	}))
+	s.Require().ErrorIs(err, ErrCallFailed)
+	s.Require().Nil(results)
+
+	s.T().Logf("Multicall3 %s Test07CallAggregate3RevertsWithCallFailed Result", s.multicall)
+	s.T().Logf("\tError: %v", err)
+}
+
+func (s *Multicall3Suite) Test08CallAggregate3Value() {
+	results, err := s.multicall3.CallAggregate3Value(s.ctx, bind.NewCallOptions().WithFrom(s.from), NewAggregate3ValueRequest(s.multicall, []Call3Value{
+		NewCall3Value(s.to, false, s.Value, nil),
+		NewCall3Value(s.multicall, true, big.NewInt(0), EncodeGetChainID()),
+	}))
+	s.Require().NoError(err)
+	s.Require().Len(results, 2)
+	s.Require().True(results[0].Success)
+	s.Require().True(results[1].Success)
+
+	chainID, err := DecodeGetChainID(results[1].ReturnData)
+	s.Require().NoError(err)
+	s.Require().Equal(int64(s.ChainID), chainID.Int64())
+
+	s.T().Logf("Multicall3 %s Test08CallAggregate3Value Result", s.multicall)
+	s.T().Logf("\tValue to %s: %s", s.to, s.Value)
+	s.T().Logf("\tChainID: %s", chainID)
+}
+
+func (s *Multicall3Suite) Test09CallBlockAndAggregate() {
+	result, err := s.multicall3.CallBlockAndAggregate(s.ctx, nil, NewBlockAndAggregateRequest(s.multicall, []Call{
+		NewCall(s.multicall, EncodeGetBlockNumber()),
+		NewCall(s.multicall, EncodeGetLastBlockHash()),
+	}))
+	s.Require().NoError(err)
+	s.Require().Len(result.Results, 2)
+	s.Require().True(result.Results[0].Success)
+	s.Require().True(result.Results[1].Success)
+
+	blockNumber, err := DecodeGetBlockNumber(result.Results[0].ReturnData)
+	s.Require().NoError(err)
+	s.Require().Zero(result.BlockNumber.Cmp(blockNumber))
+
+	s.T().Logf("Multicall3 %s Test09CallBlockAndAggregate Result", s.multicall)
+	s.T().Logf("\tBlockNumber: %s", result.BlockNumber)
+	s.T().Logf("\tBlockHash: %s", result.BlockHash)
+}
+
+func (s *Multicall3Suite) Test10CallTryAggregate() {
+	results, err := s.multicall3.CallTryAggregate(s.ctx, nil, NewTryAggregateRequest(s.multicall, false, []Call{
+		NewCall(s.multicall, EncodeGetChainID()),
+		NewCall(s.multicall, []byte{0xde, 0xad, 0xbe, 0xef}),
+	}))
+	s.Require().NoError(err)
+	s.Require().Len(results, 2)
+	s.Require().True(results[0].Success)
+	s.Require().False(results[1].Success)
+
+	results, err = s.multicall3.CallTryAggregate(s.ctx, nil, NewTryAggregateRequest(s.multicall, true, []Call{
+		NewCall(s.multicall, EncodeGetChainID()),
+		NewCall(s.multicall, []byte{0xde, 0xad, 0xbe, 0xef}),
+	}))
+	s.Require().ErrorIs(err, ErrCallFailed)
+	s.Require().Nil(results)
+
+	s.T().Logf("Multicall3 %s Test10CallTryAggregate Result", s.multicall)
+	s.T().Logf("\tRequireSuccess true: %v", err)
+}
+
+func (s *Multicall3Suite) Test11CallTryBlockAndAggregate() {
+	blockNumber, err := s.multicall3.GetBlockNumber(s.ctx, nil, NewGetBlockNumberRequest(s.multicall))
+	s.Require().NoError(err)
+
+	opts := bind.NewCallOptions().WithBlock(fmt.Sprintf("0x%x", blockNumber.Uint64()))
+
+	result, err := s.multicall3.CallTryBlockAndAggregate(s.ctx, opts, NewTryBlockAndAggregateRequest(s.multicall, false, []Call{
+		NewCall(s.multicall, EncodeGetBlockNumber()),
+		NewCall(s.multicall, []byte{0xde, 0xad, 0xbe, 0xef}),
+	}))
+	s.Require().NoError(err)
+	s.Require().Zero(blockNumber.Cmp(result.BlockNumber))
+	s.Require().Len(result.Results, 2)
+	s.Require().True(result.Results[0].Success)
+	s.Require().False(result.Results[1].Success)
+
+	hash, err := s.multicall3.GetBlockHash(s.ctx, opts, NewGetBlockHashRequest(s.multicall, blockNumber))
+	s.Require().NoError(err)
+	s.Require().True(hash.Equal(result.BlockHash))
+
+	s.T().Logf("Multicall3 %s Test11CallTryBlockAndAggregate Result", s.multicall)
+	s.T().Logf("\tBlockNumber: %s", result.BlockNumber)
+	s.T().Logf("\tBlockHash: %s", result.BlockHash)
+}
+
+func (s *Multicall3Suite) Test12Getters() {
+	blockNumber, err := s.multicall3.GetBlockNumber(s.ctx, nil, NewGetBlockNumberRequest(s.multicall))
+	s.Require().NoError(err)
+	s.Require().Positive(blockNumber.Sign())
+
+	opts := bind.NewCallOptions().WithBlock(fmt.Sprintf("0x%x", blockNumber.Uint64()))
+
+	pinned, err := s.multicall3.GetBlockNumber(s.ctx, opts, NewGetBlockNumberRequest(s.multicall))
+	s.Require().NoError(err)
+	s.Require().Zero(blockNumber.Cmp(pinned))
+
+	chainID, err := s.multicall3.GetChainID(s.ctx, opts, NewGetChainIDRequest(s.multicall))
+	s.Require().NoError(err)
+	s.Require().Equal(int64(s.ChainID), chainID.Int64())
+
+	lastBlockHash, err := s.multicall3.GetLastBlockHash(s.ctx, opts, NewGetLastBlockHashRequest(s.multicall))
+	s.Require().NoError(err)
+
+	blockHash, err := s.multicall3.GetBlockHash(s.ctx, opts, NewGetBlockHashRequest(s.multicall, new(big.Int).Sub(blockNumber, big.NewInt(1))))
+	s.Require().NoError(err)
+	s.Require().True(blockHash.Equal(lastBlockHash))
+
+	coinbase, err := s.multicall3.GetCurrentBlockCoinbase(s.ctx, opts, NewGetCurrentBlockCoinbaseRequest(s.multicall))
+	s.Require().NoError(err)
+
+	difficulty, err := s.multicall3.GetCurrentBlockDifficulty(s.ctx, opts, NewGetCurrentBlockDifficultyRequest(s.multicall))
+	s.Require().NoError(err)
+
+	gasLimit, err := s.multicall3.GetCurrentBlockGasLimit(s.ctx, opts, NewGetCurrentBlockGasLimitRequest(s.multicall))
+	s.Require().NoError(err)
+	s.Require().Positive(gasLimit.Sign())
+
+	timestamp, err := s.multicall3.GetCurrentBlockTimestamp(s.ctx, opts, NewGetCurrentBlockTimestampRequest(s.multicall))
+	s.Require().NoError(err)
+	s.Require().Positive(timestamp.Sign())
+
+	ethBalance, err := s.multicall3.GetEthBalance(s.ctx, opts, NewGetEthBalanceRequest(s.multicall, s.from))
+	s.Require().NoError(err)
+
+	basefee, err := s.multicall3.GetBasefee(s.ctx, opts, NewGetBasefeeRequest(s.multicall))
+	if err != nil {
+		s.Require().ErrorIs(err, ErrBasefeeNotImplemented)
 	}
 
-	for _, n := range networks {
-		s.Run(n.name, func() {
-			client := rpc.NewClient(n.rpcURL, rpc.WithTimeout(15*time.Second))
-			m := New(client)
-
-			results := s.call(m, DefaultMulticall3Address, calls)
-			s.Require().Len(results, len(calls))
-
-			chainID := decodeValueOrUnknown(s.T(), DecodeGetChainID, results[0])
-			blockNumber := decodeValueOrUnknown(s.T(), DecodeGetBlockNumber, results[1])
-			coinbase := decodeValueOrUnknown(s.T(), DecodeGetCurrentBlockCoinbase, results[2])
-			difficulty := decodeValueOrUnknown(s.T(), DecodeGetCurrentBlockDifficulty, results[3])
-			gasLimit := decodeValueOrUnknown(s.T(), DecodeGetCurrentBlockGasLimit, results[4])
-			timestamp := decodeValueOrUnknown(s.T(), DecodeGetCurrentBlockTimestamp, results[5])
-			basefee := decodeValueOrUnknown(s.T(), DecodeGetBasefee, results[6])
-			lastBlockHash := decodeValueOrUnknown(s.T(), DecodeGetLastBlockHash, results[7])
-			ethBalance := decodeValueOrUnknown(s.T(), DecodeGetEthBalance, results[8])
-
-			s.T().Logf("[%s] chainId(%s), blockNumber(%s), coinbase(%s), difficulty(%s), gasLimit(%s), timestamp(%s), basefee(%s), lastBlockHash(%s), ethBalance(%s)",
-				n.name, chainID, blockNumber, coinbase, difficulty, gasLimit, timestamp, basefee, lastBlockHash, ethBalance)
-		})
-	}
+	s.T().Logf("Multicall3 %s Test12Getters Result", s.multicall)
+	s.T().Logf("\tBlockNumber: %s", blockNumber)
+	s.T().Logf("\tChainID: %s", chainID)
+	s.T().Logf("\tLastBlockHash: %s", lastBlockHash)
+	s.T().Logf("\tCoinbase: %s", coinbase)
+	s.T().Logf("\tDifficulty: %s", difficulty)
+	s.T().Logf("\tGasLimit: %s", gasLimit)
+	s.T().Logf("\tTimestamp: %s", timestamp)
+	s.T().Logf("\tFrom(%s) balance: %s", s.from, ethBalance)
+	s.T().Logf("\tBasefee: %v (err %v)", basefee, err)
 }
