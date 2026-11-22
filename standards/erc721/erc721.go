@@ -1,6 +1,5 @@
-// Package erc721 encodes calls to and decodes results from an ERC-721 token
-// contract. Go types mirror the interfaces in solidity/interfaces/IERC721.sol
-// and solidity/interfaces/IERC721Metadata.sol.
+// Package erc721 is a client for ERC-721 tokens, mirroring IERC721.sol and
+// IERC721Metadata.sol.
 package erc721
 
 import (
@@ -10,51 +9,69 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core"
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
 	"github.com/ninja-protocol-labs/go-evmkit/standards/erc165"
-	"github.com/ninja-protocol-labs/go-evmkit/tx"
 	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
 // IERC721 mirrors IERC721.sol, including its IERC165 embedding.
 type IERC721 interface {
 	erc165.IERC165
-	BalanceOf(ctx context.Context, contract, owner *types.Address, block string) (*big.Int, error)
-	OwnerOf(ctx context.Context, contract *types.Address, tokenId *big.Int, block string) (*types.Address, error)
-	GetApproved(ctx context.Context, contract *types.Address, tokenId *big.Int, block string) (*types.Address, error)
-	IsApprovedForAll(ctx context.Context, contract, owner, operator *types.Address, block string) (bool, error)
 
-	Approve(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	SetApprovalForAll(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	TransferFrom(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	SafeTransferFrom(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
+	BalanceOf(ctx context.Context, opts *bind.CallOptions, req *BalanceOfRequest) (*big.Int, error)
+	OwnerOf(ctx context.Context, opts *bind.CallOptions, req *OwnerOfRequest) (*types.Address, error)
+	GetApproved(ctx context.Context, opts *bind.CallOptions, req *GetApprovedRequest) (*types.Address, error)
+	IsApprovedForAll(ctx context.Context, opts *bind.CallOptions, req *IsApprovedForAllRequest) (bool, error)
+
+	Approve(ctx context.Context, opts *bind.TransactOptions, req *ApproveRequest) (core.Transaction, *types.Hash, error)
+	SetApprovalForAll(ctx context.Context, opts *bind.TransactOptions, req *SetApprovalForAllRequest) (core.Transaction, *types.Hash, error)
+	TransferFrom(ctx context.Context, opts *bind.TransactOptions, req *TransferFromRequest) (core.Transaction, *types.Hash, error)
+	SafeTransferFrom(ctx context.Context, opts *bind.TransactOptions, req *SafeTransferFromRequest) (core.Transaction, *types.Hash, error)
+	SafeTransferFromWithData(ctx context.Context, opts *bind.TransactOptions, req *SafeTransferFromWithDataRequest) (core.Transaction, *types.Hash, error)
 }
-
-var _ IERC721 = (*ERC721)(nil)
 
 // IERC721Metadata mirrors IERC721Metadata.sol, including its IERC721 embedding.
 type IERC721Metadata interface {
 	IERC721
-	Name(ctx context.Context, contract *types.Address, block string) (string, error)
-	Symbol(ctx context.Context, contract *types.Address, block string) (string, error)
-	TokenURI(ctx context.Context, contract *types.Address, tokenId *big.Int, block string) (string, error)
+
+	Name(ctx context.Context, opts *bind.CallOptions, req *NameRequest) (string, error)
+	Symbol(ctx context.Context, opts *bind.CallOptions, req *SymbolRequest) (string, error)
+	TokenURI(ctx context.Context, opts *bind.CallOptions, req *TokenURIRequest) (string, error)
 }
 
-var _ IERC721Metadata = (*ERC721)(nil)
+// IERC721Batcher groups the Multicall3-backed batch reads; it mirrors no
+// Solidity interface.
+type IERC721Batcher interface {
+	Metadata(ctx context.Context, opts *bind.CallOptions, req *MetadataRequest) (*Metadata, error)
+	MetadataWithTokenID(ctx context.Context, opts *bind.CallOptions, req *MetadataWithTokenIDRequest) (*MetadataWithTokenID, error)
+	AllowanceWithTokenID(ctx context.Context, opts *bind.CallOptions, req *AllowanceWithTokenIDRequest) (*AllowanceWithTokenID, error)
+	ApprovalForAllWithBalance(ctx context.Context, opts *bind.CallOptions, req *ApprovalForAllWithBalanceRequest) (*ApprovalForAllWithBalance, error)
+	TokenOwners(ctx context.Context, opts *bind.CallOptions, req *TokenOwnersRequest) (*TokenOwners, error)
+	TokenOperators(ctx context.Context, opts *bind.CallOptions, req *TokenOperatorsRequest) (*TokenOperators, error)
+	AddressBalances(ctx context.Context, opts *bind.CallOptions, req *AddressBalancesRequest) (*AddressBalances, error)
+	TokenBalances(ctx context.Context, opts *bind.CallOptions, req *TokenBalancesRequest) (*TokenBalances, error)
+	OwnerPairs(ctx context.Context, opts *bind.CallOptions, req *OwnerPairsRequest) ([]TokenOwnerPair, error)
+}
 
-// ERC721 calls any ERC-721 token contract over a Client; it holds no
-// contract address, so one instance serves every collection. SupportsInterface
-// is promoted from the embedded *erc165.ERC165, mirroring IERC721 is IERC165.
+var (
+	_ IERC721         = (*ERC721)(nil)
+	_ IERC721Metadata = (*ERC721)(nil)
+	_ IERC721Batcher  = (*ERC721)(nil)
+)
+
+// ERC721 calls any ERC-721 token contract over a Client; SupportsInterface is
+// promoted from the embedded *erc165.ERC165, mirroring IERC721 is IERC165.
 type ERC721 struct {
 	*erc165.ERC165
 
 	c rpc.Client
 }
 
-// New returns an ERC721 calling collections via cli.
+// New returns an ERC721 calling contracts via cli.
 func New(cli rpc.Client) *ERC721 {
 	return &ERC721{
 		c:      cli,
@@ -62,435 +79,477 @@ func New(cli rpc.Client) *ERC721 {
 	}
 }
 
-// Name returns contract's name.
-func (e *ERC721) Name(ctx context.Context, contract *types.Address, block string) (string, error) {
-	data, err := e.call(ctx, nil, contract, EncodeName(), block)
+// Name returns req.Contract's name.
+func (e *ERC721) Name(ctx context.Context, opts *bind.CallOptions, req *NameRequest) (string, error) {
+	if err := req.Validate(); err != nil {
+		return "", fmt.Errorf("erc721: name: %w", err)
+	}
+
+	calldata := EncodeName()
+
+	data, err := bind.Call(ctx, e.c, opts, req.Contract, calldata)
+	if err != nil {
+		return "", fmt.Errorf("erc721: name: %w", e.wrapRevertError(err))
+	}
+
+	out, err := DecodeName(data)
 	if err != nil {
 		return "", fmt.Errorf("erc721: name: %w", err)
 	}
-	s, err := DecodeName(data)
-	if err != nil {
-		return "", fmt.Errorf("erc721: name: %w", err)
-	}
-	return s, nil
+
+	return out, nil
 }
 
-// Symbol returns contract's symbol.
-func (e *ERC721) Symbol(ctx context.Context, contract *types.Address, block string) (string, error) {
-	data, err := e.call(ctx, nil, contract, EncodeSymbol(), block)
+// Symbol returns req.Contract's symbol.
+func (e *ERC721) Symbol(ctx context.Context, opts *bind.CallOptions, req *SymbolRequest) (string, error) {
+	if err := req.Validate(); err != nil {
+		return "", fmt.Errorf("erc721: symbol: %w", err)
+	}
+
+	calldata := EncodeSymbol()
+
+	data, err := bind.Call(ctx, e.c, opts, req.Contract, calldata)
+	if err != nil {
+		return "", fmt.Errorf("erc721: symbol: %w", e.wrapRevertError(err))
+	}
+
+	out, err := DecodeSymbol(data)
 	if err != nil {
 		return "", fmt.Errorf("erc721: symbol: %w", err)
 	}
-	s, err := DecodeSymbol(data)
-	if err != nil {
-		return "", fmt.Errorf("erc721: symbol: %w", err)
-	}
-	return s, nil
+
+	return out, nil
 }
 
-// TokenURI returns tokenId's URI on contract.
-func (e *ERC721) TokenURI(ctx context.Context, contract *types.Address, tokenId *big.Int, block string) (string, error) {
-	calldata, err := EncodeTokenURI(tokenId)
+// TokenURI returns req.TokenID's URI on req.Contract.
+func (e *ERC721) TokenURI(ctx context.Context, opts *bind.CallOptions, req *TokenURIRequest) (string, error) {
+	if err := req.Validate(); err != nil {
+		return "", fmt.Errorf("erc721: tokenURI: %w", err)
+	}
+
+	calldata, err := EncodeTokenURI(req.TokenID)
 	if err != nil {
 		return "", fmt.Errorf("erc721: tokenURI: %w", err)
 	}
-	data, err := e.call(ctx, nil, contract, calldata, block)
+
+	data, err := bind.Call(ctx, e.c, opts, req.Contract, calldata)
+	if err != nil {
+		return "", fmt.Errorf("erc721: tokenURI: %w", e.wrapRevertError(err))
+	}
+
+	out, err := DecodeTokenURI(data)
 	if err != nil {
 		return "", fmt.Errorf("erc721: tokenURI: %w", err)
 	}
-	s, err := DecodeTokenURI(data)
-	if err != nil {
-		return "", fmt.Errorf("erc721: tokenURI: %w", err)
-	}
-	return s, nil
+
+	return out, nil
 }
 
-// BalanceOf returns owner's balance of contract.
-func (e *ERC721) BalanceOf(ctx context.Context, contract, owner *types.Address, block string) (*big.Int, error) {
-	calldata, err := EncodeBalanceOf(owner)
+// BalanceOf returns req.Owner's balance on req.Contract.
+func (e *ERC721) BalanceOf(ctx context.Context, opts *bind.CallOptions, req *BalanceOfRequest) (*big.Int, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("erc721: balanceOf: %w", err)
+	}
+
+	calldata, err := EncodeBalanceOf(req.Owner)
 	if err != nil {
 		return nil, fmt.Errorf("erc721: balanceOf: %w", err)
 	}
-	data, err := e.call(ctx, nil, contract, calldata, block)
+
+	data, err := bind.Call(ctx, e.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("erc721: balanceOf: %w", e.wrapRevertError(err))
+	}
+
+	out, err := DecodeBalanceOf(data)
 	if err != nil {
 		return nil, fmt.Errorf("erc721: balanceOf: %w", err)
 	}
-	n, err := DecodeBalanceOf(data)
-	if err != nil {
-		return nil, fmt.Errorf("erc721: balanceOf: %w", err)
-	}
-	return n, nil
+
+	return out, nil
 }
 
-// OwnerOf returns tokenId's owner on contract.
-func (e *ERC721) OwnerOf(ctx context.Context, contract *types.Address, tokenId *big.Int, block string) (*types.Address, error) {
-	calldata, err := EncodeOwnerOf(tokenId)
+// OwnerOf returns req.TokenID's owner on req.Contract.
+func (e *ERC721) OwnerOf(ctx context.Context, opts *bind.CallOptions, req *OwnerOfRequest) (*types.Address, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("erc721: ownerOf: %w", err)
+	}
+
+	calldata, err := EncodeOwnerOf(req.TokenID)
 	if err != nil {
 		return nil, fmt.Errorf("erc721: ownerOf: %w", err)
 	}
-	data, err := e.call(ctx, nil, contract, calldata, block)
+
+	data, err := bind.Call(ctx, e.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("erc721: ownerOf: %w", e.wrapRevertError(err))
+	}
+
+	out, err := DecodeOwnerOf(data)
 	if err != nil {
 		return nil, fmt.Errorf("erc721: ownerOf: %w", err)
 	}
-	addr, err := DecodeOwnerOf(data)
-	if err != nil {
-		return nil, fmt.Errorf("erc721: ownerOf: %w", err)
-	}
-	return addr, nil
+
+	return out, nil
 }
 
-// GetApproved returns tokenId's approved operator on contract.
-func (e *ERC721) GetApproved(ctx context.Context, contract *types.Address, tokenId *big.Int, block string) (*types.Address, error) {
-	calldata, err := EncodeGetApproved(tokenId)
+// GetApproved returns req.TokenID's approved address on req.Contract.
+func (e *ERC721) GetApproved(ctx context.Context, opts *bind.CallOptions, req *GetApprovedRequest) (*types.Address, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("erc721: getApproved: %w", err)
+	}
+
+	calldata, err := EncodeGetApproved(req.TokenID)
 	if err != nil {
 		return nil, fmt.Errorf("erc721: getApproved: %w", err)
 	}
-	data, err := e.call(ctx, nil, contract, calldata, block)
+
+	data, err := bind.Call(ctx, e.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("erc721: getApproved: %w", e.wrapRevertError(err))
+	}
+
+	out, err := DecodeGetApproved(data)
 	if err != nil {
 		return nil, fmt.Errorf("erc721: getApproved: %w", err)
 	}
-	addr, err := DecodeGetApproved(data)
-	if err != nil {
-		return nil, fmt.Errorf("erc721: getApproved: %w", err)
-	}
-	return addr, nil
+
+	return out, nil
 }
 
-// IsApprovedForAll reports whether operator may manage all of owner's tokens on contract.
-func (e *ERC721) IsApprovedForAll(ctx context.Context, contract, owner, operator *types.Address, block string) (bool, error) {
-	calldata, err := EncodeIsApprovedForAll(owner, operator)
+// IsApprovedForAll reports whether req.Operator may manage all of req.Owner's tokens.
+func (e *ERC721) IsApprovedForAll(ctx context.Context, opts *bind.CallOptions, req *IsApprovedForAllRequest) (bool, error) {
+	if err := req.Validate(); err != nil {
+		return false, fmt.Errorf("erc721: isApprovedForAll: %w", err)
+	}
+
+	calldata, err := EncodeIsApprovedForAll(req.Owner, req.Operator)
 	if err != nil {
 		return false, fmt.Errorf("erc721: isApprovedForAll: %w", err)
 	}
-	data, err := e.call(ctx, nil, contract, calldata, block)
+
+	data, err := bind.Call(ctx, e.c, opts, req.Contract, calldata)
+	if err != nil {
+		return false, fmt.Errorf("erc721: isApprovedForAll: %w", e.wrapRevertError(err))
+	}
+
+	out, err := DecodeIsApprovedForAll(data)
 	if err != nil {
 		return false, fmt.Errorf("erc721: isApprovedForAll: %w", err)
 	}
-	ok, err := DecodeIsApprovedForAll(data)
-	if err != nil {
-		return false, fmt.Errorf("erc721: isApprovedForAll: %w", err)
-	}
-	return ok, nil
+
+	return out, nil
 }
 
-// CreateApprove builds an unsigned approve(to, tokenId) transaction via b.
-func (e *ERC721) CreateApprove(ctx context.Context, b tx.Builder, contract, from, to *types.Address, tokenId *big.Int) (core.Transaction, error) {
-	calldata, err := EncodeApprove(to, tokenId)
-	if err != nil {
-		return nil, fmt.Errorf("erc721: createApprove: %w", err)
+// Approve sends approve(to, tokenId) on req.Contract, signed by opts.Signer.
+func (e *ERC721) Approve(ctx context.Context, opts *bind.TransactOptions, req *ApproveRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("erc721: approve: %w", err)
 	}
 
-	unsigned, err := b.Build(from, contract, nil, calldata).Pack(ctx, e.c)
+	calldata, err := EncodeApprove(req.To, req.TokenID)
 	if err != nil {
-		return nil, fmt.Errorf("erc721: createApprove: %w", e.wrapRevertError(err))
+		return nil, nil, fmt.Errorf("erc721: approve: %w", err)
 	}
-	return unsigned, nil
+
+	signed, hash, err := bind.Transact(ctx, e.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("erc721: approve: %w", e.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
 }
 
-// Approve broadcasts an already-signed approve transaction.
-func (e *ERC721) Approve(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("erc721: approve: %w", err)
+// SetApprovalForAll sends setApprovalForAll(operator, approved) on req.Contract, signed by opts.Signer.
+func (e *ERC721) SetApprovalForAll(ctx context.Context, opts *bind.TransactOptions, req *SetApprovalForAllRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("erc721: setApprovalForAll: %w", err)
 	}
-	hash, err := tx.Broadcast(ctx, e.c, raw)
+
+	calldata, err := EncodeSetApprovalForAll(req.Operator, req.Approved)
 	if err != nil {
-		return nil, fmt.Errorf("erc721: approve: %w", err)
+		return nil, nil, fmt.Errorf("erc721: setApprovalForAll: %w", err)
 	}
-	return hash, nil
+
+	signed, hash, err := bind.Transact(ctx, e.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("erc721: setApprovalForAll: %w", e.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
 }
 
-// CreateSetApprovalForAll builds an unsigned setApprovalForAll(operator, approved) transaction via b.
-func (e *ERC721) CreateSetApprovalForAll(ctx context.Context, b tx.Builder, contract, from, operator *types.Address, approved bool) (core.Transaction, error) {
-	calldata, err := EncodeSetApprovalForAll(operator, approved)
-	if err != nil {
-		return nil, fmt.Errorf("erc721: createSetApprovalForAll: %w", err)
+// TransferFrom sends transferFrom(from, to, tokenId) on req.Contract, signed by opts.Signer.
+func (e *ERC721) TransferFrom(ctx context.Context, opts *bind.TransactOptions, req *TransferFromRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("erc721: transferFrom: %w", err)
 	}
 
-	unsigned, err := b.Build(from, contract, nil, calldata).Pack(ctx, e.c)
+	calldata, err := EncodeTransferFrom(req.From, req.To, req.TokenID)
 	if err != nil {
-		return nil, fmt.Errorf("erc721: createSetApprovalForAll: %w", e.wrapRevertError(err))
+		return nil, nil, fmt.Errorf("erc721: transferFrom: %w", err)
 	}
-	return unsigned, nil
+
+	signed, hash, err := bind.Transact(ctx, e.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("erc721: transferFrom: %w", e.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
 }
 
-// SetApprovalForAll broadcasts an already-signed setApprovalForAll transaction.
-func (e *ERC721) SetApprovalForAll(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("erc721: setApprovalForAll: %w", err)
+// SafeTransferFrom sends safeTransferFrom(from, to, tokenId) on req.Contract, signed by opts.Signer.
+func (e *ERC721) SafeTransferFrom(ctx context.Context, opts *bind.TransactOptions, req *SafeTransferFromRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("erc721: safeTransferFrom: %w", err)
 	}
-	hash, err := tx.Broadcast(ctx, e.c, raw)
+
+	calldata, err := EncodeSafeTransferFrom(req.From, req.To, req.TokenID)
 	if err != nil {
-		return nil, fmt.Errorf("erc721: setApprovalForAll: %w", err)
+		return nil, nil, fmt.Errorf("erc721: safeTransferFrom: %w", err)
 	}
-	return hash, nil
+
+	signed, hash, err := bind.Transact(ctx, e.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("erc721: safeTransferFrom: %w", e.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
 }
 
-// CreateTransferFrom builds an unsigned transferFrom(from, to, tokenId) transaction via b, sent by sender.
-func (e *ERC721) CreateTransferFrom(ctx context.Context, b tx.Builder, contract, sender, from, to *types.Address, tokenId *big.Int) (core.Transaction, error) {
-	calldata, err := EncodeTransferFrom(from, to, tokenId)
-	if err != nil {
-		return nil, fmt.Errorf("erc721: createTransferFrom: %w", err)
+// SafeTransferFromWithData sends safeTransferFrom(from, to, tokenId, data) on req.Contract, signed by opts.Signer.
+func (e *ERC721) SafeTransferFromWithData(ctx context.Context, opts *bind.TransactOptions, req *SafeTransferFromWithDataRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("erc721: safeTransferFromWithData: %w", err)
 	}
 
-	unsigned, err := b.Build(sender, contract, nil, calldata).Pack(ctx, e.c)
+	calldata, err := EncodeSafeTransferFromWithData(req.From, req.To, req.TokenID, req.Data)
 	if err != nil {
-		return nil, fmt.Errorf("erc721: createTransferFrom: %w", e.wrapRevertError(err))
+		return nil, nil, fmt.Errorf("erc721: safeTransferFromWithData: %w", err)
 	}
-	return unsigned, nil
+
+	signed, hash, err := bind.Transact(ctx, e.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("erc721: safeTransferFromWithData: %w", e.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
 }
 
-// TransferFrom broadcasts an already-signed transferFrom transaction.
-func (e *ERC721) TransferFrom(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("erc721: transferFrom: %w", err)
-	}
-	hash, err := tx.Broadcast(ctx, e.c, raw)
-	if err != nil {
-		return nil, fmt.Errorf("erc721: transferFrom: %w", err)
-	}
-	return hash, nil
-}
-
-// CreateSafeTransferFrom builds an unsigned safeTransferFrom(from, to, tokenId) transaction via b, sent by sender.
-func (e *ERC721) CreateSafeTransferFrom(ctx context.Context, b tx.Builder, contract, sender, from, to *types.Address, tokenId *big.Int) (core.Transaction, error) {
-	calldata, err := EncodeSafeTransferFrom(from, to, tokenId)
-	if err != nil {
-		return nil, fmt.Errorf("erc721: createSafeTransferFrom: %w", err)
+// Metadata batches name/symbol on req.Contract via Multicall3 at req.Multicall.
+func (e *ERC721) Metadata(ctx context.Context, opts *bind.CallOptions, req *MetadataRequest) (*Metadata, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("erc721: metadata: %w", err)
 	}
 
-	unsigned, err := b.Build(sender, contract, nil, calldata).Pack(ctx, e.c)
-	if err != nil {
-		return nil, fmt.Errorf("erc721: createSafeTransferFrom: %w", e.wrapRevertError(err))
-	}
-	return unsigned, nil
-}
-
-// CreateSafeTransferFromWithData builds an unsigned safeTransferFrom(from, to, tokenId, data) transaction via b, sent by sender.
-func (e *ERC721) CreateSafeTransferFromWithData(ctx context.Context, b tx.Builder, contract, sender, from, to *types.Address, tokenId *big.Int, callData []byte) (core.Transaction, error) {
-	calldata, err := EncodeSafeTransferFromWithData(from, to, tokenId, callData)
-	if err != nil {
-		return nil, fmt.Errorf("erc721: createSafeTransferFromWithData: %w", err)
-	}
-
-	unsigned, err := b.Build(sender, contract, nil, calldata).Pack(ctx, e.c)
-	if err != nil {
-		return nil, fmt.Errorf("erc721: createSafeTransferFromWithData: %w", e.wrapRevertError(err))
-	}
-	return unsigned, nil
-}
-
-// SafeTransferFrom broadcasts an already-signed safeTransferFrom transaction.
-func (e *ERC721) SafeTransferFrom(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("erc721: safeTransferFrom: %w", err)
-	}
-	hash, err := tx.Broadcast(ctx, e.c, raw)
-	if err != nil {
-		return nil, fmt.Errorf("erc721: safeTransferFrom: %w", err)
-	}
-	return hash, nil
-}
-
-// Metadata batches name/symbol on contract into one call via the Multicall3
-// contract deployed at multicall.
-func (e *ERC721) Metadata(ctx context.Context, multicall, contract *types.Address, allowFailure bool, block string) (*Metadata, error) {
-	calldata, err := EncodeMetadata(contract, allowFailure)
+	calldata, err := EncodeMetadata(req.Contract, req.AllowFailure)
 	if err != nil {
 		return nil, fmt.Errorf("erc721: metadata: %w", err)
 	}
 
-	data, err := e.call(ctx, nil, multicall, calldata, block)
+	data, err := bind.Call(ctx, e.c, opts, req.Multicall, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("erc721: metadata: %w", e.wrapRevertError(err))
+	}
+
+	out, err := DecodeMetadata(data)
 	if err != nil {
 		return nil, fmt.Errorf("erc721: metadata: %w", err)
 	}
 
-	m, err := DecodeMetadata(data)
-	if err != nil {
-		return nil, fmt.Errorf("erc721: metadata: %w", err)
-	}
-	return m, nil
+	return out, nil
 }
 
-// MetadataWithTokenID is Metadata plus tokenId's URI and owner in the same
-// call, via the Multicall3 contract deployed at multicall.
-func (e *ERC721) MetadataWithTokenID(ctx context.Context, multicall, contract *types.Address, tokenId *big.Int, allowFailure bool, block string) (*MetadataWithTokenID, error) {
-	calldata, err := EncodeMetadataWithTokenID(contract, tokenId, allowFailure)
+// MetadataWithTokenID is Metadata plus req.TokenID's URI and owner in the same call.
+func (e *ERC721) MetadataWithTokenID(ctx context.Context, opts *bind.CallOptions, req *MetadataWithTokenIDRequest) (*MetadataWithTokenID, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("erc721: metadataWithTokenID: %w", err)
+	}
+
+	calldata, err := EncodeMetadataWithTokenID(req.Contract, req.TokenID, req.AllowFailure)
 	if err != nil {
 		return nil, fmt.Errorf("erc721: metadataWithTokenID: %w", err)
 	}
 
-	data, err := e.call(ctx, nil, multicall, calldata, block)
+	data, err := bind.Call(ctx, e.c, opts, req.Multicall, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("erc721: metadataWithTokenID: %w", e.wrapRevertError(err))
+	}
+
+	out, err := DecodeMetadataWithTokenID(req.TokenID, data)
 	if err != nil {
 		return nil, fmt.Errorf("erc721: metadataWithTokenID: %w", err)
 	}
 
-	mt, err := DecodeMetadataWithTokenID(tokenId, data)
-	if err != nil {
-		return nil, fmt.Errorf("erc721: metadataWithTokenID: %w", err)
-	}
-	return mt, nil
+	return out, nil
 }
 
-// AllowanceWithTokenID batches ownerOf(tokenId) and getApproved(tokenId) into
-// one call, via the Multicall3 contract deployed at multicall.
-func (e *ERC721) AllowanceWithTokenID(ctx context.Context, multicall, contract *types.Address, tokenId *big.Int, allowFailure bool, block string) (*AllowanceWithTokenID, error) {
-	calldata, err := EncodeAllowanceWithTokenID(contract, tokenId, allowFailure)
+// AllowanceWithTokenID batches req.TokenID's owner and approved address.
+func (e *ERC721) AllowanceWithTokenID(ctx context.Context, opts *bind.CallOptions, req *AllowanceWithTokenIDRequest) (*AllowanceWithTokenID, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("erc721: allowanceWithTokenID: %w", err)
+	}
+
+	calldata, err := EncodeAllowanceWithTokenID(req.Contract, req.TokenID, req.AllowFailure)
 	if err != nil {
 		return nil, fmt.Errorf("erc721: allowanceWithTokenID: %w", err)
 	}
 
-	data, err := e.call(ctx, nil, multicall, calldata, block)
+	data, err := bind.Call(ctx, e.c, opts, req.Multicall, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("erc721: allowanceWithTokenID: %w", e.wrapRevertError(err))
+	}
+
+	out, err := DecodeAllowanceWithTokenID(req.TokenID, data)
 	if err != nil {
 		return nil, fmt.Errorf("erc721: allowanceWithTokenID: %w", err)
 	}
 
-	awt, err := DecodeAllowanceWithTokenID(tokenId, data)
-	if err != nil {
-		return nil, fmt.Errorf("erc721: allowanceWithTokenID: %w", err)
-	}
-	return awt, nil
+	return out, nil
 }
 
-// ApprovalForAllWithBalance batches isApprovedForAll(owner, operator) and
-// both their balances into one call, via the Multicall3 contract deployed at multicall.
-func (e *ERC721) ApprovalForAllWithBalance(ctx context.Context, multicall, contract, owner, operator *types.Address, allowFailure bool, block string) (*ApprovalForAllWithBalance, error) {
-	calldata, err := EncodeApprovalForAllWithBalance(contract, owner, operator, allowFailure)
+// ApprovalForAllWithBalance batches isApprovedForAll(owner, operator) and both balances.
+func (e *ERC721) ApprovalForAllWithBalance(ctx context.Context, opts *bind.CallOptions, req *ApprovalForAllWithBalanceRequest) (*ApprovalForAllWithBalance, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("erc721: approvalForAllWithBalance: %w", err)
+	}
+
+	calldata, err := EncodeApprovalForAllWithBalance(req.Contract, req.Owner, req.Operator, req.AllowFailure)
 	if err != nil {
 		return nil, fmt.Errorf("erc721: approvalForAllWithBalance: %w", err)
 	}
 
-	data, err := e.call(ctx, nil, multicall, calldata, block)
+	data, err := bind.Call(ctx, e.c, opts, req.Multicall, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("erc721: approvalForAllWithBalance: %w", e.wrapRevertError(err))
+	}
+
+	out, err := DecodeApprovalForAllWithBalance(req.Owner, req.Operator, data)
 	if err != nil {
 		return nil, fmt.Errorf("erc721: approvalForAllWithBalance: %w", err)
 	}
 
-	afawb, err := DecodeApprovalForAllWithBalance(owner, operator, data)
-	if err != nil {
-		return nil, fmt.Errorf("erc721: approvalForAllWithBalance: %w", err)
-	}
-	return afawb, nil
+	return out, nil
 }
 
-// TokenOwners batches ownerOf(tokenIds[i]) on contract for each i into one
-// call, via the Multicall3 contract deployed at multicall.
-func (e *ERC721) TokenOwners(ctx context.Context, multicall, contract *types.Address, tokenIds []*big.Int, allowFailure bool, block string) (*TokenOwners, error) {
-	calldata, err := EncodeTokenOwners(contract, tokenIds, allowFailure)
+// TokenOwners batches ownerOf on req.Contract for each of req.TokenIDs.
+func (e *ERC721) TokenOwners(ctx context.Context, opts *bind.CallOptions, req *TokenOwnersRequest) (*TokenOwners, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("erc721: tokenOwners: %w", err)
+	}
+
+	calldata, err := EncodeTokenOwners(req.Contract, req.TokenIDs, req.AllowFailure)
 	if err != nil {
 		return nil, fmt.Errorf("erc721: tokenOwners: %w", err)
 	}
 
-	data, err := e.call(ctx, nil, multicall, calldata, block)
+	data, err := bind.Call(ctx, e.c, opts, req.Multicall, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("erc721: tokenOwners: %w", e.wrapRevertError(err))
+	}
+
+	out, err := DecodeTokenOwners(req.Contract, req.TokenIDs, data)
 	if err != nil {
 		return nil, fmt.Errorf("erc721: tokenOwners: %w", err)
 	}
 
-	tos, err := DecodeTokenOwners(contract, tokenIds, data)
-	if err != nil {
-		return nil, fmt.Errorf("erc721: tokenOwners: %w", err)
-	}
-	return tos, nil
+	return out, nil
 }
 
-// TokenOperators batches getApproved(tokenIds[i]) on contract for each i into
-// one call, via the Multicall3 contract deployed at multicall.
-func (e *ERC721) TokenOperators(ctx context.Context, multicall, contract *types.Address, tokenIds []*big.Int, allowFailure bool, block string) (*TokenOperators, error) {
-	calldata, err := EncodeTokenOperators(contract, tokenIds, allowFailure)
+// TokenOperators batches getApproved on req.Contract for each of req.TokenIDs.
+func (e *ERC721) TokenOperators(ctx context.Context, opts *bind.CallOptions, req *TokenOperatorsRequest) (*TokenOperators, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("erc721: tokenOperators: %w", err)
+	}
+
+	calldata, err := EncodeTokenOperators(req.Contract, req.TokenIDs, req.AllowFailure)
 	if err != nil {
 		return nil, fmt.Errorf("erc721: tokenOperators: %w", err)
 	}
 
-	data, err := e.call(ctx, nil, multicall, calldata, block)
+	data, err := bind.Call(ctx, e.c, opts, req.Multicall, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("erc721: tokenOperators: %w", e.wrapRevertError(err))
+	}
+
+	out, err := DecodeTokenOperators(req.Contract, req.TokenIDs, data)
 	if err != nil {
 		return nil, fmt.Errorf("erc721: tokenOperators: %w", err)
 	}
 
-	tops, err := DecodeTokenOperators(contract, tokenIds, data)
-	if err != nil {
-		return nil, fmt.Errorf("erc721: tokenOperators: %w", err)
-	}
-	return tops, nil
+	return out, nil
 }
 
-// AddressBalances batches balanceOf(address) across each contract in
-// standards into one call, via the Multicall3 contract deployed at multicall.
-func (e *ERC721) AddressBalances(ctx context.Context, multicall, address *types.Address, contracts []*types.Address, allowFailure bool, block string) (*AddressBalances, error) {
-	calldata, err := EncodeAddressBalances(address, contracts, allowFailure)
+// AddressBalances batches req.Account's balance on each of req.Contracts.
+func (e *ERC721) AddressBalances(ctx context.Context, opts *bind.CallOptions, req *AddressBalancesRequest) (*AddressBalances, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("erc721: addressBalances: %w", err)
+	}
+
+	calldata, err := EncodeAddressBalances(req.Account, req.Contracts, req.AllowFailure)
 	if err != nil {
 		return nil, fmt.Errorf("erc721: addressBalances: %w", err)
 	}
 
-	data, err := e.call(ctx, nil, multicall, calldata, block)
+	data, err := bind.Call(ctx, e.c, opts, req.Multicall, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("erc721: addressBalances: %w", e.wrapRevertError(err))
+	}
+
+	out, err := DecodeAddressBalances(req.Account, req.Contracts, data)
 	if err != nil {
 		return nil, fmt.Errorf("erc721: addressBalances: %w", err)
 	}
 
-	ab, err := DecodeAddressBalances(address, contracts, data)
-	if err != nil {
-		return nil, fmt.Errorf("erc721: addressBalances: %w", err)
-	}
-	return ab, nil
+	return out, nil
 }
 
-// TokenBalances batches balanceOf(addresses[i]) on contract for each i into
-// one call, via the Multicall3 contract deployed at multicall.
-func (e *ERC721) TokenBalances(ctx context.Context, multicall, contract *types.Address, addresses []*types.Address, allowFailure bool, block string) (*TokenBalances, error) {
-	calldata, err := EncodeTokenBalances(contract, addresses, allowFailure)
+// TokenBalances batches each of req.Accounts' balance on req.Contract.
+func (e *ERC721) TokenBalances(ctx context.Context, opts *bind.CallOptions, req *TokenBalancesRequest) (*TokenBalances, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("erc721: tokenBalances: %w", err)
+	}
+
+	calldata, err := EncodeTokenBalances(req.Contract, req.Accounts, req.AllowFailure)
 	if err != nil {
 		return nil, fmt.Errorf("erc721: tokenBalances: %w", err)
 	}
 
-	data, err := e.call(ctx, nil, multicall, calldata, block)
+	data, err := bind.Call(ctx, e.c, opts, req.Multicall, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("erc721: tokenBalances: %w", e.wrapRevertError(err))
+	}
+
+	out, err := DecodeTokenBalances(req.Contract, req.Accounts, data)
 	if err != nil {
 		return nil, fmt.Errorf("erc721: tokenBalances: %w", err)
 	}
 
-	tb, err := DecodeTokenBalances(contract, addresses, data)
-	if err != nil {
-		return nil, fmt.Errorf("erc721: tokenBalances: %w", err)
-	}
-	return tb, nil
+	return out, nil
 }
 
-// OwnerPairs batches ownerOf(tokenIds[i]) on standards[i] for each i into one
-// call (paired positionally, not every combination), via the Multicall3
-// contract deployed at multicall.
-func (e *ERC721) OwnerPairs(ctx context.Context, multicall *types.Address, contracts []*types.Address, tokenIds []*big.Int, allowFailure bool, block string) ([]TokenOwnerPair, error) {
-	calldata, err := EncodeOwnerPairs(contracts, tokenIds, allowFailure)
+// OwnerPairs batches ownerOf(req.TokenIDs[i]) on req.Contracts[i], paired by index.
+func (e *ERC721) OwnerPairs(ctx context.Context, opts *bind.CallOptions, req *OwnerPairsRequest) ([]TokenOwnerPair, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("erc721: ownerPairs: %w", err)
+	}
+
+	calldata, err := EncodeOwnerPairs(req.Contracts, req.TokenIDs, req.AllowFailure)
 	if err != nil {
 		return nil, fmt.Errorf("erc721: ownerPairs: %w", err)
 	}
 
-	data, err := e.call(ctx, nil, multicall, calldata, block)
+	data, err := bind.Call(ctx, e.c, opts, req.Multicall, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("erc721: ownerPairs: %w", e.wrapRevertError(err))
+	}
+
+	out, err := DecodeOwnerPairs(req.Contracts, req.TokenIDs, data)
 	if err != nil {
 		return nil, fmt.Errorf("erc721: ownerPairs: %w", err)
 	}
 
-	pairs, err := DecodeOwnerPairs(contracts, tokenIds, data)
-	if err != nil {
-		return nil, fmt.Errorf("erc721: ownerPairs: %w", err)
-	}
-	return pairs, nil
-}
-
-// call eth_calls contract with calldata (from msg.sender from, if non-nil), decoding a reverted custom error to its sentinel.
-func (e *ERC721) call(ctx context.Context, from, contract *types.Address, calldata []byte, block string) ([]byte, error) {
-	params := map[string]any{
-		"to":   contract.String(),
-		"data": encoding.Hex.EncodePrefixed(calldata),
-	}
-	if from != nil {
-		params["from"] = from.String()
-	}
-
-	var raw string
-	if err := e.c.Call(ctx, rpc.ETHCall("call", params, block, &raw)); err != nil {
-		return nil, e.wrapRevertError(err)
-	}
-	return encoding.Hex.Decode(raw)
+	return out, nil
 }
 
 // wrapRevertError maps a known IERC721Errors custom error in err to its sentinel.

@@ -448,7 +448,7 @@ func (s *NFPMSuite) Test04Mint() {
 	}
 	transfers, err := erc721.ExtractTransfers(nfpmLogs)
 	s.Require().NoError(err)
-	var minted []erc721.Transfer
+	var minted []erc721.TransferEvent
 	for _, transfer := range transfers {
 		if transfer.From.IsZero() {
 			minted = append(minted, transfer)
@@ -476,7 +476,7 @@ func (s *NFPMSuite) Test05Enumerable() {
 	s.Require().True(totalSupply.Sign() > 0)
 	s.T().Logf("Test05Enumerable: totalSupply() = %s", totalSupply)
 
-	balance, err := s.v3Nfpm.BalanceOf(s.ctx, s.nfpm, s.from, rpc.BlockTagLatest)
+	balance, err := s.v3Nfpm.BalanceOf(s.ctx, nil, erc721.NewBalanceOfRequest(s.nfpm, s.from))
 	s.Require().NoError(err)
 	s.Require().True(balance.Sign() > 0)
 	s.T().Logf("Test05Enumerable: balanceOf(%s) = %s", s.from, balance)
@@ -716,7 +716,7 @@ func (s *NFPMSuite) Test09Burn() {
 	}
 	transfers, err := erc721.ExtractTransfers(nfpmLogs)
 	s.Require().NoError(err)
-	var burned []erc721.Transfer
+	var burned []erc721.TransferEvent
 	for _, transfer := range transfers {
 		if transfer.To.IsZero() {
 			burned = append(burned, transfer)
@@ -876,7 +876,7 @@ func (s *NFPMSuite) Test11Permit() {
 	s.Require().True(receipt.Status, "permit transaction reverted")
 	s.T().Logf("Test11Permit: permit confirmed in block %d", receipt.BlockNumber)
 
-	approved, err := s.v3Nfpm.GetApproved(s.ctx, s.nfpm, permitTokenId, rpc.BlockTagLatest)
+	approved, err := s.v3Nfpm.GetApproved(s.ctx, nil, erc721.NewGetApprovedRequest(s.nfpm, permitTokenId))
 	s.Require().NoError(err)
 	s.Require().True(approved.Equal(spender))
 	s.T().Logf("Test11Permit: getApproved(%s) = %s", permitTokenId, approved)

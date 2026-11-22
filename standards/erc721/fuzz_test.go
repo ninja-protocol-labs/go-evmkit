@@ -1,11 +1,13 @@
 package erc721
 
 import (
+	"fmt"
 	"math/big"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 	"github.com/ninja-protocol-labs/go-evmkit/tx"
@@ -59,7 +61,10 @@ func FuzzDecodeBalanceOfRoundTrip(f *testing.F) {
 	f.Add(make([]byte, 32))
 
 	f.Fuzz(func(t *testing.T, raw []byte) {
-		value := clampUint256(raw)
+		if len(raw) > 32 {
+			raw = raw[len(raw)-32:]
+		}
+		value := new(big.Int).SetBytes(raw)
 
 		data, err := abi.Pack(abi.Types{abi.Uint256}, value)
 		require.NoError(t, err)
@@ -177,7 +182,10 @@ func FuzzExtractTransfersRoundTrip(f *testing.F) {
 	f.Fuzz(func(t *testing.T, fromRaw, toRaw, tokenIdRaw []byte) {
 		from := types.NewAddressFromBytes(fromRaw)
 		to := types.NewAddressFromBytes(toRaw)
-		tokenId := clampUint256(tokenIdRaw)
+		if len(tokenIdRaw) > 32 {
+			tokenIdRaw = tokenIdRaw[len(tokenIdRaw)-32:]
+		}
+		tokenId := new(big.Int).SetBytes(tokenIdRaw)
 
 		t0, ok := transferEvent.Topic0()
 		require.True(t, ok)
@@ -189,7 +197,7 @@ func FuzzExtractTransfersRoundTrip(f *testing.F) {
 					types.NewHashFromBytes(t0[:]),
 					types.NewHashFromBytes(from.Bytes()),
 					types.NewHashFromBytes(to.Bytes()),
-					uint256Topic(tokenId),
+					types.NewHashFromBytes(tokenId.FillBytes(make([]byte, 32))),
 				},
 			},
 		}
@@ -245,9 +253,114 @@ func FuzzExtractApprovalForAllRoundTrip(f *testing.F) {
 	})
 }
 
-func clampUint256(raw []byte) *big.Int {
-	if len(raw) > 32 {
-		raw = raw[len(raw)-32:]
-	}
-	return new(big.Int).SetBytes(raw)
+// go test -run '^$' -fuzz '^FuzzTransferFromRequestValidate$' -fuzztime=10s ./standards/erc721
+func FuzzTransferFromRequestValidate(f *testing.F) {
+	f.Add(uint8(0), []byte{})
+	f.Add(uint8(0x0f), []byte{0x01})
+	f.Add(uint8(0x1f), []byte{0xff})
+	f.Add(uint8(0x07), []byte{})
+	f.Add(uint8(0x10), []byte{0x00})
+
+	f.Fuzz(func(t *testing.T, mask uint8, tokenIDRaw []byte) {
+		if len(tokenIDRaw) > 32 {
+			tokenIDRaw = tokenIDRaw[:32]
+		}
+
+		var req *TransferFromRequest
+		if mask&0x10 == 0 {
+			req = &TransferFromRequest{}
+			if mask&0x01 != 0 {
+				req.Contract = fuzzToken1
+			}
+			if mask&0x02 != 0 {
+				req.From = fuzzAddr1
+			}
+			if mask&0x04 != 0 {
+				req.To = fuzzAddr2
+			}
+			if mask&0x08 != 0 {
+				req.TokenID = new(big.Int).SetBytes(tokenIDRaw)
+			}
+		}
+
+		want := ""
+		switch {
+		case req == nil:
+			want = "invalid request: request is nil"
+		case req.Contract == nil:
+			want = "invalid request: contract is nil"
+		case req.From == nil:
+			want = "invalid request: from is nil"
+		case req.To == nil:
+			want = "invalid request: to is nil"
+		case req.TokenID == nil:
+			want = "invalid request: tokenID is nil"
+		}
+
+		err := req.Validate()
+		if want == "" {
+			require.NoError(t, err)
+			return
+		}
+		require.ErrorIs(t, err, bind.ErrInvalidRequest)
+		require.EqualError(t, err, want)
+	})
+}
+
+// go test -run '^$' -fuzz '^FuzzOwnerPairsRequestValidate$' -fuzztime=10s ./standards/erc721
+func FuzzOwnerPairsRequestValidate(f *testing.F) {
+	f.Add(true, uint8(0), uint8(0), uint8(9), uint8(9))
+	f.Add(true, uint8(2), uint8(2), uint8(9), uint8(9))
+	f.Add(true, uint8(3), uint8(2), uint8(9), uint8(9))
+	f.Add(true, uint8(3), uint8(3), uint8(1), uint8(9))
+	f.Add(true, uint8(3), uint8(3), uint8(9), uint8(0))
+	f.Add(false, uint8(1), uint8(1), uint8(9), uint8(9))
+
+	f.Fuzz(func(t *testing.T, withMulticall bool, contractLen, tokenIDLen, nilContract, nilTokenID uint8) {
+		contractLen %= 8
+		tokenIDLen %= 8
+
+		contracts := make([]*types.Address, contractLen)
+		for i := range contracts {
+			contracts[i] = fuzzToken1
+			if uint8(i) == nilContract {
+				contracts[i] = nil
+			}
+		}
+		tokenIDs := make([]*big.Int, tokenIDLen)
+		for i := range tokenIDs {
+			tokenIDs[i] = big.NewInt(int64(i))
+			if uint8(i) == nilTokenID {
+				tokenIDs[i] = nil
+			}
+		}
+
+		var multicall *types.Address
+		if withMulticall {
+			multicall = fuzzAddr2
+		}
+		req := NewOwnerPairsRequest(multicall, contracts, tokenIDs, nilContract%2 == 0)
+
+		want := ""
+		switch {
+		case multicall == nil:
+			want = "invalid request: multicall is nil"
+		case contractLen != tokenIDLen:
+			want = "invalid request: contracts and tokenIDs differ in length"
+		case contractLen == 0:
+			want = "invalid request: contracts is empty"
+		case nilContract < contractLen && nilContract <= nilTokenID:
+			want = fmt.Sprintf("invalid request: contracts[%d] is nil", nilContract)
+		case nilTokenID < tokenIDLen:
+			want = fmt.Sprintf("invalid request: tokenIDs[%d] is nil", nilTokenID)
+		}
+
+		err := req.Validate()
+		if want == "" {
+			require.NoError(t, err)
+			return
+		}
+		require.ErrorIs(t, err, bind.ErrInvalidRequest)
+		require.EqualError(t, err, want)
+	})
 }

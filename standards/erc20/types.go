@@ -507,14 +507,12 @@ func (r *BalancePairsRequest) Validate() error {
 		return fmt.Errorf("%w: tokens is empty", bind.ErrInvalidRequest)
 	}
 
-	for i, addr := range r.Tokens {
-		if addr == nil {
+	for i := range r.Tokens {
+		if r.Tokens[i] == nil {
 			return fmt.Errorf("%w: tokens[%d] is nil", bind.ErrInvalidRequest, i)
 		}
-	}
 
-	for i, addr := range r.Accounts {
-		if addr == nil {
+		if r.Accounts[i] == nil {
 			return fmt.Errorf("%w: accounts[%d] is nil", bind.ErrInvalidRequest, i)
 		}
 	}

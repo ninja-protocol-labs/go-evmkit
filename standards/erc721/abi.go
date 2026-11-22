@@ -59,15 +59,15 @@ var (
 
 // ErrInvalidOwner, etc. mirror IERC721Errors' custom errors, for errors.Is.
 var (
-	ErrInvalidOwner         = errors.New("erc721: invalid owner")
-	ErrNonexistentToken     = errors.New("erc721: nonexistent token")
-	ErrIncorrectOwner       = errors.New("erc721: incorrect owner")
-	ErrInvalidSender        = errors.New("erc721: invalid sender")
-	ErrInvalidReceiver      = errors.New("erc721: invalid receiver")
-	ErrInsufficientApproval = errors.New("erc721: insufficient approval")
-	ErrInvalidApprover      = errors.New("erc721: invalid approver")
-	ErrInvalidOperator      = errors.New("erc721: invalid operator")
-	ErrUnknown              = errors.New("erc721: unknown revert")
+	ErrInvalidOwner         = errors.New("invalid owner")
+	ErrNonexistentToken     = errors.New("nonexistent token")
+	ErrIncorrectOwner       = errors.New("incorrect owner")
+	ErrInvalidSender        = errors.New("invalid sender")
+	ErrInvalidReceiver      = errors.New("invalid receiver")
+	ErrInsufficientApproval = errors.New("insufficient approval")
+	ErrInvalidApprover      = errors.New("invalid approver")
+	ErrInvalidOperator      = errors.New("invalid operator")
+	ErrUnknown              = errors.New("unknown revert")
 )
 
 // EncodeName returns the calldata for name().
@@ -417,9 +417,8 @@ func EncodeApprovalForAllWithBalance(contract, owner, operator *types.Address, a
 	return data, nil
 }
 
-// DecodeApprovalForAllWithBalance decodes the return data of EncodeApprovalForAllWithBalance. owner
-// and operator must be the same values passed to EncodeApprovalForAllWithBalance, since neither is
-// itself returned on-chain.
+// DecodeApprovalForAllWithBalance decodes EncodeApprovalForAllWithBalance's return data; owner and
+// operator must match the encoded call, since neither is returned on-chain.
 func DecodeApprovalForAllWithBalance(owner, operator *types.Address, data []byte) (*ApprovalForAllWithBalance, error) {
 	results, err := multicall3.DecodeResults(data)
 	if err != nil {
