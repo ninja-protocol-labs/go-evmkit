@@ -61,14 +61,14 @@ var (
 
 // ErrInsufficientBalance, etc. mirror IERC1155Errors' custom errors, for errors.Is.
 var (
-	ErrInsufficientBalance   = errors.New("erc1155: insufficient balance")
-	ErrInvalidSender         = errors.New("erc1155: invalid sender")
-	ErrInvalidReceiver       = errors.New("erc1155: invalid receiver")
-	ErrMissingApprovalForAll = errors.New("erc1155: missing approval for all")
-	ErrInvalidApprover       = errors.New("erc1155: invalid approver")
-	ErrInvalidOperator       = errors.New("erc1155: invalid operator")
-	ErrInvalidArrayLength    = errors.New("erc1155: invalid array length")
-	ErrUnknown               = errors.New("erc1155: unknown revert")
+	ErrInsufficientBalance   = errors.New("insufficient balance")
+	ErrInvalidSender         = errors.New("invalid sender")
+	ErrInvalidReceiver       = errors.New("invalid receiver")
+	ErrMissingApprovalForAll = errors.New("missing approval for all")
+	ErrInvalidApprover       = errors.New("invalid approver")
+	ErrInvalidOperator       = errors.New("invalid operator")
+	ErrInvalidArrayLength    = errors.New("invalid array length")
+	ErrUnknown               = errors.New("unknown revert")
 )
 
 // EncodeBalanceOf returns the calldata for balanceOf(account, id).
@@ -129,9 +129,8 @@ func DecodeBalanceOfBatch(data []byte) ([]*big.Int, error) {
 	return amounts, nil
 }
 
-// DecodeIdBalances decodes the return data of a balanceOfBatch call made with a single account
-// repeated once per id, pairing each result with its id. ids must be the same ids (in the same
-// order) the call was made with.
+// DecodeIdBalances decodes a balanceOfBatch result for one account repeated per id, pairing each
+// result with its id; ids must match the call's ids in order.
 func DecodeIdBalances(ids []*big.Int, data []byte) ([]IdBalance, error) {
 	amounts, err := DecodeBalanceOfBatch(data)
 	if err != nil {
@@ -148,9 +147,8 @@ func DecodeIdBalances(ids []*big.Int, data []byte) ([]IdBalance, error) {
 	return balances, nil
 }
 
-// DecodeIdBalancePairs decodes the return data of a balanceOfBatch(accounts, ids) call, pairing
-// each result with the (account, id) pair that produced it. accounts and ids must be the same
-// accounts/ids (in the same order) the call was made with.
+// DecodeIdBalancePairs decodes a balanceOfBatch(accounts, ids) result, pairing each result with its
+// (account, id); accounts and ids must match the call's in order.
 func DecodeIdBalancePairs(accounts []*types.Address, ids []*big.Int, data []byte) ([]IdBalancePair, error) {
 	if len(accounts) != len(ids) {
 		return nil, fmt.Errorf("erc1155: decodeIdBalancePairs: accounts and ids must be the same length, got %d and %d", len(accounts), len(ids))
@@ -268,9 +266,8 @@ func EncodeApprovalForAllWithBalance(contract, account, operator *types.Address,
 	return data, nil
 }
 
-// DecodeApprovalForAllWithBalance decodes the return data of EncodeApprovalForAllWithBalance.
-// account, operator and id must be the same values passed to EncodeApprovalForAllWithBalance,
-// since none of them is itself returned on-chain.
+// DecodeApprovalForAllWithBalance decodes EncodeApprovalForAllWithBalance's return data; account,
+// operator and id must match the encoded call, since none is returned on-chain.
 func DecodeApprovalForAllWithBalance(account, operator *types.Address, id *big.Int, data []byte) (*ApprovalForAllWithBalance, error) {
 	results, err := multicall3.DecodeResults(data)
 	if err != nil {

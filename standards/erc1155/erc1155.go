@@ -1,6 +1,5 @@
-// Package erc1155 encodes calls to and decodes results from an ERC-1155
-// token contract. Go types mirror the interfaces in
-// solidity/interfaces/IERC1155.sol and solidity/interfaces/IERC1155MetadataURI.sol.
+// Package erc1155 is a client for ERC-1155 tokens, mirroring IERC1155.sol and
+// IERC1155MetadataURI.sol.
 package erc1155
 
 import (
@@ -10,47 +9,59 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core"
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
 	"github.com/ninja-protocol-labs/go-evmkit/standards/erc165"
-	"github.com/ninja-protocol-labs/go-evmkit/tx"
 	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
 // IERC1155 mirrors IERC1155.sol, including its IERC165 embedding.
 type IERC1155 interface {
 	erc165.IERC165
-	BalanceOf(ctx context.Context, contract, account *types.Address, id *big.Int, block string) (*big.Int, error)
-	BalanceOfBatch(ctx context.Context, contract *types.Address, accounts []*types.Address, ids []*big.Int, block string) ([]*big.Int, error)
-	IsApprovedForAll(ctx context.Context, contract, account, operator *types.Address, block string) (bool, error)
 
-	SetApprovalForAll(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	SafeTransferFrom(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	SafeBatchTransferFrom(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
+	BalanceOf(ctx context.Context, opts *bind.CallOptions, req *BalanceOfRequest) (*big.Int, error)
+	BalanceOfBatch(ctx context.Context, opts *bind.CallOptions, req *BalanceOfBatchRequest) ([]*big.Int, error)
+	IsApprovedForAll(ctx context.Context, opts *bind.CallOptions, req *IsApprovedForAllRequest) (bool, error)
+
+	SetApprovalForAll(ctx context.Context, opts *bind.TransactOptions, req *SetApprovalForAllRequest) (core.Transaction, *types.Hash, error)
+	SafeTransferFrom(ctx context.Context, opts *bind.TransactOptions, req *SafeTransferFromRequest) (core.Transaction, *types.Hash, error)
+	SafeBatchTransferFrom(ctx context.Context, opts *bind.TransactOptions, req *SafeBatchTransferFromRequest) (core.Transaction, *types.Hash, error)
 }
-
-var _ IERC1155 = (*ERC1155)(nil)
 
 // IERC1155MetadataURI mirrors IERC1155MetadataURI.sol, including its IERC1155 embedding.
 type IERC1155MetadataURI interface {
 	IERC1155
-	URI(ctx context.Context, contract *types.Address, id *big.Int, block string) (string, error)
+
+	URI(ctx context.Context, opts *bind.CallOptions, req *URIRequest) (string, error)
 }
 
-var _ IERC1155MetadataURI = (*ERC1155)(nil)
+// IERC1155Batcher groups the batched balance and approval reads; it mirrors no
+// Solidity interface.
+type IERC1155Batcher interface {
+	IdBalances(ctx context.Context, opts *bind.CallOptions, req *IdBalancesRequest) ([]IdBalance, error)
+	IdBalancePairs(ctx context.Context, opts *bind.CallOptions, req *IdBalancePairsRequest) ([]IdBalancePair, error)
+	AccountIdBalances(ctx context.Context, opts *bind.CallOptions, req *AccountIdBalancesRequest) (*AccountIdBalances, error)
+	ApprovalForAllWithBalance(ctx context.Context, opts *bind.CallOptions, req *ApprovalForAllWithBalanceRequest) (*ApprovalForAllWithBalance, error)
+}
 
-// ERC1155 calls any ERC-1155 token contract over a Client; it holds no
-// contract address, so one instance serves every collection. SupportsInterface
-// is promoted from the embedded *erc165.ERC165, mirroring IERC1155 is IERC165.
+var (
+	_ IERC1155            = (*ERC1155)(nil)
+	_ IERC1155MetadataURI = (*ERC1155)(nil)
+	_ IERC1155Batcher     = (*ERC1155)(nil)
+)
+
+// ERC1155 calls any ERC-1155 token contract over a Client; SupportsInterface is
+// promoted from the embedded *erc165.ERC165, mirroring IERC1155 is IERC165.
 type ERC1155 struct {
 	*erc165.ERC165
 
 	c rpc.Client
 }
 
-// New returns an ERC1155 calling collections via cli.
+// New returns an ERC1155 calling contracts via cli.
 func New(cli rpc.Client) *ERC1155 {
 	return &ERC1155{
 		c:      cli,
@@ -58,251 +69,258 @@ func New(cli rpc.Client) *ERC1155 {
 	}
 }
 
-// URI returns id's URI on contract.
-func (e *ERC1155) URI(ctx context.Context, contract *types.Address, id *big.Int, block string) (string, error) {
-	calldata, err := EncodeURI(id)
+// URI returns req.ID's URI on req.Contract.
+func (e *ERC1155) URI(ctx context.Context, opts *bind.CallOptions, req *URIRequest) (string, error) {
+	if err := req.Validate(); err != nil {
+		return "", fmt.Errorf("erc1155: uri: %w", err)
+	}
+
+	calldata, err := EncodeURI(req.ID)
 	if err != nil {
 		return "", fmt.Errorf("erc1155: uri: %w", err)
 	}
-	data, err := e.call(ctx, nil, contract, calldata, block)
+
+	data, err := bind.Call(ctx, e.c, opts, req.Contract, calldata)
+	if err != nil {
+		return "", fmt.Errorf("erc1155: uri: %w", e.wrapRevertError(err))
+	}
+
+	out, err := DecodeURI(data)
 	if err != nil {
 		return "", fmt.Errorf("erc1155: uri: %w", err)
 	}
-	s, err := DecodeURI(data)
-	if err != nil {
-		return "", fmt.Errorf("erc1155: uri: %w", err)
-	}
-	return s, nil
+
+	return out, nil
 }
 
-// BalanceOf returns account's balance of id on contract.
-func (e *ERC1155) BalanceOf(ctx context.Context, contract, account *types.Address, id *big.Int, block string) (*big.Int, error) {
-	calldata, err := EncodeBalanceOf(account, id)
+// BalanceOf returns req.Account's balance of req.ID on req.Contract.
+func (e *ERC1155) BalanceOf(ctx context.Context, opts *bind.CallOptions, req *BalanceOfRequest) (*big.Int, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("erc1155: balanceOf: %w", err)
+	}
+
+	calldata, err := EncodeBalanceOf(req.Account, req.ID)
 	if err != nil {
 		return nil, fmt.Errorf("erc1155: balanceOf: %w", err)
 	}
-	data, err := e.call(ctx, nil, contract, calldata, block)
+
+	data, err := bind.Call(ctx, e.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("erc1155: balanceOf: %w", e.wrapRevertError(err))
+	}
+
+	out, err := DecodeBalanceOf(data)
 	if err != nil {
 		return nil, fmt.Errorf("erc1155: balanceOf: %w", err)
 	}
-	n, err := DecodeBalanceOf(data)
-	if err != nil {
-		return nil, fmt.Errorf("erc1155: balanceOf: %w", err)
-	}
-	return n, nil
+
+	return out, nil
 }
 
-// BalanceOfBatch returns each accounts[i]'s balance of ids[i] on contract, in the same order.
-func (e *ERC1155) BalanceOfBatch(ctx context.Context, contract *types.Address, accounts []*types.Address, ids []*big.Int, block string) ([]*big.Int, error) {
-	calldata, err := EncodeBalanceOfBatch(accounts, ids)
+// BalanceOfBatch returns each req.Accounts[i]'s balance of req.IDs[i], in the same order.
+func (e *ERC1155) BalanceOfBatch(ctx context.Context, opts *bind.CallOptions, req *BalanceOfBatchRequest) ([]*big.Int, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("erc1155: balanceOfBatch: %w", err)
+	}
+
+	calldata, err := EncodeBalanceOfBatch(req.Accounts, req.IDs)
 	if err != nil {
 		return nil, fmt.Errorf("erc1155: balanceOfBatch: %w", err)
 	}
-	data, err := e.call(ctx, nil, contract, calldata, block)
+
+	data, err := bind.Call(ctx, e.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("erc1155: balanceOfBatch: %w", e.wrapRevertError(err))
+	}
+
+	out, err := DecodeBalanceOfBatch(data)
 	if err != nil {
 		return nil, fmt.Errorf("erc1155: balanceOfBatch: %w", err)
 	}
-	amounts, err := DecodeBalanceOfBatch(data)
-	if err != nil {
-		return nil, fmt.Errorf("erc1155: balanceOfBatch: %w", err)
-	}
-	return amounts, nil
+
+	return out, nil
 }
 
-// IdBalances returns account's balance of each id in ids on contract, via balanceOfBatch's native
-// cross-id batching (account repeated once per id).
-func (e *ERC1155) IdBalances(ctx context.Context, contract, account *types.Address, ids []*big.Int, block string) ([]IdBalance, error) {
-	accounts := make([]*types.Address, len(ids))
+// IsApprovedForAll reports whether req.Operator may manage all of req.Account's tokens.
+func (e *ERC1155) IsApprovedForAll(ctx context.Context, opts *bind.CallOptions, req *IsApprovedForAllRequest) (bool, error) {
+	if err := req.Validate(); err != nil {
+		return false, fmt.Errorf("erc1155: isApprovedForAll: %w", err)
+	}
+
+	calldata, err := EncodeIsApprovedForAll(req.Account, req.Operator)
+	if err != nil {
+		return false, fmt.Errorf("erc1155: isApprovedForAll: %w", err)
+	}
+
+	data, err := bind.Call(ctx, e.c, opts, req.Contract, calldata)
+	if err != nil {
+		return false, fmt.Errorf("erc1155: isApprovedForAll: %w", e.wrapRevertError(err))
+	}
+
+	out, err := DecodeIsApprovedForAll(data)
+	if err != nil {
+		return false, fmt.Errorf("erc1155: isApprovedForAll: %w", err)
+	}
+
+	return out, nil
+}
+
+// SetApprovalForAll sends setApprovalForAll(operator, approved) on req.Contract, signed by opts.Signer.
+func (e *ERC1155) SetApprovalForAll(ctx context.Context, opts *bind.TransactOptions, req *SetApprovalForAllRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("erc1155: setApprovalForAll: %w", err)
+	}
+
+	calldata, err := EncodeSetApprovalForAll(req.Operator, req.Approved)
+	if err != nil {
+		return nil, nil, fmt.Errorf("erc1155: setApprovalForAll: %w", err)
+	}
+
+	signed, hash, err := bind.Transact(ctx, e.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("erc1155: setApprovalForAll: %w", e.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
+}
+
+// SafeTransferFrom sends safeTransferFrom(from, to, id, value, data) on req.Contract, signed by opts.Signer.
+func (e *ERC1155) SafeTransferFrom(ctx context.Context, opts *bind.TransactOptions, req *SafeTransferFromRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("erc1155: safeTransferFrom: %w", err)
+	}
+
+	calldata, err := EncodeSafeTransferFrom(req.From, req.To, req.ID, req.Amount, req.Data)
+	if err != nil {
+		return nil, nil, fmt.Errorf("erc1155: safeTransferFrom: %w", err)
+	}
+
+	signed, hash, err := bind.Transact(ctx, e.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("erc1155: safeTransferFrom: %w", e.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
+}
+
+// SafeBatchTransferFrom sends safeBatchTransferFrom(from, to, ids, values, data) on req.Contract, signed by opts.Signer.
+func (e *ERC1155) SafeBatchTransferFrom(ctx context.Context, opts *bind.TransactOptions, req *SafeBatchTransferFromRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("erc1155: safeBatchTransferFrom: %w", err)
+	}
+
+	calldata, err := EncodeSafeBatchTransferFrom(req.From, req.To, req.IDs, req.Amounts, req.Data)
+	if err != nil {
+		return nil, nil, fmt.Errorf("erc1155: safeBatchTransferFrom: %w", err)
+	}
+
+	signed, hash, err := bind.Transact(ctx, e.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("erc1155: safeBatchTransferFrom: %w", e.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
+}
+
+// IdBalances returns req.Account's balance of each of req.IDs via balanceOfBatch.
+func (e *ERC1155) IdBalances(ctx context.Context, opts *bind.CallOptions, req *IdBalancesRequest) ([]IdBalance, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("erc1155: idBalances: %w", err)
+	}
+
+	accounts := make([]*types.Address, len(req.IDs))
 	for i := range accounts {
-		accounts[i] = account
+		accounts[i] = req.Account
 	}
 
-	calldata, err := EncodeBalanceOfBatch(accounts, ids)
+	calldata, err := EncodeBalanceOfBatch(accounts, req.IDs)
 	if err != nil {
 		return nil, fmt.Errorf("erc1155: idBalances: %w", err)
 	}
-	data, err := e.call(ctx, nil, contract, calldata, block)
+
+	data, err := bind.Call(ctx, e.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("erc1155: idBalances: %w", e.wrapRevertError(err))
+	}
+
+	out, err := DecodeIdBalances(req.IDs, data)
 	if err != nil {
 		return nil, fmt.Errorf("erc1155: idBalances: %w", err)
 	}
-	balances, err := DecodeIdBalances(ids, data)
-	if err != nil {
-		return nil, fmt.Errorf("erc1155: idBalances: %w", err)
-	}
-	return balances, nil
+
+	return out, nil
 }
 
-// IdBalancePairs returns each accounts[i]'s balance of ids[i] on contract, via balanceOfBatch's
-// native cross-id batching; accounts and ids are matched pairwise by index.
-func (e *ERC1155) IdBalancePairs(ctx context.Context, contract *types.Address, accounts []*types.Address, ids []*big.Int, block string) ([]IdBalancePair, error) {
-	calldata, err := EncodeBalanceOfBatch(accounts, ids)
+// IdBalancePairs returns each req.Accounts[i]'s balance of req.IDs[i] via balanceOfBatch.
+func (e *ERC1155) IdBalancePairs(ctx context.Context, opts *bind.CallOptions, req *IdBalancePairsRequest) ([]IdBalancePair, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("erc1155: idBalancePairs: %w", err)
+	}
+
+	calldata, err := EncodeBalanceOfBatch(req.Accounts, req.IDs)
 	if err != nil {
 		return nil, fmt.Errorf("erc1155: idBalancePairs: %w", err)
 	}
-	data, err := e.call(ctx, nil, contract, calldata, block)
+
+	data, err := bind.Call(ctx, e.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("erc1155: idBalancePairs: %w", e.wrapRevertError(err))
+	}
+
+	out, err := DecodeIdBalancePairs(req.Accounts, req.IDs, data)
 	if err != nil {
 		return nil, fmt.Errorf("erc1155: idBalancePairs: %w", err)
 	}
-	pairs, err := DecodeIdBalancePairs(accounts, ids, data)
-	if err != nil {
-		return nil, fmt.Errorf("erc1155: idBalancePairs: %w", err)
-	}
-	return pairs, nil
+
+	return out, nil
 }
 
-// AccountIdBalances batches balanceOf(account, id) across each contract in standards into one
-// call, via the Multicall3 contract deployed at multicall.
-func (e *ERC1155) AccountIdBalances(ctx context.Context, multicall, account *types.Address, id *big.Int, contracts []*types.Address, allowFailure bool, block string) (*AccountIdBalances, error) {
-	calldata, err := EncodeAccountIdBalances(account, id, contracts, allowFailure)
+// AccountIdBalances batches req.Account's balance of req.ID on each of req.Contracts via Multicall3.
+func (e *ERC1155) AccountIdBalances(ctx context.Context, opts *bind.CallOptions, req *AccountIdBalancesRequest) (*AccountIdBalances, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("erc1155: accountIdBalances: %w", err)
+	}
+
+	calldata, err := EncodeAccountIdBalances(req.Account, req.ID, req.Contracts, req.AllowFailure)
 	if err != nil {
 		return nil, fmt.Errorf("erc1155: accountIdBalances: %w", err)
 	}
 
-	data, err := e.call(ctx, nil, multicall, calldata, block)
+	data, err := bind.Call(ctx, e.c, opts, req.Multicall, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("erc1155: accountIdBalances: %w", e.wrapRevertError(err))
+	}
+
+	out, err := DecodeAccountIdBalances(req.Account, req.ID, req.Contracts, data)
 	if err != nil {
 		return nil, fmt.Errorf("erc1155: accountIdBalances: %w", err)
 	}
 
-	aib, err := DecodeAccountIdBalances(account, id, contracts, data)
-	if err != nil {
-		return nil, fmt.Errorf("erc1155: accountIdBalances: %w", err)
-	}
-	return aib, nil
+	return out, nil
 }
 
-// ApprovalForAllWithBalance batches isApprovedForAll(account, operator) and both their
-// balanceOf(id) results into one call, via the Multicall3 contract deployed at multicall.
-func (e *ERC1155) ApprovalForAllWithBalance(ctx context.Context, multicall, contract, account, operator *types.Address, id *big.Int, allowFailure bool, block string) (*ApprovalForAllWithBalance, error) {
-	calldata, err := EncodeApprovalForAllWithBalance(contract, account, operator, id, allowFailure)
+// ApprovalForAllWithBalance batches isApprovedForAll(account, operator) and both balances of req.ID via Multicall3.
+func (e *ERC1155) ApprovalForAllWithBalance(ctx context.Context, opts *bind.CallOptions, req *ApprovalForAllWithBalanceRequest) (*ApprovalForAllWithBalance, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("erc1155: approvalForAllWithBalance: %w", err)
+	}
+
+	calldata, err := EncodeApprovalForAllWithBalance(req.Contract, req.Account, req.Operator, req.ID, req.AllowFailure)
 	if err != nil {
 		return nil, fmt.Errorf("erc1155: approvalForAllWithBalance: %w", err)
 	}
 
-	data, err := e.call(ctx, nil, multicall, calldata, block)
+	data, err := bind.Call(ctx, e.c, opts, req.Multicall, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("erc1155: approvalForAllWithBalance: %w", e.wrapRevertError(err))
+	}
+
+	out, err := DecodeApprovalForAllWithBalance(req.Account, req.Operator, req.ID, data)
 	if err != nil {
 		return nil, fmt.Errorf("erc1155: approvalForAllWithBalance: %w", err)
 	}
 
-	afawb, err := DecodeApprovalForAllWithBalance(account, operator, id, data)
-	if err != nil {
-		return nil, fmt.Errorf("erc1155: approvalForAllWithBalance: %w", err)
-	}
-	return afawb, nil
-}
-
-// IsApprovedForAll reports whether operator may manage all of account's tokens on contract.
-func (e *ERC1155) IsApprovedForAll(ctx context.Context, contract, account, operator *types.Address, block string) (bool, error) {
-	calldata, err := EncodeIsApprovedForAll(account, operator)
-	if err != nil {
-		return false, fmt.Errorf("erc1155: isApprovedForAll: %w", err)
-	}
-	data, err := e.call(ctx, nil, contract, calldata, block)
-	if err != nil {
-		return false, fmt.Errorf("erc1155: isApprovedForAll: %w", err)
-	}
-	ok, err := DecodeIsApprovedForAll(data)
-	if err != nil {
-		return false, fmt.Errorf("erc1155: isApprovedForAll: %w", err)
-	}
-	return ok, nil
-}
-
-// CreateSetApprovalForAll builds an unsigned setApprovalForAll(operator, approved) transaction via b.
-func (e *ERC1155) CreateSetApprovalForAll(ctx context.Context, b tx.Builder, contract, from, operator *types.Address, approved bool) (core.Transaction, error) {
-	calldata, err := EncodeSetApprovalForAll(operator, approved)
-	if err != nil {
-		return nil, fmt.Errorf("erc1155: createSetApprovalForAll: %w", err)
-	}
-
-	unsigned, err := b.Build(from, contract, nil, calldata).Pack(ctx, e.c)
-	if err != nil {
-		return nil, fmt.Errorf("erc1155: createSetApprovalForAll: %w", e.wrapRevertError(err))
-	}
-	return unsigned, nil
-}
-
-// SetApprovalForAll broadcasts an already-signed setApprovalForAll transaction.
-func (e *ERC1155) SetApprovalForAll(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("erc1155: setApprovalForAll: %w", err)
-	}
-	hash, err := tx.Broadcast(ctx, e.c, raw)
-	if err != nil {
-		return nil, fmt.Errorf("erc1155: setApprovalForAll: %w", err)
-	}
-	return hash, nil
-}
-
-// CreateSafeTransferFrom builds an unsigned safeTransferFrom(from, to, id, value, data) transaction via b, sent by sender.
-func (e *ERC1155) CreateSafeTransferFrom(ctx context.Context, b tx.Builder, contract, sender, from, to *types.Address, id, value *big.Int, callData []byte) (core.Transaction, error) {
-	calldata, err := EncodeSafeTransferFrom(from, to, id, value, callData)
-	if err != nil {
-		return nil, fmt.Errorf("erc1155: createSafeTransferFrom: %w", err)
-	}
-
-	unsigned, err := b.Build(sender, contract, nil, calldata).Pack(ctx, e.c)
-	if err != nil {
-		return nil, fmt.Errorf("erc1155: createSafeTransferFrom: %w", e.wrapRevertError(err))
-	}
-	return unsigned, nil
-}
-
-// SafeTransferFrom broadcasts an already-signed safeTransferFrom transaction.
-func (e *ERC1155) SafeTransferFrom(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("erc1155: safeTransferFrom: %w", err)
-	}
-	hash, err := tx.Broadcast(ctx, e.c, raw)
-	if err != nil {
-		return nil, fmt.Errorf("erc1155: safeTransferFrom: %w", err)
-	}
-	return hash, nil
-}
-
-// CreateSafeBatchTransferFrom builds an unsigned safeBatchTransferFrom(from, to, ids, values, data) transaction via b, sent by sender.
-func (e *ERC1155) CreateSafeBatchTransferFrom(ctx context.Context, b tx.Builder, contract, sender, from, to *types.Address, ids, values []*big.Int, callData []byte) (core.Transaction, error) {
-	calldata, err := EncodeSafeBatchTransferFrom(from, to, ids, values, callData)
-	if err != nil {
-		return nil, fmt.Errorf("erc1155: createSafeBatchTransferFrom: %w", err)
-	}
-
-	unsigned, err := b.Build(sender, contract, nil, calldata).Pack(ctx, e.c)
-	if err != nil {
-		return nil, fmt.Errorf("erc1155: createSafeBatchTransferFrom: %w", e.wrapRevertError(err))
-	}
-	return unsigned, nil
-}
-
-// SafeBatchTransferFrom broadcasts an already-signed safeBatchTransferFrom transaction.
-func (e *ERC1155) SafeBatchTransferFrom(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("erc1155: safeBatchTransferFrom: %w", err)
-	}
-	hash, err := tx.Broadcast(ctx, e.c, raw)
-	if err != nil {
-		return nil, fmt.Errorf("erc1155: safeBatchTransferFrom: %w", err)
-	}
-	return hash, nil
-}
-
-// call eth_calls contract with calldata (from msg.sender from, if non-nil), decoding a reverted custom error to its sentinel.
-func (e *ERC1155) call(ctx context.Context, from, contract *types.Address, calldata []byte, block string) ([]byte, error) {
-	params := map[string]any{
-		"to":   contract.String(),
-		"data": encoding.Hex.EncodePrefixed(calldata),
-	}
-	if from != nil {
-		params["from"] = from.String()
-	}
-
-	var raw string
-	if err := e.c.Call(ctx, rpc.ETHCall("call", params, block, &raw)); err != nil {
-		return nil, e.wrapRevertError(err)
-	}
-	return encoding.Hex.Decode(raw)
+	return out, nil
 }
 
 // wrapRevertError maps a known IERC1155Errors custom error in err to its sentinel.
