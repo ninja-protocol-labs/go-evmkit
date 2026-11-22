@@ -1,0 +1,12 @@
+template: testify
+dir: "{{.InterfaceDir}}/mocks"
+pkgname: mocks
+structname: "{{.InterfaceName}}"
+filename: "{{.InterfaceName | snakecase}}.go"
+packages:
+  github.com/ninja-protocol-labs/go-evmkit/standards/erc20:
+    config:
+      all: true
+  github.com/ninja-protocol-labs/go-evmkit/standards/erc165:
+    config:
+      all: true
