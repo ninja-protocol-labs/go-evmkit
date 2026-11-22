@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core"
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
@@ -31,57 +32,250 @@ var nftPermitTypes = eip712.Types{
 	},
 }
 
-// TokenOfOwnerByIndexParams is TokenOfOwnerByIndex's argument list.
-type TokenOfOwnerByIndexParams struct {
-	NFPM  *types.Address
-	Owner *types.Address
-	Index *big.Int
+// WETH9Request is WETH9()'s input on Contract.
+type WETH9Request struct {
+	Contract *types.Address
 }
 
-func NewTokenOfOwnerByIndexParams(nfpm, owner *types.Address, index *big.Int) *TokenOfOwnerByIndexParams {
-	return &TokenOfOwnerByIndexParams{
-		NFPM:  nfpm,
-		Owner: owner,
-		Index: index,
+func NewWETH9Request(contract *types.Address) *WETH9Request {
+	return &WETH9Request{
+		Contract: contract,
 	}
 }
 
-// PermitParams is CreatePermit's argument list.
-type PermitParams struct {
-	NFPM     *types.Address
-	Sender   *types.Address
+func (r *WETH9Request) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// TotalSupplyRequest is totalSupply()'s input on Contract.
+type TotalSupplyRequest struct {
+	Contract *types.Address
+}
+
+func NewTotalSupplyRequest(contract *types.Address) *TotalSupplyRequest {
+	return &TotalSupplyRequest{
+		Contract: contract,
+	}
+}
+
+func (r *TotalSupplyRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// TokenOfOwnerByIndexRequest is tokenOfOwnerByIndex(owner, index)'s input on Contract.
+type TokenOfOwnerByIndexRequest struct {
+	Contract *types.Address
+	Owner    *types.Address
+	Index    *big.Int
+}
+
+func NewTokenOfOwnerByIndexRequest(contract, owner *types.Address, index *big.Int) *TokenOfOwnerByIndexRequest {
+	return &TokenOfOwnerByIndexRequest{
+		Contract: contract,
+		Owner:    owner,
+		Index:    index,
+	}
+}
+
+func (r *TokenOfOwnerByIndexRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Owner == nil {
+		return fmt.Errorf("%w: owner is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Index == nil {
+		return fmt.Errorf("%w: index is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// TokenByIndexRequest is tokenByIndex(index)'s input on Contract.
+type TokenByIndexRequest struct {
+	Contract *types.Address
+	Index    *big.Int
+}
+
+func NewTokenByIndexRequest(contract *types.Address, index *big.Int) *TokenByIndexRequest {
+	return &TokenByIndexRequest{
+		Contract: contract,
+		Index:    index,
+	}
+}
+
+func (r *TokenByIndexRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Index == nil {
+		return fmt.Errorf("%w: index is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// PermitTypehashRequest is PERMIT_TYPEHASH()'s input on Contract.
+type PermitTypehashRequest struct {
+	Contract *types.Address
+}
+
+func NewPermitTypehashRequest(contract *types.Address) *PermitTypehashRequest {
+	return &PermitTypehashRequest{
+		Contract: contract,
+	}
+}
+
+func (r *PermitTypehashRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// DomainSeparatorRequest is DOMAIN_SEPARATOR()'s input on Contract.
+type DomainSeparatorRequest struct {
+	Contract *types.Address
+}
+
+func NewDomainSeparatorRequest(contract *types.Address) *DomainSeparatorRequest {
+	return &DomainSeparatorRequest{
+		Contract: contract,
+	}
+}
+
+func (r *DomainSeparatorRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// NFPMPositionsRequest is positions(tokenId)'s input on Contract.
+type NFPMPositionsRequest struct {
+	Contract *types.Address
+	TokenID  *big.Int
+}
+
+func NewNFPMPositionsRequest(contract *types.Address, tokenID *big.Int) *NFPMPositionsRequest {
+	return &NFPMPositionsRequest{
+		Contract: contract,
+		TokenID:  tokenID,
+	}
+}
+
+func (r *NFPMPositionsRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.TokenID == nil {
+		return fmt.Errorf("%w: tokenID is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// PermitRequest is permit(spender, tokenId, deadline, v, r, s)'s input on Contract.
+type PermitRequest struct {
+	Contract *types.Address
 	Spender  *types.Address
-	TokenId  *big.Int
+	TokenID  *big.Int
 	Deadline *big.Int
 	Sig      *types.Signature
 }
 
-func NewPermitParams(nfpm, sender, spender *types.Address, tokenId, deadline *big.Int, sig *types.Signature) *PermitParams {
-	return &PermitParams{
-		NFPM:     nfpm,
-		Sender:   sender,
+func NewPermitRequest(contract, spender *types.Address, tokenID, deadline *big.Int, sig *types.Signature) *PermitRequest {
+	return &PermitRequest{
+		Contract: contract,
 		Spender:  spender,
-		TokenId:  tokenId,
+		TokenID:  tokenID,
 		Deadline: deadline,
 		Sig:      sig,
 	}
 }
 
-// CreateAndInitializePoolIfNecessaryParams is CreateCreateAndInitializePoolIfNecessary's and
-// CallCreateAndInitializePoolIfNecessary's argument list.
-type CreateAndInitializePoolIfNecessaryParams struct {
-	NFPM         *types.Address
-	Sender       *types.Address
+func (r *PermitRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Spender == nil {
+		return fmt.Errorf("%w: spender is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.TokenID == nil {
+		return fmt.Errorf("%w: tokenID is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Deadline == nil {
+		return fmt.Errorf("%w: deadline is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Sig == nil {
+		return fmt.Errorf("%w: sig is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// CreateAndInitializePoolIfNecessaryRequest is createAndInitializePoolIfNecessary(token0, token1, fee, sqrtPriceX96)'s input on Contract.
+type CreateAndInitializePoolIfNecessaryRequest struct {
+	Contract     *types.Address
 	Token0       *types.Address
 	Token1       *types.Address
 	Fee          *big.Int
 	SqrtPriceX96 *big.Int
 }
 
-func NewCreateAndInitializePoolIfNecessaryParams(nfpm, sender, token0, token1 *types.Address, fee, sqrtPriceX96 *big.Int) *CreateAndInitializePoolIfNecessaryParams {
-	return &CreateAndInitializePoolIfNecessaryParams{
-		NFPM:         nfpm,
-		Sender:       sender,
+func NewCreateAndInitializePoolIfNecessaryRequest(contract, token0, token1 *types.Address, fee, sqrtPriceX96 *big.Int) *CreateAndInitializePoolIfNecessaryRequest {
+	return &CreateAndInitializePoolIfNecessaryRequest{
+		Contract:     contract,
 		Token0:       token0,
 		Token1:       token1,
 		Fee:          fee,
@@ -89,85 +283,447 @@ func NewCreateAndInitializePoolIfNecessaryParams(nfpm, sender, token0, token1 *t
 	}
 }
 
-// NFPMUnwrapWETH9Params is CreateUnwrapWETH9's argument list.
-type NFPMUnwrapWETH9Params struct {
-	NFPM          *types.Address
-	Sender        *types.Address
+func (r *CreateAndInitializePoolIfNecessaryRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Token0 == nil {
+		return fmt.Errorf("%w: token0 is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Token1 == nil {
+		return fmt.Errorf("%w: token1 is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Fee == nil {
+		return fmt.Errorf("%w: fee is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.SqrtPriceX96 == nil {
+		return fmt.Errorf("%w: sqrtPriceX96 is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// NFPMUnwrapWETH9Request is unwrapWETH9(amountMinimum, recipient)'s input on Contract.
+type NFPMUnwrapWETH9Request struct {
+	Contract      *types.Address
 	AmountMinimum *big.Int
 	Recipient     *types.Address
 }
 
-func NewNFPMUnwrapWETH9Params(nfpm, sender *types.Address, amountMinimum *big.Int, recipient *types.Address) *NFPMUnwrapWETH9Params {
-	return &NFPMUnwrapWETH9Params{
-		NFPM:          nfpm,
-		Sender:        sender,
+func NewNFPMUnwrapWETH9Request(contract *types.Address, amountMinimum *big.Int, recipient *types.Address) *NFPMUnwrapWETH9Request {
+	return &NFPMUnwrapWETH9Request{
+		Contract:      contract,
 		AmountMinimum: amountMinimum,
 		Recipient:     recipient,
 	}
 }
 
-// NFPMSweepTokenParams is CreateSweepToken's argument list.
-type NFPMSweepTokenParams struct {
-	NFPM          *types.Address
-	Sender        *types.Address
+func (r *NFPMUnwrapWETH9Request) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.AmountMinimum == nil {
+		return fmt.Errorf("%w: amountMinimum is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Recipient == nil {
+		return fmt.Errorf("%w: recipient is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// NFPMSweepTokenRequest is sweepToken(token, amountMinimum, recipient)'s input on Contract.
+type NFPMSweepTokenRequest struct {
+	Contract      *types.Address
 	Token         *types.Address
 	AmountMinimum *big.Int
 	Recipient     *types.Address
 }
 
-func NewNFPMSweepTokenParams(nfpm, sender, token *types.Address, amountMinimum *big.Int, recipient *types.Address) *NFPMSweepTokenParams {
-	return &NFPMSweepTokenParams{
-		NFPM:          nfpm,
-		Sender:        sender,
+func NewNFPMSweepTokenRequest(contract, token *types.Address, amountMinimum *big.Int, recipient *types.Address) *NFPMSweepTokenRequest {
+	return &NFPMSweepTokenRequest{
+		Contract:      contract,
 		Token:         token,
 		AmountMinimum: amountMinimum,
 		Recipient:     recipient,
 	}
 }
 
-// NFPMRefundETHParams is CreateRefundETH's argument list.
-type NFPMRefundETHParams struct {
-	NFPM   *types.Address
-	Sender *types.Address
+func (r *NFPMSweepTokenRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Token == nil {
+		return fmt.Errorf("%w: token is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.AmountMinimum == nil {
+		return fmt.Errorf("%w: amountMinimum is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Recipient == nil {
+		return fmt.Errorf("%w: recipient is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
 }
 
-func NewNFPMRefundETHParams(nfpm, sender *types.Address) *NFPMRefundETHParams {
-	return &NFPMRefundETHParams{
-		NFPM:   nfpm,
-		Sender: sender,
+// NFPMRefundETHRequest is refundETH()'s input on Contract.
+type NFPMRefundETHRequest struct {
+	Contract *types.Address
+}
+
+func NewNFPMRefundETHRequest(contract *types.Address) *NFPMRefundETHRequest {
+	return &NFPMRefundETHRequest{
+		Contract: contract,
 	}
 }
 
-// NFPMMulticallParams is CreateMulticall's and CallMulticall's argument list.
-type NFPMMulticallParams struct {
-	NFPM   *types.Address
-	Sender *types.Address
-	Value  *big.Int
-	Data   [][]byte
+func (r *NFPMRefundETHRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
 }
 
-func NewNFPMMulticallParams(nfpm, sender *types.Address, value *big.Int, data [][]byte) *NFPMMulticallParams {
-	return &NFPMMulticallParams{
-		NFPM:   nfpm,
-		Sender: sender,
-		Value:  value,
-		Data:   data,
+// NFPMMulticallRequest is multicall(data)'s input on Contract; NativeAmount, if set, is sent as msg.value.
+type NFPMMulticallRequest struct {
+	Contract     *types.Address
+	Data         [][]byte
+	NativeAmount *big.Int
+}
+
+func NewNFPMMulticallRequest(contract *types.Address, data [][]byte, nativeAmount *big.Int) *NFPMMulticallRequest {
+	return &NFPMMulticallRequest{
+		Contract:     contract,
+		Data:         data,
+		NativeAmount: nativeAmount,
 	}
 }
 
-// NFPMBurnParams is CreateBurn's argument list.
-type NFPMBurnParams struct {
-	NFPM    *types.Address
-	Sender  *types.Address
-	TokenId *big.Int
+func (r *NFPMMulticallRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if len(r.Data) == 0 {
+		return fmt.Errorf("%w: data is empty", bind.ErrInvalidRequest)
+	}
+
+	return nil
 }
 
-func NewNFPMBurnParams(nfpm, sender *types.Address, tokenId *big.Int) *NFPMBurnParams {
-	return &NFPMBurnParams{
-		NFPM:    nfpm,
-		Sender:  sender,
-		TokenId: tokenId,
+// NFPMMintRequest is mint(params)'s input on Contract; NativeAmount, if set, is sent as msg.value.
+type NFPMMintRequest struct {
+	Contract     *types.Address
+	Params       *MintParams
+	NativeAmount *big.Int
+}
+
+func NewNFPMMintRequest(contract *types.Address, params *MintParams, nativeAmount *big.Int) *NFPMMintRequest {
+	return &NFPMMintRequest{
+		Contract:     contract,
+		Params:       params,
+		NativeAmount: nativeAmount,
 	}
+}
+
+func (r *NFPMMintRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if err := validateMintParams(r.Params); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// IncreaseLiquidityRequest is increaseLiquidity(params)'s input on Contract; NativeAmount, if set, is sent as msg.value.
+type IncreaseLiquidityRequest struct {
+	Contract     *types.Address
+	Params       *IncreaseLiquidityParams
+	NativeAmount *big.Int
+}
+
+func NewIncreaseLiquidityRequest(contract *types.Address, params *IncreaseLiquidityParams, nativeAmount *big.Int) *IncreaseLiquidityRequest {
+	return &IncreaseLiquidityRequest{
+		Contract:     contract,
+		Params:       params,
+		NativeAmount: nativeAmount,
+	}
+}
+
+func (r *IncreaseLiquidityRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if err := validateIncreaseLiquidityParams(r.Params); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// DecreaseLiquidityRequest is decreaseLiquidity(params)'s input on Contract.
+type DecreaseLiquidityRequest struct {
+	Contract *types.Address
+	Params   *DecreaseLiquidityParams
+}
+
+func NewDecreaseLiquidityRequest(contract *types.Address, params *DecreaseLiquidityParams) *DecreaseLiquidityRequest {
+	return &DecreaseLiquidityRequest{
+		Contract: contract,
+		Params:   params,
+	}
+}
+
+func (r *DecreaseLiquidityRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if err := validateDecreaseLiquidityParams(r.Params); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// NFPMCollectRequest is collect(params)'s input on Contract.
+type NFPMCollectRequest struct {
+	Contract *types.Address
+	Params   *CollectParams
+}
+
+func NewNFPMCollectRequest(contract *types.Address, params *CollectParams) *NFPMCollectRequest {
+	return &NFPMCollectRequest{
+		Contract: contract,
+		Params:   params,
+	}
+}
+
+func (r *NFPMCollectRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if err := validateCollectParams(r.Params); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// NFPMBurnRequest is burn(tokenId)'s input on Contract.
+type NFPMBurnRequest struct {
+	Contract *types.Address
+	TokenID  *big.Int
+}
+
+func NewNFPMBurnRequest(contract *types.Address, tokenID *big.Int) *NFPMBurnRequest {
+	return &NFPMBurnRequest{
+		Contract: contract,
+		TokenID:  tokenID,
+	}
+}
+
+func (r *NFPMBurnRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.TokenID == nil {
+		return fmt.Errorf("%w: tokenID is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+func validateMintParams(p *MintParams) error {
+	if p == nil {
+		return fmt.Errorf("%w: params is nil", bind.ErrInvalidRequest)
+	}
+
+	if p.Token0 == nil {
+		return fmt.Errorf("%w: params.token0 is nil", bind.ErrInvalidRequest)
+	}
+
+	if p.Token1 == nil {
+		return fmt.Errorf("%w: params.token1 is nil", bind.ErrInvalidRequest)
+	}
+
+	if p.Fee == nil {
+		return fmt.Errorf("%w: params.fee is nil", bind.ErrInvalidRequest)
+	}
+
+	if p.TickLower == nil {
+		return fmt.Errorf("%w: params.tickLower is nil", bind.ErrInvalidRequest)
+	}
+
+	if p.TickUpper == nil {
+		return fmt.Errorf("%w: params.tickUpper is nil", bind.ErrInvalidRequest)
+	}
+
+	if p.Amount0Desired == nil {
+		return fmt.Errorf("%w: params.amount0Desired is nil", bind.ErrInvalidRequest)
+	}
+
+	if p.Amount1Desired == nil {
+		return fmt.Errorf("%w: params.amount1Desired is nil", bind.ErrInvalidRequest)
+	}
+
+	if p.Amount0Min == nil {
+		return fmt.Errorf("%w: params.amount0Min is nil", bind.ErrInvalidRequest)
+	}
+
+	if p.Amount1Min == nil {
+		return fmt.Errorf("%w: params.amount1Min is nil", bind.ErrInvalidRequest)
+	}
+
+	if p.Recipient == nil {
+		return fmt.Errorf("%w: params.recipient is nil", bind.ErrInvalidRequest)
+	}
+
+	if p.Deadline == nil {
+		return fmt.Errorf("%w: params.deadline is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+func validateIncreaseLiquidityParams(p *IncreaseLiquidityParams) error {
+	if p == nil {
+		return fmt.Errorf("%w: params is nil", bind.ErrInvalidRequest)
+	}
+
+	if p.TokenId == nil {
+		return fmt.Errorf("%w: params.tokenId is nil", bind.ErrInvalidRequest)
+	}
+
+	if p.Amount0Desired == nil {
+		return fmt.Errorf("%w: params.amount0Desired is nil", bind.ErrInvalidRequest)
+	}
+
+	if p.Amount1Desired == nil {
+		return fmt.Errorf("%w: params.amount1Desired is nil", bind.ErrInvalidRequest)
+	}
+
+	if p.Amount0Min == nil {
+		return fmt.Errorf("%w: params.amount0Min is nil", bind.ErrInvalidRequest)
+	}
+
+	if p.Amount1Min == nil {
+		return fmt.Errorf("%w: params.amount1Min is nil", bind.ErrInvalidRequest)
+	}
+
+	if p.Deadline == nil {
+		return fmt.Errorf("%w: params.deadline is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+func validateDecreaseLiquidityParams(p *DecreaseLiquidityParams) error {
+	if p == nil {
+		return fmt.Errorf("%w: params is nil", bind.ErrInvalidRequest)
+	}
+
+	if p.TokenId == nil {
+		return fmt.Errorf("%w: params.tokenId is nil", bind.ErrInvalidRequest)
+	}
+
+	if p.Liquidity == nil {
+		return fmt.Errorf("%w: params.liquidity is nil", bind.ErrInvalidRequest)
+	}
+
+	if p.Amount0Min == nil {
+		return fmt.Errorf("%w: params.amount0Min is nil", bind.ErrInvalidRequest)
+	}
+
+	if p.Amount1Min == nil {
+		return fmt.Errorf("%w: params.amount1Min is nil", bind.ErrInvalidRequest)
+	}
+
+	if p.Deadline == nil {
+		return fmt.Errorf("%w: params.deadline is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+func validateCollectParams(p *CollectParams) error {
+	if p == nil {
+		return fmt.Errorf("%w: params is nil", bind.ErrInvalidRequest)
+	}
+
+	if p.TokenId == nil {
+		return fmt.Errorf("%w: params.tokenId is nil", bind.ErrInvalidRequest)
+	}
+
+	if p.Recipient == nil {
+		return fmt.Errorf("%w: params.recipient is nil", bind.ErrInvalidRequest)
+	}
+
+	if p.Amount0Max == nil {
+		return fmt.Errorf("%w: params.amount0Max is nil", bind.ErrInvalidRequest)
+	}
+
+	if p.Amount1Max == nil {
+		return fmt.Errorf("%w: params.amount1Max is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
 }
 
 // NewNFTPermitDomain returns the EIP-712 domain a NonfungiblePositionManager deployment signs
@@ -353,8 +909,8 @@ func NewCollectParams(tokenId *big.Int, recipient *types.Address, amount0Max, am
 	}
 }
 
-// IncreaseLiquidity mirrors INonfungiblePositionManager's IncreaseLiquidity event.
-type IncreaseLiquidity struct {
+// IncreaseLiquidityEvent mirrors INonfungiblePositionManager's IncreaseLiquidity event.
+type IncreaseLiquidityEvent struct {
 	Contract  *types.Address
 	TokenId   *big.Int
 	Liquidity *big.Int
@@ -362,8 +918,8 @@ type IncreaseLiquidity struct {
 	Amount1   *big.Int
 }
 
-func NewIncreaseLiquidity(contract *types.Address, tokenId, liquidity, amount0, amount1 *big.Int) *IncreaseLiquidity {
-	return &IncreaseLiquidity{
+func NewIncreaseLiquidityEvent(contract *types.Address, tokenId, liquidity, amount0, amount1 *big.Int) *IncreaseLiquidityEvent {
+	return &IncreaseLiquidityEvent{
 		Contract:  contract,
 		TokenId:   tokenId,
 		Liquidity: liquidity,
@@ -372,8 +928,8 @@ func NewIncreaseLiquidity(contract *types.Address, tokenId, liquidity, amount0, 
 	}
 }
 
-// DecreaseLiquidity mirrors INonfungiblePositionManager's DecreaseLiquidity event.
-type DecreaseLiquidity struct {
+// DecreaseLiquidityEvent mirrors INonfungiblePositionManager's DecreaseLiquidity event.
+type DecreaseLiquidityEvent struct {
 	Contract  *types.Address
 	TokenId   *big.Int
 	Liquidity *big.Int
@@ -381,8 +937,8 @@ type DecreaseLiquidity struct {
 	Amount1   *big.Int
 }
 
-func NewDecreaseLiquidity(contract *types.Address, tokenId, liquidity, amount0, amount1 *big.Int) *DecreaseLiquidity {
-	return &DecreaseLiquidity{
+func NewDecreaseLiquidityEvent(contract *types.Address, tokenId, liquidity, amount0, amount1 *big.Int) *DecreaseLiquidityEvent {
+	return &DecreaseLiquidityEvent{
 		Contract:  contract,
 		TokenId:   tokenId,
 		Liquidity: liquidity,
@@ -391,9 +947,9 @@ func NewDecreaseLiquidity(contract *types.Address, tokenId, liquidity, amount0, 
 	}
 }
 
-// PositionCollect mirrors INonfungiblePositionManager's Collect event (named to avoid colliding
+// PositionCollectEvent mirrors INonfungiblePositionManager's Collect event (named to avoid colliding
 // with Pool's own Collect event type).
-type PositionCollect struct {
+type PositionCollectEvent struct {
 	Contract  *types.Address
 	TokenId   *big.Int
 	Recipient *types.Address
@@ -401,8 +957,8 @@ type PositionCollect struct {
 	Amount1   *big.Int
 }
 
-func NewPositionCollect(contract, recipient *types.Address, tokenId, amount0, amount1 *big.Int) *PositionCollect {
-	return &PositionCollect{
+func NewPositionCollectEvent(contract, recipient *types.Address, tokenId, amount0, amount1 *big.Int) *PositionCollectEvent {
+	return &PositionCollectEvent{
 		Contract:  contract,
 		TokenId:   tokenId,
 		Recipient: recipient,

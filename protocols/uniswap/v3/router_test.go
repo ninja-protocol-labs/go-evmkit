@@ -800,12 +800,12 @@ func (s *RouterLifeCycleSuite) Test01ReadMethods() {
 	s.weth9 = weth9
 	s.T().Logf("Test01ReadMethods: WETH9() = %s", weth9)
 
-	nfpmFactory, err := s.v3Nfpm.Factory(s.ctx, s.nfpm, rpc.BlockTagLatest)
+	nfpmFactory, err := s.v3Nfpm.Factory(s.ctx, nil, NewFactoryRequest(s.nfpm))
 	s.Require().NoError(err)
 	s.Require().True(nfpmFactory.Equal(factory), "Router and NFPM are different periphery contracts, but they must share the same core Factory")
 	s.T().Logf("Test01ReadMethods: NFPM's factory() = %s matches Router's", nfpmFactory)
 
-	nfpmWETH9, err := s.v3Nfpm.WETH9(s.ctx, s.nfpm, rpc.BlockTagLatest)
+	nfpmWETH9, err := s.v3Nfpm.WETH9(s.ctx, nil, NewWETH9Request(s.nfpm))
 	s.Require().NoError(err)
 	s.Require().True(nfpmWETH9.Equal(weth9), "Router and NFPM are different periphery contracts, but they must share the same WETH9")
 	s.T().Logf("Test01ReadMethods: NFPM's WETH9() = %s matches Router's", nfpmWETH9)
@@ -823,7 +823,7 @@ func (s *RouterLifeCycleSuite) Test02CreateAndInitializePoolIfNecessary() {
 	sqrtPriceX96 := new(big.Int).Lsh(big.NewInt(1), 96)
 	s.T().Logf("Test02CreateAndInitializePoolIfNecessary: token0=%s token1=%s fee=%s sqrtPriceX96=%s", s.tokenA, s.tokenB, s.Fee, sqrtPriceX96)
 
-	predicted, err := s.v3Nfpm.CallCreateAndInitializePoolIfNecessary(s.ctx, NewCreateAndInitializePoolIfNecessaryParams(s.nfpm, s.from, s.tokenA, s.tokenB, s.Fee, sqrtPriceX96), rpc.BlockTagLatest)
+	predicted, err := s.v3Nfpm.CallCreateAndInitializePoolIfNecessary(s.ctx, bind.NewCallOptions().WithFrom(s.from), NewCreateAndInitializePoolIfNecessaryRequest(s.nfpm, s.tokenA, s.tokenB, s.Fee, sqrtPriceX96))
 	s.Require().NoError(err)
 	s.Require().False(predicted.IsZero())
 	s.T().Logf("Test02CreateAndInitializePoolIfNecessary: CallCreateAndInitializePoolIfNecessary predicted pool=%s", predicted)
@@ -831,16 +831,13 @@ func (s *RouterLifeCycleSuite) Test02CreateAndInitializePoolIfNecessary() {
 	builder := tx.NewDynamicFeeBuilder()
 	builder.PriceBuffer(150)
 	builder.LimitBuffer(300)
-	unsigned, err := s.v3Nfpm.CreateCreateAndInitializePoolIfNecessary(s.ctx, builder, NewCreateAndInitializePoolIfNecessaryParams(s.nfpm, s.from, s.tokenA, s.tokenB, s.Fee, sqrtPriceX96))
+	sentTx, hash, err := s.v3Nfpm.CreateAndInitializePoolIfNecessary(s.ctx, bind.NewTransactOptions(s.signer, builder), NewCreateAndInitializePoolIfNecessaryRequest(s.nfpm, s.tokenA, s.tokenB, s.Fee, sqrtPriceX96))
 	s.Require().NoError(err)
-	s.Require().NoError(unsigned.Sign(s.signer))
 	s.mu.Lock()
-	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
+	s.totalFee.Add(s.totalFee, sentTx.MaxFee())
 	s.mu.Unlock()
-	s.T().Logf("Test02CreateAndInitializePoolIfNecessary: signed tx (nonce %d, gasLimit %d, maxFee %s)", unsigned.AddressNonce(), unsigned.Gas(), unsigned.MaxFee())
+	s.T().Logf("Test02CreateAndInitializePoolIfNecessary: signed tx (nonce %d, gasLimit %d, maxFee %s)", sentTx.AddressNonce(), sentTx.Gas(), sentTx.MaxFee())
 
-	hash, err := s.v3Nfpm.CreateAndInitializePoolIfNecessary(s.ctx, unsigned)
-	s.Require().NoError(err)
 	s.T().Logf("Test02CreateAndInitializePoolIfNecessary: broadcast tx %s", hash)
 
 	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
@@ -937,7 +934,7 @@ func (s *RouterLifeCycleSuite) Test03Mint() {
 
 	params := NewMintParams(s.tokenA, s.tokenB, s.Fee, tickLower, tickUpper, amount, amount, big.NewInt(0), big.NewInt(0), s.from, deadline)
 
-	predictedTokenId, predictedLiquidity, predictedAmount0, predictedAmount1, err := s.v3Nfpm.CallMint(s.ctx, s.nfpm, s.from, nil, params, rpc.BlockTagLatest)
+	predictedTokenId, predictedLiquidity, predictedAmount0, predictedAmount1, err := s.v3Nfpm.CallMint(s.ctx, bind.NewCallOptions().WithFrom(s.from), NewNFPMMintRequest(s.nfpm, params, nil))
 	s.Require().NoError(err)
 	s.Require().True(predictedLiquidity.Sign() > 0)
 	s.T().Logf("Test03Mint: CallMint predicted tokenId=%s liquidity=%s amount0=%s amount1=%s", predictedTokenId, predictedLiquidity, predictedAmount0, predictedAmount1)
@@ -945,16 +942,13 @@ func (s *RouterLifeCycleSuite) Test03Mint() {
 	builder := tx.NewDynamicFeeBuilder()
 	builder.PriceBuffer(150)
 	builder.LimitBuffer(300)
-	unsigned, err := s.v3Nfpm.CreateMint(s.ctx, builder, s.nfpm, s.from, nil, params)
+	sentTx, hash, err := s.v3Nfpm.Mint(s.ctx, bind.NewTransactOptions(s.signer, builder), NewNFPMMintRequest(s.nfpm, params, nil))
 	s.Require().NoError(err)
-	s.Require().NoError(unsigned.Sign(s.signer))
 	s.mu.Lock()
-	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
+	s.totalFee.Add(s.totalFee, sentTx.MaxFee())
 	s.mu.Unlock()
-	s.T().Logf("Test03Mint: signed mint tx (nonce %d, gasLimit %d, maxFee %s)", unsigned.AddressNonce(), unsigned.Gas(), unsigned.MaxFee())
+	s.T().Logf("Test03Mint: signed mint tx (nonce %d, gasLimit %d, maxFee %s)", sentTx.AddressNonce(), sentTx.Gas(), sentTx.MaxFee())
 
-	hash, err := s.v3Nfpm.Mint(s.ctx, unsigned)
-	s.Require().NoError(err)
 	s.T().Logf("Test03Mint: broadcast mint tx %s", hash)
 
 	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
@@ -971,7 +965,7 @@ func (s *RouterLifeCycleSuite) Test03Mint() {
 
 	var position *Position
 	s.Require().Eventually(func() bool {
-		position, err = s.v3Nfpm.Positions(s.ctx, s.nfpm, s.tokenId, rpc.BlockTagLatest)
+		position, err = s.v3Nfpm.Positions(s.ctx, nil, NewNFPMPositionsRequest(s.nfpm, s.tokenId))
 		return err == nil && predictedLiquidity.Cmp(position.Liquidity) == 0
 	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "position not visible after mint")
 	s.Require().True(position.Token0.Equal(s.tokenA))
@@ -1222,7 +1216,7 @@ func (s *RouterLifeCycleSuite) Test06CreateAndInitializePoolBC() {
 	sqrtPriceX96 := new(big.Int).Lsh(big.NewInt(1), 96)
 	s.T().Logf("Test06CreateAndInitializePoolBC: token0=%s token1=%s fee=%s sqrtPriceX96=%s", s.tokenB, s.tokenC, s.Fee, sqrtPriceX96)
 
-	predicted, err := s.v3Nfpm.CallCreateAndInitializePoolIfNecessary(s.ctx, NewCreateAndInitializePoolIfNecessaryParams(s.nfpm, s.from, s.tokenB, s.tokenC, s.Fee, sqrtPriceX96), rpc.BlockTagLatest)
+	predicted, err := s.v3Nfpm.CallCreateAndInitializePoolIfNecessary(s.ctx, bind.NewCallOptions().WithFrom(s.from), NewCreateAndInitializePoolIfNecessaryRequest(s.nfpm, s.tokenB, s.tokenC, s.Fee, sqrtPriceX96))
 	s.Require().NoError(err)
 	s.Require().False(predicted.IsZero())
 	s.T().Logf("Test06CreateAndInitializePoolBC: CallCreateAndInitializePoolIfNecessary predicted pool=%s", predicted)
@@ -1230,16 +1224,13 @@ func (s *RouterLifeCycleSuite) Test06CreateAndInitializePoolBC() {
 	builder := tx.NewDynamicFeeBuilder()
 	builder.PriceBuffer(150)
 	builder.LimitBuffer(300)
-	unsigned, err := s.v3Nfpm.CreateCreateAndInitializePoolIfNecessary(s.ctx, builder, NewCreateAndInitializePoolIfNecessaryParams(s.nfpm, s.from, s.tokenB, s.tokenC, s.Fee, sqrtPriceX96))
+	sentTx, hash, err := s.v3Nfpm.CreateAndInitializePoolIfNecessary(s.ctx, bind.NewTransactOptions(s.signer, builder), NewCreateAndInitializePoolIfNecessaryRequest(s.nfpm, s.tokenB, s.tokenC, s.Fee, sqrtPriceX96))
 	s.Require().NoError(err)
-	s.Require().NoError(unsigned.Sign(s.signer))
 	s.mu.Lock()
-	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
+	s.totalFee.Add(s.totalFee, sentTx.MaxFee())
 	s.mu.Unlock()
-	s.T().Logf("Test06CreateAndInitializePoolBC: signed tx (nonce %d, gasLimit %d, maxFee %s)", unsigned.AddressNonce(), unsigned.Gas(), unsigned.MaxFee())
+	s.T().Logf("Test06CreateAndInitializePoolBC: signed tx (nonce %d, gasLimit %d, maxFee %s)", sentTx.AddressNonce(), sentTx.Gas(), sentTx.MaxFee())
 
-	hash, err := s.v3Nfpm.CreateAndInitializePoolIfNecessary(s.ctx, unsigned)
-	s.Require().NoError(err)
 	s.T().Logf("Test06CreateAndInitializePoolBC: broadcast tx %s", hash)
 
 	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
@@ -1326,7 +1317,7 @@ func (s *RouterLifeCycleSuite) Test07MintBC() {
 
 	params := NewMintParams(s.tokenB, s.tokenC, s.Fee, tickLower, tickUpper, amount, amount, big.NewInt(0), big.NewInt(0), s.from, deadline)
 
-	predictedTokenId, predictedLiquidity, predictedAmount0, predictedAmount1, err := s.v3Nfpm.CallMint(s.ctx, s.nfpm, s.from, nil, params, rpc.BlockTagLatest)
+	predictedTokenId, predictedLiquidity, predictedAmount0, predictedAmount1, err := s.v3Nfpm.CallMint(s.ctx, bind.NewCallOptions().WithFrom(s.from), NewNFPMMintRequest(s.nfpm, params, nil))
 	s.Require().NoError(err)
 	s.Require().True(predictedLiquidity.Sign() > 0)
 	s.T().Logf("Test07MintBC: CallMint predicted tokenId=%s liquidity=%s amount0=%s amount1=%s", predictedTokenId, predictedLiquidity, predictedAmount0, predictedAmount1)
@@ -1334,16 +1325,13 @@ func (s *RouterLifeCycleSuite) Test07MintBC() {
 	builder := tx.NewDynamicFeeBuilder()
 	builder.PriceBuffer(150)
 	builder.LimitBuffer(300)
-	unsigned, err := s.v3Nfpm.CreateMint(s.ctx, builder, s.nfpm, s.from, nil, params)
+	sentTx, hash, err := s.v3Nfpm.Mint(s.ctx, bind.NewTransactOptions(s.signer, builder), NewNFPMMintRequest(s.nfpm, params, nil))
 	s.Require().NoError(err)
-	s.Require().NoError(unsigned.Sign(s.signer))
 	s.mu.Lock()
-	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
+	s.totalFee.Add(s.totalFee, sentTx.MaxFee())
 	s.mu.Unlock()
-	s.T().Logf("Test07MintBC: signed mint tx (nonce %d, gasLimit %d, maxFee %s)", unsigned.AddressNonce(), unsigned.Gas(), unsigned.MaxFee())
+	s.T().Logf("Test07MintBC: signed mint tx (nonce %d, gasLimit %d, maxFee %s)", sentTx.AddressNonce(), sentTx.Gas(), sentTx.MaxFee())
 
-	hash, err := s.v3Nfpm.Mint(s.ctx, unsigned)
-	s.Require().NoError(err)
 	s.T().Logf("Test07MintBC: broadcast mint tx %s", hash)
 
 	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
@@ -1360,7 +1348,7 @@ func (s *RouterLifeCycleSuite) Test07MintBC() {
 
 	var position *Position
 	s.Require().Eventually(func() bool {
-		position, err = s.v3Nfpm.Positions(s.ctx, s.nfpm, tokenIdBC, rpc.BlockTagLatest)
+		position, err = s.v3Nfpm.Positions(s.ctx, nil, NewNFPMPositionsRequest(s.nfpm, tokenIdBC))
 		return err == nil && predictedLiquidity.Cmp(position.Liquidity) == 0
 	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "position not visible after mint")
 	s.Require().True(position.Token0.Equal(s.tokenB))
@@ -2027,7 +2015,7 @@ func (s *RouterLifeCycleSuite) Test17CreateAndInitializePoolWETH() {
 	sqrtPriceX96 := new(big.Int).Lsh(big.NewInt(1), 96)
 	s.T().Logf("Test17CreateAndInitializePoolWETH: token0=%s token1=%s fee=%s sqrtPriceX96=%s", s.wethToken0, s.wethToken1, s.Fee, sqrtPriceX96)
 
-	predicted, err := s.v3Nfpm.CallCreateAndInitializePoolIfNecessary(s.ctx, NewCreateAndInitializePoolIfNecessaryParams(s.nfpm, s.from, s.wethToken0, s.wethToken1, s.Fee, sqrtPriceX96), rpc.BlockTagLatest)
+	predicted, err := s.v3Nfpm.CallCreateAndInitializePoolIfNecessary(s.ctx, bind.NewCallOptions().WithFrom(s.from), NewCreateAndInitializePoolIfNecessaryRequest(s.nfpm, s.wethToken0, s.wethToken1, s.Fee, sqrtPriceX96))
 	s.Require().NoError(err)
 	s.Require().False(predicted.IsZero())
 	s.T().Logf("Test17CreateAndInitializePoolWETH: CallCreateAndInitializePoolIfNecessary predicted pool=%s", predicted)
@@ -2035,16 +2023,13 @@ func (s *RouterLifeCycleSuite) Test17CreateAndInitializePoolWETH() {
 	builder := tx.NewDynamicFeeBuilder()
 	builder.PriceBuffer(150)
 	builder.LimitBuffer(300)
-	unsigned, err := s.v3Nfpm.CreateCreateAndInitializePoolIfNecessary(s.ctx, builder, NewCreateAndInitializePoolIfNecessaryParams(s.nfpm, s.from, s.wethToken0, s.wethToken1, s.Fee, sqrtPriceX96))
+	sentTx, hash, err := s.v3Nfpm.CreateAndInitializePoolIfNecessary(s.ctx, bind.NewTransactOptions(s.signer, builder), NewCreateAndInitializePoolIfNecessaryRequest(s.nfpm, s.wethToken0, s.wethToken1, s.Fee, sqrtPriceX96))
 	s.Require().NoError(err)
-	s.Require().NoError(unsigned.Sign(s.signer))
 	s.mu.Lock()
-	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
+	s.totalFee.Add(s.totalFee, sentTx.MaxFee())
 	s.mu.Unlock()
-	s.T().Logf("Test17CreateAndInitializePoolWETH: signed tx (nonce %d, gasLimit %d, maxFee %s)", unsigned.AddressNonce(), unsigned.Gas(), unsigned.MaxFee())
+	s.T().Logf("Test17CreateAndInitializePoolWETH: signed tx (nonce %d, gasLimit %d, maxFee %s)", sentTx.AddressNonce(), sentTx.Gas(), sentTx.MaxFee())
 
-	hash, err := s.v3Nfpm.CreateAndInitializePoolIfNecessary(s.ctx, unsigned)
-	s.Require().NoError(err)
 	s.T().Logf("Test17CreateAndInitializePoolWETH: broadcast tx %s", hash)
 
 	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
@@ -2106,7 +2091,7 @@ func (s *RouterLifeCycleSuite) Test18MintWETH() {
 
 	params := NewMintParams(s.wethToken0, s.wethToken1, s.Fee, tickLower, tickUpper, amount, amount, big.NewInt(0), big.NewInt(0), s.from, deadline)
 
-	predictedTokenId, predictedLiquidity, predictedAmount0, predictedAmount1, err := s.v3Nfpm.CallMint(s.ctx, s.nfpm, s.from, nil, params, rpc.BlockTagLatest)
+	predictedTokenId, predictedLiquidity, predictedAmount0, predictedAmount1, err := s.v3Nfpm.CallMint(s.ctx, bind.NewCallOptions().WithFrom(s.from), NewNFPMMintRequest(s.nfpm, params, nil))
 	s.Require().NoError(err)
 	s.Require().True(predictedLiquidity.Sign() > 0)
 	s.T().Logf("Test18MintWETH: CallMint predicted tokenId=%s liquidity=%s amount0=%s amount1=%s", predictedTokenId, predictedLiquidity, predictedAmount0, predictedAmount1)
@@ -2114,16 +2099,13 @@ func (s *RouterLifeCycleSuite) Test18MintWETH() {
 	builder := tx.NewDynamicFeeBuilder()
 	builder.PriceBuffer(150)
 	builder.LimitBuffer(300)
-	unsigned, err := s.v3Nfpm.CreateMint(s.ctx, builder, s.nfpm, s.from, nil, params)
+	sentTx, hash, err := s.v3Nfpm.Mint(s.ctx, bind.NewTransactOptions(s.signer, builder), NewNFPMMintRequest(s.nfpm, params, nil))
 	s.Require().NoError(err)
-	s.Require().NoError(unsigned.Sign(s.signer))
 	s.mu.Lock()
-	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
+	s.totalFee.Add(s.totalFee, sentTx.MaxFee())
 	s.mu.Unlock()
-	s.T().Logf("Test18MintWETH: signed mint tx (nonce %d, gasLimit %d, maxFee %s)", unsigned.AddressNonce(), unsigned.Gas(), unsigned.MaxFee())
+	s.T().Logf("Test18MintWETH: signed mint tx (nonce %d, gasLimit %d, maxFee %s)", sentTx.AddressNonce(), sentTx.Gas(), sentTx.MaxFee())
 
-	hash, err := s.v3Nfpm.Mint(s.ctx, unsigned)
-	s.Require().NoError(err)
 	s.T().Logf("Test18MintWETH: broadcast mint tx %s", hash)
 
 	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)

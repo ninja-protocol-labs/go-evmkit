@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 )
@@ -118,7 +119,7 @@ func TestNewIncreaseLiquidityEvent(t *testing.T) {
 	amount0 := big.NewInt(3)
 	amount1 := big.NewInt(4)
 
-	e := NewIncreaseLiquidity(contract, tokenId, liquidity, amount0, amount1)
+	e := NewIncreaseLiquidityEvent(contract, tokenId, liquidity, amount0, amount1)
 	require.Same(t, contract, e.Contract)
 	require.Same(t, tokenId, e.TokenId)
 	require.Same(t, liquidity, e.Liquidity)
@@ -133,7 +134,7 @@ func TestNewDecreaseLiquidityEvent(t *testing.T) {
 	amount0 := big.NewInt(3)
 	amount1 := big.NewInt(4)
 
-	e := NewDecreaseLiquidity(contract, tokenId, liquidity, amount0, amount1)
+	e := NewDecreaseLiquidityEvent(contract, tokenId, liquidity, amount0, amount1)
 	require.Same(t, contract, e.Contract)
 	require.Same(t, tokenId, e.TokenId)
 	require.Same(t, liquidity, e.Liquidity)
@@ -141,14 +142,14 @@ func TestNewDecreaseLiquidityEvent(t *testing.T) {
 	require.Same(t, amount1, e.Amount1)
 }
 
-func TestNewPositionCollect(t *testing.T) {
+func TestNewPositionCollectEvent(t *testing.T) {
 	contract := types.MustNewAddressFromHex("0x1111111111111111111111111111111111111111")
 	recipient := types.MustNewAddressFromHex("0x2222222222222222222222222222222222222222")
 	tokenId := big.NewInt(1)
 	amount0 := big.NewInt(2)
 	amount1 := big.NewInt(3)
 
-	e := NewPositionCollect(contract, recipient, tokenId, amount0, amount1)
+	e := NewPositionCollectEvent(contract, recipient, tokenId, amount0, amount1)
 	require.Same(t, contract, e.Contract)
 	require.Same(t, recipient, e.Recipient)
 	require.Same(t, tokenId, e.TokenId)
@@ -280,4 +281,189 @@ func TestNFTPermitSignRejectsNilDomain(t *testing.T) {
 
 	_, err = p.Sign(nil, key)
 	require.Error(t, err)
+}
+
+func TestNFPMRequestsValidate(t *testing.T) {
+	nfpm := types.MustNewAddressFromHex("0xC36442b4a4522E871399CD717aBDD847Ab11FE88")
+	a := types.MustNewAddressFromHex("0x6667c8dc9fbfec411e7c1ee2b24de960149f930f")
+	key, err := types.NewPrivateKeyFromBig(big.NewInt(0xb1d))
+	require.NoError(t, err)
+	sig, err := key.Sign(core.Keccak256([]byte("permit")))
+	require.NoError(t, err)
+	mintParams := NewMintParams(a, a, big.NewInt(3000), big.NewInt(-60), big.NewInt(60), big.NewInt(1), big.NewInt(2), big.NewInt(0), big.NewInt(0), a, big.NewInt(1_700_000_000))
+	increaseParams := NewIncreaseLiquidityParams(big.NewInt(7), big.NewInt(1), big.NewInt(2), big.NewInt(0), big.NewInt(0), big.NewInt(1_700_000_000))
+	decreaseParams := NewDecreaseLiquidityParams(big.NewInt(7), big.NewInt(100), big.NewInt(0), big.NewInt(0), big.NewInt(1_700_000_000))
+	collectParams := NewCollectParams(big.NewInt(7), a, big.NewInt(5), big.NewInt(6))
+
+	for _, tc := range []struct {
+		name string
+		err  error
+		want string
+	}{
+		{"wETH9 nil", (*WETH9Request)(nil).Validate(), "invalid request: request is nil"},
+		{"wETH9 empty", (&WETH9Request{}).Validate(), "invalid request: contract is nil"},
+		{"wETH9 nil contract", (&WETH9Request{}).Validate(), "invalid request: contract is nil"},
+		{"wETH9 valid", (&WETH9Request{Contract: nfpm}).Validate(), ""},
+		{"totalSupply nil", (*TotalSupplyRequest)(nil).Validate(), "invalid request: request is nil"},
+		{"totalSupply empty", (&TotalSupplyRequest{}).Validate(), "invalid request: contract is nil"},
+		{"totalSupply nil contract", (&TotalSupplyRequest{}).Validate(), "invalid request: contract is nil"},
+		{"totalSupply valid", (&TotalSupplyRequest{Contract: nfpm}).Validate(), ""},
+		{"tokenOfOwnerByIndex nil", (*TokenOfOwnerByIndexRequest)(nil).Validate(), "invalid request: request is nil"},
+		{"tokenOfOwnerByIndex empty", (&TokenOfOwnerByIndexRequest{}).Validate(), "invalid request: contract is nil"},
+		{"tokenOfOwnerByIndex nil contract", (&TokenOfOwnerByIndexRequest{Owner: a, Index: big.NewInt(21)}).Validate(), "invalid request: contract is nil"},
+		{"tokenOfOwnerByIndex nil owner", (&TokenOfOwnerByIndexRequest{Contract: nfpm, Index: big.NewInt(21)}).Validate(), "invalid request: owner is nil"},
+		{"tokenOfOwnerByIndex nil index", (&TokenOfOwnerByIndexRequest{Contract: nfpm, Owner: a}).Validate(), "invalid request: index is nil"},
+		{"tokenOfOwnerByIndex valid", (&TokenOfOwnerByIndexRequest{Contract: nfpm, Owner: a, Index: big.NewInt(21)}).Validate(), ""},
+		{"tokenByIndex nil", (*TokenByIndexRequest)(nil).Validate(), "invalid request: request is nil"},
+		{"tokenByIndex empty", (&TokenByIndexRequest{}).Validate(), "invalid request: contract is nil"},
+		{"tokenByIndex nil contract", (&TokenByIndexRequest{Index: big.NewInt(11)}).Validate(), "invalid request: contract is nil"},
+		{"tokenByIndex nil index", (&TokenByIndexRequest{Contract: nfpm}).Validate(), "invalid request: index is nil"},
+		{"tokenByIndex valid", (&TokenByIndexRequest{Contract: nfpm, Index: big.NewInt(11)}).Validate(), ""},
+		{"permitTypehash nil", (*PermitTypehashRequest)(nil).Validate(), "invalid request: request is nil"},
+		{"permitTypehash empty", (&PermitTypehashRequest{}).Validate(), "invalid request: contract is nil"},
+		{"permitTypehash nil contract", (&PermitTypehashRequest{}).Validate(), "invalid request: contract is nil"},
+		{"permitTypehash valid", (&PermitTypehashRequest{Contract: nfpm}).Validate(), ""},
+		{"domainSeparator nil", (*DomainSeparatorRequest)(nil).Validate(), "invalid request: request is nil"},
+		{"domainSeparator empty", (&DomainSeparatorRequest{}).Validate(), "invalid request: contract is nil"},
+		{"domainSeparator nil contract", (&DomainSeparatorRequest{}).Validate(), "invalid request: contract is nil"},
+		{"domainSeparator valid", (&DomainSeparatorRequest{Contract: nfpm}).Validate(), ""},
+		{"nFPMPositions nil", (*NFPMPositionsRequest)(nil).Validate(), "invalid request: request is nil"},
+		{"nFPMPositions empty", (&NFPMPositionsRequest{}).Validate(), "invalid request: contract is nil"},
+		{"nFPMPositions nil contract", (&NFPMPositionsRequest{TokenID: big.NewInt(11)}).Validate(), "invalid request: contract is nil"},
+		{"nFPMPositions nil tokenID", (&NFPMPositionsRequest{Contract: nfpm}).Validate(), "invalid request: tokenID is nil"},
+		{"nFPMPositions valid", (&NFPMPositionsRequest{Contract: nfpm, TokenID: big.NewInt(11)}).Validate(), ""},
+		{"permit nil", (*PermitRequest)(nil).Validate(), "invalid request: request is nil"},
+		{"permit empty", (&PermitRequest{}).Validate(), "invalid request: contract is nil"},
+		{"permit nil contract", (&PermitRequest{Spender: a, TokenID: big.NewInt(21), Deadline: big.NewInt(31), Sig: sig}).Validate(), "invalid request: contract is nil"},
+		{"permit nil spender", (&PermitRequest{Contract: nfpm, TokenID: big.NewInt(21), Deadline: big.NewInt(31), Sig: sig}).Validate(), "invalid request: spender is nil"},
+		{"permit nil tokenID", (&PermitRequest{Contract: nfpm, Spender: a, Deadline: big.NewInt(31), Sig: sig}).Validate(), "invalid request: tokenID is nil"},
+		{"permit nil deadline", (&PermitRequest{Contract: nfpm, Spender: a, TokenID: big.NewInt(21), Sig: sig}).Validate(), "invalid request: deadline is nil"},
+		{"permit nil sig", (&PermitRequest{Contract: nfpm, Spender: a, TokenID: big.NewInt(21), Deadline: big.NewInt(31)}).Validate(), "invalid request: sig is nil"},
+		{"permit valid", (&PermitRequest{Contract: nfpm, Spender: a, TokenID: big.NewInt(21), Deadline: big.NewInt(31), Sig: sig}).Validate(), ""},
+		{"createAndInitializePoolIfNecessary nil", (*CreateAndInitializePoolIfNecessaryRequest)(nil).Validate(), "invalid request: request is nil"},
+		{"createAndInitializePoolIfNecessary empty", (&CreateAndInitializePoolIfNecessaryRequest{}).Validate(), "invalid request: contract is nil"},
+		{"createAndInitializePoolIfNecessary nil contract", (&CreateAndInitializePoolIfNecessaryRequest{Token0: a, Token1: a, Fee: big.NewInt(31), SqrtPriceX96: big.NewInt(41)}).Validate(), "invalid request: contract is nil"},
+		{"createAndInitializePoolIfNecessary nil token0", (&CreateAndInitializePoolIfNecessaryRequest{Contract: nfpm, Token1: a, Fee: big.NewInt(31), SqrtPriceX96: big.NewInt(41)}).Validate(), "invalid request: token0 is nil"},
+		{"createAndInitializePoolIfNecessary nil token1", (&CreateAndInitializePoolIfNecessaryRequest{Contract: nfpm, Token0: a, Fee: big.NewInt(31), SqrtPriceX96: big.NewInt(41)}).Validate(), "invalid request: token1 is nil"},
+		{"createAndInitializePoolIfNecessary nil fee", (&CreateAndInitializePoolIfNecessaryRequest{Contract: nfpm, Token0: a, Token1: a, SqrtPriceX96: big.NewInt(41)}).Validate(), "invalid request: fee is nil"},
+		{"createAndInitializePoolIfNecessary nil sqrtPriceX96", (&CreateAndInitializePoolIfNecessaryRequest{Contract: nfpm, Token0: a, Token1: a, Fee: big.NewInt(31)}).Validate(), "invalid request: sqrtPriceX96 is nil"},
+		{"createAndInitializePoolIfNecessary valid", (&CreateAndInitializePoolIfNecessaryRequest{Contract: nfpm, Token0: a, Token1: a, Fee: big.NewInt(31), SqrtPriceX96: big.NewInt(41)}).Validate(), ""},
+		{"nFPMUnwrapWETH9 nil", (*NFPMUnwrapWETH9Request)(nil).Validate(), "invalid request: request is nil"},
+		{"nFPMUnwrapWETH9 empty", (&NFPMUnwrapWETH9Request{}).Validate(), "invalid request: contract is nil"},
+		{"nFPMUnwrapWETH9 nil contract", (&NFPMUnwrapWETH9Request{AmountMinimum: big.NewInt(11), Recipient: a}).Validate(), "invalid request: contract is nil"},
+		{"nFPMUnwrapWETH9 nil amountMinimum", (&NFPMUnwrapWETH9Request{Contract: nfpm, Recipient: a}).Validate(), "invalid request: amountMinimum is nil"},
+		{"nFPMUnwrapWETH9 nil recipient", (&NFPMUnwrapWETH9Request{Contract: nfpm, AmountMinimum: big.NewInt(11)}).Validate(), "invalid request: recipient is nil"},
+		{"nFPMUnwrapWETH9 valid", (&NFPMUnwrapWETH9Request{Contract: nfpm, AmountMinimum: big.NewInt(11), Recipient: a}).Validate(), ""},
+		{"nFPMSweepToken nil", (*NFPMSweepTokenRequest)(nil).Validate(), "invalid request: request is nil"},
+		{"nFPMSweepToken empty", (&NFPMSweepTokenRequest{}).Validate(), "invalid request: contract is nil"},
+		{"nFPMSweepToken nil contract", (&NFPMSweepTokenRequest{Token: a, AmountMinimum: big.NewInt(21), Recipient: a}).Validate(), "invalid request: contract is nil"},
+		{"nFPMSweepToken nil token", (&NFPMSweepTokenRequest{Contract: nfpm, AmountMinimum: big.NewInt(21), Recipient: a}).Validate(), "invalid request: token is nil"},
+		{"nFPMSweepToken nil amountMinimum", (&NFPMSweepTokenRequest{Contract: nfpm, Token: a, Recipient: a}).Validate(), "invalid request: amountMinimum is nil"},
+		{"nFPMSweepToken nil recipient", (&NFPMSweepTokenRequest{Contract: nfpm, Token: a, AmountMinimum: big.NewInt(21)}).Validate(), "invalid request: recipient is nil"},
+		{"nFPMSweepToken valid", (&NFPMSweepTokenRequest{Contract: nfpm, Token: a, AmountMinimum: big.NewInt(21), Recipient: a}).Validate(), ""},
+		{"nFPMRefundETH nil", (*NFPMRefundETHRequest)(nil).Validate(), "invalid request: request is nil"},
+		{"nFPMRefundETH empty", (&NFPMRefundETHRequest{}).Validate(), "invalid request: contract is nil"},
+		{"nFPMRefundETH nil contract", (&NFPMRefundETHRequest{}).Validate(), "invalid request: contract is nil"},
+		{"nFPMRefundETH valid", (&NFPMRefundETHRequest{Contract: nfpm}).Validate(), ""},
+		{"nFPMMulticall nil", (*NFPMMulticallRequest)(nil).Validate(), "invalid request: request is nil"},
+		{"nFPMMulticall empty", (&NFPMMulticallRequest{}).Validate(), "invalid request: contract is nil"},
+		{"nFPMMulticall nil contract", (&NFPMMulticallRequest{Data: [][]byte{{0x01}}, NativeAmount: big.NewInt(21)}).Validate(), "invalid request: contract is nil"},
+		{"nFPMMulticall empty data", (&NFPMMulticallRequest{Contract: nfpm, Data: [][]byte{}, NativeAmount: big.NewInt(21)}).Validate(), "invalid request: data is empty"},
+		{"nFPMMulticall valid", (&NFPMMulticallRequest{Contract: nfpm, Data: [][]byte{{0x01}}, NativeAmount: big.NewInt(21)}).Validate(), ""},
+		{"nFPMMulticall nil nativeAmount", (&NFPMMulticallRequest{Contract: nfpm, Data: [][]byte{{0x01}}}).Validate(), ""},
+		{"nFPMMint nil", (*NFPMMintRequest)(nil).Validate(), "invalid request: request is nil"},
+		{"nFPMMint empty", (&NFPMMintRequest{}).Validate(), "invalid request: contract is nil"},
+		{"nFPMMint nil contract", (&NFPMMintRequest{Params: mintParams, NativeAmount: big.NewInt(21)}).Validate(), "invalid request: contract is nil"},
+		{"nFPMMint nil params", (&NFPMMintRequest{Contract: nfpm, NativeAmount: big.NewInt(21)}).Validate(), "invalid request: params is nil"},
+		{"nFPMMint nil params.token0", (&NFPMMintRequest{Contract: nfpm, Params: &MintParams{Token1: mintParams.Token1, Fee: mintParams.Fee, TickLower: mintParams.TickLower, TickUpper: mintParams.TickUpper, Amount0Desired: mintParams.Amount0Desired, Amount1Desired: mintParams.Amount1Desired, Amount0Min: mintParams.Amount0Min, Amount1Min: mintParams.Amount1Min, Recipient: mintParams.Recipient, Deadline: mintParams.Deadline}, NativeAmount: big.NewInt(21)}).Validate(), "invalid request: params.token0 is nil"},
+		{"nFPMMint nil params.token1", (&NFPMMintRequest{Contract: nfpm, Params: &MintParams{Token0: mintParams.Token0, Fee: mintParams.Fee, TickLower: mintParams.TickLower, TickUpper: mintParams.TickUpper, Amount0Desired: mintParams.Amount0Desired, Amount1Desired: mintParams.Amount1Desired, Amount0Min: mintParams.Amount0Min, Amount1Min: mintParams.Amount1Min, Recipient: mintParams.Recipient, Deadline: mintParams.Deadline}, NativeAmount: big.NewInt(21)}).Validate(), "invalid request: params.token1 is nil"},
+		{"nFPMMint nil params.fee", (&NFPMMintRequest{Contract: nfpm, Params: &MintParams{Token0: mintParams.Token0, Token1: mintParams.Token1, TickLower: mintParams.TickLower, TickUpper: mintParams.TickUpper, Amount0Desired: mintParams.Amount0Desired, Amount1Desired: mintParams.Amount1Desired, Amount0Min: mintParams.Amount0Min, Amount1Min: mintParams.Amount1Min, Recipient: mintParams.Recipient, Deadline: mintParams.Deadline}, NativeAmount: big.NewInt(21)}).Validate(), "invalid request: params.fee is nil"},
+		{"nFPMMint nil params.tickLower", (&NFPMMintRequest{Contract: nfpm, Params: &MintParams{Token0: mintParams.Token0, Token1: mintParams.Token1, Fee: mintParams.Fee, TickUpper: mintParams.TickUpper, Amount0Desired: mintParams.Amount0Desired, Amount1Desired: mintParams.Amount1Desired, Amount0Min: mintParams.Amount0Min, Amount1Min: mintParams.Amount1Min, Recipient: mintParams.Recipient, Deadline: mintParams.Deadline}, NativeAmount: big.NewInt(21)}).Validate(), "invalid request: params.tickLower is nil"},
+		{"nFPMMint nil params.tickUpper", (&NFPMMintRequest{Contract: nfpm, Params: &MintParams{Token0: mintParams.Token0, Token1: mintParams.Token1, Fee: mintParams.Fee, TickLower: mintParams.TickLower, Amount0Desired: mintParams.Amount0Desired, Amount1Desired: mintParams.Amount1Desired, Amount0Min: mintParams.Amount0Min, Amount1Min: mintParams.Amount1Min, Recipient: mintParams.Recipient, Deadline: mintParams.Deadline}, NativeAmount: big.NewInt(21)}).Validate(), "invalid request: params.tickUpper is nil"},
+		{"nFPMMint nil params.amount0Desired", (&NFPMMintRequest{Contract: nfpm, Params: &MintParams{Token0: mintParams.Token0, Token1: mintParams.Token1, Fee: mintParams.Fee, TickLower: mintParams.TickLower, TickUpper: mintParams.TickUpper, Amount1Desired: mintParams.Amount1Desired, Amount0Min: mintParams.Amount0Min, Amount1Min: mintParams.Amount1Min, Recipient: mintParams.Recipient, Deadline: mintParams.Deadline}, NativeAmount: big.NewInt(21)}).Validate(), "invalid request: params.amount0Desired is nil"},
+		{"nFPMMint nil params.amount1Desired", (&NFPMMintRequest{Contract: nfpm, Params: &MintParams{Token0: mintParams.Token0, Token1: mintParams.Token1, Fee: mintParams.Fee, TickLower: mintParams.TickLower, TickUpper: mintParams.TickUpper, Amount0Desired: mintParams.Amount0Desired, Amount0Min: mintParams.Amount0Min, Amount1Min: mintParams.Amount1Min, Recipient: mintParams.Recipient, Deadline: mintParams.Deadline}, NativeAmount: big.NewInt(21)}).Validate(), "invalid request: params.amount1Desired is nil"},
+		{"nFPMMint nil params.amount0Min", (&NFPMMintRequest{Contract: nfpm, Params: &MintParams{Token0: mintParams.Token0, Token1: mintParams.Token1, Fee: mintParams.Fee, TickLower: mintParams.TickLower, TickUpper: mintParams.TickUpper, Amount0Desired: mintParams.Amount0Desired, Amount1Desired: mintParams.Amount1Desired, Amount1Min: mintParams.Amount1Min, Recipient: mintParams.Recipient, Deadline: mintParams.Deadline}, NativeAmount: big.NewInt(21)}).Validate(), "invalid request: params.amount0Min is nil"},
+		{"nFPMMint nil params.amount1Min", (&NFPMMintRequest{Contract: nfpm, Params: &MintParams{Token0: mintParams.Token0, Token1: mintParams.Token1, Fee: mintParams.Fee, TickLower: mintParams.TickLower, TickUpper: mintParams.TickUpper, Amount0Desired: mintParams.Amount0Desired, Amount1Desired: mintParams.Amount1Desired, Amount0Min: mintParams.Amount0Min, Recipient: mintParams.Recipient, Deadline: mintParams.Deadline}, NativeAmount: big.NewInt(21)}).Validate(), "invalid request: params.amount1Min is nil"},
+		{"nFPMMint nil params.recipient", (&NFPMMintRequest{Contract: nfpm, Params: &MintParams{Token0: mintParams.Token0, Token1: mintParams.Token1, Fee: mintParams.Fee, TickLower: mintParams.TickLower, TickUpper: mintParams.TickUpper, Amount0Desired: mintParams.Amount0Desired, Amount1Desired: mintParams.Amount1Desired, Amount0Min: mintParams.Amount0Min, Amount1Min: mintParams.Amount1Min, Deadline: mintParams.Deadline}, NativeAmount: big.NewInt(21)}).Validate(), "invalid request: params.recipient is nil"},
+		{"nFPMMint nil params.deadline", (&NFPMMintRequest{Contract: nfpm, Params: &MintParams{Token0: mintParams.Token0, Token1: mintParams.Token1, Fee: mintParams.Fee, TickLower: mintParams.TickLower, TickUpper: mintParams.TickUpper, Amount0Desired: mintParams.Amount0Desired, Amount1Desired: mintParams.Amount1Desired, Amount0Min: mintParams.Amount0Min, Amount1Min: mintParams.Amount1Min, Recipient: mintParams.Recipient}, NativeAmount: big.NewInt(21)}).Validate(), "invalid request: params.deadline is nil"},
+		{"nFPMMint valid", (&NFPMMintRequest{Contract: nfpm, Params: mintParams, NativeAmount: big.NewInt(21)}).Validate(), ""},
+		{"nFPMMint nil nativeAmount", (&NFPMMintRequest{Contract: nfpm, Params: mintParams}).Validate(), ""},
+		{"increaseLiquidity nil", (*IncreaseLiquidityRequest)(nil).Validate(), "invalid request: request is nil"},
+		{"increaseLiquidity empty", (&IncreaseLiquidityRequest{}).Validate(), "invalid request: contract is nil"},
+		{"increaseLiquidity nil contract", (&IncreaseLiquidityRequest{Params: increaseParams, NativeAmount: big.NewInt(21)}).Validate(), "invalid request: contract is nil"},
+		{"increaseLiquidity nil params", (&IncreaseLiquidityRequest{Contract: nfpm, NativeAmount: big.NewInt(21)}).Validate(), "invalid request: params is nil"},
+		{"increaseLiquidity nil params.tokenId", (&IncreaseLiquidityRequest{Contract: nfpm, Params: &IncreaseLiquidityParams{Amount0Desired: increaseParams.Amount0Desired, Amount1Desired: increaseParams.Amount1Desired, Amount0Min: increaseParams.Amount0Min, Amount1Min: increaseParams.Amount1Min, Deadline: increaseParams.Deadline}, NativeAmount: big.NewInt(21)}).Validate(), "invalid request: params.tokenId is nil"},
+		{"increaseLiquidity nil params.amount0Desired", (&IncreaseLiquidityRequest{Contract: nfpm, Params: &IncreaseLiquidityParams{TokenId: increaseParams.TokenId, Amount1Desired: increaseParams.Amount1Desired, Amount0Min: increaseParams.Amount0Min, Amount1Min: increaseParams.Amount1Min, Deadline: increaseParams.Deadline}, NativeAmount: big.NewInt(21)}).Validate(), "invalid request: params.amount0Desired is nil"},
+		{"increaseLiquidity nil params.amount1Desired", (&IncreaseLiquidityRequest{Contract: nfpm, Params: &IncreaseLiquidityParams{TokenId: increaseParams.TokenId, Amount0Desired: increaseParams.Amount0Desired, Amount0Min: increaseParams.Amount0Min, Amount1Min: increaseParams.Amount1Min, Deadline: increaseParams.Deadline}, NativeAmount: big.NewInt(21)}).Validate(), "invalid request: params.amount1Desired is nil"},
+		{"increaseLiquidity nil params.amount0Min", (&IncreaseLiquidityRequest{Contract: nfpm, Params: &IncreaseLiquidityParams{TokenId: increaseParams.TokenId, Amount0Desired: increaseParams.Amount0Desired, Amount1Desired: increaseParams.Amount1Desired, Amount1Min: increaseParams.Amount1Min, Deadline: increaseParams.Deadline}, NativeAmount: big.NewInt(21)}).Validate(), "invalid request: params.amount0Min is nil"},
+		{"increaseLiquidity nil params.amount1Min", (&IncreaseLiquidityRequest{Contract: nfpm, Params: &IncreaseLiquidityParams{TokenId: increaseParams.TokenId, Amount0Desired: increaseParams.Amount0Desired, Amount1Desired: increaseParams.Amount1Desired, Amount0Min: increaseParams.Amount0Min, Deadline: increaseParams.Deadline}, NativeAmount: big.NewInt(21)}).Validate(), "invalid request: params.amount1Min is nil"},
+		{"increaseLiquidity nil params.deadline", (&IncreaseLiquidityRequest{Contract: nfpm, Params: &IncreaseLiquidityParams{TokenId: increaseParams.TokenId, Amount0Desired: increaseParams.Amount0Desired, Amount1Desired: increaseParams.Amount1Desired, Amount0Min: increaseParams.Amount0Min, Amount1Min: increaseParams.Amount1Min}, NativeAmount: big.NewInt(21)}).Validate(), "invalid request: params.deadline is nil"},
+		{"increaseLiquidity valid", (&IncreaseLiquidityRequest{Contract: nfpm, Params: increaseParams, NativeAmount: big.NewInt(21)}).Validate(), ""},
+		{"increaseLiquidity nil nativeAmount", (&IncreaseLiquidityRequest{Contract: nfpm, Params: increaseParams}).Validate(), ""},
+		{"decreaseLiquidity nil", (*DecreaseLiquidityRequest)(nil).Validate(), "invalid request: request is nil"},
+		{"decreaseLiquidity empty", (&DecreaseLiquidityRequest{}).Validate(), "invalid request: contract is nil"},
+		{"decreaseLiquidity nil contract", (&DecreaseLiquidityRequest{Params: decreaseParams}).Validate(), "invalid request: contract is nil"},
+		{"decreaseLiquidity nil params", (&DecreaseLiquidityRequest{Contract: nfpm}).Validate(), "invalid request: params is nil"},
+		{"decreaseLiquidity nil params.tokenId", (&DecreaseLiquidityRequest{Contract: nfpm, Params: &DecreaseLiquidityParams{Liquidity: decreaseParams.Liquidity, Amount0Min: decreaseParams.Amount0Min, Amount1Min: decreaseParams.Amount1Min, Deadline: decreaseParams.Deadline}}).Validate(), "invalid request: params.tokenId is nil"},
+		{"decreaseLiquidity nil params.liquidity", (&DecreaseLiquidityRequest{Contract: nfpm, Params: &DecreaseLiquidityParams{TokenId: decreaseParams.TokenId, Amount0Min: decreaseParams.Amount0Min, Amount1Min: decreaseParams.Amount1Min, Deadline: decreaseParams.Deadline}}).Validate(), "invalid request: params.liquidity is nil"},
+		{"decreaseLiquidity nil params.amount0Min", (&DecreaseLiquidityRequest{Contract: nfpm, Params: &DecreaseLiquidityParams{TokenId: decreaseParams.TokenId, Liquidity: decreaseParams.Liquidity, Amount1Min: decreaseParams.Amount1Min, Deadline: decreaseParams.Deadline}}).Validate(), "invalid request: params.amount0Min is nil"},
+		{"decreaseLiquidity nil params.amount1Min", (&DecreaseLiquidityRequest{Contract: nfpm, Params: &DecreaseLiquidityParams{TokenId: decreaseParams.TokenId, Liquidity: decreaseParams.Liquidity, Amount0Min: decreaseParams.Amount0Min, Deadline: decreaseParams.Deadline}}).Validate(), "invalid request: params.amount1Min is nil"},
+		{"decreaseLiquidity nil params.deadline", (&DecreaseLiquidityRequest{Contract: nfpm, Params: &DecreaseLiquidityParams{TokenId: decreaseParams.TokenId, Liquidity: decreaseParams.Liquidity, Amount0Min: decreaseParams.Amount0Min, Amount1Min: decreaseParams.Amount1Min}}).Validate(), "invalid request: params.deadline is nil"},
+		{"decreaseLiquidity valid", (&DecreaseLiquidityRequest{Contract: nfpm, Params: decreaseParams}).Validate(), ""},
+		{"nFPMCollect nil", (*NFPMCollectRequest)(nil).Validate(), "invalid request: request is nil"},
+		{"nFPMCollect empty", (&NFPMCollectRequest{}).Validate(), "invalid request: contract is nil"},
+		{"nFPMCollect nil contract", (&NFPMCollectRequest{Params: collectParams}).Validate(), "invalid request: contract is nil"},
+		{"nFPMCollect nil params", (&NFPMCollectRequest{Contract: nfpm}).Validate(), "invalid request: params is nil"},
+		{"nFPMCollect nil params.tokenId", (&NFPMCollectRequest{Contract: nfpm, Params: &CollectParams{Recipient: collectParams.Recipient, Amount0Max: collectParams.Amount0Max, Amount1Max: collectParams.Amount1Max}}).Validate(), "invalid request: params.tokenId is nil"},
+		{"nFPMCollect nil params.recipient", (&NFPMCollectRequest{Contract: nfpm, Params: &CollectParams{TokenId: collectParams.TokenId, Amount0Max: collectParams.Amount0Max, Amount1Max: collectParams.Amount1Max}}).Validate(), "invalid request: params.recipient is nil"},
+		{"nFPMCollect nil params.amount0Max", (&NFPMCollectRequest{Contract: nfpm, Params: &CollectParams{TokenId: collectParams.TokenId, Recipient: collectParams.Recipient, Amount1Max: collectParams.Amount1Max}}).Validate(), "invalid request: params.amount0Max is nil"},
+		{"nFPMCollect nil params.amount1Max", (&NFPMCollectRequest{Contract: nfpm, Params: &CollectParams{TokenId: collectParams.TokenId, Recipient: collectParams.Recipient, Amount0Max: collectParams.Amount0Max}}).Validate(), "invalid request: params.amount1Max is nil"},
+		{"nFPMCollect valid", (&NFPMCollectRequest{Contract: nfpm, Params: collectParams}).Validate(), ""},
+		{"nFPMBurn nil", (*NFPMBurnRequest)(nil).Validate(), "invalid request: request is nil"},
+		{"nFPMBurn empty", (&NFPMBurnRequest{}).Validate(), "invalid request: contract is nil"},
+		{"nFPMBurn nil contract", (&NFPMBurnRequest{TokenID: big.NewInt(11)}).Validate(), "invalid request: contract is nil"},
+		{"nFPMBurn nil tokenID", (&NFPMBurnRequest{Contract: nfpm}).Validate(), "invalid request: tokenID is nil"},
+		{"nFPMBurn valid", (&NFPMBurnRequest{Contract: nfpm, TokenID: big.NewInt(11)}).Validate(), ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.want == "" {
+				require.NoError(t, tc.err)
+				return
+			}
+			require.ErrorIs(t, tc.err, bind.ErrInvalidRequest)
+			require.EqualError(t, tc.err, tc.want)
+		})
+	}
+}
+
+func TestNewNFPMRequestsSetFields(t *testing.T) {
+	nfpm := types.MustNewAddressFromHex("0xC36442b4a4522E871399CD717aBDD847Ab11FE88")
+	a := types.MustNewAddressFromHex("0x6667c8dc9fbfec411e7c1ee2b24de960149f930f")
+	key, err := types.NewPrivateKeyFromBig(big.NewInt(0xb1d))
+	require.NoError(t, err)
+	sig, err := key.Sign(core.Keccak256([]byte("permit")))
+	require.NoError(t, err)
+	mintParams := NewMintParams(a, a, big.NewInt(3000), big.NewInt(-60), big.NewInt(60), big.NewInt(1), big.NewInt(2), big.NewInt(0), big.NewInt(0), a, big.NewInt(1_700_000_000))
+	increaseParams := NewIncreaseLiquidityParams(big.NewInt(7), big.NewInt(1), big.NewInt(2), big.NewInt(0), big.NewInt(0), big.NewInt(1_700_000_000))
+	decreaseParams := NewDecreaseLiquidityParams(big.NewInt(7), big.NewInt(100), big.NewInt(0), big.NewInt(0), big.NewInt(1_700_000_000))
+	collectParams := NewCollectParams(big.NewInt(7), a, big.NewInt(5), big.NewInt(6))
+
+	require.Equal(t, &WETH9Request{Contract: nfpm}, NewWETH9Request(nfpm))
+	require.Equal(t, &TotalSupplyRequest{Contract: nfpm}, NewTotalSupplyRequest(nfpm))
+	require.Equal(t, &TokenOfOwnerByIndexRequest{Contract: nfpm, Owner: a, Index: big.NewInt(21)}, NewTokenOfOwnerByIndexRequest(nfpm, a, big.NewInt(21)))
+	require.Equal(t, &TokenByIndexRequest{Contract: nfpm, Index: big.NewInt(11)}, NewTokenByIndexRequest(nfpm, big.NewInt(11)))
+	require.Equal(t, &PermitTypehashRequest{Contract: nfpm}, NewPermitTypehashRequest(nfpm))
+	require.Equal(t, &DomainSeparatorRequest{Contract: nfpm}, NewDomainSeparatorRequest(nfpm))
+	require.Equal(t, &NFPMPositionsRequest{Contract: nfpm, TokenID: big.NewInt(11)}, NewNFPMPositionsRequest(nfpm, big.NewInt(11)))
+	require.Equal(t, &PermitRequest{Contract: nfpm, Spender: a, TokenID: big.NewInt(21), Deadline: big.NewInt(31), Sig: sig}, NewPermitRequest(nfpm, a, big.NewInt(21), big.NewInt(31), sig))
+	require.Equal(t, &CreateAndInitializePoolIfNecessaryRequest{Contract: nfpm, Token0: a, Token1: a, Fee: big.NewInt(31), SqrtPriceX96: big.NewInt(41)}, NewCreateAndInitializePoolIfNecessaryRequest(nfpm, a, a, big.NewInt(31), big.NewInt(41)))
+	require.Equal(t, &NFPMUnwrapWETH9Request{Contract: nfpm, AmountMinimum: big.NewInt(11), Recipient: a}, NewNFPMUnwrapWETH9Request(nfpm, big.NewInt(11), a))
+	require.Equal(t, &NFPMSweepTokenRequest{Contract: nfpm, Token: a, AmountMinimum: big.NewInt(21), Recipient: a}, NewNFPMSweepTokenRequest(nfpm, a, big.NewInt(21), a))
+	require.Equal(t, &NFPMRefundETHRequest{Contract: nfpm}, NewNFPMRefundETHRequest(nfpm))
+	require.Equal(t, &NFPMMulticallRequest{Contract: nfpm, Data: [][]byte{{0x01}}, NativeAmount: big.NewInt(21)}, NewNFPMMulticallRequest(nfpm, [][]byte{{0x01}}, big.NewInt(21)))
+	require.Equal(t, &NFPMMintRequest{Contract: nfpm, Params: mintParams, NativeAmount: big.NewInt(21)}, NewNFPMMintRequest(nfpm, mintParams, big.NewInt(21)))
+	require.Equal(t, &IncreaseLiquidityRequest{Contract: nfpm, Params: increaseParams, NativeAmount: big.NewInt(21)}, NewIncreaseLiquidityRequest(nfpm, increaseParams, big.NewInt(21)))
+	require.Equal(t, &DecreaseLiquidityRequest{Contract: nfpm, Params: decreaseParams}, NewDecreaseLiquidityRequest(nfpm, decreaseParams))
+	require.Equal(t, &NFPMCollectRequest{Contract: nfpm, Params: collectParams}, NewNFPMCollectRequest(nfpm, collectParams))
+	require.Equal(t, &NFPMBurnRequest{Contract: nfpm, TokenID: big.NewInt(11)}, NewNFPMBurnRequest(nfpm, big.NewInt(11)))
 }

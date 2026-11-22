@@ -10,8 +10,8 @@ import (
 )
 
 // ExtractIncreaseLiquidity pulls every IncreaseLiquidity-shaped log out of logs, from any NFPM.
-func ExtractIncreaseLiquidity(logs []tx.Log) ([]IncreaseLiquidity, error) {
-	var increased []IncreaseLiquidity
+func ExtractIncreaseLiquidity(logs []tx.Log) ([]IncreaseLiquidityEvent, error) {
+	var increased []IncreaseLiquidityEvent
 	for i, log := range logs {
 		if len(log.Topics) == 0 || log.Topics[0] == nil {
 			continue
@@ -46,14 +46,14 @@ func ExtractIncreaseLiquidity(logs []tx.Log) ([]IncreaseLiquidity, error) {
 		if !ok {
 			return nil, fmt.Errorf("uniswapv3: extractIncreaseLiquidity: logs[%d]: unexpected decoded type for amount1: %T", i, vals[3])
 		}
-		increased = append(increased, *NewIncreaseLiquidity(log.Address, tokenId, liquidity, amount0, amount1))
+		increased = append(increased, *NewIncreaseLiquidityEvent(log.Address, tokenId, liquidity, amount0, amount1))
 	}
 	return increased, nil
 }
 
 // ExtractDecreaseLiquidity pulls every DecreaseLiquidity-shaped log out of logs, from any NFPM.
-func ExtractDecreaseLiquidity(logs []tx.Log) ([]DecreaseLiquidity, error) {
-	var decreased []DecreaseLiquidity
+func ExtractDecreaseLiquidity(logs []tx.Log) ([]DecreaseLiquidityEvent, error) {
+	var decreased []DecreaseLiquidityEvent
 	for i, log := range logs {
 		if len(log.Topics) == 0 || log.Topics[0] == nil {
 			continue
@@ -88,14 +88,14 @@ func ExtractDecreaseLiquidity(logs []tx.Log) ([]DecreaseLiquidity, error) {
 		if !ok {
 			return nil, fmt.Errorf("uniswapv3: extractDecreaseLiquidity: logs[%d]: unexpected decoded type for amount1: %T", i, vals[3])
 		}
-		decreased = append(decreased, *NewDecreaseLiquidity(log.Address, tokenId, liquidity, amount0, amount1))
+		decreased = append(decreased, *NewDecreaseLiquidityEvent(log.Address, tokenId, liquidity, amount0, amount1))
 	}
 	return decreased, nil
 }
 
 // ExtractPositionCollect pulls every Collect-shaped log out of logs, from any NFPM.
-func ExtractPositionCollect(logs []tx.Log) ([]PositionCollect, error) {
-	var collected []PositionCollect
+func ExtractPositionCollect(logs []tx.Log) ([]PositionCollectEvent, error) {
+	var collected []PositionCollectEvent
 	for i, log := range logs {
 		if len(log.Topics) == 0 || log.Topics[0] == nil {
 			continue
@@ -130,7 +130,7 @@ func ExtractPositionCollect(logs []tx.Log) ([]PositionCollect, error) {
 		if !ok {
 			return nil, fmt.Errorf("uniswapv3: extractPositionCollect: logs[%d]: unexpected decoded type for amount1: %T", i, vals[3])
 		}
-		collected = append(collected, *NewPositionCollect(log.Address, recipient, tokenId, amount0, amount1))
+		collected = append(collected, *NewPositionCollectEvent(log.Address, recipient, tokenId, amount0, amount1))
 	}
 	return collected, nil
 }
