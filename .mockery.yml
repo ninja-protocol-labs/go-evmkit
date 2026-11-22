@@ -36,3 +36,7 @@ packages:
   github.com/ninja-protocol-labs/go-evmkit/protocols/weth:
     config:
       all: true
+  github.com/ninja-protocol-labs/go-evmkit/protocols/permit2:
+    config:
+      all: true
+      filename: "{{.InterfaceName | lower}}.go"

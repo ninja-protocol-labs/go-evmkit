@@ -11,8 +11,8 @@ import (
 
 // ExtractNonceInvalidations pulls every NonceInvalidation-shaped log out of logs, from any
 // Permit2-shaped contract; filter by Contract afterward.
-func ExtractNonceInvalidations(logs []tx.Log) ([]NonceInvalidation, error) {
-	var out []NonceInvalidation
+func ExtractNonceInvalidations(logs []tx.Log) ([]NonceInvalidationEvent, error) {
+	var out []NonceInvalidationEvent
 	for i, log := range logs {
 		if len(log.Topics) == 0 || log.Topics[0] == nil {
 			continue
@@ -51,15 +51,15 @@ func ExtractNonceInvalidations(logs []tx.Log) ([]NonceInvalidation, error) {
 		if !ok {
 			return nil, fmt.Errorf("permit2: extractNonceInvalidations: logs[%d]: unexpected decoded type for oldNonce: %T", i, vals[4])
 		}
-		out = append(out, *NewNonceInvalidation(log.Address, owner, token, spender, newNonce, oldNonce))
+		out = append(out, *NewNonceInvalidationEvent(log.Address, owner, token, spender, newNonce, oldNonce))
 	}
 	return out, nil
 }
 
 // ExtractApprovals pulls every Approval-shaped log out of logs, from any Permit2-shaped contract;
 // filter by Contract afterward.
-func ExtractApprovals(logs []tx.Log) ([]Approval, error) {
-	var out []Approval
+func ExtractApprovals(logs []tx.Log) ([]ApprovalEvent, error) {
+	var out []ApprovalEvent
 	for i, log := range logs {
 		if len(log.Topics) == 0 || log.Topics[0] == nil {
 			continue
@@ -98,15 +98,15 @@ func ExtractApprovals(logs []tx.Log) ([]Approval, error) {
 		if !ok {
 			return nil, fmt.Errorf("permit2: extractApprovals: logs[%d]: unexpected decoded type for expiration: %T", i, vals[4])
 		}
-		out = append(out, *NewApproval(log.Address, owner, token, spender, amount, expiration))
+		out = append(out, *NewApprovalEvent(log.Address, owner, token, spender, amount, expiration))
 	}
 	return out, nil
 }
 
 // ExtractPermits pulls every Permit-shaped log out of logs, from any Permit2-shaped contract;
 // filter by Contract afterward.
-func ExtractPermits(logs []tx.Log) ([]Permit, error) {
-	var out []Permit
+func ExtractPermits(logs []tx.Log) ([]PermitEvent, error) {
+	var out []PermitEvent
 	for i, log := range logs {
 		if len(log.Topics) == 0 || log.Topics[0] == nil {
 			continue
@@ -149,15 +149,15 @@ func ExtractPermits(logs []tx.Log) ([]Permit, error) {
 		if !ok {
 			return nil, fmt.Errorf("permit2: extractPermits: logs[%d]: unexpected decoded type for nonce: %T", i, vals[5])
 		}
-		out = append(out, *NewPermit(log.Address, owner, token, spender, amount, expiration, nonce))
+		out = append(out, *NewPermitEvent(log.Address, owner, token, spender, amount, expiration, nonce))
 	}
 	return out, nil
 }
 
 // ExtractLockdowns pulls every Lockdown-shaped log out of logs, from any Permit2-shaped contract;
 // filter by Contract afterward.
-func ExtractLockdowns(logs []tx.Log) ([]Lockdown, error) {
-	var out []Lockdown
+func ExtractLockdowns(logs []tx.Log) ([]LockdownEvent, error) {
+	var out []LockdownEvent
 	for i, log := range logs {
 		if len(log.Topics) == 0 || log.Topics[0] == nil {
 			continue
@@ -188,15 +188,15 @@ func ExtractLockdowns(logs []tx.Log) ([]Lockdown, error) {
 		if !ok {
 			return nil, fmt.Errorf("permit2: extractLockdowns: logs[%d]: unexpected decoded type for spender: %T", i, vals[2])
 		}
-		out = append(out, *NewLockdown(log.Address, owner, token, spender))
+		out = append(out, *NewLockdownEvent(log.Address, owner, token, spender))
 	}
 	return out, nil
 }
 
 // ExtractUnorderedNonceInvalidations pulls every UnorderedNonceInvalidation-shaped log out of
 // logs, from any Permit2-shaped contract; filter by Contract afterward.
-func ExtractUnorderedNonceInvalidations(logs []tx.Log) ([]UnorderedNonceInvalidation, error) {
-	var out []UnorderedNonceInvalidation
+func ExtractUnorderedNonceInvalidations(logs []tx.Log) ([]UnorderedNonceInvalidationEvent, error) {
+	var out []UnorderedNonceInvalidationEvent
 	for i, log := range logs {
 		if len(log.Topics) == 0 || log.Topics[0] == nil {
 			continue
@@ -227,7 +227,7 @@ func ExtractUnorderedNonceInvalidations(logs []tx.Log) ([]UnorderedNonceInvalida
 		if !ok {
 			return nil, fmt.Errorf("permit2: extractUnorderedNonceInvalidations: logs[%d]: unexpected decoded type for mask: %T", i, vals[2])
 		}
-		out = append(out, *NewUnorderedNonceInvalidation(log.Address, owner, word, mask))
+		out = append(out, *NewUnorderedNonceInvalidationEvent(log.Address, owner, word, mask))
 	}
 	return out, nil
 }

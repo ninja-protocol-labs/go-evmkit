@@ -222,17 +222,11 @@ func (s *QuoterSuite) SetupSuite() {
 		}
 
 		expiration := big.NewInt(time.Now().Add(time.Duration(s.Permit2ApproveDuration.Int64()) * time.Second).Unix())
-		permit2Params := permit2.NewApproveParams(s.permit2Contract, s.from, token, s.positionManagerContract, s.Permit2ApproveAmount, expiration)
-
-		unsignedPermit2Approve, err := s.permit2.CreateApprove(s.ctx, tx.NewDynamicFeeBuilder(), permit2Params)
+		permit2ApproveTx, permit2ApproveHash, err := s.permit2.Approve(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), permit2.NewApproveRequest(s.permit2Contract, token, s.positionManagerContract, s.Permit2ApproveAmount, expiration))
 		s.Require().NoError(err)
-		s.Require().NoError(unsignedPermit2Approve.Sign(s.signer))
 		s.mu.Lock()
-		s.totalFee.Add(s.totalFee, unsignedPermit2Approve.MaxFee())
+		s.totalFee.Add(s.totalFee, permit2ApproveTx.MaxFee())
 		s.mu.Unlock()
-
-		permit2ApproveHash, err := s.permit2.Approve(s.ctx, unsignedPermit2Approve)
-		s.Require().NoError(err)
 
 		permit2ApproveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, permit2ApproveHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
 		s.Require().NoError(err)

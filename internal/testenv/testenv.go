@@ -97,6 +97,7 @@ type Config struct {
 	Multicall           string
 	NicksFactory        string
 	WETH                string
+	Permit2             string
 	ReceiptPollInterval time.Duration
 	ReceiptTimeout      time.Duration
 }
