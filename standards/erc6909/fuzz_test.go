@@ -1,14 +1,21 @@
 package erc6909
 
 import (
+	"context"
 	"math/big"
 	"testing"
 
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/ninja-protocol-labs/go-evmkit/bind"
+	"github.com/ninja-protocol-labs/go-evmkit/core"
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
+	"github.com/ninja-protocol-labs/go-evmkit/rpc"
+	"github.com/ninja-protocol-labs/go-evmkit/rpc/mocks"
 	"github.com/ninja-protocol-labs/go-evmkit/tx"
+	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
 // go test -run '^$' -fuzz '^FuzzExtractOperatorSetsDoesNotPanic$' -fuzztime=10s ./standards/erc6909
@@ -198,7 +205,7 @@ func FuzzExtractTransfersRoundTrip(f *testing.F) {
 		t0, ok := transferEvent.Topic0()
 		require.True(t, ok)
 
-		data, err := abi.Pack(abi.Types{abi.Address, abi.Uint256}, caller, amount)
+		data, err := abi.Pack(abi.NewTypes(abi.Address, abi.Uint256), caller, amount)
 		require.NoError(t, err)
 
 		logs := []tx.Log{{
@@ -248,7 +255,7 @@ func FuzzExtractApprovalsRoundTrip(f *testing.F) {
 		t0, ok := approvalEvent.Topic0()
 		require.True(t, ok)
 
-		data, err := abi.Pack(abi.Types{abi.Uint256}, amount)
+		data, err := abi.Pack(abi.NewTypes(abi.Uint256), amount)
 		require.NoError(t, err)
 
 		logs := []tx.Log{{
@@ -288,7 +295,7 @@ func FuzzExtractDecimalsUpdatedRoundTrip(f *testing.F) {
 		t0, ok := decimalsUpdatedEvent.Topic0()
 		require.True(t, ok)
 
-		data, err := abi.Pack(abi.Types{abi.Uint8}, decimals)
+		data, err := abi.Pack(abi.NewTypes(abi.Uint8), decimals)
 		require.NoError(t, err)
 
 		logs := []tx.Log{{
@@ -324,7 +331,7 @@ func FuzzExtractNameUpdatedRoundTrip(f *testing.F) {
 		t0, ok := nameUpdatedEvent.Topic0()
 		require.True(t, ok)
 
-		data, err := abi.Pack(abi.Types{abi.String}, name)
+		data, err := abi.Pack(abi.NewTypes(abi.String), name)
 		require.NoError(t, err)
 
 		logs := []tx.Log{{
@@ -353,19 +360,19 @@ func FuzzSimpleDecodersDoNotPanic(f *testing.F) {
 	f.Add(make([]byte, 64))
 	f.Add(make([]byte, 96))
 
-	uintData, err := abi.Pack(abi.Types{abi.Uint256}, big.NewInt(123456789))
+	uintData, err := abi.Pack(abi.NewTypes(abi.Uint256), big.NewInt(123456789))
 	require.NoError(f, err)
 	f.Add(uintData)
 
-	boolData, err := abi.Pack(abi.Types{abi.Bool}, true)
+	boolData, err := abi.Pack(abi.NewTypes(abi.Bool), true)
 	require.NoError(f, err)
 	f.Add(boolData)
 
-	uint8Data, err := abi.Pack(abi.Types{abi.Uint8}, uint8(18))
+	uint8Data, err := abi.Pack(abi.NewTypes(abi.Uint8), uint8(18))
 	require.NoError(f, err)
 	f.Add(uint8Data)
 
-	strData, err := abi.Pack(abi.Types{abi.String}, "evmkit test token")
+	strData, err := abi.Pack(abi.NewTypes(abi.String), "evmkit test token")
 	require.NoError(f, err)
 	f.Add(strData)
 
@@ -394,7 +401,7 @@ func FuzzDecodeBalanceOfRoundTrip(f *testing.F) {
 		}
 		value := new(big.Int).SetBytes(clamped)
 
-		data, err := abi.Pack(abi.Types{abi.Uint256}, value)
+		data, err := abi.Pack(abi.NewTypes(abi.Uint256), value)
 		require.NoError(t, err)
 
 		got, err := DecodeBalanceOf(data)
@@ -416,7 +423,7 @@ func FuzzDecodeAllowanceRoundTrip(f *testing.F) {
 		}
 		value := new(big.Int).SetBytes(clamped)
 
-		data, err := abi.Pack(abi.Types{abi.Uint256}, value)
+		data, err := abi.Pack(abi.NewTypes(abi.Uint256), value)
 		require.NoError(t, err)
 
 		got, err := DecodeAllowance(data)
@@ -432,7 +439,7 @@ func FuzzDecodeDecimalsRoundTrip(f *testing.F) {
 	f.Add(uint8(255))
 
 	f.Fuzz(func(t *testing.T, decimals uint8) {
-		data, err := abi.Pack(abi.Types{abi.Uint8}, decimals)
+		data, err := abi.Pack(abi.NewTypes(abi.Uint8), decimals)
 		require.NoError(t, err)
 
 		got, err := DecodeDecimals(data)
@@ -448,7 +455,7 @@ func FuzzDecodeNameRoundTrip(f *testing.F) {
 	f.Add("\x00\x01\xff unicode éè")
 
 	f.Fuzz(func(t *testing.T, name string) {
-		data, err := abi.Pack(abi.Types{abi.String}, name)
+		data, err := abi.Pack(abi.NewTypes(abi.String), name)
 		require.NoError(t, err)
 
 		got, err := DecodeName(data)
@@ -464,7 +471,7 @@ func FuzzDecodeSymbolRoundTrip(f *testing.F) {
 	f.Add("\x00\x01\xff unicode éè")
 
 	f.Fuzz(func(t *testing.T, symbol string) {
-		data, err := abi.Pack(abi.Types{abi.String}, symbol)
+		data, err := abi.Pack(abi.NewTypes(abi.String), symbol)
 		require.NoError(t, err)
 
 		got, err := DecodeSymbol(data)
@@ -713,5 +720,165 @@ func FuzzEncodeDecimalsRoundTrip(f *testing.F) {
 		vals, err := decimalsFn.DecodeCall(data)
 		require.NoError(t, err)
 		require.Zero(t, id.Cmp(vals[0].(*big.Int)))
+	})
+}
+
+// go test -run '^$' -fuzz '^FuzzTransferFromRequestValidate$' -fuzztime=10s ./standards/erc6909
+func FuzzTransferFromRequestValidate(f *testing.F) {
+	f.Add(uint8(0))
+	f.Add(uint8(0x1f))
+	f.Add(uint8(0x20))
+	f.Add(uint8(0x0f))
+
+	contract := types.MustNewAddressFromHex("0xbc4ca0eda7647a8ab7c2061c2e118a18a936f13d")
+	a := types.MustNewAddressFromHex("0x6667c8dc9fbfec411e7c1ee2b24de960149f930f")
+
+	f.Fuzz(func(t *testing.T, mask uint8) {
+		var req *TransferFromRequest
+		if mask&0x20 == 0 {
+			req = &TransferFromRequest{}
+			if mask&0x01 != 0 {
+				req.Contract = contract
+			}
+			if mask&0x02 != 0 {
+				req.Sender = a
+			}
+			if mask&0x04 != 0 {
+				req.Receiver = a
+			}
+			if mask&0x08 != 0 {
+				req.ID = big.NewInt(int64(mask))
+			}
+			if mask&0x10 != 0 {
+				req.Amount = big.NewInt(0)
+			}
+		}
+
+		want := ""
+		switch {
+		case req == nil:
+			want = "invalid request: request is nil"
+		case req.Contract == nil:
+			want = "invalid request: contract is nil"
+		case req.Sender == nil:
+			want = "invalid request: sender is nil"
+		case req.Receiver == nil:
+			want = "invalid request: receiver is nil"
+		case req.ID == nil:
+			want = "invalid request: id is nil"
+		case req.Amount == nil:
+			want = "invalid request: amount is nil"
+		}
+
+		err := req.Validate()
+		if want == "" {
+			require.NoError(t, err)
+			return
+		}
+		require.ErrorIs(t, err, bind.ErrInvalidRequest)
+		require.EqualError(t, err, want)
+	})
+}
+
+// go test -run '^$' -fuzz '^FuzzTransferFromThroughClient$' -fuzztime=10s ./standards/erc6909
+func FuzzTransferFromThroughClient(f *testing.F) {
+	f.Add([]byte{}, []byte{}, []byte{}, []byte{}, uint64(0), true)
+	f.Add([]byte{0x01}, []byte{0x02}, []byte{0x07}, []byte{0x01, 0x00}, uint64(42), false)
+	f.Add(make([]byte, 20), make([]byte, 20), make([]byte, 32), make([]byte, 32), ^uint64(0)-1, true)
+
+	key, err := types.NewPrivateKeyFromBig(big.NewInt(0xb1d))
+	require.NoError(f, err)
+	signer := core.PubkeyToAddress(key.PublicKey())
+	contract := types.MustNewAddressFromHex("0xbc4ca0eda7647a8ab7c2061c2e118a18a936f13d")
+
+	f.Fuzz(func(t *testing.T, senderRaw, receiverRaw, idRaw, amountRaw []byte, nonce uint64, dynamic bool) {
+		if len(idRaw) > 32 {
+			idRaw = idRaw[len(idRaw)-32:]
+		}
+		if len(amountRaw) > 32 {
+			amountRaw = amountRaw[len(amountRaw)-32:]
+		}
+		sender := types.NewAddressFromBytes(senderRaw)
+		receiver := types.NewAddressFromBytes(receiverRaw)
+		id := new(big.Int).SetBytes(idRaw)
+		amount := new(big.Int).SetBytes(amountRaw)
+
+		calldata, err := EncodeTransferFrom(sender, receiver, id, amount)
+		require.NoError(t, err)
+
+		var builder tx.Builder
+		if dynamic {
+			builder = tx.NewDynamicFeeBuilder()
+		} else {
+			builder = tx.NewLegacyBuilder()
+		}
+		builder.ChainID(big.NewInt(1))
+		builder.Nonce(nonce)
+		builder.Limit(120_000)
+		builder.Price(big.NewInt(30_000_000_000), big.NewInt(1_000_000_000))
+
+		var raw []byte
+		c := mocks.NewClient(t)
+		c.EXPECT().Call(mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, e rpc.Element) error {
+			raw, err = encoding.Hex.Decode(e.Params.([]any)[0].(string))
+			require.NoError(t, err)
+			*e.Result.(*string) = core.Keccak256(raw).String()
+			return nil
+		}).Once()
+
+		signed, hash, err := New(c).TransferFrom(t.Context(), bind.NewTransactOptions(key, builder), NewTransferFromRequest(contract, sender, receiver, id, amount))
+		require.NoError(t, err)
+		require.True(t, hash.Equal(core.Keccak256(raw)))
+		require.Equal(t, nonce, signed.AddressNonce())
+
+		decoded, err := core.DecodeTransaction(raw)
+		require.NoError(t, err)
+		from, err := decoded.Sender()
+		require.NoError(t, err)
+		require.True(t, from.Equal(signer))
+
+		var gotTo *types.Address
+		var gotData []byte
+		switch v := decoded.(type) {
+		case *core.DynamicFeeTx:
+			require.True(t, dynamic)
+			gotTo, gotData = v.To, v.Data
+		case *core.LegacyTx:
+			require.False(t, dynamic)
+			gotTo, gotData = v.To, v.Data
+		default:
+			t.Fatalf("unexpected tx type %T", decoded)
+		}
+		require.True(t, gotTo.Equal(contract))
+		require.Equal(t, calldata, gotData)
+	})
+}
+
+// go test -run '^$' -fuzz '^FuzzReadsSurviveArbitraryResult$' -fuzztime=10s ./standards/erc6909
+func FuzzReadsSurviveArbitraryResult(f *testing.F) {
+	f.Add([]byte{})
+	f.Add(make([]byte, 31))
+	f.Add(make([]byte, 32))
+	f.Add(make([]byte, 96))
+
+	contract := types.MustNewAddressFromHex("0xbc4ca0eda7647a8ab7c2061c2e118a18a936f13d")
+	a := types.MustNewAddressFromHex("0x6667c8dc9fbfec411e7c1ee2b24de960149f930f")
+
+	f.Fuzz(func(t *testing.T, result []byte) {
+		c := mocks.NewClient(t)
+		c.EXPECT().Call(mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, e rpc.Element) error {
+			*e.Result.(*string) = encoding.Hex.EncodePrefixed(result)
+			return nil
+		}).Times(6)
+		e := New(c)
+
+		n, err := e.BalanceOf(t.Context(), nil, NewBalanceOfRequest(contract, a, big.NewInt(1)))
+		require.True(t, (err == nil) != (n == nil))
+		n, err = e.Allowance(t.Context(), nil, NewAllowanceRequest(contract, a, a, big.NewInt(1)))
+		require.True(t, (err == nil) != (n == nil))
+		_, _ = e.IsOperator(t.Context(), nil, NewIsOperatorRequest(contract, a, a))
+		_, _ = e.Name(t.Context(), nil, NewNameRequest(contract, big.NewInt(1)))
+		_, _ = e.Decimals(t.Context(), nil, NewDecimalsRequest(contract, big.NewInt(1)))
+		_, _ = e.CallTransferFrom(t.Context(), nil, NewTransferFromRequest(contract, a, a, big.NewInt(1), big.NewInt(1)))
 	})
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 )
 
 type NetworkType int
@@ -88,13 +89,15 @@ func (n Network) String() string {
 }
 
 type Config struct {
-	ChainID            int
-	NativeSymbol       string
-	NativeDecimals     int
-	RPCURL             string
-	ActorPrivateKeyHex string
-	Multicall          string
-	NicksFactory       string
+	ChainID             int
+	NativeSymbol        string
+	NativeDecimals      int
+	RPCURL              string
+	ActorPrivateKeyHex  string
+	Multicall           string
+	NicksFactory        string
+	ReceiptPollInterval time.Duration
+	ReceiptTimeout      time.Duration
 }
 
 // MustLoad returns n's config on nt with the API key and actor key filled in, panicking when

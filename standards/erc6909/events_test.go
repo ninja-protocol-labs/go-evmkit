@@ -21,7 +21,7 @@ var (
 func TestExtractOperatorSetsSampleReceipt(t *testing.T) {
 	operatorSetTopic, ok := operatorSetEvent.Topic0()
 	require.True(t, ok)
-	operatorSetData, err := abi.Pack(abi.Types{abi.Bool}, true)
+	operatorSetData, err := abi.Pack(abi.NewTypes(abi.Bool), true)
 	require.NoError(t, err)
 
 	logs := []tx.Log{
@@ -48,7 +48,7 @@ func TestExtractOperatorSetsSampleReceipt(t *testing.T) {
 func TestExtractApprovalsSampleReceipt(t *testing.T) {
 	approvalTopic, ok := approvalEvent.Topic0()
 	require.True(t, ok)
-	approvalData, err := abi.Pack(abi.Types{abi.Uint256}, big.NewInt(100))
+	approvalData, err := abi.Pack(abi.NewTypes(abi.Uint256), big.NewInt(100))
 	require.NoError(t, err)
 
 	logs := []tx.Log{
@@ -77,7 +77,7 @@ func TestExtractApprovalsSampleReceipt(t *testing.T) {
 func TestExtractTransfersSampleReceipt(t *testing.T) {
 	transferTopic, ok := transferEvent.Topic0()
 	require.True(t, ok)
-	transferData, err := abi.Pack(abi.Types{abi.Address, abi.Uint256}, testAddr1, big.NewInt(7))
+	transferData, err := abi.Pack(abi.NewTypes(abi.Address, abi.Uint256), testAddr1, big.NewInt(7))
 	require.NoError(t, err)
 
 	logs := []tx.Log{
@@ -107,7 +107,7 @@ func TestExtractTransfersSampleReceipt(t *testing.T) {
 func TestExtractNameUpdatedSampleReceipt(t *testing.T) {
 	nameUpdatedTopic, ok := nameUpdatedEvent.Topic0()
 	require.True(t, ok)
-	nameUpdatedData, err := abi.Pack(abi.Types{abi.String}, "evmkit test token")
+	nameUpdatedData, err := abi.Pack(abi.NewTypes(abi.String), "evmkit test token")
 	require.NoError(t, err)
 
 	logs := []tx.Log{
@@ -132,7 +132,7 @@ func TestExtractNameUpdatedSampleReceipt(t *testing.T) {
 func TestExtractSymbolUpdatedSampleReceipt(t *testing.T) {
 	symbolUpdatedTopic, ok := symbolUpdatedEvent.Topic0()
 	require.True(t, ok)
-	symbolUpdatedData, err := abi.Pack(abi.Types{abi.String}, "EVK6909")
+	symbolUpdatedData, err := abi.Pack(abi.NewTypes(abi.String), "EVK6909")
 	require.NoError(t, err)
 
 	logs := []tx.Log{
@@ -157,7 +157,7 @@ func TestExtractSymbolUpdatedSampleReceipt(t *testing.T) {
 func TestExtractDecimalsUpdatedSampleReceipt(t *testing.T) {
 	decimalsUpdatedTopic, ok := decimalsUpdatedEvent.Topic0()
 	require.True(t, ok)
-	decimalsUpdatedData, err := abi.Pack(abi.Types{abi.Uint8}, uint8(18))
+	decimalsUpdatedData, err := abi.Pack(abi.NewTypes(abi.Uint8), uint8(18))
 	require.NoError(t, err)
 
 	logs := []tx.Log{

@@ -10,8 +10,8 @@ import (
 )
 
 // ExtractOperatorSets pulls every OperatorSet-shaped log out of logs, from any contract; filter by Contract afterward.
-func ExtractOperatorSets(logs []tx.Log) ([]OperatorSet, error) {
-	var operatorSets []OperatorSet
+func ExtractOperatorSets(logs []tx.Log) ([]OperatorSetEvent, error) {
+	var operatorSets []OperatorSetEvent
 	for i, log := range logs {
 		if len(log.Topics) == 0 || log.Topics[0] == nil {
 			continue
@@ -42,14 +42,14 @@ func ExtractOperatorSets(logs []tx.Log) ([]OperatorSet, error) {
 		if !ok {
 			return nil, fmt.Errorf("erc6909: extractOperatorSets: logs[%d]: unexpected decoded type for approved: %T", i, vals[2])
 		}
-		operatorSets = append(operatorSets, *NewOperatorSet(log.Address, owner, operator, approved))
+		operatorSets = append(operatorSets, *NewOperatorSetEvent(log.Address, owner, operator, approved))
 	}
 	return operatorSets, nil
 }
 
 // ExtractApprovals pulls every Approval-shaped log out of logs; see ExtractOperatorSets.
-func ExtractApprovals(logs []tx.Log) ([]Approval, error) {
-	var approvals []Approval
+func ExtractApprovals(logs []tx.Log) ([]ApprovalEvent, error) {
+	var approvals []ApprovalEvent
 	for i, log := range logs {
 		if len(log.Topics) == 0 || log.Topics[0] == nil {
 			continue
@@ -84,14 +84,14 @@ func ExtractApprovals(logs []tx.Log) ([]Approval, error) {
 		if !ok {
 			return nil, fmt.Errorf("erc6909: extractApprovals: logs[%d]: unexpected decoded type for amount: %T", i, vals[3])
 		}
-		approvals = append(approvals, *NewApproval(log.Address, owner, spender, id, amount))
+		approvals = append(approvals, *NewApprovalEvent(log.Address, owner, spender, id, amount))
 	}
 	return approvals, nil
 }
 
 // ExtractTransfers pulls every Transfer-shaped log out of logs; see ExtractOperatorSets.
-func ExtractTransfers(logs []tx.Log) ([]Transfer, error) {
-	var transfers []Transfer
+func ExtractTransfers(logs []tx.Log) ([]TransferEvent, error) {
+	var transfers []TransferEvent
 	for i, log := range logs {
 		if len(log.Topics) == 0 || log.Topics[0] == nil {
 			continue
@@ -130,14 +130,14 @@ func ExtractTransfers(logs []tx.Log) ([]Transfer, error) {
 		if !ok {
 			return nil, fmt.Errorf("erc6909: extractTransfers: logs[%d]: unexpected decoded type for amount: %T", i, vals[4])
 		}
-		transfers = append(transfers, *NewTransfer(log.Address, caller, sender, receiver, id, amount))
+		transfers = append(transfers, *NewTransferEvent(log.Address, caller, sender, receiver, id, amount))
 	}
 	return transfers, nil
 }
 
 // ExtractNameUpdated pulls every ERC6909NameUpdated-shaped log out of logs; see ExtractOperatorSets.
-func ExtractNameUpdated(logs []tx.Log) ([]NameUpdated, error) {
-	var updates []NameUpdated
+func ExtractNameUpdated(logs []tx.Log) ([]NameUpdatedEvent, error) {
+	var updates []NameUpdatedEvent
 	for i, log := range logs {
 		if len(log.Topics) == 0 || log.Topics[0] == nil {
 			continue
@@ -164,14 +164,14 @@ func ExtractNameUpdated(logs []tx.Log) ([]NameUpdated, error) {
 		if !ok {
 			return nil, fmt.Errorf("erc6909: extractNameUpdated: logs[%d]: unexpected decoded type for newName: %T", i, vals[1])
 		}
-		updates = append(updates, *NewNameUpdated(log.Address, id, newName))
+		updates = append(updates, *NewNameUpdatedEvent(log.Address, id, newName))
 	}
 	return updates, nil
 }
 
 // ExtractSymbolUpdated pulls every ERC6909SymbolUpdated-shaped log out of logs; see ExtractOperatorSets.
-func ExtractSymbolUpdated(logs []tx.Log) ([]SymbolUpdated, error) {
-	var updates []SymbolUpdated
+func ExtractSymbolUpdated(logs []tx.Log) ([]SymbolUpdatedEvent, error) {
+	var updates []SymbolUpdatedEvent
 	for i, log := range logs {
 		if len(log.Topics) == 0 || log.Topics[0] == nil {
 			continue
@@ -198,14 +198,14 @@ func ExtractSymbolUpdated(logs []tx.Log) ([]SymbolUpdated, error) {
 		if !ok {
 			return nil, fmt.Errorf("erc6909: extractSymbolUpdated: logs[%d]: unexpected decoded type for newSymbol: %T", i, vals[1])
 		}
-		updates = append(updates, *NewSymbolUpdated(log.Address, id, newSymbol))
+		updates = append(updates, *NewSymbolUpdatedEvent(log.Address, id, newSymbol))
 	}
 	return updates, nil
 }
 
 // ExtractDecimalsUpdated pulls every ERC6909DecimalsUpdated-shaped log out of logs; see ExtractOperatorSets.
-func ExtractDecimalsUpdated(logs []tx.Log) ([]DecimalsUpdated, error) {
-	var updates []DecimalsUpdated
+func ExtractDecimalsUpdated(logs []tx.Log) ([]DecimalsUpdatedEvent, error) {
+	var updates []DecimalsUpdatedEvent
 	for i, log := range logs {
 		if len(log.Topics) == 0 || log.Topics[0] == nil {
 			continue
@@ -232,7 +232,7 @@ func ExtractDecimalsUpdated(logs []tx.Log) ([]DecimalsUpdated, error) {
 		if !ok {
 			return nil, fmt.Errorf("erc6909: extractDecimalsUpdated: logs[%d]: unexpected decoded type for newDecimals: %T", i, vals[1])
 		}
-		updates = append(updates, *NewDecimalsUpdated(log.Address, id, newDecimals))
+		updates = append(updates, *NewDecimalsUpdatedEvent(log.Address, id, newDecimals))
 	}
 	return updates, nil
 }
