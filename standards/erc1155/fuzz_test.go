@@ -1,15 +1,22 @@
 package erc1155
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 	"testing"
 
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/ninja-protocol-labs/go-evmkit/bind"
+	"github.com/ninja-protocol-labs/go-evmkit/core"
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
+	"github.com/ninja-protocol-labs/go-evmkit/rpc"
+	"github.com/ninja-protocol-labs/go-evmkit/rpc/mocks"
+	"github.com/ninja-protocol-labs/go-evmkit/tx"
+	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
 var (
@@ -366,5 +373,150 @@ func FuzzSafeBatchTransferFromRequestValidate(f *testing.F) {
 		}
 		require.ErrorIs(t, err, bind.ErrInvalidRequest)
 		require.EqualError(t, err, want)
+	})
+}
+
+// go test -run '^$' -fuzz '^FuzzBalanceOfBatchThroughClient$' -fuzztime=10s ./standards/erc1155
+func FuzzBalanceOfBatchThroughClient(f *testing.F) {
+	f.Add([]byte{0x01}, uint8(1))
+	f.Add([]byte{0xaa, 0xbb}, uint8(3))
+	f.Add(make([]byte, 32), uint8(7))
+
+	f.Fuzz(func(t *testing.T, seed []byte, n uint8) {
+		n = n%8 + 1
+		accounts := make([]*types.Address, n)
+		ids := make([]*big.Int, n)
+		amounts := make([]*big.Int, n)
+		for i := range accounts {
+			accountRaw := append(append([]byte{}, seed...), byte(i), 0xa0)
+			accounts[i] = types.NewAddressFromBytes(accountRaw)
+			idRaw := append(append([]byte{}, seed...), byte(i), 0x1d)
+			if len(idRaw) > 32 {
+				idRaw = idRaw[len(idRaw)-32:]
+			}
+			ids[i] = new(big.Int).SetBytes(idRaw)
+			amountRaw := append(append([]byte{}, seed...), byte(i), 0xa3)
+			if len(amountRaw) > 32 {
+				amountRaw = amountRaw[len(amountRaw)-32:]
+			}
+			amounts[i] = new(big.Int).SetBytes(amountRaw)
+		}
+
+		calldata, err := EncodeBalanceOfBatch(accounts, ids)
+		require.NoError(t, err)
+		result, err := abi.Pack(abi.NewTypes(abi.Slice(abi.Uint256)), amounts)
+		require.NoError(t, err)
+
+		c := mocks.NewClient(t)
+		c.EXPECT().Call(mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, e rpc.Element) error {
+			call := e.Params.([]any)[0].(map[string]any)
+			require.Equal(t, fuzzContract1.String(), call["to"])
+			require.Equal(t, encoding.Hex.EncodePrefixed(calldata), call["data"])
+			*e.Result.(*string) = encoding.Hex.EncodePrefixed(result)
+			return nil
+		}).Once()
+
+		got, err := New(c).BalanceOfBatch(t.Context(), nil, NewBalanceOfBatchRequest(fuzzContract1, accounts, ids))
+		require.NoError(t, err)
+		require.Len(t, got, int(n))
+		for i := range got {
+			require.Zero(t, amounts[i].Cmp(got[i]))
+		}
+	})
+}
+
+// go test -run '^$' -fuzz '^FuzzSafeBatchTransferFromThroughClient$' -fuzztime=10s ./standards/erc1155
+func FuzzSafeBatchTransferFromThroughClient(f *testing.F) {
+	f.Add([]byte{0x01}, uint8(1), []byte{}, uint64(0))
+	f.Add([]byte{0xaa, 0xbb}, uint8(3), []byte{0xca, 0xfe}, uint64(7))
+	f.Add(make([]byte, 32), uint8(7), make([]byte, 200), ^uint64(0)-1)
+
+	key, err := types.NewPrivateKeyFromBig(big.NewInt(0xb1d))
+	require.NoError(f, err)
+	sender := core.PubkeyToAddress(key.PublicKey())
+
+	f.Fuzz(func(t *testing.T, seed []byte, n uint8, data []byte, nonce uint64) {
+		n = n%8 + 1
+		ids := make([]*big.Int, n)
+		amounts := make([]*big.Int, n)
+		for i := range ids {
+			idRaw := append(append([]byte{}, seed...), byte(i), 0x1d)
+			if len(idRaw) > 32 {
+				idRaw = idRaw[len(idRaw)-32:]
+			}
+			ids[i] = new(big.Int).SetBytes(idRaw)
+			amountRaw := append(append([]byte{}, seed...), byte(i), 0xa3)
+			if len(amountRaw) > 32 {
+				amountRaw = amountRaw[len(amountRaw)-32:]
+			}
+			amounts[i] = new(big.Int).SetBytes(amountRaw)
+		}
+
+		calldata, err := EncodeSafeBatchTransferFrom(fuzzAddr1, fuzzAddr2, ids, amounts, data)
+		require.NoError(t, err)
+
+		builder := tx.NewDynamicFeeBuilder()
+		builder.ChainID(big.NewInt(1))
+		builder.Nonce(nonce)
+		builder.Limit(500_000)
+		builder.Price(big.NewInt(30_000_000_000), big.NewInt(1_000_000_000))
+
+		var raw []byte
+		c := mocks.NewClient(t)
+		c.EXPECT().Call(mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, e rpc.Element) error {
+			raw, err = encoding.Hex.Decode(e.Params.([]any)[0].(string))
+			require.NoError(t, err)
+			*e.Result.(*string) = core.Keccak256(raw).String()
+			return nil
+		}).Once()
+
+		signed, hash, err := New(c).SafeBatchTransferFrom(t.Context(), bind.NewTransactOptions(key, builder), NewSafeBatchTransferFromRequest(fuzzContract1, fuzzAddr1, fuzzAddr2, ids, amounts, data))
+		require.NoError(t, err)
+		require.True(t, hash.Equal(core.Keccak256(raw)))
+		require.Equal(t, nonce, signed.AddressNonce())
+
+		decoded, err := core.DecodeTransaction(raw)
+		require.NoError(t, err)
+		dyn, ok := decoded.(*core.DynamicFeeTx)
+		require.True(t, ok)
+		require.True(t, dyn.To.Equal(fuzzContract1))
+		require.Equal(t, calldata, dyn.Data)
+		got, err := decoded.Sender()
+		require.NoError(t, err)
+		require.True(t, got.Equal(sender))
+	})
+}
+
+// go test -run '^$' -fuzz '^FuzzReadsSurviveArbitraryResult$' -fuzztime=10s ./standards/erc1155
+func FuzzReadsSurviveArbitraryResult(f *testing.F) {
+	f.Add([]byte{})
+	f.Add(make([]byte, 31))
+	f.Add(make([]byte, 32))
+	f.Add(make([]byte, 128))
+	f.Add([]byte{0xff, 0xff, 0xff, 0xff})
+
+	f.Fuzz(func(t *testing.T, result []byte) {
+		c := mocks.NewClient(t)
+		c.EXPECT().Call(mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, e rpc.Element) error {
+			*e.Result.(*string) = encoding.Hex.EncodePrefixed(result)
+			return nil
+		}).Times(6)
+		e := New(c)
+
+		n, err := e.BalanceOf(t.Context(), nil, NewBalanceOfRequest(fuzzContract1, fuzzAddr1, big.NewInt(1)))
+		require.True(t, (err == nil) != (n == nil))
+		amounts, err := e.BalanceOfBatch(t.Context(), nil, NewBalanceOfBatchRequest(fuzzContract1, []*types.Address{fuzzAddr1, fuzzAddr2}, []*big.Int{big.NewInt(1), big.NewInt(2)}))
+		if err == nil {
+			require.NotNil(t, amounts)
+		}
+		_, _ = e.URI(t.Context(), nil, NewURIRequest(fuzzContract1, big.NewInt(1)))
+		balances, err := e.IdBalances(t.Context(), nil, NewIdBalancesRequest(fuzzContract1, fuzzAddr1, []*big.Int{big.NewInt(1), big.NewInt(2)}))
+		if err == nil {
+			require.Len(t, balances, 2)
+		}
+		aib, err := e.AccountIdBalances(t.Context(), nil, NewAccountIdBalancesRequest(fuzzAddr2, fuzzAddr1, big.NewInt(1), []*types.Address{fuzzContract1}, true))
+		require.True(t, (err == nil) != (aib == nil))
+		afa, err := e.ApprovalForAllWithBalance(t.Context(), nil, NewApprovalForAllWithBalanceRequest(fuzzAddr2, fuzzContract1, fuzzAddr1, fuzzAddr2, big.NewInt(1), true))
+		require.True(t, (err == nil) != (afa == nil))
 	})
 }

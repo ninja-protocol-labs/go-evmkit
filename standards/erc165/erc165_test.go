@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
+	"github.com/ninja-protocol-labs/go-evmkit/internal/testenv"
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
 )
 
@@ -20,8 +21,8 @@ var (
 type ERC165Suite struct {
 	suite.Suite
 
-	Enable               bool
 	RPCURL               string
+	Timeout              time.Duration
 	ContractHex          string
 	NonERC165ContractHex string
 
@@ -35,20 +36,18 @@ type ERC165Suite struct {
 }
 
 func TestERC165Suite(t *testing.T) {
+	c := testenv.MustLoad(t, testenv.UnknownNetworkType, testenv.UnknownNetwork)
+
 	suite.Run(t, &ERC165Suite{
-		Enable:               false,
-		RPCURL:               "",
+		RPCURL:               c.RPCURL,
+		Timeout:              60 * time.Second,
 		ContractHex:          "",
 		NonERC165ContractHex: "",
 	})
 }
 
 func (s *ERC165Suite) SetupSuite() {
-	if !s.Enable {
-		s.T().Skip("disabled")
-	}
-
-	s.ctx, s.cancel = context.WithTimeout(s.T().Context(), 60*time.Second)
+	s.ctx, s.cancel = context.WithTimeout(s.T().Context(), s.Timeout)
 
 	s.client = rpc.NewClient(s.RPCURL)
 

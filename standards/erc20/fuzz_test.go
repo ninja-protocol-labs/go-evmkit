@@ -1,16 +1,22 @@
 package erc20
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 	"testing"
 
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/ninja-protocol-labs/go-evmkit/bind"
+	"github.com/ninja-protocol-labs/go-evmkit/core"
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
+	"github.com/ninja-protocol-labs/go-evmkit/rpc"
+	"github.com/ninja-protocol-labs/go-evmkit/rpc/mocks"
 	"github.com/ninja-protocol-labs/go-evmkit/tx"
+	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
 var (
@@ -283,5 +289,149 @@ func FuzzBalancePairsRequestValidate(f *testing.F) {
 		}
 		require.ErrorIs(t, err, bind.ErrInvalidRequest)
 		require.EqualError(t, err, want)
+	})
+}
+
+// go test -run '^$' -fuzz '^FuzzBalanceOfThroughClient$' -fuzztime=10s ./standards/erc20
+func FuzzBalanceOfThroughClient(f *testing.F) {
+	f.Add([]byte{}, []byte{}, []byte{}, uint64(0))
+	f.Add(fuzzToken1.Bytes(), fuzzAddr1.Bytes(), []byte{0x01}, uint64(1))
+	f.Add(make([]byte, 20), make([]byte, 20), make([]byte, 32), ^uint64(0))
+	f.Add([]byte{0xff}, []byte{0xee}, []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}, uint64(1<<40))
+
+	f.Fuzz(func(t *testing.T, tokenRaw, accountRaw, amountRaw []byte, block uint64) {
+		if len(amountRaw) > 32 {
+			amountRaw = amountRaw[len(amountRaw)-32:]
+		}
+		token := types.NewAddressFromBytes(tokenRaw)
+		account := types.NewAddressFromBytes(accountRaw)
+		amount := new(big.Int).SetBytes(amountRaw)
+		blockHex := "0x" + new(big.Int).SetUint64(block).Text(16)
+
+		calldata, err := EncodeBalanceOf(account)
+		require.NoError(t, err)
+		result, err := abi.Pack(abi.NewTypes(abi.Uint256), amount)
+		require.NoError(t, err)
+
+		c := mocks.NewClient(t)
+		c.EXPECT().Call(mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, e rpc.Element) error {
+			params := e.Params.([]any)
+			call := params[0].(map[string]any)
+			require.Equal(t, token.String(), call["to"])
+			require.Equal(t, encoding.Hex.EncodePrefixed(calldata), call["data"])
+			require.NotContains(t, call, "from")
+			require.Equal(t, blockHex, params[1])
+			*e.Result.(*string) = encoding.Hex.EncodePrefixed(result)
+			return nil
+		}).Once()
+
+		got, err := New(c).BalanceOf(t.Context(), bind.NewCallOptions().WithBlock(blockHex), NewBalanceOfRequest(token, account))
+		require.NoError(t, err)
+		require.Zero(t, amount.Cmp(got))
+	})
+}
+
+// go test -run '^$' -fuzz '^FuzzTransferFromThroughClient$' -fuzztime=10s ./standards/erc20
+func FuzzTransferFromThroughClient(f *testing.F) {
+	f.Add([]byte{}, []byte{}, []byte{}, uint64(0), uint64(21_000), true)
+	f.Add(fuzzAddr1.Bytes(), fuzzAddr2.Bytes(), []byte{0x01}, uint64(42), uint64(100_000), false)
+	f.Add(make([]byte, 20), make([]byte, 20), make([]byte, 32), ^uint64(0)-1, uint64(30_000_000), true)
+
+	key, err := types.NewPrivateKeyFromBig(big.NewInt(0xb1d))
+	require.NoError(f, err)
+	sender := core.PubkeyToAddress(key.PublicKey())
+
+	f.Fuzz(func(t *testing.T, fromRaw, toRaw, amountRaw []byte, nonce, gasLimit uint64, dynamic bool) {
+		if len(amountRaw) > 32 {
+			amountRaw = amountRaw[len(amountRaw)-32:]
+		}
+		from := types.NewAddressFromBytes(fromRaw)
+		to := types.NewAddressFromBytes(toRaw)
+		amount := new(big.Int).SetBytes(amountRaw)
+
+		calldata, err := EncodeTransferFrom(from, to, amount)
+		require.NoError(t, err)
+
+		var builder tx.Builder
+		if dynamic {
+			builder = tx.NewDynamicFeeBuilder()
+		} else {
+			builder = tx.NewLegacyBuilder()
+		}
+		builder.ChainID(big.NewInt(1))
+		builder.Nonce(nonce)
+		builder.Limit(gasLimit)
+		builder.Price(big.NewInt(30_000_000_000), big.NewInt(1_000_000_000))
+
+		var raw []byte
+		c := mocks.NewClient(t)
+		c.EXPECT().Call(mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, e rpc.Element) error {
+			require.Equal(t, rpc.MethodETHSendRawTransaction, e.Method)
+			raw, err = encoding.Hex.Decode(e.Params.([]any)[0].(string))
+			require.NoError(t, err)
+			*e.Result.(*string) = core.Keccak256(raw).String()
+			return nil
+		}).Once()
+
+		signed, hash, err := New(c).TransferFrom(t.Context(), bind.NewTransactOptions(key, builder), NewTransferFromRequest(fuzzToken1, from, to, amount))
+		require.NoError(t, err)
+		require.True(t, hash.Equal(core.Keccak256(raw)))
+		require.Equal(t, nonce, signed.AddressNonce())
+		require.Equal(t, gasLimit, signed.Gas())
+
+		decoded, err := core.DecodeTransaction(raw)
+		require.NoError(t, err)
+		got, err := decoded.Sender()
+		require.NoError(t, err)
+		require.True(t, got.Equal(sender))
+
+		var gotTo *types.Address
+		var gotData []byte
+		switch v := decoded.(type) {
+		case *core.DynamicFeeTx:
+			require.True(t, dynamic)
+			gotTo, gotData = v.To, v.Data
+		case *core.LegacyTx:
+			require.False(t, dynamic)
+			gotTo, gotData = v.To, v.Data
+		default:
+			t.Fatalf("unexpected tx type %T", decoded)
+		}
+		require.True(t, gotTo.Equal(fuzzToken1))
+		require.Equal(t, calldata, gotData)
+	})
+}
+
+// go test -run '^$' -fuzz '^FuzzReadsSurviveArbitraryResult$' -fuzztime=10s ./standards/erc20
+func FuzzReadsSurviveArbitraryResult(f *testing.F) {
+	f.Add([]byte{})
+	f.Add(make([]byte, 31))
+	f.Add(make([]byte, 32))
+	f.Add(make([]byte, 96))
+	f.Add([]byte{0xff, 0xff, 0xff, 0xff})
+
+	f.Fuzz(func(t *testing.T, result []byte) {
+		c := mocks.NewClient(t)
+		c.EXPECT().Call(mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, e rpc.Element) error {
+			*e.Result.(*string) = encoding.Hex.EncodePrefixed(result)
+			return nil
+		}).Times(8)
+		e := New(c)
+
+		n, err := e.TotalSupply(t.Context(), nil, NewTotalSupplyRequest(fuzzToken1))
+		require.True(t, (err == nil) != (n == nil))
+		n, err = e.BalanceOf(t.Context(), nil, NewBalanceOfRequest(fuzzToken1, fuzzAddr1))
+		require.True(t, (err == nil) != (n == nil))
+		_, _ = e.Name(t.Context(), nil, NewNameRequest(fuzzToken1))
+		_, _ = e.Decimals(t.Context(), nil, NewDecimalsRequest(fuzzToken1))
+		_, _ = e.CallTransfer(t.Context(), nil, NewTransferRequest(fuzzToken1, fuzzAddr1, big.NewInt(1)))
+		m, err := e.Metadata(t.Context(), nil, NewMetadataRequest(fuzzAddr2, fuzzToken1, true))
+		require.True(t, (err == nil) != (m == nil))
+		tb, err := e.TokenBalances(t.Context(), nil, NewTokenBalancesRequest(fuzzAddr2, fuzzToken1, []*types.Address{fuzzAddr1, fuzzAddr2}, true))
+		require.True(t, (err == nil) != (tb == nil))
+		pairs, err := e.BalancePairs(t.Context(), nil, NewBalancePairsRequest(fuzzAddr2, []*types.Address{fuzzToken1}, []*types.Address{fuzzAddr1}, false))
+		if err == nil {
+			require.Len(t, pairs, 1)
+		}
 	})
 }
