@@ -163,12 +163,12 @@ const (
 // meaning with an existing Factory/Pair sentinel (identical addresses, zero address, insufficient
 // liquidity/input/output amount, invalid path) reuse that sentinel instead of a new one.
 var (
-	ErrExpired              = errors.New("uniswapv2: expired")
-	ErrInsufficientAAmount  = errors.New("uniswapv2: insufficient a amount")
-	ErrInsufficientBAmount  = errors.New("uniswapv2: insufficient b amount")
-	ErrExcessiveInputAmount = errors.New("uniswapv2: excessive input amount")
-	ErrInvalidPath          = errors.New("uniswapv2: invalid path")
-	ErrInsufficientAmount   = errors.New("uniswapv2: insufficient amount")
+	ErrExpired              = errors.New("expired")
+	ErrInsufficientAAmount  = errors.New("insufficient a amount")
+	ErrInsufficientBAmount  = errors.New("insufficient b amount")
+	ErrExcessiveInputAmount = errors.New("excessive input amount")
+	ErrInvalidPath          = errors.New("invalid path")
+	ErrInsufficientAmount   = errors.New("insufficient amount")
 )
 
 // EncodeRouterFactory returns the calldata for factory().
