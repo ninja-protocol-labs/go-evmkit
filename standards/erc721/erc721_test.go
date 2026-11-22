@@ -63,7 +63,7 @@ type ERC721Suite struct {
 }
 
 func TestERC721Suite(t *testing.T) {
-	c := testenv.MustLoad(t, testenv.UnknownNetworkType, testenv.UnknownNetwork)
+	c := testenv.MustLoad(t, testenv.Testnet, testenv.UnknownNetwork)
 
 	suite.Run(t, &ERC721Suite{
 		RPCURL:              c.RPCURL,

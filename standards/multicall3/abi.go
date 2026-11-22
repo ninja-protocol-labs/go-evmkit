@@ -36,11 +36,12 @@ var (
 	getLastBlockHash        = abi.NewFunction("getLastBlockHash", nil, abi.NewTypes(abi.Bytes32))
 )
 
-// ErrCallFailed, ErrValueMismatch and ErrBasefeeNotImplemented mirror Multicall3's own revert reasons, for errors.Is.
+// ErrCallFailed and ErrValueMismatch mirror Multicall3's revert reasons; ErrUnknown is any other revert.
 var (
-	ErrCallFailed            = errors.New("multicall3: call failed")
-	ErrValueMismatch         = errors.New("multicall3: value mismatch")
-	ErrBasefeeNotImplemented = errors.New("multicall3: BASEFEE opcode not implemented on this chain")
+	ErrUnknown               = errors.New("unknown revert")
+	ErrCallFailed            = errors.New("call failed")
+	ErrValueMismatch         = errors.New("value mismatch")
+	ErrBasefeeNotImplemented = errors.New("basefee opcode not implemented")
 )
 
 const (

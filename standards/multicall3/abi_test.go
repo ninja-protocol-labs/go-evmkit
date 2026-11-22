@@ -31,32 +31,33 @@ const (
 	resultsEmpty       = "00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000000"
 )
 
-func mustHex(t *testing.T, s string) []byte {
-	t.Helper()
-	b, err := encoding.Hex.Decode(s)
-	require.NoError(t, err)
-	return b
-}
-
 func TestEncodeAggregate3(t *testing.T) {
+	balanceOf, err := encoding.Hex.Decode("70a082310000000000000000000000002222222222222222222222222222222222222222")
+	require.NoError(t, err)
+	want, err := encoding.Hex.Decode(aggregate3TwoCalls)
+	require.NoError(t, err)
+
 	calls := []Call3{
 		{
 			Target:       types.MustNewAddressFromHex("0x1111111111111111111111111111111111111111"),
 			AllowFailure: true,
-			CallData:     mustHex(t, "70a082310000000000000000000000002222222222222222222222222222222222222222"),
+			CallData:     balanceOf,
 		},
 		{Target: types.MustNewAddressFromHex("0x2222222222222222222222222222222222222222")},
 	}
 
 	got, err := EncodeAggregate3(calls)
 	require.NoError(t, err)
-	require.Equal(t, mustHex(t, aggregate3TwoCalls), got)
+	require.Equal(t, want, got)
 }
 
 func TestEncodeAggregate3Empty(t *testing.T) {
+	want, err := encoding.Hex.Decode(aggregate3Empty)
+	require.NoError(t, err)
+
 	got, err := EncodeAggregate3(nil)
 	require.NoError(t, err)
-	require.Equal(t, mustHex(t, aggregate3Empty), got)
+	require.Equal(t, want, got)
 }
 
 func TestEncodeAggregate3NilTarget(t *testing.T) {
@@ -65,16 +66,21 @@ func TestEncodeAggregate3NilTarget(t *testing.T) {
 }
 
 func TestEncodeAggregate3Value(t *testing.T) {
+	callData, err := encoding.Hex.Decode("deadbeef")
+	require.NoError(t, err)
+	want, err := encoding.Hex.Decode(aggregate3Value1)
+	require.NoError(t, err)
+
 	calls := []Call3Value{{
 		Target:       types.MustNewAddressFromHex("0x1111111111111111111111111111111111111111"),
 		AllowFailure: true,
 		Value:        big.NewInt(1_000_000_000_000_000_000),
-		CallData:     mustHex(t, "deadbeef"),
+		CallData:     callData,
 	}}
 
 	got, err := EncodeAggregate3Value(calls)
 	require.NoError(t, err)
-	require.Equal(t, mustHex(t, aggregate3Value1), got)
+	require.Equal(t, want, got)
 }
 
 func TestEncodeAggregate3ValueNilValue(t *testing.T) {
@@ -83,22 +89,32 @@ func TestEncodeAggregate3ValueNilValue(t *testing.T) {
 }
 
 func TestDecodeResults(t *testing.T) {
-	got, err := DecodeResults(mustHex(t, resultsTwo))
+	data, err := encoding.Hex.Decode(resultsTwo)
+	require.NoError(t, err)
+	word, err := encoding.Hex.Decode("0000000000000000000000000000000000000000000000000000000000000064")
+	require.NoError(t, err)
+
+	got, err := DecodeResults(data)
 	require.NoError(t, err)
 	require.Equal(t, []Result{
-		{Success: true, ReturnData: mustHex(t, "0000000000000000000000000000000000000000000000000000000000000064")},
-		{Success: false, ReturnData: mustHex(t, "08c379a0")},
+		{Success: true, ReturnData: word},
+		{Success: false, ReturnData: []byte{0x08, 0xc3, 0x79, 0xa0}},
 	}, got)
 }
 
 func TestDecodeResultsEmpty(t *testing.T) {
-	got, err := DecodeResults(mustHex(t, resultsEmpty))
+	data, err := encoding.Hex.Decode(resultsEmpty)
+	require.NoError(t, err)
+
+	got, err := DecodeResults(data)
 	require.NoError(t, err)
 	require.Empty(t, got)
 }
 
 func TestDecodeResultsTruncated(t *testing.T) {
-	full := mustHex(t, resultsTwo)
+	full, err := encoding.Hex.Decode(resultsTwo)
+	require.NoError(t, err)
+
 	const unpaddedEnd = 356
 	for n := range unpaddedEnd {
 		_, err := DecodeResults(full[:n])
@@ -107,11 +123,13 @@ func TestDecodeResultsTruncated(t *testing.T) {
 }
 
 func TestDecodeResultsRejectsHugeOffsets(t *testing.T) {
-	data := mustHex(t, resultsTwo)
+	data, err := encoding.Hex.Decode(resultsTwo)
+	require.NoError(t, err)
+
 	for i := 32; i < 64; i++ {
 		data[i] = 0xff
 	}
-	_, err := DecodeResults(data)
+	_, err = DecodeResults(data)
 	require.Error(t, err)
 }
 
@@ -137,78 +155,95 @@ func TestAggregate3RoundTripThroughDecodeCall(t *testing.T) {
 	}
 }
 
-func sampleCalls(t *testing.T) []Call {
-	t.Helper()
-	return []Call{
-		{
-			Target:   types.MustNewAddressFromHex("0x1111111111111111111111111111111111111111"),
-			CallData: mustHex(t, "70a082310000000000000000000000002222222222222222222222222222222222222222"),
-		},
+func TestEncodeCallsFunctions(t *testing.T) {
+	balanceOf, err := encoding.Hex.Decode("70a082310000000000000000000000002222222222222222222222222222222222222222")
+	require.NoError(t, err)
+	calls := []Call{
+		{Target: types.MustNewAddressFromHex("0x1111111111111111111111111111111111111111"), CallData: balanceOf},
 		{Target: types.MustNewAddressFromHex("0x2222222222222222222222222222222222222222")},
 	}
-}
 
-func TestEncodeAggregate(t *testing.T) {
-	got, err := EncodeAggregate(sampleCalls(t))
+	aggregateData, err := EncodeAggregate(calls)
 	require.NoError(t, err)
-	require.Equal(t, mustHex(t, callAggregate), got)
-}
+	blockAndAggregateData, err := EncodeBlockAndAggregate(calls)
+	require.NoError(t, err)
+	tryAggregateData, err := EncodeTryAggregate(true, calls)
+	require.NoError(t, err)
+	tryBlockAndAggregateData, err := EncodeTryBlockAndAggregate(false, calls)
+	require.NoError(t, err)
 
-func TestEncodeBlockAndAggregate(t *testing.T) {
-	got, err := EncodeBlockAndAggregate(sampleCalls(t))
-	require.NoError(t, err)
-	require.Equal(t, mustHex(t, callBlockAndAggregate), got)
-}
-
-func TestEncodeTryAggregate(t *testing.T) {
-	got, err := EncodeTryAggregate(true, sampleCalls(t))
-	require.NoError(t, err)
-	require.Equal(t, mustHex(t, callTryAggregate), got)
-}
-
-func TestEncodeTryBlockAndAggregate(t *testing.T) {
-	got, err := EncodeTryBlockAndAggregate(false, sampleCalls(t))
-	require.NoError(t, err)
-	require.Equal(t, mustHex(t, callTryBlockAndAggregate), got)
+	for _, tc := range []struct {
+		name string
+		got  []byte
+		want string
+	}{
+		{"aggregate", aggregateData, callAggregate},
+		{"blockAndAggregate", blockAndAggregateData, callBlockAndAggregate},
+		{"tryAggregate", tryAggregateData, callTryAggregate},
+		{"tryBlockAndAggregate", tryBlockAndAggregateData, callTryBlockAndAggregate},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			want, err := encoding.Hex.Decode(tc.want)
+			require.NoError(t, err)
+			require.Equal(t, want, tc.got)
+		})
+	}
 }
 
 func TestEncodeCallsNilTarget(t *testing.T) {
 	_, err := EncodeAggregate([]Call{{}})
 	require.ErrorIs(t, err, abi.ErrNilAddress)
+	_, err = EncodeTryAggregate(true, []Call{{}})
+	require.ErrorIs(t, err, abi.ErrNilAddress)
+	_, err = EncodeBlockAndAggregate([]Call{{}})
+	require.ErrorIs(t, err, abi.ErrNilAddress)
+	_, err = EncodeTryBlockAndAggregate(false, []Call{{}})
+	require.ErrorIs(t, err, abi.ErrNilAddress)
 }
 
 func TestDecodeAggregate(t *testing.T) {
-	got, err := DecodeAggregate(mustHex(t, retAggregate))
+	data, err := encoding.Hex.Decode(retAggregate)
+	require.NoError(t, err)
+	word, err := encoding.Hex.Decode("0000000000000000000000000000000000000000000000000000000000000064")
+	require.NoError(t, err)
+
+	got, err := DecodeAggregate(data)
 	require.NoError(t, err)
 	require.Equal(t, big.NewInt(12345), got.BlockNumber)
-	require.Equal(t, [][]byte{
-		mustHex(t, "0000000000000000000000000000000000000000000000000000000000000064"),
-		{},
-	}, got.ReturnData)
+	require.Equal(t, [][]byte{word, {}}, got.ReturnData)
 }
 
 func TestDecodeBlockAndAggregate(t *testing.T) {
-	got, err := DecodeBlockAndAggregate(mustHex(t, retBlockAndAggregate))
+	data, err := encoding.Hex.Decode(retBlockAndAggregate)
+	require.NoError(t, err)
+	hash, err := encoding.Hex.Decode("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+	require.NoError(t, err)
+
+	got, err := DecodeBlockAndAggregate(data)
 	require.NoError(t, err)
 	require.Equal(t, big.NewInt(12345), got.BlockNumber)
-	require.Equal(t, mustHex(t, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), got.BlockHash.Bytes())
+	require.Equal(t, hash, got.BlockHash.Bytes())
 	require.Equal(t, []Result{{Success: true, ReturnData: []byte{0x64}}, {Success: false, ReturnData: []byte{}}}, got.Results)
 }
 
 func TestDecodeAggregateTruncated(t *testing.T) {
-	full := mustHex(t, retAggregate)
-	_, err := DecodeAggregate(full[:len(full)/2])
+	full, err := encoding.Hex.Decode(retAggregate)
+	require.NoError(t, err)
+
+	_, err = DecodeAggregate(full[:len(full)/2])
 	require.Error(t, err)
 }
 
 func TestDecodeBlockAndAggregateTruncated(t *testing.T) {
-	full := mustHex(t, retBlockAndAggregate)
-	_, err := DecodeBlockAndAggregate(full[:len(full)/2])
+	full, err := encoding.Hex.Decode(retBlockAndAggregate)
+	require.NoError(t, err)
+
+	_, err = DecodeBlockAndAggregate(full[:len(full)/2])
 	require.Error(t, err)
 }
 
 func TestEncodeGettersWithoutArguments(t *testing.T) {
-	tests := []struct {
+	for _, tc := range []struct {
 		name     string
 		got      []byte
 		selector string
@@ -221,19 +256,20 @@ func TestEncodeGettersWithoutArguments(t *testing.T) {
 		{"getCurrentBlockGasLimit", EncodeGetCurrentBlockGasLimit(), "86d516e8"},
 		{"getCurrentBlockTimestamp", EncodeGetCurrentBlockTimestamp(), "0f28c97d"},
 		{"getLastBlockHash", EncodeGetLastBlockHash(), "27e86d6e"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			require.Equal(t, tt.selector, encoding.Hex.Encode(tt.got))
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.selector, encoding.Hex.Encode(tc.got))
 		})
 	}
 }
 
 func TestEncodeGetBlockHash(t *testing.T) {
+	want, err := encoding.Hex.Decode(callGetBlockHash)
+	require.NoError(t, err)
+
 	got, err := EncodeGetBlockHash(big.NewInt(12345))
 	require.NoError(t, err)
-	require.Equal(t, mustHex(t, callGetBlockHash), got)
+	require.Equal(t, want, got)
 }
 
 func TestEncodeGetBlockHashNil(t *testing.T) {
@@ -242,9 +278,12 @@ func TestEncodeGetBlockHashNil(t *testing.T) {
 }
 
 func TestEncodeGetEthBalance(t *testing.T) {
+	want, err := encoding.Hex.Decode(callGetEthBalance)
+	require.NoError(t, err)
+
 	got, err := EncodeGetEthBalance(types.MustNewAddressFromHex("0x1111111111111111111111111111111111111111"))
 	require.NoError(t, err)
-	require.Equal(t, mustHex(t, callGetEthBalance), got)
+	require.Equal(t, want, got)
 }
 
 func TestEncodeGetEthBalanceNil(t *testing.T) {
@@ -253,7 +292,10 @@ func TestEncodeGetEthBalanceNil(t *testing.T) {
 }
 
 func TestDecodeUint256Getters(t *testing.T) {
-	decoders := map[string]func([]byte) (*big.Int, error){
+	data, err := encoding.Hex.Decode(retUint256)
+	require.NoError(t, err)
+
+	for name, decode := range map[string]func([]byte) (*big.Int, error){
 		"getBasefee":                DecodeGetBasefee,
 		"getBlockNumber":            DecodeGetBlockNumber,
 		"getChainId":                DecodeGetChainID,
@@ -261,40 +303,46 @@ func TestDecodeUint256Getters(t *testing.T) {
 		"getCurrentBlockGasLimit":   DecodeGetCurrentBlockGasLimit,
 		"getCurrentBlockTimestamp":  DecodeGetCurrentBlockTimestamp,
 		"getEthBalance":             DecodeGetEthBalance,
-	}
-
-	for name, decode := range decoders {
+	} {
 		t.Run(name, func(t *testing.T) {
-			got, err := decode(mustHex(t, retUint256))
+			got, err := decode(data)
 			require.NoError(t, err)
 			require.Equal(t, big.NewInt(12345), got)
 
-			_, err = decode(mustHex(t, retUint256)[:31])
+			_, err = decode(data[:31])
 			require.Error(t, err)
 		})
 	}
 }
 
 func TestDecodeHashGetters(t *testing.T) {
-	want := mustHex(t, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+	data, err := encoding.Hex.Decode(retBytes32)
+	require.NoError(t, err)
+	want, err := encoding.Hex.Decode("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+	require.NoError(t, err)
 
-	blockHash, err := DecodeGetBlockHash(mustHex(t, retBytes32))
+	blockHash, err := DecodeGetBlockHash(data)
 	require.NoError(t, err)
 	require.Equal(t, want, blockHash.Bytes())
 
-	lastHash, err := DecodeGetLastBlockHash(mustHex(t, retBytes32))
+	lastHash, err := DecodeGetLastBlockHash(data)
 	require.NoError(t, err)
 	require.Equal(t, want, lastHash.Bytes())
 
-	_, err = DecodeGetBlockHash(mustHex(t, retBytes32)[:31])
+	_, err = DecodeGetBlockHash(data[:31])
+	require.Error(t, err)
+	_, err = DecodeGetLastBlockHash(data[:31])
 	require.Error(t, err)
 }
 
 func TestDecodeGetCurrentBlockCoinbase(t *testing.T) {
-	got, err := DecodeGetCurrentBlockCoinbase(mustHex(t, retAddress))
+	data, err := encoding.Hex.Decode(retAddress)
+	require.NoError(t, err)
+
+	got, err := DecodeGetCurrentBlockCoinbase(data)
 	require.NoError(t, err)
 	require.True(t, got.Equal(types.MustNewAddressFromHex("0x1111111111111111111111111111111111111111")))
 
-	_, err = DecodeGetCurrentBlockCoinbase(mustHex(t, retAddress)[:31])
+	_, err = DecodeGetCurrentBlockCoinbase(data[:31])
 	require.Error(t, err)
 }

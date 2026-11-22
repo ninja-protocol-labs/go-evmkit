@@ -68,7 +68,7 @@ type ERC6909Suite struct {
 }
 
 func TestERC6909Suite(t *testing.T) {
-	c := testenv.MustLoad(t, testenv.UnknownNetworkType, testenv.UnknownNetwork)
+	c := testenv.MustLoad(t, testenv.Testnet, testenv.UnknownNetwork)
 
 	suite.Run(t, &ERC6909Suite{
 		RPCURL:               c.RPCURL,
