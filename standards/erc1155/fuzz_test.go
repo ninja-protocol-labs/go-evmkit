@@ -1,11 +1,13 @@
 package erc1155
 
 import (
+	"fmt"
 	"math/big"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 )
@@ -22,7 +24,7 @@ func FuzzTransferBatchExpand(f *testing.F) {
 	f.Add(uint8(1), uint8(1))
 	f.Add(uint8(3), uint8(3))
 	f.Add(uint8(255), uint8(255))
-	f.Add(uint8(2), uint8(1)) // mismatched lengths: must error, never panic
+	f.Add(uint8(2), uint8(1))
 	f.Add(uint8(0), uint8(1))
 	f.Add(uint8(1), uint8(0))
 
@@ -36,7 +38,7 @@ func FuzzTransferBatchExpand(f *testing.F) {
 			values[i] = big.NewInt(int64(i) * 10)
 		}
 
-		tb := NewTransferBatch(fuzzContract1, fuzzAddr1, fuzzAddr1, fuzzAddr2, ids, values)
+		tb := NewTransferBatchEvent(fuzzContract1, fuzzAddr1, fuzzAddr1, fuzzAddr2, ids, values)
 
 		transfers, err := tb.Expand()
 		if nIds != nValues {
@@ -96,11 +98,6 @@ func FuzzSimpleDecodersDoNotPanic(f *testing.F) {
 }
 
 // go test -run '^$' -fuzz '^FuzzBatchDecodersDoNotPanic$' -fuzztime=10s ./standards/erc1155
-//
-// Feeds arbitrary garbage, including lengths that don't match the fixed
-// ids/accounts/standards the decoders are told about, through every
-// Decode*WithBalance/Decode*Batch* decoder: these must always return an
-// error on malformed or mismatched input, never panic.
 func FuzzBatchDecodersDoNotPanic(f *testing.F) {
 	ids := []*big.Int{big.NewInt(1), big.NewInt(2), big.NewInt(3)}
 	accounts := []*types.Address{fuzzAddr1, fuzzAddr2, fuzzAddr1}
@@ -135,7 +132,10 @@ func FuzzDecodeBalanceOfRoundTrip(f *testing.F) {
 	f.Add(make([]byte, 32))
 
 	f.Fuzz(func(t *testing.T, raw []byte) {
-		value := clampUint256(raw)
+		if len(raw) > 32 {
+			raw = raw[len(raw)-32:]
+		}
+		value := new(big.Int).SetBytes(raw)
 
 		data, err := abi.Pack(abi.Types{abi.Uint256}, value)
 		require.NoError(t, err)
@@ -163,11 +163,6 @@ func FuzzDecodeURIRoundTrip(f *testing.F) {
 }
 
 // go test -run '^$' -fuzz '^FuzzBalanceOfBatchRoundTrip$' -fuzztime=10s ./standards/erc1155
-//
-// Covers the exact shape that originally broke DecodeBalanceOfBatch (a
-// Slice(Uint256) return decoding to []any, not []*big.Int) across random
-// lengths and values, both through EncodeBalanceOfBatch/DecodeCall and
-// through DecodeBalanceOfBatch's own return-data decoding.
 func FuzzBalanceOfBatchRoundTrip(f *testing.F) {
 	f.Add(uint8(0), []byte{})
 	f.Add(uint8(1), []byte{0x01})
@@ -182,8 +177,16 @@ func FuzzBalanceOfBatchRoundTrip(f *testing.F) {
 		for i := range accounts {
 			h := append(append([]byte{}, seed...), byte(i), 0xa0)
 			accounts[i] = types.NewAddressFromBytes(h)
-			ids[i] = clampUint256(append(append([]byte{}, seed...), byte(i), 0xd0))
-			amounts[i] = clampUint256(append(append([]byte{}, seed...), byte(i), 0xb0))
+			idsRaw := append(append([]byte{}, seed...), byte(i), 0xd0)
+			if len(idsRaw) > 32 {
+				idsRaw = idsRaw[len(idsRaw)-32:]
+			}
+			ids[i] = new(big.Int).SetBytes(idsRaw)
+			amountsRaw := append(append([]byte{}, seed...), byte(i), 0xb0)
+			if len(amountsRaw) > 32 {
+				amountsRaw = amountsRaw[len(amountsRaw)-32:]
+			}
+			amounts[i] = new(big.Int).SetBytes(amountsRaw)
 		}
 
 		calldata, err := EncodeBalanceOfBatch(accounts, ids)
@@ -250,9 +253,6 @@ func FuzzEncodeBalanceOfBatchRejectsLengthMismatch(f *testing.F) {
 }
 
 // go test -run '^$' -fuzz '^FuzzSafeBatchTransferFromRoundTrip$' -fuzztime=10s ./standards/erc1155
-//
-// Stresses encoding two dynamic arrays plus a dynamic bytes argument
-// together in one call, across random lengths/values/callData.
 func FuzzSafeBatchTransferFromRoundTrip(f *testing.F) {
 	f.Add(uint8(0), []byte{}, []byte{})
 	f.Add(uint8(1), []byte{0x01}, []byte{0xde, 0xad})
@@ -263,8 +263,16 @@ func FuzzSafeBatchTransferFromRoundTrip(f *testing.F) {
 		ids := make([]*big.Int, count)
 		values := make([]*big.Int, count)
 		for i := range ids {
-			ids[i] = clampUint256(append(append([]byte{}, seed...), byte(i), 0x01))
-			values[i] = clampUint256(append(append([]byte{}, seed...), byte(i), 0x02))
+			idsRaw := append(append([]byte{}, seed...), byte(i), 0x01)
+			if len(idsRaw) > 32 {
+				idsRaw = idsRaw[len(idsRaw)-32:]
+			}
+			ids[i] = new(big.Int).SetBytes(idsRaw)
+			valuesRaw := append(append([]byte{}, seed...), byte(i), 0x02)
+			if len(valuesRaw) > 32 {
+				valuesRaw = valuesRaw[len(valuesRaw)-32:]
+			}
+			values[i] = new(big.Int).SetBytes(valuesRaw)
 		}
 
 		data, err := EncodeSafeBatchTransferFrom(fuzzAddr1, fuzzAddr2, ids, values, callData)
@@ -289,9 +297,74 @@ func FuzzSafeBatchTransferFromRoundTrip(f *testing.F) {
 	})
 }
 
-func clampUint256(raw []byte) *big.Int {
-	if len(raw) > 32 {
-		raw = raw[len(raw)-32:]
-	}
-	return new(big.Int).SetBytes(raw)
+// go test -run '^$' -fuzz '^FuzzSafeBatchTransferFromRequestValidate$' -fuzztime=10s ./standards/erc1155
+func FuzzSafeBatchTransferFromRequestValidate(f *testing.F) {
+	f.Add(uint8(0x07), uint8(0), uint8(0), uint8(9), uint8(9))
+	f.Add(uint8(0x07), uint8(2), uint8(2), uint8(9), uint8(9))
+	f.Add(uint8(0x07), uint8(3), uint8(2), uint8(9), uint8(9))
+	f.Add(uint8(0x07), uint8(3), uint8(3), uint8(1), uint8(0))
+	f.Add(uint8(0x05), uint8(1), uint8(1), uint8(9), uint8(9))
+	f.Add(uint8(0x08), uint8(1), uint8(1), uint8(9), uint8(9))
+
+	f.Fuzz(func(t *testing.T, mask, idLen, amountLen, nilID, nilAmount uint8) {
+		idLen %= 8
+		amountLen %= 8
+
+		ids := make([]*big.Int, idLen)
+		for i := range ids {
+			ids[i] = big.NewInt(int64(i))
+			if uint8(i) == nilID {
+				ids[i] = nil
+			}
+		}
+		amounts := make([]*big.Int, amountLen)
+		for i := range amounts {
+			amounts[i] = big.NewInt(int64(i) * 10)
+			if uint8(i) == nilAmount {
+				amounts[i] = nil
+			}
+		}
+
+		var req *SafeBatchTransferFromRequest
+		if mask&0x08 == 0 {
+			req = NewSafeBatchTransferFromRequest(nil, nil, nil, ids, amounts, nil)
+			if mask&0x01 != 0 {
+				req.Contract = fuzzContract1
+			}
+			if mask&0x02 != 0 {
+				req.From = fuzzAddr1
+			}
+			if mask&0x04 != 0 {
+				req.To = fuzzAddr2
+			}
+		}
+
+		want := ""
+		switch {
+		case req == nil:
+			want = "invalid request: request is nil"
+		case req.Contract == nil:
+			want = "invalid request: contract is nil"
+		case req.From == nil:
+			want = "invalid request: from is nil"
+		case req.To == nil:
+			want = "invalid request: to is nil"
+		case idLen != amountLen:
+			want = "invalid request: ids and amounts differ in length"
+		case idLen == 0:
+			want = "invalid request: ids is empty"
+		case nilID < idLen && nilID <= nilAmount:
+			want = fmt.Sprintf("invalid request: ids[%d] is nil", nilID)
+		case nilAmount < amountLen:
+			want = fmt.Sprintf("invalid request: amounts[%d] is nil", nilAmount)
+		}
+
+		err := req.Validate()
+		if want == "" {
+			require.NoError(t, err)
+			return
+		}
+		require.ErrorIs(t, err, bind.ErrInvalidRequest)
+		require.EqualError(t, err, want)
+	})
 }

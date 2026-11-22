@@ -18,20 +18,6 @@ var (
 	testTokens = types.MustNewAddressFromHex("0xbc4ca0eda7647a8ab7c2061c2e118a18a936f13d")
 )
 
-func encodeResultsData(t *testing.T, successes []bool, datas [][]byte) []byte {
-	t.Helper()
-	require.Len(t, datas, len(successes))
-
-	resultT := abi.Tuple(abi.Bool, abi.Bytes)
-	elems := make([]any, len(successes))
-	for i := range successes {
-		elems[i] = []any{successes[i], datas[i]}
-	}
-	data, err := abi.Pack(abi.Types{abi.Slice(resultT)}, elems)
-	require.NoError(t, err)
-	return data
-}
-
 func TestEncodeBalanceOf(t *testing.T) {
 	data, err := EncodeBalanceOf(testAddr1, big.NewInt(42))
 	require.NoError(t, err)
@@ -396,10 +382,12 @@ func TestDecodeApprovalForAllWithBalance(t *testing.T) {
 	accountBalData, _ := abi.Pack(abi.Types{abi.Uint256}, big.NewInt(3))
 	operatorBalData, _ := abi.Pack(abi.Types{abi.Uint256}, big.NewInt(5))
 
-	data := encodeResultsData(t,
-		[]bool{true, true, true},
-		[][]byte{approvedData, accountBalData, operatorBalData},
-	)
+	data, err := abi.Pack(abi.Types{abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))}, []any{
+		[]any{true, approvedData},
+		[]any{true, accountBalData},
+		[]any{true, operatorBalData},
+	})
+	require.NoError(t, err)
 
 	id := big.NewInt(7)
 	afawb, err := DecodeApprovalForAllWithBalance(testAddr1, testAddr2, id, data)
@@ -415,10 +403,12 @@ func TestDecodeApprovalForAllWithBalance(t *testing.T) {
 func TestDecodeApprovalForAllWithBalancePartialFailure(t *testing.T) {
 	approvedData, _ := abi.Pack(abi.Types{abi.Bool}, true)
 
-	data := encodeResultsData(t,
-		[]bool{true, false, false},
-		[][]byte{approvedData, nil, nil},
-	)
+	data, err := abi.Pack(abi.Types{abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))}, []any{
+		[]any{true, approvedData},
+		[]any{false, []byte{}},
+		[]any{false, []byte{}},
+	})
+	require.NoError(t, err)
 
 	afawb, err := DecodeApprovalForAllWithBalance(testAddr1, testAddr2, big.NewInt(7), data)
 	require.NoError(t, err)
@@ -428,8 +418,12 @@ func TestDecodeApprovalForAllWithBalancePartialFailure(t *testing.T) {
 }
 
 func TestDecodeApprovalForAllWithBalanceRejectsWrongResultCount(t *testing.T) {
-	data := encodeResultsData(t, []bool{true, true}, [][]byte{{}, {}})
-	_, err := DecodeApprovalForAllWithBalance(testAddr1, testAddr2, big.NewInt(7), data)
+	data, err := abi.Pack(abi.Types{abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))}, []any{
+		[]any{true, []byte{}},
+		[]any{true, []byte{}},
+	})
+	require.NoError(t, err)
+	_, err = DecodeApprovalForAllWithBalance(testAddr1, testAddr2, big.NewInt(7), data)
 	require.Error(t, err)
 }
 
@@ -459,7 +453,11 @@ func TestDecodeAccountIdBalances(t *testing.T) {
 	bal1, _ := abi.Pack(abi.Types{abi.Uint256}, big.NewInt(3))
 	bal2, _ := abi.Pack(abi.Types{abi.Uint256}, big.NewInt(4))
 
-	data := encodeResultsData(t, []bool{true, true}, [][]byte{bal1, bal2})
+	data, err := abi.Pack(abi.Types{abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))}, []any{
+		[]any{true, bal1},
+		[]any{true, bal2},
+	})
+	require.NoError(t, err)
 
 	id := big.NewInt(9)
 	aib, err := DecodeAccountIdBalances(testAddr1, id, contracts, data)
@@ -476,7 +474,11 @@ func TestDecodeAccountIdBalances(t *testing.T) {
 func TestDecodeAccountIdBalancesPartialFailure(t *testing.T) {
 	bal1, _ := abi.Pack(abi.Types{abi.Uint256}, big.NewInt(3))
 
-	data := encodeResultsData(t, []bool{true, false}, [][]byte{bal1, nil})
+	data, err := abi.Pack(abi.Types{abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))}, []any{
+		[]any{true, bal1},
+		[]any{false, []byte{}},
+	})
+	require.NoError(t, err)
 
 	aib, err := DecodeAccountIdBalances(testAddr1, big.NewInt(9), []*types.Address{testTokens, testAddr3}, data)
 	require.NoError(t, err)
@@ -485,8 +487,11 @@ func TestDecodeAccountIdBalancesPartialFailure(t *testing.T) {
 }
 
 func TestDecodeAccountIdBalancesRejectsLengthMismatch(t *testing.T) {
-	data := encodeResultsData(t, []bool{true}, [][]byte{{}})
-	_, err := DecodeAccountIdBalances(testAddr1, big.NewInt(9), []*types.Address{testTokens, testAddr3}, data)
+	data, err := abi.Pack(abi.Types{abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))}, []any{
+		[]any{true, []byte{}},
+	})
+	require.NoError(t, err)
+	_, err = DecodeAccountIdBalances(testAddr1, big.NewInt(9), []*types.Address{testTokens, testAddr3}, data)
 	require.Error(t, err)
 }
 

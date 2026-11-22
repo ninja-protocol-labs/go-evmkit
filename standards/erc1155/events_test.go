@@ -13,7 +13,66 @@ import (
 )
 
 func TestExtractTransfersSampleReceipt(t *testing.T) {
-	transfers, err := ExtractTransfers(sampleReceiptLogs(t))
+	transferSingleTopic, ok := transferSingleEvent.Topic0()
+	require.True(t, ok)
+	transferBatchTopic, ok := transferBatchEvent.Topic0()
+	require.True(t, ok)
+	approvalForAllTopic, ok := approvalForAllEvent.Topic0()
+	require.True(t, ok)
+	uriTopic, ok := uriEvent.Topic0()
+	require.True(t, ok)
+
+	transferSingleData, err := abi.Pack(abi.Types{abi.Uint256, abi.Uint256}, big.NewInt(42), big.NewInt(7))
+	require.NoError(t, err)
+	transferBatchData, err := abi.Pack(abi.Types{abi.Slice(abi.Uint256), abi.Slice(abi.Uint256)},
+		[]*big.Int{big.NewInt(1), big.NewInt(2)}, []*big.Int{big.NewInt(10), big.NewInt(20)})
+	require.NoError(t, err)
+	approvedData, err := abi.Pack(abi.Types{abi.Bool}, true)
+	require.NoError(t, err)
+	uriData, err := abi.Pack(abi.Types{abi.String}, "ipfs://1234")
+	require.NoError(t, err)
+
+	logs := []tx.Log{
+		{
+			Address: testTokens,
+			Topics: []*types.Hash{
+				types.NewHashFromBytes(transferSingleTopic[:]),
+				types.NewHashFromBytes(testAddr1.Bytes()),
+				types.NewHashFromBytes(testAddr1.Bytes()),
+				types.NewHashFromBytes(testAddr2.Bytes()),
+			},
+			Data: transferSingleData,
+		},
+		{
+			Address: testTokens,
+			Topics: []*types.Hash{
+				types.NewHashFromBytes(transferBatchTopic[:]),
+				types.NewHashFromBytes(testAddr1.Bytes()),
+				types.NewHashFromBytes(testAddr1.Bytes()),
+				types.NewHashFromBytes(testAddr2.Bytes()),
+			},
+			Data: transferBatchData,
+		},
+		{
+			Address: testTokens,
+			Topics: []*types.Hash{
+				types.NewHashFromBytes(approvalForAllTopic[:]),
+				types.NewHashFromBytes(testAddr1.Bytes()),
+				types.NewHashFromBytes(testAddr2.Bytes()),
+			},
+			Data: approvedData,
+		},
+		{
+			Address: testTokens,
+			Topics: []*types.Hash{
+				types.NewHashFromBytes(uriTopic[:]),
+				types.NewHashFromBytes(big.NewInt(42).FillBytes(make([]byte, 32))),
+			},
+			Data: uriData,
+		},
+	}
+
+	transfers, err := ExtractTransfers(logs)
 	require.NoError(t, err)
 	require.Len(t, transfers, 1)
 	require.True(t, transfers[0].Contract.Equal(testTokens))
@@ -25,7 +84,66 @@ func TestExtractTransfersSampleReceipt(t *testing.T) {
 }
 
 func TestExtractTransferBatchesSampleReceipt(t *testing.T) {
-	batches, err := ExtractTransferBatches(sampleReceiptLogs(t))
+	transferSingleTopic, ok := transferSingleEvent.Topic0()
+	require.True(t, ok)
+	transferBatchTopic, ok := transferBatchEvent.Topic0()
+	require.True(t, ok)
+	approvalForAllTopic, ok := approvalForAllEvent.Topic0()
+	require.True(t, ok)
+	uriTopic, ok := uriEvent.Topic0()
+	require.True(t, ok)
+
+	transferSingleData, err := abi.Pack(abi.Types{abi.Uint256, abi.Uint256}, big.NewInt(42), big.NewInt(7))
+	require.NoError(t, err)
+	transferBatchData, err := abi.Pack(abi.Types{abi.Slice(abi.Uint256), abi.Slice(abi.Uint256)},
+		[]*big.Int{big.NewInt(1), big.NewInt(2)}, []*big.Int{big.NewInt(10), big.NewInt(20)})
+	require.NoError(t, err)
+	approvedData, err := abi.Pack(abi.Types{abi.Bool}, true)
+	require.NoError(t, err)
+	uriData, err := abi.Pack(abi.Types{abi.String}, "ipfs://1234")
+	require.NoError(t, err)
+
+	logs := []tx.Log{
+		{
+			Address: testTokens,
+			Topics: []*types.Hash{
+				types.NewHashFromBytes(transferSingleTopic[:]),
+				types.NewHashFromBytes(testAddr1.Bytes()),
+				types.NewHashFromBytes(testAddr1.Bytes()),
+				types.NewHashFromBytes(testAddr2.Bytes()),
+			},
+			Data: transferSingleData,
+		},
+		{
+			Address: testTokens,
+			Topics: []*types.Hash{
+				types.NewHashFromBytes(transferBatchTopic[:]),
+				types.NewHashFromBytes(testAddr1.Bytes()),
+				types.NewHashFromBytes(testAddr1.Bytes()),
+				types.NewHashFromBytes(testAddr2.Bytes()),
+			},
+			Data: transferBatchData,
+		},
+		{
+			Address: testTokens,
+			Topics: []*types.Hash{
+				types.NewHashFromBytes(approvalForAllTopic[:]),
+				types.NewHashFromBytes(testAddr1.Bytes()),
+				types.NewHashFromBytes(testAddr2.Bytes()),
+			},
+			Data: approvedData,
+		},
+		{
+			Address: testTokens,
+			Topics: []*types.Hash{
+				types.NewHashFromBytes(uriTopic[:]),
+				types.NewHashFromBytes(big.NewInt(42).FillBytes(make([]byte, 32))),
+			},
+			Data: uriData,
+		},
+	}
+
+	batches, err := ExtractTransferBatches(logs)
 	require.NoError(t, err)
 	require.Len(t, batches, 1)
 	require.True(t, batches[0].Contract.Equal(testTokens))
@@ -41,7 +159,66 @@ func TestExtractTransferBatchesSampleReceipt(t *testing.T) {
 }
 
 func TestExtractApprovalForAllSampleReceipt(t *testing.T) {
-	approvals, err := ExtractApprovalForAll(sampleReceiptLogs(t))
+	transferSingleTopic, ok := transferSingleEvent.Topic0()
+	require.True(t, ok)
+	transferBatchTopic, ok := transferBatchEvent.Topic0()
+	require.True(t, ok)
+	approvalForAllTopic, ok := approvalForAllEvent.Topic0()
+	require.True(t, ok)
+	uriTopic, ok := uriEvent.Topic0()
+	require.True(t, ok)
+
+	transferSingleData, err := abi.Pack(abi.Types{abi.Uint256, abi.Uint256}, big.NewInt(42), big.NewInt(7))
+	require.NoError(t, err)
+	transferBatchData, err := abi.Pack(abi.Types{abi.Slice(abi.Uint256), abi.Slice(abi.Uint256)},
+		[]*big.Int{big.NewInt(1), big.NewInt(2)}, []*big.Int{big.NewInt(10), big.NewInt(20)})
+	require.NoError(t, err)
+	approvedData, err := abi.Pack(abi.Types{abi.Bool}, true)
+	require.NoError(t, err)
+	uriData, err := abi.Pack(abi.Types{abi.String}, "ipfs://1234")
+	require.NoError(t, err)
+
+	logs := []tx.Log{
+		{
+			Address: testTokens,
+			Topics: []*types.Hash{
+				types.NewHashFromBytes(transferSingleTopic[:]),
+				types.NewHashFromBytes(testAddr1.Bytes()),
+				types.NewHashFromBytes(testAddr1.Bytes()),
+				types.NewHashFromBytes(testAddr2.Bytes()),
+			},
+			Data: transferSingleData,
+		},
+		{
+			Address: testTokens,
+			Topics: []*types.Hash{
+				types.NewHashFromBytes(transferBatchTopic[:]),
+				types.NewHashFromBytes(testAddr1.Bytes()),
+				types.NewHashFromBytes(testAddr1.Bytes()),
+				types.NewHashFromBytes(testAddr2.Bytes()),
+			},
+			Data: transferBatchData,
+		},
+		{
+			Address: testTokens,
+			Topics: []*types.Hash{
+				types.NewHashFromBytes(approvalForAllTopic[:]),
+				types.NewHashFromBytes(testAddr1.Bytes()),
+				types.NewHashFromBytes(testAddr2.Bytes()),
+			},
+			Data: approvedData,
+		},
+		{
+			Address: testTokens,
+			Topics: []*types.Hash{
+				types.NewHashFromBytes(uriTopic[:]),
+				types.NewHashFromBytes(big.NewInt(42).FillBytes(make([]byte, 32))),
+			},
+			Data: uriData,
+		},
+	}
+
+	approvals, err := ExtractApprovalForAll(logs)
 	require.NoError(t, err)
 	require.Len(t, approvals, 1)
 	require.True(t, approvals[0].Contract.Equal(testTokens))
@@ -51,7 +228,66 @@ func TestExtractApprovalForAllSampleReceipt(t *testing.T) {
 }
 
 func TestExtractURISampleReceipt(t *testing.T) {
-	uris, err := ExtractURI(sampleReceiptLogs(t))
+	transferSingleTopic, ok := transferSingleEvent.Topic0()
+	require.True(t, ok)
+	transferBatchTopic, ok := transferBatchEvent.Topic0()
+	require.True(t, ok)
+	approvalForAllTopic, ok := approvalForAllEvent.Topic0()
+	require.True(t, ok)
+	uriTopic, ok := uriEvent.Topic0()
+	require.True(t, ok)
+
+	transferSingleData, err := abi.Pack(abi.Types{abi.Uint256, abi.Uint256}, big.NewInt(42), big.NewInt(7))
+	require.NoError(t, err)
+	transferBatchData, err := abi.Pack(abi.Types{abi.Slice(abi.Uint256), abi.Slice(abi.Uint256)},
+		[]*big.Int{big.NewInt(1), big.NewInt(2)}, []*big.Int{big.NewInt(10), big.NewInt(20)})
+	require.NoError(t, err)
+	approvedData, err := abi.Pack(abi.Types{abi.Bool}, true)
+	require.NoError(t, err)
+	uriData, err := abi.Pack(abi.Types{abi.String}, "ipfs://1234")
+	require.NoError(t, err)
+
+	logs := []tx.Log{
+		{
+			Address: testTokens,
+			Topics: []*types.Hash{
+				types.NewHashFromBytes(transferSingleTopic[:]),
+				types.NewHashFromBytes(testAddr1.Bytes()),
+				types.NewHashFromBytes(testAddr1.Bytes()),
+				types.NewHashFromBytes(testAddr2.Bytes()),
+			},
+			Data: transferSingleData,
+		},
+		{
+			Address: testTokens,
+			Topics: []*types.Hash{
+				types.NewHashFromBytes(transferBatchTopic[:]),
+				types.NewHashFromBytes(testAddr1.Bytes()),
+				types.NewHashFromBytes(testAddr1.Bytes()),
+				types.NewHashFromBytes(testAddr2.Bytes()),
+			},
+			Data: transferBatchData,
+		},
+		{
+			Address: testTokens,
+			Topics: []*types.Hash{
+				types.NewHashFromBytes(approvalForAllTopic[:]),
+				types.NewHashFromBytes(testAddr1.Bytes()),
+				types.NewHashFromBytes(testAddr2.Bytes()),
+			},
+			Data: approvedData,
+		},
+		{
+			Address: testTokens,
+			Topics: []*types.Hash{
+				types.NewHashFromBytes(uriTopic[:]),
+				types.NewHashFromBytes(big.NewInt(42).FillBytes(make([]byte, 32))),
+			},
+			Data: uriData,
+		},
+	}
+
+	uris, err := ExtractURI(logs)
 	require.NoError(t, err)
 	require.Len(t, uris, 1)
 	require.True(t, uris[0].Contract.Equal(testTokens))
@@ -186,67 +422,4 @@ func TestExtractURIRejectsMalformedData(t *testing.T) {
 	}}
 	_, err := ExtractURI(logs)
 	require.Error(t, err)
-}
-
-func sampleReceiptLogs(t *testing.T) []tx.Log {
-	t.Helper()
-
-	transferSingleTopic, ok := transferSingleEvent.Topic0()
-	require.True(t, ok)
-	transferBatchTopic, ok := transferBatchEvent.Topic0()
-	require.True(t, ok)
-	approvalForAllTopic, ok := approvalForAllEvent.Topic0()
-	require.True(t, ok)
-	uriTopic, ok := uriEvent.Topic0()
-	require.True(t, ok)
-
-	transferSingleData, err := abi.Pack(abi.Types{abi.Uint256, abi.Uint256}, big.NewInt(42), big.NewInt(7))
-	require.NoError(t, err)
-	transferBatchData, err := abi.Pack(abi.Types{abi.Slice(abi.Uint256), abi.Slice(abi.Uint256)},
-		[]*big.Int{big.NewInt(1), big.NewInt(2)}, []*big.Int{big.NewInt(10), big.NewInt(20)})
-	require.NoError(t, err)
-	approvedData, err := abi.Pack(abi.Types{abi.Bool}, true)
-	require.NoError(t, err)
-	uriData, err := abi.Pack(abi.Types{abi.String}, "ipfs://1234")
-	require.NoError(t, err)
-
-	return []tx.Log{
-		{
-			Address: testTokens,
-			Topics: []*types.Hash{
-				types.NewHashFromBytes(transferSingleTopic[:]),
-				types.NewHashFromBytes(testAddr1.Bytes()),
-				types.NewHashFromBytes(testAddr1.Bytes()),
-				types.NewHashFromBytes(testAddr2.Bytes()),
-			},
-			Data: transferSingleData,
-		},
-		{
-			Address: testTokens,
-			Topics: []*types.Hash{
-				types.NewHashFromBytes(transferBatchTopic[:]),
-				types.NewHashFromBytes(testAddr1.Bytes()),
-				types.NewHashFromBytes(testAddr1.Bytes()),
-				types.NewHashFromBytes(testAddr2.Bytes()),
-			},
-			Data: transferBatchData,
-		},
-		{
-			Address: testTokens,
-			Topics: []*types.Hash{
-				types.NewHashFromBytes(approvalForAllTopic[:]),
-				types.NewHashFromBytes(testAddr1.Bytes()),
-				types.NewHashFromBytes(testAddr2.Bytes()),
-			},
-			Data: approvedData,
-		},
-		{
-			Address: testTokens,
-			Topics: []*types.Hash{
-				types.NewHashFromBytes(uriTopic[:]),
-				types.NewHashFromBytes(big.NewInt(42).FillBytes(make([]byte, 32))),
-			},
-			Data: uriData,
-		},
-	}
 }

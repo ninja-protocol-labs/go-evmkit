@@ -10,8 +10,8 @@ import (
 )
 
 // ExtractTransfers pulls every TransferSingle-shaped log out of logs, from any contract; filter by Contract afterward.
-func ExtractTransfers(logs []tx.Log) ([]Transfer, error) {
-	var transfers []Transfer
+func ExtractTransfers(logs []tx.Log) ([]TransferSingleEvent, error) {
+	var transfers []TransferSingleEvent
 	for i, log := range logs {
 		if len(log.Topics) == 0 || log.Topics[0] == nil {
 			continue
@@ -50,14 +50,14 @@ func ExtractTransfers(logs []tx.Log) ([]Transfer, error) {
 		if !ok {
 			return nil, fmt.Errorf("erc1155: extractTransfers: logs[%d]: unexpected decoded type for value: %T", i, vals[4])
 		}
-		transfers = append(transfers, *NewTransfer(log.Address, operator, from, to, id, value))
+		transfers = append(transfers, *NewTransferSingleEvent(log.Address, operator, from, to, id, value))
 	}
 	return transfers, nil
 }
 
 // ExtractTransferBatches pulls every TransferBatch-shaped log out of logs; see ExtractTransfers.
-func ExtractTransferBatches(logs []tx.Log) ([]TransferBatch, error) {
-	var batches []TransferBatch
+func ExtractTransferBatches(logs []tx.Log) ([]TransferBatchEvent, error) {
+	var batches []TransferBatchEvent
 	for i, log := range logs {
 		if len(log.Topics) == 0 || log.Topics[0] == nil {
 			continue
@@ -112,14 +112,14 @@ func ExtractTransferBatches(logs []tx.Log) ([]TransferBatch, error) {
 			}
 			values[j] = value
 		}
-		batches = append(batches, *NewTransferBatch(log.Address, operator, from, to, ids, values))
+		batches = append(batches, *NewTransferBatchEvent(log.Address, operator, from, to, ids, values))
 	}
 	return batches, nil
 }
 
 // ExtractApprovalForAll pulls every ApprovalForAll-shaped log out of logs; see ExtractTransfers.
-func ExtractApprovalForAll(logs []tx.Log) ([]ApprovalForAll, error) {
-	var approvals []ApprovalForAll
+func ExtractApprovalForAll(logs []tx.Log) ([]ApprovalForAllEvent, error) {
+	var approvals []ApprovalForAllEvent
 	for i, log := range logs {
 		if len(log.Topics) == 0 || log.Topics[0] == nil {
 			continue
@@ -150,15 +150,15 @@ func ExtractApprovalForAll(logs []tx.Log) ([]ApprovalForAll, error) {
 		if !ok {
 			return nil, fmt.Errorf("erc1155: extractApprovalForAll: logs[%d]: unexpected decoded type for approved: %T", i, vals[2])
 		}
-		approvals = append(approvals, *NewApprovalForAll(log.Address, account, operator, approved))
+		approvals = append(approvals, *NewApprovalForAllEvent(log.Address, account, operator, approved))
 	}
 	return approvals, nil
 }
 
 // ExtractURI pulls every URI-shaped log out of logs; see ExtractTransfers. Implementations aren't
 // required to emit this event, so its absence doesn't mean the uri() function's result is stale.
-func ExtractURI(logs []tx.Log) ([]URI, error) {
-	var uris []URI
+func ExtractURI(logs []tx.Log) ([]URIEvent, error) {
+	var uris []URIEvent
 	for i, log := range logs {
 		if len(log.Topics) == 0 || log.Topics[0] == nil {
 			continue
@@ -185,7 +185,7 @@ func ExtractURI(logs []tx.Log) ([]URI, error) {
 		if !ok {
 			return nil, fmt.Errorf("erc1155: extractURI: logs[%d]: unexpected decoded type for id: %T", i, vals[1])
 		}
-		uris = append(uris, *NewURI(log.Address, value, id))
+		uris = append(uris, *NewURIEvent(log.Address, value, id))
 	}
 	return uris, nil
 }
