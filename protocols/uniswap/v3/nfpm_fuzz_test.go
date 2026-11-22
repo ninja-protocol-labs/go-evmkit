@@ -1,13 +1,20 @@
 package v3
 
 import (
+	"context"
 	"math/big"
 	"testing"
 
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
+	"github.com/ninja-protocol-labs/go-evmkit/rpc"
+	"github.com/ninja-protocol-labs/go-evmkit/rpc/mocks"
+	"github.com/ninja-protocol-labs/go-evmkit/tx"
+	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
 // go test -run '^$' -fuzz '^FuzzEncodeNfpmMintRoundTrip$' -fuzztime=10s ./protocols/uniswap/v3
@@ -408,5 +415,134 @@ func FuzzNFTPermitSignRoundTrip(f *testing.F) {
 		ok, err := core.VerifyAddress(digest, sig, signerAddr)
 		require.NoError(t, err)
 		require.True(t, ok)
+	})
+}
+
+// go test -run '^$' -fuzz '^FuzzNFPMMintThroughClient$' -fuzztime=10s ./protocols/uniswap/v3
+func FuzzNFPMMintThroughClient(f *testing.F) {
+	f.Add([]byte{}, []byte{}, []byte{}, uint32(0), int32(0), int32(0), []byte{}, []byte{}, []byte{}, uint64(0), true)
+	f.Add([]byte{0x01}, []byte{0x02}, []byte{0x03}, uint32(3000), int32(-60), int32(60), []byte{0x03, 0xe8}, []byte{0x07, 0xd0}, []byte{0x01}, uint64(42), false)
+	f.Add(make([]byte, 20), make([]byte, 20), make([]byte, 20), uint32(1<<24-1), int32(-887272), int32(887272), make([]byte, 32), make([]byte, 32), make([]byte, 16), ^uint64(0)-1, true)
+
+	key, err := types.NewPrivateKeyFromBig(big.NewInt(0xb1d))
+	require.NoError(f, err)
+	signer := core.PubkeyToAddress(key.PublicKey())
+
+	f.Fuzz(func(t *testing.T, nfpmRaw, token0Raw, token1Raw []byte, feeRaw uint32, tickLowerRaw, tickUpperRaw int32, amount0Raw, amount1Raw, nativeRaw []byte, nonce uint64, dynamic bool) {
+		if len(amount0Raw) > 32 {
+			amount0Raw = amount0Raw[len(amount0Raw)-32:]
+		}
+		if len(amount1Raw) > 32 {
+			amount1Raw = amount1Raw[len(amount1Raw)-32:]
+		}
+		if len(nativeRaw) > 16 {
+			nativeRaw = nativeRaw[len(nativeRaw)-16:]
+		}
+		nfpm := types.NewAddressFromBytes(nfpmRaw)
+		token0 := types.NewAddressFromBytes(token0Raw)
+		token1 := types.NewAddressFromBytes(token1Raw)
+		fee := big.NewInt(int64(feeRaw % (1 << 24)))
+		tickLower := big.NewInt(int64(tickLowerRaw % (1 << 23)))
+		tickUpper := big.NewInt(int64(tickUpperRaw % (1 << 23)))
+		amount0 := new(big.Int).SetBytes(amount0Raw)
+		amount1 := new(big.Int).SetBytes(amount1Raw)
+		var native *big.Int
+		if len(nativeRaw) > 0 {
+			native = new(big.Int).SetBytes(nativeRaw)
+		}
+
+		var builder tx.Builder
+		if dynamic {
+			builder = tx.NewDynamicFeeBuilder()
+		} else {
+			builder = tx.NewLegacyBuilder()
+		}
+		builder.ChainID(big.NewInt(1))
+		builder.Nonce(nonce)
+		builder.Limit(3_000_000)
+		builder.Price(big.NewInt(30_000_000_000), big.NewInt(1_000_000_000))
+
+		var raw []byte
+		c := mocks.NewClient(t)
+		c.EXPECT().Call(mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, e rpc.Element) error {
+			raw, err = encoding.Hex.Decode(e.Params.([]any)[0].(string))
+			require.NoError(t, err)
+			*e.Result.(*string) = core.Keccak256(raw).String()
+			return nil
+		}).Once()
+
+		opts := bind.NewTransactOptions(key, builder)
+		params := NewMintParams(token0, token1, fee, tickLower, tickUpper, amount0, amount1, big.NewInt(0), big.NewInt(0), token0, big.NewInt(1_700_000_000))
+		signed, hash, err := NewNFPM(c).Mint(t.Context(), opts, NewNFPMMintRequest(nfpm, params, native))
+		require.NoError(t, err)
+		require.True(t, hash.Equal(core.Keccak256(raw)))
+		require.Equal(t, nonce, signed.AddressNonce())
+		require.Nil(t, opts.Value)
+
+		decoded, err := core.DecodeTransaction(raw)
+		require.NoError(t, err)
+		from, err := decoded.Sender()
+		require.NoError(t, err)
+		require.True(t, from.Equal(signer))
+
+		var gotTo *types.Address
+		var gotValue *big.Int
+		var gotData []byte
+		switch v := decoded.(type) {
+		case *core.DynamicFeeTx:
+			require.True(t, dynamic)
+			gotTo, gotValue, gotData = v.To, v.Value, v.Data
+		case *core.LegacyTx:
+			require.False(t, dynamic)
+			gotTo, gotValue, gotData = v.To, v.Value, v.Data
+		default:
+			t.Fatalf("unexpected tx type %T", decoded)
+		}
+		require.True(t, gotTo.Equal(nfpm))
+		if native == nil {
+			require.Zero(t, gotValue.Sign())
+		} else {
+			require.Zero(t, native.Cmp(gotValue))
+		}
+
+		want, err := EncodeNfpmMint(token0, token1, fee, tickLower, tickUpper, amount0, amount1, big.NewInt(0), big.NewInt(0), token0, big.NewInt(1_700_000_000))
+		require.NoError(t, err)
+		require.Equal(t, want, gotData)
+	})
+}
+
+// go test -run '^$' -fuzz '^FuzzNFPMReadsSurviveArbitraryResult$' -fuzztime=10s ./protocols/uniswap/v3
+func FuzzNFPMReadsSurviveArbitraryResult(f *testing.F) {
+	f.Add([]byte{})
+	f.Add(make([]byte, 31))
+	f.Add(make([]byte, 64))
+	f.Add(make([]byte, 12*32))
+	f.Add(append(append(make([]byte, 31), 0x20), append(make([]byte, 31), 0x02)...))
+
+	nfpm := types.MustNewAddressFromHex("0xC36442b4a4522E871399CD717aBDD847Ab11FE88")
+	a := types.MustNewAddressFromHex("0x6667c8dc9fbfec411e7c1ee2b24de960149f930f")
+
+	f.Fuzz(func(t *testing.T, result []byte) {
+		c := mocks.NewClient(t)
+		c.EXPECT().Call(mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, e rpc.Element) error {
+			*e.Result.(*string) = encoding.Hex.EncodePrefixed(result)
+			return nil
+		}).Times(5)
+		n := NewNFPM(c)
+
+		position, err := n.Positions(t.Context(), nil, NewNFPMPositionsRequest(nfpm, big.NewInt(1)))
+		require.True(t, (err == nil) != (position == nil))
+		weth9, err := n.WETH9(t.Context(), nil, NewWETH9Request(nfpm))
+		require.True(t, (err == nil) != (weth9 == nil))
+		tokenID, liquidity, amount0, amount1, err := n.CallMint(t.Context(), nil, NewNFPMMintRequest(nfpm, NewMintParams(a, a, big.NewInt(3000), big.NewInt(-60), big.NewInt(60), big.NewInt(1), big.NewInt(1), big.NewInt(0), big.NewInt(0), a, big.NewInt(1)), nil))
+		require.True(t, (err == nil) != (tokenID == nil))
+		require.True(t, (err == nil) != (liquidity == nil))
+		require.True(t, (err == nil) != (amount0 == nil))
+		require.True(t, (err == nil) != (amount1 == nil))
+		results, err := n.CallMulticall(t.Context(), nil, NewNFPMMulticallRequest(nfpm, [][]byte{{0x01}}, nil))
+		require.True(t, err == nil || results == nil)
+		collected0, collected1, err := n.CallCollect(t.Context(), nil, NewNFPMCollectRequest(nfpm, NewCollectParams(big.NewInt(1), a, big.NewInt(1), big.NewInt(1))))
+		require.True(t, (err == nil) != (collected0 == nil))
+		require.True(t, (err == nil) != (collected1 == nil))
 	})
 }
