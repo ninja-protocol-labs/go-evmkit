@@ -166,19 +166,19 @@ var (
 // ErrAllowanceExpired, etc. are sentinel errors wrapRevertError maps known Permit2 custom
 // errors to, for errors.Is.
 var (
-	ErrAllowanceExpired         = errors.New("permit2: allowance expired")
-	ErrInsufficientAllowance    = errors.New("permit2: insufficient allowance")
-	ErrExcessiveInvalidation    = errors.New("permit2: excessive invalidation")
-	ErrSignatureExpired         = errors.New("permit2: signature expired")
-	ErrInvalidNonce             = errors.New("permit2: invalid nonce")
-	ErrInvalidSignatureLength   = errors.New("permit2: invalid signature length")
-	ErrInvalidSignature         = errors.New("permit2: invalid signature")
-	ErrInvalidSigner            = errors.New("permit2: invalid signer")
-	ErrInvalidContractSignature = errors.New("permit2: invalid contract signature")
-	ErrUnsafeCast               = errors.New("permit2: unsafe cast")
-	ErrInvalidAmount            = errors.New("permit2: invalid amount")
-	ErrLengthMismatch           = errors.New("permit2: length mismatch")
-	ErrUnknown                  = errors.New("permit2: unknown revert")
+	ErrAllowanceExpired         = errors.New("allowance expired")
+	ErrInsufficientAllowance    = errors.New("insufficient allowance")
+	ErrExcessiveInvalidation    = errors.New("excessive invalidation")
+	ErrSignatureExpired         = errors.New("signature expired")
+	ErrInvalidNonce             = errors.New("invalid nonce")
+	ErrInvalidSignatureLength   = errors.New("invalid signature length")
+	ErrInvalidSignature         = errors.New("invalid signature")
+	ErrInvalidSigner            = errors.New("invalid signer")
+	ErrInvalidContractSignature = errors.New("invalid contract signature")
+	ErrUnsafeCast               = errors.New("unsafe cast")
+	ErrInvalidAmount            = errors.New("invalid amount")
+	ErrLengthMismatch           = errors.New("length mismatch")
+	ErrUnknown                  = errors.New("unknown revert")
 )
 
 // EncodeDomainSeparator returns the calldata for DOMAIN_SEPARATOR().

@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 	"github.com/ninja-protocol-labs/go-evmkit/standards/eip712"
@@ -119,12 +120,12 @@ func TestNewPermitBatchTransferFrom(t *testing.T) {
 	require.Same(t, deadline, p.Deadline)
 }
 
-func TestNewNonceInvalidation(t *testing.T) {
+func TestNewNonceInvalidationEvent(t *testing.T) {
 	contract := types.MustNewAddressFromHex("0xbc4ca0eda7647a8ab7c2061c2e118a18a936f13d")
 	newNonce := big.NewInt(2)
 	oldNonce := big.NewInt(1)
 
-	n := NewNonceInvalidation(contract, testOwner, testToken, testSpender, newNonce, oldNonce)
+	n := NewNonceInvalidationEvent(contract, testOwner, testToken, testSpender, newNonce, oldNonce)
 	require.Same(t, contract, n.Contract)
 	require.Same(t, testOwner, n.Owner)
 	require.Same(t, testToken, n.Token)
@@ -133,12 +134,12 @@ func TestNewNonceInvalidation(t *testing.T) {
 	require.Same(t, oldNonce, n.OldNonce)
 }
 
-func TestNewApproval(t *testing.T) {
+func TestNewApprovalEvent(t *testing.T) {
 	contract := types.MustNewAddressFromHex("0xbc4ca0eda7647a8ab7c2061c2e118a18a936f13d")
 	amount := big.NewInt(100)
 	expiration := big.NewInt(200)
 
-	a := NewApproval(contract, testOwner, testToken, testSpender, amount, expiration)
+	a := NewApprovalEvent(contract, testOwner, testToken, testSpender, amount, expiration)
 	require.Same(t, contract, a.Contract)
 	require.Same(t, testOwner, a.Owner)
 	require.Same(t, testToken, a.Token)
@@ -147,13 +148,13 @@ func TestNewApproval(t *testing.T) {
 	require.Same(t, expiration, a.Expiration)
 }
 
-func TestNewPermit(t *testing.T) {
+func TestNewPermitEvent(t *testing.T) {
 	contract := types.MustNewAddressFromHex("0xbc4ca0eda7647a8ab7c2061c2e118a18a936f13d")
 	amount := big.NewInt(100)
 	expiration := big.NewInt(200)
 	nonce := big.NewInt(1)
 
-	p := NewPermit(contract, testOwner, testToken, testSpender, amount, expiration, nonce)
+	p := NewPermitEvent(contract, testOwner, testToken, testSpender, amount, expiration, nonce)
 	require.Same(t, contract, p.Contract)
 	require.Same(t, testOwner, p.Owner)
 	require.Same(t, testToken, p.Token)
@@ -163,22 +164,22 @@ func TestNewPermit(t *testing.T) {
 	require.Same(t, nonce, p.Nonce)
 }
 
-func TestNewLockdown(t *testing.T) {
+func TestNewLockdownEvent(t *testing.T) {
 	contract := types.MustNewAddressFromHex("0xbc4ca0eda7647a8ab7c2061c2e118a18a936f13d")
 
-	l := NewLockdown(contract, testOwner, testToken, testSpender)
+	l := NewLockdownEvent(contract, testOwner, testToken, testSpender)
 	require.Same(t, contract, l.Contract)
 	require.Same(t, testOwner, l.Owner)
 	require.Same(t, testToken, l.Token)
 	require.Same(t, testSpender, l.Spender)
 }
 
-func TestNewUnorderedNonceInvalidation(t *testing.T) {
+func TestNewUnorderedNonceInvalidationEvent(t *testing.T) {
 	contract := types.MustNewAddressFromHex("0xbc4ca0eda7647a8ab7c2061c2e118a18a936f13d")
 	word := big.NewInt(1)
 	mask := big.NewInt(2)
 
-	n := NewUnorderedNonceInvalidation(contract, testOwner, word, mask)
+	n := NewUnorderedNonceInvalidationEvent(contract, testOwner, word, mask)
 	require.Same(t, contract, n.Contract)
 	require.Same(t, testOwner, n.Owner)
 	require.Same(t, word, n.Word)
@@ -728,4 +729,222 @@ func TestPermitBatchTransferFromSignWithWitness(t *testing.T) {
 	ok, err := core.VerifyAddress(digest, sig, signerAddr)
 	require.NoError(t, err)
 	require.True(t, ok)
+}
+
+func TestRequestsValidate(t *testing.T) {
+	contract := types.MustNewAddressFromHex("0x000000000022D473030F116dDEE9F6B43aC78BA3")
+	owner := types.MustNewAddressFromHex("0x6667c8dc9fbfec411e7c1ee2b24de960149f930f")
+	spender := types.MustNewAddressFromHex("0xba12222222228d8ba445958a75a0704d566bf2c8")
+	token := types.MustNewAddressFromHex("0xA0b86991c6218b36c1d19d4a2e9eb0ce3606eb48")
+	witness := types.NewHashFromBytes([]byte{0x01})
+	sig := &types.Signature{}
+
+	for _, tc := range []struct {
+		name string
+		err  error
+		want string
+	}{
+		{"domainSeparator nil", (*DomainSeparatorRequest)(nil).Validate(), "invalid request: request is nil"},
+		{"domainSeparator empty", (&DomainSeparatorRequest{}).Validate(), "invalid request: contract is nil"},
+		{"domainSeparator nil Contract", (&DomainSeparatorRequest{}).Validate(), "invalid request: contract is nil"},
+		{"domainSeparator valid", (&DomainSeparatorRequest{Contract: contract}).Validate(), ""},
+		{"allowance nil", (*AllowanceRequest)(nil).Validate(), "invalid request: request is nil"},
+		{"allowance empty", (&AllowanceRequest{}).Validate(), "invalid request: contract is nil"},
+		{"allowance nil Contract", (&AllowanceRequest{Owner: owner, Token: token, Spender: spender}).Validate(), "invalid request: contract is nil"},
+		{"allowance nil Owner", (&AllowanceRequest{Contract: contract, Token: token, Spender: spender}).Validate(), "invalid request: owner is nil"},
+		{"allowance nil Token", (&AllowanceRequest{Contract: contract, Owner: owner, Spender: spender}).Validate(), "invalid request: token is nil"},
+		{"allowance nil Spender", (&AllowanceRequest{Contract: contract, Owner: owner, Token: token}).Validate(), "invalid request: spender is nil"},
+		{"allowance valid", (&AllowanceRequest{Contract: contract, Owner: owner, Token: token, Spender: spender}).Validate(), ""},
+		{"nonceBitmap nil", (*NonceBitmapRequest)(nil).Validate(), "invalid request: request is nil"},
+		{"nonceBitmap empty", (&NonceBitmapRequest{}).Validate(), "invalid request: contract is nil"},
+		{"nonceBitmap nil Contract", (&NonceBitmapRequest{Owner: owner, WordPos: big.NewInt(0)}).Validate(), "invalid request: contract is nil"},
+		{"nonceBitmap nil Owner", (&NonceBitmapRequest{Contract: contract, WordPos: big.NewInt(0)}).Validate(), "invalid request: owner is nil"},
+		{"nonceBitmap nil WordPos", (&NonceBitmapRequest{Contract: contract, Owner: owner}).Validate(), "invalid request: wordPos is nil"},
+		{"nonceBitmap valid", (&NonceBitmapRequest{Contract: contract, Owner: owner, WordPos: big.NewInt(0)}).Validate(), ""},
+		{"approve nil", (*ApproveRequest)(nil).Validate(), "invalid request: request is nil"},
+		{"approve empty", (&ApproveRequest{}).Validate(), "invalid request: contract is nil"},
+		{"approve nil Contract", (&ApproveRequest{Token: token, Spender: spender, Amount: big.NewInt(1), Expiration: big.NewInt(0)}).Validate(), "invalid request: contract is nil"},
+		{"approve nil Token", (&ApproveRequest{Contract: contract, Spender: spender, Amount: big.NewInt(1), Expiration: big.NewInt(0)}).Validate(), "invalid request: token is nil"},
+		{"approve nil Spender", (&ApproveRequest{Contract: contract, Token: token, Amount: big.NewInt(1), Expiration: big.NewInt(0)}).Validate(), "invalid request: spender is nil"},
+		{"approve nil Amount", (&ApproveRequest{Contract: contract, Token: token, Spender: spender, Expiration: big.NewInt(0)}).Validate(), "invalid request: amount is nil"},
+		{"approve nil Expiration", (&ApproveRequest{Contract: contract, Token: token, Spender: spender, Amount: big.NewInt(1)}).Validate(), "invalid request: expiration is nil"},
+		{"approve valid", (&ApproveRequest{Contract: contract, Token: token, Spender: spender, Amount: big.NewInt(1), Expiration: big.NewInt(0)}).Validate(), ""},
+		{"transferFrom nil", (*TransferFromRequest)(nil).Validate(), "invalid request: request is nil"},
+		{"transferFrom empty", (&TransferFromRequest{}).Validate(), "invalid request: contract is nil"},
+		{"transferFrom nil Contract", (&TransferFromRequest{From: owner, To: spender, Amount: big.NewInt(1), Token: token}).Validate(), "invalid request: contract is nil"},
+		{"transferFrom nil From", (&TransferFromRequest{Contract: contract, To: spender, Amount: big.NewInt(1), Token: token}).Validate(), "invalid request: from is nil"},
+		{"transferFrom nil To", (&TransferFromRequest{Contract: contract, From: owner, Amount: big.NewInt(1), Token: token}).Validate(), "invalid request: to is nil"},
+		{"transferFrom nil Amount", (&TransferFromRequest{Contract: contract, From: owner, To: spender, Token: token}).Validate(), "invalid request: amount is nil"},
+		{"transferFrom nil Token", (&TransferFromRequest{Contract: contract, From: owner, To: spender, Amount: big.NewInt(1)}).Validate(), "invalid request: token is nil"},
+		{"transferFrom valid", (&TransferFromRequest{Contract: contract, From: owner, To: spender, Amount: big.NewInt(1), Token: token}).Validate(), ""},
+		{"invalidateNonces nil", (*InvalidateNoncesRequest)(nil).Validate(), "invalid request: request is nil"},
+		{"invalidateNonces empty", (&InvalidateNoncesRequest{}).Validate(), "invalid request: contract is nil"},
+		{"invalidateNonces nil Contract", (&InvalidateNoncesRequest{Token: token, Spender: spender, NewNonce: big.NewInt(2)}).Validate(), "invalid request: contract is nil"},
+		{"invalidateNonces nil Token", (&InvalidateNoncesRequest{Contract: contract, Spender: spender, NewNonce: big.NewInt(2)}).Validate(), "invalid request: token is nil"},
+		{"invalidateNonces nil Spender", (&InvalidateNoncesRequest{Contract: contract, Token: token, NewNonce: big.NewInt(2)}).Validate(), "invalid request: spender is nil"},
+		{"invalidateNonces nil NewNonce", (&InvalidateNoncesRequest{Contract: contract, Token: token, Spender: spender}).Validate(), "invalid request: newNonce is nil"},
+		{"invalidateNonces valid", (&InvalidateNoncesRequest{Contract: contract, Token: token, Spender: spender, NewNonce: big.NewInt(2)}).Validate(), ""},
+		{"invalidateUnorderedNonces nil", (*InvalidateUnorderedNoncesRequest)(nil).Validate(), "invalid request: request is nil"},
+		{"invalidateUnorderedNonces empty", (&InvalidateUnorderedNoncesRequest{}).Validate(), "invalid request: contract is nil"},
+		{"invalidateUnorderedNonces nil Contract", (&InvalidateUnorderedNoncesRequest{WordPos: big.NewInt(0), Mask: big.NewInt(1)}).Validate(), "invalid request: contract is nil"},
+		{"invalidateUnorderedNonces nil WordPos", (&InvalidateUnorderedNoncesRequest{Contract: contract, Mask: big.NewInt(1)}).Validate(), "invalid request: wordPos is nil"},
+		{"invalidateUnorderedNonces nil Mask", (&InvalidateUnorderedNoncesRequest{Contract: contract, WordPos: big.NewInt(0)}).Validate(), "invalid request: mask is nil"},
+		{"invalidateUnorderedNonces valid", (&InvalidateUnorderedNoncesRequest{Contract: contract, WordPos: big.NewInt(0), Mask: big.NewInt(1)}).Validate(), ""},
+		{"permitSingle nil", (*PermitSingleRequest)(nil).Validate(), "invalid request: request is nil"},
+		{"permitSingle empty", (&PermitSingleRequest{}).Validate(), "invalid request: contract is nil"},
+		{"permitSingle nil Contract", (&PermitSingleRequest{Owner: owner, PermitSingle: &PermitSingle{Details: &PermitDetails{Token: token, Amount: big.NewInt(1), Expiration: big.NewInt(2), Nonce: big.NewInt(3)}, Spender: spender, SigDeadline: big.NewInt(9)}, Signature: sig}).Validate(), "invalid request: contract is nil"},
+		{"permitSingle nil Owner", (&PermitSingleRequest{Contract: contract, PermitSingle: &PermitSingle{Details: &PermitDetails{Token: token, Amount: big.NewInt(1), Expiration: big.NewInt(2), Nonce: big.NewInt(3)}, Spender: spender, SigDeadline: big.NewInt(9)}, Signature: sig}).Validate(), "invalid request: owner is nil"},
+		{"permitSingle nil PermitSingle", (&PermitSingleRequest{Contract: contract, Owner: owner, Signature: sig}).Validate(), "invalid request: permitSingle is nil"},
+		{"permitSingle nil Details", (&PermitSingleRequest{Contract: contract, Owner: owner, PermitSingle: &PermitSingle{Spender: spender, SigDeadline: big.NewInt(9)}, Signature: sig}).Validate(), "invalid request: permitSingle.details is nil"},
+		{"permitSingle nil Spender", (&PermitSingleRequest{Contract: contract, Owner: owner, PermitSingle: &PermitSingle{Details: &PermitDetails{Token: token, Amount: big.NewInt(1), Expiration: big.NewInt(2), Nonce: big.NewInt(3)}, SigDeadline: big.NewInt(9)}, Signature: sig}).Validate(), "invalid request: permitSingle.spender is nil"},
+		{"permitSingle nil SigDeadline", (&PermitSingleRequest{Contract: contract, Owner: owner, PermitSingle: &PermitSingle{Details: &PermitDetails{Token: token, Amount: big.NewInt(1), Expiration: big.NewInt(2), Nonce: big.NewInt(3)}, Spender: spender}, Signature: sig}).Validate(), "invalid request: permitSingle.sigDeadline is nil"},
+		{"permitSingle nil details token", (&PermitSingleRequest{Contract: contract, Owner: owner, PermitSingle: &PermitSingle{Details: &PermitDetails{Amount: big.NewInt(1), Expiration: big.NewInt(2), Nonce: big.NewInt(3)}, Spender: spender, SigDeadline: big.NewInt(9)}, Signature: sig}).Validate(), "invalid request: permitSingle.details.token is nil"},
+		{"permitSingle nil details amount", (&PermitSingleRequest{Contract: contract, Owner: owner, PermitSingle: &PermitSingle{Details: &PermitDetails{Token: token, Expiration: big.NewInt(2), Nonce: big.NewInt(3)}, Spender: spender, SigDeadline: big.NewInt(9)}, Signature: sig}).Validate(), "invalid request: permitSingle.details.amount is nil"},
+		{"permitSingle nil details expiration", (&PermitSingleRequest{Contract: contract, Owner: owner, PermitSingle: &PermitSingle{Details: &PermitDetails{Token: token, Amount: big.NewInt(1), Nonce: big.NewInt(3)}, Spender: spender, SigDeadline: big.NewInt(9)}, Signature: sig}).Validate(), "invalid request: permitSingle.details.expiration is nil"},
+		{"permitSingle nil details nonce", (&PermitSingleRequest{Contract: contract, Owner: owner, PermitSingle: &PermitSingle{Details: &PermitDetails{Token: token, Amount: big.NewInt(1), Expiration: big.NewInt(2)}, Spender: spender, SigDeadline: big.NewInt(9)}, Signature: sig}).Validate(), "invalid request: permitSingle.details.nonce is nil"},
+		{"permitSingle nil signature", (&PermitSingleRequest{Contract: contract, Owner: owner, PermitSingle: &PermitSingle{Details: &PermitDetails{Token: token, Amount: big.NewInt(1), Expiration: big.NewInt(2), Nonce: big.NewInt(3)}, Spender: spender, SigDeadline: big.NewInt(9)}}).Validate(), "invalid request: signature is nil"},
+		{"permitSingle valid", (&PermitSingleRequest{Contract: contract, Owner: owner, PermitSingle: &PermitSingle{Details: &PermitDetails{Token: token, Amount: big.NewInt(1), Expiration: big.NewInt(2), Nonce: big.NewInt(3)}, Spender: spender, SigDeadline: big.NewInt(9)}, Signature: sig}).Validate(), ""},
+		{"permitBatch nil", (*PermitBatchRequest)(nil).Validate(), "invalid request: request is nil"},
+		{"permitBatch empty", (&PermitBatchRequest{}).Validate(), "invalid request: contract is nil"},
+		{"permitBatch nil Contract", (&PermitBatchRequest{Owner: owner, PermitBatch: &PermitBatch{Details: []PermitDetails{*&PermitDetails{Token: token, Amount: big.NewInt(1), Expiration: big.NewInt(2), Nonce: big.NewInt(3)}, *&PermitDetails{Token: token, Amount: big.NewInt(1), Expiration: big.NewInt(2), Nonce: big.NewInt(3)}}, Spender: spender, SigDeadline: big.NewInt(9)}, Signature: sig}).Validate(), "invalid request: contract is nil"},
+		{"permitBatch nil Owner", (&PermitBatchRequest{Contract: contract, PermitBatch: &PermitBatch{Details: []PermitDetails{*&PermitDetails{Token: token, Amount: big.NewInt(1), Expiration: big.NewInt(2), Nonce: big.NewInt(3)}, *&PermitDetails{Token: token, Amount: big.NewInt(1), Expiration: big.NewInt(2), Nonce: big.NewInt(3)}}, Spender: spender, SigDeadline: big.NewInt(9)}, Signature: sig}).Validate(), "invalid request: owner is nil"},
+		{"permitBatch nil PermitBatch", (&PermitBatchRequest{Contract: contract, Owner: owner, Signature: sig}).Validate(), "invalid request: permitBatch is nil"},
+		{"permitBatch nil details", (&PermitBatchRequest{Contract: contract, Owner: owner, PermitBatch: &PermitBatch{Spender: spender, SigDeadline: big.NewInt(9)}, Signature: sig}).Validate(), "invalid request: permitBatch.details is empty"},
+		{"permitBatch empty details", (&PermitBatchRequest{Contract: contract, Owner: owner, PermitBatch: &PermitBatch{Details: []PermitDetails{}, Spender: spender, SigDeadline: big.NewInt(9)}, Signature: sig}).Validate(), "invalid request: permitBatch.details is empty"},
+		{"permitBatch nil details[1] token", (&PermitBatchRequest{Contract: contract, Owner: owner, PermitBatch: &PermitBatch{Details: []PermitDetails{*&PermitDetails{Token: token, Amount: big.NewInt(1), Expiration: big.NewInt(2), Nonce: big.NewInt(3)}, *&PermitDetails{Amount: big.NewInt(1), Expiration: big.NewInt(2), Nonce: big.NewInt(3)}}, Spender: spender, SigDeadline: big.NewInt(9)}, Signature: sig}).Validate(), "invalid request: permitBatch.details[1].token is nil"},
+		{"permitBatch nil details[1] amount", (&PermitBatchRequest{Contract: contract, Owner: owner, PermitBatch: &PermitBatch{Details: []PermitDetails{*&PermitDetails{Token: token, Amount: big.NewInt(1), Expiration: big.NewInt(2), Nonce: big.NewInt(3)}, *&PermitDetails{Token: token, Expiration: big.NewInt(2), Nonce: big.NewInt(3)}}, Spender: spender, SigDeadline: big.NewInt(9)}, Signature: sig}).Validate(), "invalid request: permitBatch.details[1].amount is nil"},
+		{"permitBatch nil details[1] expiration", (&PermitBatchRequest{Contract: contract, Owner: owner, PermitBatch: &PermitBatch{Details: []PermitDetails{*&PermitDetails{Token: token, Amount: big.NewInt(1), Expiration: big.NewInt(2), Nonce: big.NewInt(3)}, *&PermitDetails{Token: token, Amount: big.NewInt(1), Nonce: big.NewInt(3)}}, Spender: spender, SigDeadline: big.NewInt(9)}, Signature: sig}).Validate(), "invalid request: permitBatch.details[1].expiration is nil"},
+		{"permitBatch nil details[1] nonce", (&PermitBatchRequest{Contract: contract, Owner: owner, PermitBatch: &PermitBatch{Details: []PermitDetails{*&PermitDetails{Token: token, Amount: big.NewInt(1), Expiration: big.NewInt(2), Nonce: big.NewInt(3)}, *&PermitDetails{Token: token, Amount: big.NewInt(1), Expiration: big.NewInt(2)}}, Spender: spender, SigDeadline: big.NewInt(9)}, Signature: sig}).Validate(), "invalid request: permitBatch.details[1].nonce is nil"},
+		{"permitBatch first bad detail wins", (&PermitBatchRequest{Contract: contract, Owner: owner, PermitBatch: &PermitBatch{Details: []PermitDetails{*&PermitDetails{Token: token, Amount: big.NewInt(1), Expiration: big.NewInt(2)}, *&PermitDetails{Amount: big.NewInt(1), Expiration: big.NewInt(2), Nonce: big.NewInt(3)}}, Spender: spender, SigDeadline: big.NewInt(9)}, Signature: sig}).Validate(), "invalid request: permitBatch.details[0].nonce is nil"},
+		{"permitBatch nil Spender", (&PermitBatchRequest{Contract: contract, Owner: owner, PermitBatch: &PermitBatch{Details: []PermitDetails{*&PermitDetails{Token: token, Amount: big.NewInt(1), Expiration: big.NewInt(2), Nonce: big.NewInt(3)}, *&PermitDetails{Token: token, Amount: big.NewInt(1), Expiration: big.NewInt(2), Nonce: big.NewInt(3)}}, SigDeadline: big.NewInt(9)}, Signature: sig}).Validate(), "invalid request: permitBatch.spender is nil"},
+		{"permitBatch nil SigDeadline", (&PermitBatchRequest{Contract: contract, Owner: owner, PermitBatch: &PermitBatch{Details: []PermitDetails{*&PermitDetails{Token: token, Amount: big.NewInt(1), Expiration: big.NewInt(2), Nonce: big.NewInt(3)}, *&PermitDetails{Token: token, Amount: big.NewInt(1), Expiration: big.NewInt(2), Nonce: big.NewInt(3)}}, Spender: spender}, Signature: sig}).Validate(), "invalid request: permitBatch.sigDeadline is nil"},
+		{"permitBatch nil signature", (&PermitBatchRequest{Contract: contract, Owner: owner, PermitBatch: &PermitBatch{Details: []PermitDetails{*&PermitDetails{Token: token, Amount: big.NewInt(1), Expiration: big.NewInt(2), Nonce: big.NewInt(3)}, *&PermitDetails{Token: token, Amount: big.NewInt(1), Expiration: big.NewInt(2), Nonce: big.NewInt(3)}}, Spender: spender, SigDeadline: big.NewInt(9)}}).Validate(), "invalid request: signature is nil"},
+		{"permitBatch valid", (&PermitBatchRequest{Contract: contract, Owner: owner, PermitBatch: &PermitBatch{Details: []PermitDetails{*&PermitDetails{Token: token, Amount: big.NewInt(1), Expiration: big.NewInt(2), Nonce: big.NewInt(3)}, *&PermitDetails{Token: token, Amount: big.NewInt(1), Expiration: big.NewInt(2), Nonce: big.NewInt(3)}}, Spender: spender, SigDeadline: big.NewInt(9)}, Signature: sig}).Validate(), ""},
+		{"transferFromBatch nil", (*TransferFromBatchRequest)(nil).Validate(), "invalid request: request is nil"},
+		{"transferFromBatch empty", (&TransferFromBatchRequest{}).Validate(), "invalid request: contract is nil"},
+		{"transferFromBatch nil contract", (&TransferFromBatchRequest{TransferDetails: []AllowanceTransferDetails{*NewAllowanceTransferDetails(owner, spender, big.NewInt(1), token), *NewAllowanceTransferDetails(owner, spender, big.NewInt(1), token)}}).Validate(), "invalid request: contract is nil"},
+		{"transferFromBatch nil transferDetails", (&TransferFromBatchRequest{Contract: contract}).Validate(), "invalid request: transferDetails is empty"},
+		{"transferFromBatch nil [1] from", (&TransferFromBatchRequest{Contract: contract, TransferDetails: []AllowanceTransferDetails{*NewAllowanceTransferDetails(owner, spender, big.NewInt(1), token), *NewAllowanceTransferDetails(nil, spender, big.NewInt(1), token)}}).Validate(), "invalid request: transferDetails[1].from is nil"},
+		{"transferFromBatch nil [1] to", (&TransferFromBatchRequest{Contract: contract, TransferDetails: []AllowanceTransferDetails{*NewAllowanceTransferDetails(owner, spender, big.NewInt(1), token), *NewAllowanceTransferDetails(owner, nil, big.NewInt(1), token)}}).Validate(), "invalid request: transferDetails[1].to is nil"},
+		{"transferFromBatch nil [1] amount", (&TransferFromBatchRequest{Contract: contract, TransferDetails: []AllowanceTransferDetails{*NewAllowanceTransferDetails(owner, spender, big.NewInt(1), token), *NewAllowanceTransferDetails(owner, spender, nil, token)}}).Validate(), "invalid request: transferDetails[1].amount is nil"},
+		{"transferFromBatch nil [1] token", (&TransferFromBatchRequest{Contract: contract, TransferDetails: []AllowanceTransferDetails{*NewAllowanceTransferDetails(owner, spender, big.NewInt(1), token), *NewAllowanceTransferDetails(owner, spender, big.NewInt(1), nil)}}).Validate(), "invalid request: transferDetails[1].token is nil"},
+		{"transferFromBatch valid", (&TransferFromBatchRequest{Contract: contract, TransferDetails: []AllowanceTransferDetails{*NewAllowanceTransferDetails(owner, spender, big.NewInt(1), token), *NewAllowanceTransferDetails(owner, spender, big.NewInt(1), token)}}).Validate(), ""},
+		{"lockdown nil", (*LockdownRequest)(nil).Validate(), "invalid request: request is nil"},
+		{"lockdown empty", (&LockdownRequest{}).Validate(), "invalid request: contract is nil"},
+		{"lockdown nil contract", (&LockdownRequest{Approvals: []TokenSpenderPair{*NewTokenSpenderPair(token, spender)}}).Validate(), "invalid request: contract is nil"},
+		{"lockdown empty approvals", (&LockdownRequest{Contract: contract, Approvals: []TokenSpenderPair{}}).Validate(), "invalid request: approvals is empty"},
+		{"lockdown nil [1] token", (&LockdownRequest{Contract: contract, Approvals: []TokenSpenderPair{*NewTokenSpenderPair(token, spender), *NewTokenSpenderPair(nil, spender)}}).Validate(), "invalid request: approvals[1].token is nil"},
+		{"lockdown nil [0] spender", (&LockdownRequest{Contract: contract, Approvals: []TokenSpenderPair{*NewTokenSpenderPair(token, nil)}}).Validate(), "invalid request: approvals[0].spender is nil"},
+		{"lockdown valid", (&LockdownRequest{Contract: contract, Approvals: []TokenSpenderPair{*NewTokenSpenderPair(token, spender)}}).Validate(), ""},
+		{"permitTransferFrom nil", (*PermitTransferFromRequest)(nil).Validate(), "invalid request: request is nil"},
+		{"permitTransferFrom empty", (&PermitTransferFromRequest{}).Validate(), "invalid request: contract is nil"},
+		{"permitTransferFrom nil contract", (&PermitTransferFromRequest{Permit: &PermitTransferFrom{Permitted: NewTokenPermissions(token, big.NewInt(5)), Nonce: big.NewInt(1), Deadline: big.NewInt(9)}, TransferDetails: NewSignatureTransferDetails(spender, big.NewInt(5)), Owner: owner, Signature: sig}).Validate(), "invalid request: contract is nil"},
+		{"permitTransferFrom nil permit", (&PermitTransferFromRequest{Contract: contract, TransferDetails: NewSignatureTransferDetails(spender, big.NewInt(5)), Owner: owner, Signature: sig}).Validate(), "invalid request: permit is nil"},
+		{"permitTransferFrom nil permitted", (&PermitTransferFromRequest{Contract: contract, Permit: &PermitTransferFrom{Nonce: big.NewInt(1), Deadline: big.NewInt(9)}, TransferDetails: NewSignatureTransferDetails(spender, big.NewInt(5)), Owner: owner, Signature: sig}).Validate(), "invalid request: permit.permitted is nil"},
+		{"permitTransferFrom nil permitted token", (&PermitTransferFromRequest{Contract: contract, Permit: &PermitTransferFrom{Permitted: NewTokenPermissions(nil, big.NewInt(5)), Nonce: big.NewInt(1), Deadline: big.NewInt(9)}, TransferDetails: NewSignatureTransferDetails(spender, big.NewInt(5)), Owner: owner, Signature: sig}).Validate(), "invalid request: permit.permitted.token is nil"},
+		{"permitTransferFrom nil permitted amount", (&PermitTransferFromRequest{Contract: contract, Permit: &PermitTransferFrom{Permitted: NewTokenPermissions(token, nil), Nonce: big.NewInt(1), Deadline: big.NewInt(9)}, TransferDetails: NewSignatureTransferDetails(spender, big.NewInt(5)), Owner: owner, Signature: sig}).Validate(), "invalid request: permit.permitted.amount is nil"},
+		{"permitTransferFrom nil permit nonce", (&PermitTransferFromRequest{Contract: contract, Permit: &PermitTransferFrom{Permitted: NewTokenPermissions(token, big.NewInt(5)), Deadline: big.NewInt(9)}, TransferDetails: NewSignatureTransferDetails(spender, big.NewInt(5)), Owner: owner, Signature: sig}).Validate(), "invalid request: permit.nonce is nil"},
+		{"permitTransferFrom nil permit deadline", (&PermitTransferFromRequest{Contract: contract, Permit: &PermitTransferFrom{Permitted: NewTokenPermissions(token, big.NewInt(5)), Nonce: big.NewInt(1)}, TransferDetails: NewSignatureTransferDetails(spender, big.NewInt(5)), Owner: owner, Signature: sig}).Validate(), "invalid request: permit.deadline is nil"},
+		{"permitTransferFrom nil transferDetails", (&PermitTransferFromRequest{Contract: contract, Permit: &PermitTransferFrom{Permitted: NewTokenPermissions(token, big.NewInt(5)), Nonce: big.NewInt(1), Deadline: big.NewInt(9)}, Owner: owner, Signature: sig}).Validate(), "invalid request: transferDetails is nil"},
+		{"permitTransferFrom nil transferDetails to", (&PermitTransferFromRequest{Contract: contract, Permit: &PermitTransferFrom{Permitted: NewTokenPermissions(token, big.NewInt(5)), Nonce: big.NewInt(1), Deadline: big.NewInt(9)}, TransferDetails: NewSignatureTransferDetails(nil, big.NewInt(5)), Owner: owner, Signature: sig}).Validate(), "invalid request: transferDetails.to is nil"},
+		{"permitTransferFrom nil transferDetails requestedAmount", (&PermitTransferFromRequest{Contract: contract, Permit: &PermitTransferFrom{Permitted: NewTokenPermissions(token, big.NewInt(5)), Nonce: big.NewInt(1), Deadline: big.NewInt(9)}, TransferDetails: NewSignatureTransferDetails(spender, nil), Owner: owner, Signature: sig}).Validate(), "invalid request: transferDetails.requestedAmount is nil"},
+		{"permitTransferFrom nil owner", (&PermitTransferFromRequest{Contract: contract, Permit: &PermitTransferFrom{Permitted: NewTokenPermissions(token, big.NewInt(5)), Nonce: big.NewInt(1), Deadline: big.NewInt(9)}, TransferDetails: NewSignatureTransferDetails(spender, big.NewInt(5)), Signature: sig}).Validate(), "invalid request: owner is nil"},
+		{"permitTransferFrom nil signature", (&PermitTransferFromRequest{Contract: contract, Permit: &PermitTransferFrom{Permitted: NewTokenPermissions(token, big.NewInt(5)), Nonce: big.NewInt(1), Deadline: big.NewInt(9)}, TransferDetails: NewSignatureTransferDetails(spender, big.NewInt(5)), Owner: owner}).Validate(), "invalid request: signature is nil"},
+		{"permitTransferFrom valid", (&PermitTransferFromRequest{Contract: contract, Permit: &PermitTransferFrom{Permitted: NewTokenPermissions(token, big.NewInt(5)), Nonce: big.NewInt(1), Deadline: big.NewInt(9)}, TransferDetails: NewSignatureTransferDetails(spender, big.NewInt(5)), Owner: owner, Signature: sig}).Validate(), ""},
+		{"permitWitnessTransferFrom nil", (*PermitWitnessTransferFromRequest)(nil).Validate(), "invalid request: request is nil"},
+		{"permitWitnessTransferFrom empty", (&PermitWitnessTransferFromRequest{}).Validate(), "invalid request: contract is nil"},
+		{"permitWitnessTransferFrom nil contract", (&PermitWitnessTransferFromRequest{Permit: &PermitTransferFrom{Permitted: NewTokenPermissions(token, big.NewInt(5)), Nonce: big.NewInt(1), Deadline: big.NewInt(9)}, TransferDetails: NewSignatureTransferDetails(spender, big.NewInt(5)), Owner: owner, Witness: witness, WitnessTypeString: "Witness witness)Witness(uint256 x)", Signature: sig}).Validate(), "invalid request: contract is nil"},
+		{"permitWitnessTransferFrom nil permit", (&PermitWitnessTransferFromRequest{Contract: contract, TransferDetails: NewSignatureTransferDetails(spender, big.NewInt(5)), Owner: owner, Witness: witness, WitnessTypeString: "Witness witness)Witness(uint256 x)", Signature: sig}).Validate(), "invalid request: permit is nil"},
+		{"permitWitnessTransferFrom nil permitted", (&PermitWitnessTransferFromRequest{Contract: contract, Permit: &PermitTransferFrom{Nonce: big.NewInt(1), Deadline: big.NewInt(9)}, TransferDetails: NewSignatureTransferDetails(spender, big.NewInt(5)), Owner: owner, Witness: witness, WitnessTypeString: "Witness witness)Witness(uint256 x)", Signature: sig}).Validate(), "invalid request: permit.permitted is nil"},
+		{"permitWitnessTransferFrom nil permitted token", (&PermitWitnessTransferFromRequest{Contract: contract, Permit: &PermitTransferFrom{Permitted: NewTokenPermissions(nil, big.NewInt(5)), Nonce: big.NewInt(1), Deadline: big.NewInt(9)}, TransferDetails: NewSignatureTransferDetails(spender, big.NewInt(5)), Owner: owner, Witness: witness, WitnessTypeString: "Witness witness)Witness(uint256 x)", Signature: sig}).Validate(), "invalid request: permit.permitted.token is nil"},
+		{"permitWitnessTransferFrom nil permitted amount", (&PermitWitnessTransferFromRequest{Contract: contract, Permit: &PermitTransferFrom{Permitted: NewTokenPermissions(token, nil), Nonce: big.NewInt(1), Deadline: big.NewInt(9)}, TransferDetails: NewSignatureTransferDetails(spender, big.NewInt(5)), Owner: owner, Witness: witness, WitnessTypeString: "Witness witness)Witness(uint256 x)", Signature: sig}).Validate(), "invalid request: permit.permitted.amount is nil"},
+		{"permitWitnessTransferFrom nil permit nonce", (&PermitWitnessTransferFromRequest{Contract: contract, Permit: &PermitTransferFrom{Permitted: NewTokenPermissions(token, big.NewInt(5)), Deadline: big.NewInt(9)}, TransferDetails: NewSignatureTransferDetails(spender, big.NewInt(5)), Owner: owner, Witness: witness, WitnessTypeString: "Witness witness)Witness(uint256 x)", Signature: sig}).Validate(), "invalid request: permit.nonce is nil"},
+		{"permitWitnessTransferFrom nil permit deadline", (&PermitWitnessTransferFromRequest{Contract: contract, Permit: &PermitTransferFrom{Permitted: NewTokenPermissions(token, big.NewInt(5)), Nonce: big.NewInt(1)}, TransferDetails: NewSignatureTransferDetails(spender, big.NewInt(5)), Owner: owner, Witness: witness, WitnessTypeString: "Witness witness)Witness(uint256 x)", Signature: sig}).Validate(), "invalid request: permit.deadline is nil"},
+		{"permitWitnessTransferFrom nil transferDetails", (&PermitWitnessTransferFromRequest{Contract: contract, Permit: &PermitTransferFrom{Permitted: NewTokenPermissions(token, big.NewInt(5)), Nonce: big.NewInt(1), Deadline: big.NewInt(9)}, Owner: owner, Witness: witness, WitnessTypeString: "Witness witness)Witness(uint256 x)", Signature: sig}).Validate(), "invalid request: transferDetails is nil"},
+		{"permitWitnessTransferFrom nil transferDetails to", (&PermitWitnessTransferFromRequest{Contract: contract, Permit: &PermitTransferFrom{Permitted: NewTokenPermissions(token, big.NewInt(5)), Nonce: big.NewInt(1), Deadline: big.NewInt(9)}, TransferDetails: NewSignatureTransferDetails(nil, big.NewInt(5)), Owner: owner, Witness: witness, WitnessTypeString: "Witness witness)Witness(uint256 x)", Signature: sig}).Validate(), "invalid request: transferDetails.to is nil"},
+		{"permitWitnessTransferFrom nil transferDetails requestedAmount", (&PermitWitnessTransferFromRequest{Contract: contract, Permit: &PermitTransferFrom{Permitted: NewTokenPermissions(token, big.NewInt(5)), Nonce: big.NewInt(1), Deadline: big.NewInt(9)}, TransferDetails: NewSignatureTransferDetails(spender, nil), Owner: owner, Witness: witness, WitnessTypeString: "Witness witness)Witness(uint256 x)", Signature: sig}).Validate(), "invalid request: transferDetails.requestedAmount is nil"},
+		{"permitWitnessTransferFrom nil owner", (&PermitWitnessTransferFromRequest{Contract: contract, Permit: &PermitTransferFrom{Permitted: NewTokenPermissions(token, big.NewInt(5)), Nonce: big.NewInt(1), Deadline: big.NewInt(9)}, TransferDetails: NewSignatureTransferDetails(spender, big.NewInt(5)), Witness: witness, WitnessTypeString: "Witness witness)Witness(uint256 x)", Signature: sig}).Validate(), "invalid request: owner is nil"},
+		{"permitWitnessTransferFrom nil witness", (&PermitWitnessTransferFromRequest{Contract: contract, Permit: &PermitTransferFrom{Permitted: NewTokenPermissions(token, big.NewInt(5)), Nonce: big.NewInt(1), Deadline: big.NewInt(9)}, TransferDetails: NewSignatureTransferDetails(spender, big.NewInt(5)), Owner: owner, WitnessTypeString: "Witness witness)Witness(uint256 x)", Signature: sig}).Validate(), "invalid request: witness is nil"},
+		{"permitWitnessTransferFrom empty witnessTypeString", (&PermitWitnessTransferFromRequest{Contract: contract, Permit: &PermitTransferFrom{Permitted: NewTokenPermissions(token, big.NewInt(5)), Nonce: big.NewInt(1), Deadline: big.NewInt(9)}, TransferDetails: NewSignatureTransferDetails(spender, big.NewInt(5)), Owner: owner, Witness: witness, WitnessTypeString: "", Signature: sig}).Validate(), "invalid request: witnessTypeString is empty"},
+		{"permitWitnessTransferFrom nil signature", (&PermitWitnessTransferFromRequest{Contract: contract, Permit: &PermitTransferFrom{Permitted: NewTokenPermissions(token, big.NewInt(5)), Nonce: big.NewInt(1), Deadline: big.NewInt(9)}, TransferDetails: NewSignatureTransferDetails(spender, big.NewInt(5)), Owner: owner, Witness: witness, WitnessTypeString: "Witness witness)Witness(uint256 x)"}).Validate(), "invalid request: signature is nil"},
+		{"permitWitnessTransferFrom valid", (&PermitWitnessTransferFromRequest{Contract: contract, Permit: &PermitTransferFrom{Permitted: NewTokenPermissions(token, big.NewInt(5)), Nonce: big.NewInt(1), Deadline: big.NewInt(9)}, TransferDetails: NewSignatureTransferDetails(spender, big.NewInt(5)), Owner: owner, Witness: witness, WitnessTypeString: "Witness witness)Witness(uint256 x)", Signature: sig}).Validate(), ""},
+		{"permitTransferFromBatch nil", (*PermitTransferFromBatchRequest)(nil).Validate(), "invalid request: request is nil"},
+		{"permitTransferFromBatch empty", (&PermitTransferFromBatchRequest{}).Validate(), "invalid request: contract is nil"},
+		{"permitTransferFromBatch nil contract", (&PermitTransferFromBatchRequest{Permit: &PermitBatchTransferFrom{Permitted: []TokenPermissions{*NewTokenPermissions(token, big.NewInt(5)), *NewTokenPermissions(token, big.NewInt(6))}, Nonce: big.NewInt(1), Deadline: big.NewInt(9)}, TransferDetails: []SignatureTransferDetails{*NewSignatureTransferDetails(spender, big.NewInt(5)), *NewSignatureTransferDetails(spender, big.NewInt(6))}, Owner: owner, Signature: sig}).Validate(), "invalid request: contract is nil"},
+		{"permitTransferFromBatch nil permit", (&PermitTransferFromBatchRequest{Contract: contract, TransferDetails: []SignatureTransferDetails{*NewSignatureTransferDetails(spender, big.NewInt(5)), *NewSignatureTransferDetails(spender, big.NewInt(6))}, Owner: owner, Signature: sig}).Validate(), "invalid request: permit is nil"},
+		{"permitTransferFromBatch empty permitted", (&PermitTransferFromBatchRequest{Contract: contract, Permit: &PermitBatchTransferFrom{Permitted: []TokenPermissions{}, Nonce: big.NewInt(1), Deadline: big.NewInt(9)}, TransferDetails: []SignatureTransferDetails{*NewSignatureTransferDetails(spender, big.NewInt(5)), *NewSignatureTransferDetails(spender, big.NewInt(6))}, Owner: owner, Signature: sig}).Validate(), "invalid request: permit.permitted is empty"},
+		{"permitTransferFromBatch length mismatch", (&PermitTransferFromBatchRequest{Contract: contract, Permit: &PermitBatchTransferFrom{Permitted: []TokenPermissions{*NewTokenPermissions(token, big.NewInt(5)), *NewTokenPermissions(token, big.NewInt(6))}, Nonce: big.NewInt(1), Deadline: big.NewInt(9)}, TransferDetails: []SignatureTransferDetails{*NewSignatureTransferDetails(spender, big.NewInt(5))}, Owner: owner, Signature: sig}).Validate(), "invalid request: transferDetails length 1 does not match permit.permitted length 2"},
+		{"permitTransferFromBatch nil transferDetails", (&PermitTransferFromBatchRequest{Contract: contract, Permit: &PermitBatchTransferFrom{Permitted: []TokenPermissions{*NewTokenPermissions(token, big.NewInt(5)), *NewTokenPermissions(token, big.NewInt(6))}, Nonce: big.NewInt(1), Deadline: big.NewInt(9)}, Owner: owner, Signature: sig}).Validate(), "invalid request: transferDetails length 0 does not match permit.permitted length 2"},
+		{"permitTransferFromBatch nil permitted[1] token", (&PermitTransferFromBatchRequest{Contract: contract, Permit: &PermitBatchTransferFrom{Permitted: []TokenPermissions{*NewTokenPermissions(token, big.NewInt(5)), *NewTokenPermissions(nil, big.NewInt(6))}, Nonce: big.NewInt(1), Deadline: big.NewInt(9)}, TransferDetails: []SignatureTransferDetails{*NewSignatureTransferDetails(spender, big.NewInt(5)), *NewSignatureTransferDetails(spender, big.NewInt(6))}, Owner: owner, Signature: sig}).Validate(), "invalid request: permit.permitted[1].token is nil"},
+		{"permitTransferFromBatch nil permitted[0] amount", (&PermitTransferFromBatchRequest{Contract: contract, Permit: &PermitBatchTransferFrom{Permitted: []TokenPermissions{*NewTokenPermissions(token, nil), *NewTokenPermissions(token, big.NewInt(6))}, Nonce: big.NewInt(1), Deadline: big.NewInt(9)}, TransferDetails: []SignatureTransferDetails{*NewSignatureTransferDetails(spender, big.NewInt(5)), *NewSignatureTransferDetails(spender, big.NewInt(6))}, Owner: owner, Signature: sig}).Validate(), "invalid request: permit.permitted[0].amount is nil"},
+		{"permitTransferFromBatch nil transferDetails[1] to", (&PermitTransferFromBatchRequest{Contract: contract, Permit: &PermitBatchTransferFrom{Permitted: []TokenPermissions{*NewTokenPermissions(token, big.NewInt(5)), *NewTokenPermissions(token, big.NewInt(6))}, Nonce: big.NewInt(1), Deadline: big.NewInt(9)}, TransferDetails: []SignatureTransferDetails{*NewSignatureTransferDetails(spender, big.NewInt(5)), *NewSignatureTransferDetails(nil, big.NewInt(6))}, Owner: owner, Signature: sig}).Validate(), "invalid request: transferDetails[1].to is nil"},
+		{"permitTransferFromBatch nil transferDetails[0] requestedAmount", (&PermitTransferFromBatchRequest{Contract: contract, Permit: &PermitBatchTransferFrom{Permitted: []TokenPermissions{*NewTokenPermissions(token, big.NewInt(5)), *NewTokenPermissions(token, big.NewInt(6))}, Nonce: big.NewInt(1), Deadline: big.NewInt(9)}, TransferDetails: []SignatureTransferDetails{*NewSignatureTransferDetails(spender, nil), *NewSignatureTransferDetails(spender, big.NewInt(6))}, Owner: owner, Signature: sig}).Validate(), "invalid request: transferDetails[0].requestedAmount is nil"},
+		{"permitTransferFromBatch lower index wins", (&PermitTransferFromBatchRequest{Contract: contract, Permit: &PermitBatchTransferFrom{Permitted: []TokenPermissions{*NewTokenPermissions(token, big.NewInt(5)), *NewTokenPermissions(nil, big.NewInt(6))}, Nonce: big.NewInt(1), Deadline: big.NewInt(9)}, TransferDetails: []SignatureTransferDetails{*NewSignatureTransferDetails(nil, big.NewInt(5)), *NewSignatureTransferDetails(spender, big.NewInt(6))}, Owner: owner, Signature: sig}).Validate(), "invalid request: transferDetails[0].to is nil"},
+		{"permitTransferFromBatch nil permit nonce", (&PermitTransferFromBatchRequest{Contract: contract, Permit: &PermitBatchTransferFrom{Permitted: []TokenPermissions{*NewTokenPermissions(token, big.NewInt(5)), *NewTokenPermissions(token, big.NewInt(6))}, Deadline: big.NewInt(9)}, TransferDetails: []SignatureTransferDetails{*NewSignatureTransferDetails(spender, big.NewInt(5)), *NewSignatureTransferDetails(spender, big.NewInt(6))}, Owner: owner, Signature: sig}).Validate(), "invalid request: permit.nonce is nil"},
+		{"permitTransferFromBatch nil permit deadline", (&PermitTransferFromBatchRequest{Contract: contract, Permit: &PermitBatchTransferFrom{Permitted: []TokenPermissions{*NewTokenPermissions(token, big.NewInt(5)), *NewTokenPermissions(token, big.NewInt(6))}, Nonce: big.NewInt(1)}, TransferDetails: []SignatureTransferDetails{*NewSignatureTransferDetails(spender, big.NewInt(5)), *NewSignatureTransferDetails(spender, big.NewInt(6))}, Owner: owner, Signature: sig}).Validate(), "invalid request: permit.deadline is nil"},
+		{"permitTransferFromBatch nil owner", (&PermitTransferFromBatchRequest{Contract: contract, Permit: &PermitBatchTransferFrom{Permitted: []TokenPermissions{*NewTokenPermissions(token, big.NewInt(5)), *NewTokenPermissions(token, big.NewInt(6))}, Nonce: big.NewInt(1), Deadline: big.NewInt(9)}, TransferDetails: []SignatureTransferDetails{*NewSignatureTransferDetails(spender, big.NewInt(5)), *NewSignatureTransferDetails(spender, big.NewInt(6))}, Signature: sig}).Validate(), "invalid request: owner is nil"},
+		{"permitTransferFromBatch nil signature", (&PermitTransferFromBatchRequest{Contract: contract, Permit: &PermitBatchTransferFrom{Permitted: []TokenPermissions{*NewTokenPermissions(token, big.NewInt(5)), *NewTokenPermissions(token, big.NewInt(6))}, Nonce: big.NewInt(1), Deadline: big.NewInt(9)}, TransferDetails: []SignatureTransferDetails{*NewSignatureTransferDetails(spender, big.NewInt(5)), *NewSignatureTransferDetails(spender, big.NewInt(6))}, Owner: owner}).Validate(), "invalid request: signature is nil"},
+		{"permitTransferFromBatch valid", (&PermitTransferFromBatchRequest{Contract: contract, Permit: &PermitBatchTransferFrom{Permitted: []TokenPermissions{*NewTokenPermissions(token, big.NewInt(5)), *NewTokenPermissions(token, big.NewInt(6))}, Nonce: big.NewInt(1), Deadline: big.NewInt(9)}, TransferDetails: []SignatureTransferDetails{*NewSignatureTransferDetails(spender, big.NewInt(5)), *NewSignatureTransferDetails(spender, big.NewInt(6))}, Owner: owner, Signature: sig}).Validate(), ""},
+		{"permitWitnessTransferFromBatch nil", (*PermitWitnessTransferFromBatchRequest)(nil).Validate(), "invalid request: request is nil"},
+		{"permitWitnessTransferFromBatch empty", (&PermitWitnessTransferFromBatchRequest{}).Validate(), "invalid request: contract is nil"},
+		{"permitWitnessTransferFromBatch nil contract", (&PermitWitnessTransferFromBatchRequest{Permit: &PermitBatchTransferFrom{Permitted: []TokenPermissions{*NewTokenPermissions(token, big.NewInt(5)), *NewTokenPermissions(token, big.NewInt(6))}, Nonce: big.NewInt(1), Deadline: big.NewInt(9)}, TransferDetails: []SignatureTransferDetails{*NewSignatureTransferDetails(spender, big.NewInt(5)), *NewSignatureTransferDetails(spender, big.NewInt(6))}, Owner: owner, Witness: witness, WitnessTypeString: "Witness witness)Witness(uint256 x)", Signature: sig}).Validate(), "invalid request: contract is nil"},
+		{"permitWitnessTransferFromBatch nil permit", (&PermitWitnessTransferFromBatchRequest{Contract: contract, TransferDetails: []SignatureTransferDetails{*NewSignatureTransferDetails(spender, big.NewInt(5)), *NewSignatureTransferDetails(spender, big.NewInt(6))}, Owner: owner, Witness: witness, WitnessTypeString: "Witness witness)Witness(uint256 x)", Signature: sig}).Validate(), "invalid request: permit is nil"},
+		{"permitWitnessTransferFromBatch empty permitted", (&PermitWitnessTransferFromBatchRequest{Contract: contract, Permit: &PermitBatchTransferFrom{Permitted: []TokenPermissions{}, Nonce: big.NewInt(1), Deadline: big.NewInt(9)}, TransferDetails: []SignatureTransferDetails{*NewSignatureTransferDetails(spender, big.NewInt(5)), *NewSignatureTransferDetails(spender, big.NewInt(6))}, Owner: owner, Witness: witness, WitnessTypeString: "Witness witness)Witness(uint256 x)", Signature: sig}).Validate(), "invalid request: permit.permitted is empty"},
+		{"permitWitnessTransferFromBatch length mismatch", (&PermitWitnessTransferFromBatchRequest{Contract: contract, Permit: &PermitBatchTransferFrom{Permitted: []TokenPermissions{*NewTokenPermissions(token, big.NewInt(5)), *NewTokenPermissions(token, big.NewInt(6))}, Nonce: big.NewInt(1), Deadline: big.NewInt(9)}, TransferDetails: []SignatureTransferDetails{*NewSignatureTransferDetails(spender, big.NewInt(5))}, Owner: owner, Witness: witness, WitnessTypeString: "Witness witness)Witness(uint256 x)", Signature: sig}).Validate(), "invalid request: transferDetails length 1 does not match permit.permitted length 2"},
+		{"permitWitnessTransferFromBatch nil transferDetails", (&PermitWitnessTransferFromBatchRequest{Contract: contract, Permit: &PermitBatchTransferFrom{Permitted: []TokenPermissions{*NewTokenPermissions(token, big.NewInt(5)), *NewTokenPermissions(token, big.NewInt(6))}, Nonce: big.NewInt(1), Deadline: big.NewInt(9)}, Owner: owner, Witness: witness, WitnessTypeString: "Witness witness)Witness(uint256 x)", Signature: sig}).Validate(), "invalid request: transferDetails length 0 does not match permit.permitted length 2"},
+		{"permitWitnessTransferFromBatch nil permitted[1] token", (&PermitWitnessTransferFromBatchRequest{Contract: contract, Permit: &PermitBatchTransferFrom{Permitted: []TokenPermissions{*NewTokenPermissions(token, big.NewInt(5)), *NewTokenPermissions(nil, big.NewInt(6))}, Nonce: big.NewInt(1), Deadline: big.NewInt(9)}, TransferDetails: []SignatureTransferDetails{*NewSignatureTransferDetails(spender, big.NewInt(5)), *NewSignatureTransferDetails(spender, big.NewInt(6))}, Owner: owner, Witness: witness, WitnessTypeString: "Witness witness)Witness(uint256 x)", Signature: sig}).Validate(), "invalid request: permit.permitted[1].token is nil"},
+		{"permitWitnessTransferFromBatch nil permitted[0] amount", (&PermitWitnessTransferFromBatchRequest{Contract: contract, Permit: &PermitBatchTransferFrom{Permitted: []TokenPermissions{*NewTokenPermissions(token, nil), *NewTokenPermissions(token, big.NewInt(6))}, Nonce: big.NewInt(1), Deadline: big.NewInt(9)}, TransferDetails: []SignatureTransferDetails{*NewSignatureTransferDetails(spender, big.NewInt(5)), *NewSignatureTransferDetails(spender, big.NewInt(6))}, Owner: owner, Witness: witness, WitnessTypeString: "Witness witness)Witness(uint256 x)", Signature: sig}).Validate(), "invalid request: permit.permitted[0].amount is nil"},
+		{"permitWitnessTransferFromBatch nil transferDetails[1] to", (&PermitWitnessTransferFromBatchRequest{Contract: contract, Permit: &PermitBatchTransferFrom{Permitted: []TokenPermissions{*NewTokenPermissions(token, big.NewInt(5)), *NewTokenPermissions(token, big.NewInt(6))}, Nonce: big.NewInt(1), Deadline: big.NewInt(9)}, TransferDetails: []SignatureTransferDetails{*NewSignatureTransferDetails(spender, big.NewInt(5)), *NewSignatureTransferDetails(nil, big.NewInt(6))}, Owner: owner, Witness: witness, WitnessTypeString: "Witness witness)Witness(uint256 x)", Signature: sig}).Validate(), "invalid request: transferDetails[1].to is nil"},
+		{"permitWitnessTransferFromBatch nil transferDetails[0] requestedAmount", (&PermitWitnessTransferFromBatchRequest{Contract: contract, Permit: &PermitBatchTransferFrom{Permitted: []TokenPermissions{*NewTokenPermissions(token, big.NewInt(5)), *NewTokenPermissions(token, big.NewInt(6))}, Nonce: big.NewInt(1), Deadline: big.NewInt(9)}, TransferDetails: []SignatureTransferDetails{*NewSignatureTransferDetails(spender, nil), *NewSignatureTransferDetails(spender, big.NewInt(6))}, Owner: owner, Witness: witness, WitnessTypeString: "Witness witness)Witness(uint256 x)", Signature: sig}).Validate(), "invalid request: transferDetails[0].requestedAmount is nil"},
+		{"permitWitnessTransferFromBatch lower index wins", (&PermitWitnessTransferFromBatchRequest{Contract: contract, Permit: &PermitBatchTransferFrom{Permitted: []TokenPermissions{*NewTokenPermissions(token, big.NewInt(5)), *NewTokenPermissions(nil, big.NewInt(6))}, Nonce: big.NewInt(1), Deadline: big.NewInt(9)}, TransferDetails: []SignatureTransferDetails{*NewSignatureTransferDetails(nil, big.NewInt(5)), *NewSignatureTransferDetails(spender, big.NewInt(6))}, Owner: owner, Witness: witness, WitnessTypeString: "Witness witness)Witness(uint256 x)", Signature: sig}).Validate(), "invalid request: transferDetails[0].to is nil"},
+		{"permitWitnessTransferFromBatch nil permit nonce", (&PermitWitnessTransferFromBatchRequest{Contract: contract, Permit: &PermitBatchTransferFrom{Permitted: []TokenPermissions{*NewTokenPermissions(token, big.NewInt(5)), *NewTokenPermissions(token, big.NewInt(6))}, Deadline: big.NewInt(9)}, TransferDetails: []SignatureTransferDetails{*NewSignatureTransferDetails(spender, big.NewInt(5)), *NewSignatureTransferDetails(spender, big.NewInt(6))}, Owner: owner, Witness: witness, WitnessTypeString: "Witness witness)Witness(uint256 x)", Signature: sig}).Validate(), "invalid request: permit.nonce is nil"},
+		{"permitWitnessTransferFromBatch nil permit deadline", (&PermitWitnessTransferFromBatchRequest{Contract: contract, Permit: &PermitBatchTransferFrom{Permitted: []TokenPermissions{*NewTokenPermissions(token, big.NewInt(5)), *NewTokenPermissions(token, big.NewInt(6))}, Nonce: big.NewInt(1)}, TransferDetails: []SignatureTransferDetails{*NewSignatureTransferDetails(spender, big.NewInt(5)), *NewSignatureTransferDetails(spender, big.NewInt(6))}, Owner: owner, Witness: witness, WitnessTypeString: "Witness witness)Witness(uint256 x)", Signature: sig}).Validate(), "invalid request: permit.deadline is nil"},
+		{"permitWitnessTransferFromBatch nil owner", (&PermitWitnessTransferFromBatchRequest{Contract: contract, Permit: &PermitBatchTransferFrom{Permitted: []TokenPermissions{*NewTokenPermissions(token, big.NewInt(5)), *NewTokenPermissions(token, big.NewInt(6))}, Nonce: big.NewInt(1), Deadline: big.NewInt(9)}, TransferDetails: []SignatureTransferDetails{*NewSignatureTransferDetails(spender, big.NewInt(5)), *NewSignatureTransferDetails(spender, big.NewInt(6))}, Witness: witness, WitnessTypeString: "Witness witness)Witness(uint256 x)", Signature: sig}).Validate(), "invalid request: owner is nil"},
+		{"permitWitnessTransferFromBatch nil witness", (&PermitWitnessTransferFromBatchRequest{Contract: contract, Permit: &PermitBatchTransferFrom{Permitted: []TokenPermissions{*NewTokenPermissions(token, big.NewInt(5)), *NewTokenPermissions(token, big.NewInt(6))}, Nonce: big.NewInt(1), Deadline: big.NewInt(9)}, TransferDetails: []SignatureTransferDetails{*NewSignatureTransferDetails(spender, big.NewInt(5)), *NewSignatureTransferDetails(spender, big.NewInt(6))}, Owner: owner, WitnessTypeString: "Witness witness)Witness(uint256 x)", Signature: sig}).Validate(), "invalid request: witness is nil"},
+		{"permitWitnessTransferFromBatch empty witnessTypeString", (&PermitWitnessTransferFromBatchRequest{Contract: contract, Permit: &PermitBatchTransferFrom{Permitted: []TokenPermissions{*NewTokenPermissions(token, big.NewInt(5)), *NewTokenPermissions(token, big.NewInt(6))}, Nonce: big.NewInt(1), Deadline: big.NewInt(9)}, TransferDetails: []SignatureTransferDetails{*NewSignatureTransferDetails(spender, big.NewInt(5)), *NewSignatureTransferDetails(spender, big.NewInt(6))}, Owner: owner, Witness: witness, WitnessTypeString: "", Signature: sig}).Validate(), "invalid request: witnessTypeString is empty"},
+		{"permitWitnessTransferFromBatch nil signature", (&PermitWitnessTransferFromBatchRequest{Contract: contract, Permit: &PermitBatchTransferFrom{Permitted: []TokenPermissions{*NewTokenPermissions(token, big.NewInt(5)), *NewTokenPermissions(token, big.NewInt(6))}, Nonce: big.NewInt(1), Deadline: big.NewInt(9)}, TransferDetails: []SignatureTransferDetails{*NewSignatureTransferDetails(spender, big.NewInt(5)), *NewSignatureTransferDetails(spender, big.NewInt(6))}, Owner: owner, Witness: witness, WitnessTypeString: "Witness witness)Witness(uint256 x)"}).Validate(), "invalid request: signature is nil"},
+		{"permitWitnessTransferFromBatch valid", (&PermitWitnessTransferFromBatchRequest{Contract: contract, Permit: &PermitBatchTransferFrom{Permitted: []TokenPermissions{*NewTokenPermissions(token, big.NewInt(5)), *NewTokenPermissions(token, big.NewInt(6))}, Nonce: big.NewInt(1), Deadline: big.NewInt(9)}, TransferDetails: []SignatureTransferDetails{*NewSignatureTransferDetails(spender, big.NewInt(5)), *NewSignatureTransferDetails(spender, big.NewInt(6))}, Owner: owner, Witness: witness, WitnessTypeString: "Witness witness)Witness(uint256 x)", Signature: sig}).Validate(), ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.want == "" {
+				require.NoError(t, tc.err)
+				return
+			}
+			require.ErrorIs(t, tc.err, bind.ErrInvalidRequest)
+			require.EqualError(t, tc.err, tc.want)
+		})
+	}
+}
+
+func TestNewRequestsSetFields(t *testing.T) {
+	contract := types.MustNewAddressFromHex("0x000000000022D473030F116dDEE9F6B43aC78BA3")
+	owner := types.MustNewAddressFromHex("0x6667c8dc9fbfec411e7c1ee2b24de960149f930f")
+	spender := types.MustNewAddressFromHex("0xba12222222228d8ba445958a75a0704d566bf2c8")
+	token := types.MustNewAddressFromHex("0xA0b86991c6218b36c1d19d4a2e9eb0ce3606eb48")
+	witness := types.NewHashFromBytes([]byte{0x01})
+	sig := &types.Signature{}
+	permitSingle := NewPermitSingle(NewPermitDetails(token, big.NewInt(1), big.NewInt(2), big.NewInt(3)), spender, big.NewInt(9))
+	permitBatch := NewPermitBatch([]PermitDetails{*NewPermitDetails(token, big.NewInt(1), big.NewInt(2), big.NewInt(3))}, spender, big.NewInt(9))
+	transferDetails := []AllowanceTransferDetails{*NewAllowanceTransferDetails(owner, spender, big.NewInt(1), token)}
+	approvals := []TokenSpenderPair{*NewTokenSpenderPair(token, spender)}
+	permit := NewPermitTransferFrom(NewTokenPermissions(token, big.NewInt(5)), big.NewInt(1), big.NewInt(9))
+	batchPermit := NewPermitBatchTransferFrom([]TokenPermissions{*NewTokenPermissions(token, big.NewInt(5))}, big.NewInt(1), big.NewInt(9))
+	single := NewSignatureTransferDetails(spender, big.NewInt(5))
+	batch := []SignatureTransferDetails{*NewSignatureTransferDetails(spender, big.NewInt(5))}
+
+	require.Equal(t, &DomainSeparatorRequest{Contract: contract}, NewDomainSeparatorRequest(contract))
+	require.Equal(t, &AllowanceRequest{Contract: contract, Owner: owner, Token: token, Spender: spender}, NewAllowanceRequest(contract, owner, token, spender))
+	require.Equal(t, &NonceBitmapRequest{Contract: contract, Owner: owner, WordPos: big.NewInt(4)}, NewNonceBitmapRequest(contract, owner, big.NewInt(4)))
+	require.Equal(t, &ApproveRequest{Contract: contract, Token: token, Spender: spender, Amount: big.NewInt(1), Expiration: big.NewInt(2)}, NewApproveRequest(contract, token, spender, big.NewInt(1), big.NewInt(2)))
+	require.Equal(t, &PermitSingleRequest{Contract: contract, Owner: owner, PermitSingle: permitSingle, Signature: sig}, NewPermitSingleRequest(contract, owner, permitSingle, sig))
+	require.Equal(t, &PermitBatchRequest{Contract: contract, Owner: owner, PermitBatch: permitBatch, Signature: sig}, NewPermitBatchRequest(contract, owner, permitBatch, sig))
+	require.Equal(t, &TransferFromRequest{Contract: contract, From: owner, To: spender, Amount: big.NewInt(1), Token: token}, NewTransferFromRequest(contract, owner, spender, big.NewInt(1), token))
+	require.Equal(t, &TransferFromBatchRequest{Contract: contract, TransferDetails: transferDetails}, NewTransferFromBatchRequest(contract, transferDetails))
+	require.Equal(t, &LockdownRequest{Contract: contract, Approvals: approvals}, NewLockdownRequest(contract, approvals))
+	require.Equal(t, &InvalidateNoncesRequest{Contract: contract, Token: token, Spender: spender, NewNonce: big.NewInt(2)}, NewInvalidateNoncesRequest(contract, token, spender, big.NewInt(2)))
+	require.Equal(t, &PermitTransferFromRequest{Contract: contract, Permit: permit, TransferDetails: single, Owner: owner, Signature: sig}, NewPermitTransferFromRequest(contract, permit, single, owner, sig))
+	require.Equal(t, &PermitWitnessTransferFromRequest{Contract: contract, Permit: permit, TransferDetails: single, Owner: owner, Witness: witness, WitnessTypeString: "w", Signature: sig}, NewPermitWitnessTransferFromRequest(contract, permit, single, owner, witness, "w", sig))
+	require.Equal(t, &PermitTransferFromBatchRequest{Contract: contract, Permit: batchPermit, TransferDetails: batch, Owner: owner, Signature: sig}, NewPermitTransferFromBatchRequest(contract, batchPermit, batch, owner, sig))
+	require.Equal(t, &PermitWitnessTransferFromBatchRequest{Contract: contract, Permit: batchPermit, TransferDetails: batch, Owner: owner, Witness: witness, WitnessTypeString: "w", Signature: sig}, NewPermitWitnessTransferFromBatchRequest(contract, batchPermit, batch, owner, witness, "w", sig))
+	require.Equal(t, &InvalidateUnorderedNoncesRequest{Contract: contract, WordPos: big.NewInt(4), Mask: big.NewInt(5)}, NewInvalidateUnorderedNoncesRequest(contract, big.NewInt(4), big.NewInt(5)))
 }

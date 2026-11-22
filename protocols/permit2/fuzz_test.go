@@ -1,15 +1,22 @@
 package permit2
 
 import (
+	"context"
+	"fmt"
 	"math/big"
 	"testing"
 
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core"
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
+	"github.com/ninja-protocol-labs/go-evmkit/rpc"
+	"github.com/ninja-protocol-labs/go-evmkit/rpc/mocks"
 	"github.com/ninja-protocol-labs/go-evmkit/tx"
+	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
 // go test -run '^$' -fuzz '^FuzzDecodeAllowanceRoundTrip$' -fuzztime=10s ./protocols/permit2
@@ -555,5 +562,169 @@ func FuzzSignatureTransferSimpleDecodersDoNotPanic(f *testing.F) {
 
 	f.Fuzz(func(t *testing.T, data []byte) {
 		_, _ = DecodeNonceBitmap(data)
+	})
+}
+
+// go test -run '^$' -fuzz '^FuzzPermitTransferFromBatchRequestValidate$' -fuzztime=10s ./protocols/permit2
+func FuzzPermitTransferFromBatchRequestValidate(f *testing.F) {
+	f.Add(uint8(2), uint8(2), uint16(0))
+	f.Add(uint8(2), uint8(1), uint16(0))
+	f.Add(uint8(3), uint8(3), uint16(0x0f0f))
+	f.Add(uint8(0), uint8(0), uint16(0))
+
+	contract := types.MustNewAddressFromHex("0x000000000022D473030F116dDEE9F6B43aC78BA3")
+	owner := types.MustNewAddressFromHex("0x6667c8dc9fbfec411e7c1ee2b24de960149f930f")
+	token := types.MustNewAddressFromHex("0xA0b86991c6218b36c1d19d4a2e9eb0ce3606eb48")
+	sig := &types.Signature{}
+
+	f.Fuzz(func(t *testing.T, permittedLen, detailsLen uint8, holes uint16) {
+		permittedLen %= 5
+		detailsLen %= 5
+		permitted := make([]TokenPermissions, permittedLen)
+		for i := range permitted {
+			permitted[i] = *NewTokenPermissions(token, big.NewInt(int64(i)))
+			if holes&(1<<i) != 0 {
+				permitted[i].Token = nil
+			}
+		}
+		details := make([]SignatureTransferDetails, detailsLen)
+		for i := range details {
+			details[i] = *NewSignatureTransferDetails(owner, big.NewInt(int64(i)))
+			if holes&(1<<(8+i)) != 0 {
+				details[i].To = nil
+			}
+		}
+		req := NewPermitTransferFromBatchRequest(contract, NewPermitBatchTransferFrom(permitted, big.NewInt(1), big.NewInt(1)), details, owner, sig)
+
+		want := ""
+		switch {
+		case permittedLen == 0:
+			want = "invalid request: permit.permitted is empty"
+		case detailsLen != permittedLen:
+			want = fmt.Sprintf("invalid request: transferDetails length %d does not match permit.permitted length %d", detailsLen, permittedLen)
+		default:
+			for i := range permitted {
+				if permitted[i].Token == nil {
+					want = fmt.Sprintf("invalid request: permit.permitted[%d].token is nil", i)
+					break
+				}
+				if details[i].To == nil {
+					want = fmt.Sprintf("invalid request: transferDetails[%d].to is nil", i)
+					break
+				}
+			}
+		}
+
+		err := req.Validate()
+		if want == "" {
+			require.NoError(t, err)
+			return
+		}
+		require.ErrorIs(t, err, bind.ErrInvalidRequest)
+		require.EqualError(t, err, want)
+	})
+}
+
+// go test -run '^$' -fuzz '^FuzzApproveThroughClient$' -fuzztime=10s ./protocols/permit2
+func FuzzApproveThroughClient(f *testing.F) {
+	f.Add([]byte{}, []byte{}, []byte{}, []byte{}, uint64(0), true)
+	f.Add([]byte{0x01}, []byte{0x02}, []byte{0x03}, []byte{0x04}, uint64(42), false)
+	f.Add(make([]byte, 20), make([]byte, 20), make([]byte, 20), make([]byte, 6), ^uint64(0)-1, true)
+
+	key, err := types.NewPrivateKeyFromBig(big.NewInt(0xb1d))
+	require.NoError(f, err)
+	signer := core.PubkeyToAddress(key.PublicKey())
+	contract := types.MustNewAddressFromHex("0x000000000022D473030F116dDEE9F6B43aC78BA3")
+
+	f.Fuzz(func(t *testing.T, tokenRaw, spenderRaw, amountRaw, expirationRaw []byte, nonce uint64, dynamic bool) {
+		if len(amountRaw) > 20 {
+			amountRaw = amountRaw[len(amountRaw)-20:]
+		}
+		if len(expirationRaw) > 6 {
+			expirationRaw = expirationRaw[len(expirationRaw)-6:]
+		}
+		token := types.NewAddressFromBytes(tokenRaw)
+		spender := types.NewAddressFromBytes(spenderRaw)
+		amount := new(big.Int).SetBytes(amountRaw)
+		expiration := new(big.Int).SetBytes(expirationRaw)
+
+		var builder tx.Builder
+		if dynamic {
+			builder = tx.NewDynamicFeeBuilder()
+		} else {
+			builder = tx.NewLegacyBuilder()
+		}
+		builder.ChainID(big.NewInt(1))
+		builder.Nonce(nonce)
+		builder.Limit(100_000)
+		builder.Price(big.NewInt(30_000_000_000), big.NewInt(1_000_000_000))
+
+		var raw []byte
+		c := mocks.NewClient(t)
+		c.EXPECT().Call(mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, e rpc.Element) error {
+			raw, err = encoding.Hex.Decode(e.Params.([]any)[0].(string))
+			require.NoError(t, err)
+			*e.Result.(*string) = core.Keccak256(raw).String()
+			return nil
+		}).Once()
+
+		signed, hash, err := New(c).Approve(t.Context(), bind.NewTransactOptions(key, builder), NewApproveRequest(contract, token, spender, amount, expiration))
+		require.NoError(t, err)
+		require.True(t, hash.Equal(core.Keccak256(raw)))
+		require.Equal(t, nonce, signed.AddressNonce())
+
+		decoded, err := core.DecodeTransaction(raw)
+		require.NoError(t, err)
+		from, err := decoded.Sender()
+		require.NoError(t, err)
+		require.True(t, from.Equal(signer))
+
+		var gotTo *types.Address
+		var gotData []byte
+		switch v := decoded.(type) {
+		case *core.DynamicFeeTx:
+			require.True(t, dynamic)
+			gotTo, gotData = v.To, v.Data
+		case *core.LegacyTx:
+			require.False(t, dynamic)
+			gotTo, gotData = v.To, v.Data
+		default:
+			t.Fatalf("unexpected tx type %T", decoded)
+		}
+		require.True(t, gotTo.Equal(contract))
+
+		vals, err := approveFn.DecodeCall(gotData)
+		require.NoError(t, err)
+		require.True(t, token.Equal(vals[0].(*types.Address)))
+		require.True(t, spender.Equal(vals[1].(*types.Address)))
+		require.Zero(t, amount.Cmp(vals[2].(*big.Int)))
+		require.Zero(t, expiration.Cmp(vals[3].(*big.Int)))
+	})
+}
+
+// go test -run '^$' -fuzz '^FuzzReadsSurviveArbitraryResult$' -fuzztime=10s ./protocols/permit2
+func FuzzReadsSurviveArbitraryResult(f *testing.F) {
+	f.Add([]byte{})
+	f.Add(make([]byte, 31))
+	f.Add(make([]byte, 32))
+	f.Add(make([]byte, 96))
+
+	contract := types.MustNewAddressFromHex("0x000000000022D473030F116dDEE9F6B43aC78BA3")
+	owner := types.MustNewAddressFromHex("0x6667c8dc9fbfec411e7c1ee2b24de960149f930f")
+
+	f.Fuzz(func(t *testing.T, result []byte) {
+		c := mocks.NewClient(t)
+		c.EXPECT().Call(mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, e rpc.Element) error {
+			*e.Result.(*string) = encoding.Hex.EncodePrefixed(result)
+			return nil
+		}).Times(3)
+		p := New(c)
+
+		h, err := p.DomainSeparator(t.Context(), nil, NewDomainSeparatorRequest(contract))
+		require.True(t, (err == nil) != (h == nil))
+		a, err := p.Allowance(t.Context(), nil, NewAllowanceRequest(contract, owner, owner, owner))
+		require.True(t, (err == nil) != (a == nil))
+		n, err := p.NonceBitmap(t.Context(), nil, NewNonceBitmapRequest(contract, owner, big.NewInt(0)))
+		require.True(t, (err == nil) != (n == nil))
 	})
 }

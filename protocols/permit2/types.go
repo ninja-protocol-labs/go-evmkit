@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core"
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
@@ -559,16 +560,39 @@ func (p *PermitBatchTransferFrom) tuple() []any {
 	return []any{permitted, p.Nonce, p.Deadline}
 }
 
-// AllowanceParams is Allowance's argument list.
-type AllowanceParams struct {
+// DomainSeparatorRequest is DOMAIN_SEPARATOR()'s input on Contract.
+type DomainSeparatorRequest struct {
+	Contract *types.Address
+}
+
+func NewDomainSeparatorRequest(contract *types.Address) *DomainSeparatorRequest {
+	return &DomainSeparatorRequest{
+		Contract: contract,
+	}
+}
+
+func (r *DomainSeparatorRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// AllowanceRequest is allowance(user, token, spender)'s input on Contract.
+type AllowanceRequest struct {
 	Contract *types.Address
 	Owner    *types.Address
 	Token    *types.Address
 	Spender  *types.Address
 }
 
-func NewAllowanceParams(contract, owner, token, spender *types.Address) *AllowanceParams {
-	return &AllowanceParams{
+func NewAllowanceRequest(contract, owner, token, spender *types.Address) *AllowanceRequest {
+	return &AllowanceRequest{
 		Contract: contract,
 		Owner:    owner,
 		Token:    token,
@@ -576,237 +600,77 @@ func NewAllowanceParams(contract, owner, token, spender *types.Address) *Allowan
 	}
 }
 
-// PermitSingleParams is CreatePermitSingle's argument list.
-type PermitSingleParams struct {
-	Contract     *types.Address
-	Sender       *types.Address
-	Owner        *types.Address
-	PermitSingle *PermitSingle
-	Sig          *types.Signature
-}
-
-func NewPermitSingleParams(contract, sender, owner *types.Address, permitSingle *PermitSingle, sig *types.Signature) *PermitSingleParams {
-	return &PermitSingleParams{
-		Contract:     contract,
-		Sender:       sender,
-		Owner:        owner,
-		PermitSingle: permitSingle,
-		Sig:          sig,
+func (r *AllowanceRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
 	}
-}
 
-// PermitBatchParams is CreatePermitBatch's argument list.
-type PermitBatchParams struct {
-	Contract    *types.Address
-	Sender      *types.Address
-	Owner       *types.Address
-	PermitBatch *PermitBatch
-	Sig         *types.Signature
-}
-
-func NewPermitBatchParams(contract, sender, owner *types.Address, permitBatch *PermitBatch, sig *types.Signature) *PermitBatchParams {
-	return &PermitBatchParams{
-		Contract:    contract,
-		Sender:      sender,
-		Owner:       owner,
-		PermitBatch: permitBatch,
-		Sig:         sig,
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
 	}
-}
 
-// TransferFromBatchParams is CreateTransferFromBatch's argument list.
-type TransferFromBatchParams struct {
-	Contract        *types.Address
-	Sender          *types.Address
-	TransferDetails []AllowanceTransferDetails
-}
-
-func NewTransferFromBatchParams(contract, sender *types.Address, transferDetails []AllowanceTransferDetails) *TransferFromBatchParams {
-	return &TransferFromBatchParams{
-		Contract:        contract,
-		Sender:          sender,
-		TransferDetails: transferDetails,
+	if r.Owner == nil {
+		return fmt.Errorf("%w: owner is nil", bind.ErrInvalidRequest)
 	}
-}
 
-// LockdownParams is CreateLockdown's argument list.
-type LockdownParams struct {
-	Contract  *types.Address
-	Sender    *types.Address
-	Approvals []TokenSpenderPair
-}
-
-func NewLockdownParams(contract, sender *types.Address, approvals []TokenSpenderPair) *LockdownParams {
-	return &LockdownParams{
-		Contract:  contract,
-		Sender:    sender,
-		Approvals: approvals,
+	if r.Token == nil {
+		return fmt.Errorf("%w: token is nil", bind.ErrInvalidRequest)
 	}
+
+	if r.Spender == nil {
+		return fmt.Errorf("%w: spender is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
 }
 
-// TransferFromParams is CreateTransferFrom's argument list.
-type TransferFromParams struct {
+// NonceBitmapRequest is nonceBitmap(owner, wordPos)'s input on Contract.
+type NonceBitmapRequest struct {
 	Contract *types.Address
-	Sender   *types.Address
-	From     *types.Address
-	To       *types.Address
-	Amount   *big.Int
-	Token    *types.Address
-}
-
-func NewTransferFromParams(contract, sender, from, to *types.Address, amount *big.Int, token *types.Address) *TransferFromParams {
-	return &TransferFromParams{
-		Contract: contract,
-		Sender:   sender,
-		From:     from,
-		To:       to,
-		Amount:   amount,
-		Token:    token,
-	}
-}
-
-// InvalidateNoncesParams is CreateInvalidateNonces's argument list.
-type InvalidateNoncesParams struct {
-	Contract *types.Address
-	Sender   *types.Address
-	Token    *types.Address
-	Spender  *types.Address
-	NewNonce *big.Int
-}
-
-func NewInvalidateNoncesParams(contract, sender, token, spender *types.Address, newNonce *big.Int) *InvalidateNoncesParams {
-	return &InvalidateNoncesParams{
-		Contract: contract,
-		Sender:   sender,
-		Token:    token,
-		Spender:  spender,
-		NewNonce: newNonce,
-	}
-}
-
-// PermitTransferFromParams is CreatePermitTransferFrom's argument list.
-type PermitTransferFromParams struct {
-	Contract        *types.Address
-	Sender          *types.Address
-	Permit          *PermitTransferFrom
-	TransferDetails *SignatureTransferDetails
-	Owner           *types.Address
-	Sig             *types.Signature
-}
-
-func NewPermitTransferFromParams(contract, sender *types.Address, permit *PermitTransferFrom, transferDetails *SignatureTransferDetails, owner *types.Address, sig *types.Signature) *PermitTransferFromParams {
-	return &PermitTransferFromParams{
-		Contract:        contract,
-		Sender:          sender,
-		Permit:          permit,
-		TransferDetails: transferDetails,
-		Owner:           owner,
-		Sig:             sig,
-	}
-}
-
-// PermitWitnessTransferFromParams is CreatePermitWitnessTransferFrom's argument list.
-type PermitWitnessTransferFromParams struct {
-	Contract          *types.Address
-	Sender            *types.Address
-	Permit            *PermitTransferFrom
-	TransferDetails   *SignatureTransferDetails
-	Owner             *types.Address
-	Witness           *types.Hash
-	WitnessTypeString string
-	Sig               *types.Signature
-}
-
-func NewPermitWitnessTransferFromParams(contract, sender *types.Address, permit *PermitTransferFrom, transferDetails *SignatureTransferDetails, owner *types.Address, witness *types.Hash, witnessTypeString string, sig *types.Signature) *PermitWitnessTransferFromParams {
-	return &PermitWitnessTransferFromParams{
-		Contract:          contract,
-		Sender:            sender,
-		Permit:            permit,
-		TransferDetails:   transferDetails,
-		Owner:             owner,
-		Witness:           witness,
-		WitnessTypeString: witnessTypeString,
-		Sig:               sig,
-	}
-}
-
-// PermitTransferFromBatchParams is CreatePermitTransferFromBatch's argument list.
-type PermitTransferFromBatchParams struct {
-	Contract        *types.Address
-	Sender          *types.Address
-	Permit          *PermitBatchTransferFrom
-	TransferDetails []SignatureTransferDetails
-	Owner           *types.Address
-	Sig             *types.Signature
-}
-
-func NewPermitTransferFromBatchParams(contract, sender *types.Address, permit *PermitBatchTransferFrom, transferDetails []SignatureTransferDetails, owner *types.Address, sig *types.Signature) *PermitTransferFromBatchParams {
-	return &PermitTransferFromBatchParams{
-		Contract:        contract,
-		Sender:          sender,
-		Permit:          permit,
-		TransferDetails: transferDetails,
-		Owner:           owner,
-		Sig:             sig,
-	}
-}
-
-// PermitWitnessTransferFromBatchParams is CreatePermitWitnessTransferFromBatch's argument list.
-type PermitWitnessTransferFromBatchParams struct {
-	Contract          *types.Address
-	Sender            *types.Address
-	Permit            *PermitBatchTransferFrom
-	TransferDetails   []SignatureTransferDetails
-	Owner             *types.Address
-	Witness           *types.Hash
-	WitnessTypeString string
-	Sig               *types.Signature
-}
-
-func NewPermitWitnessTransferFromBatchParams(contract, sender *types.Address, permit *PermitBatchTransferFrom, transferDetails []SignatureTransferDetails, owner *types.Address, witness *types.Hash, witnessTypeString string, sig *types.Signature) *PermitWitnessTransferFromBatchParams {
-	return &PermitWitnessTransferFromBatchParams{
-		Contract:          contract,
-		Sender:            sender,
-		Permit:            permit,
-		TransferDetails:   transferDetails,
-		Owner:             owner,
-		Witness:           witness,
-		WitnessTypeString: witnessTypeString,
-		Sig:               sig,
-	}
-}
-
-// InvalidateUnorderedNoncesParams is CreateInvalidateUnorderedNonces's argument list.
-type InvalidateUnorderedNoncesParams struct {
-	Contract *types.Address
-	Sender   *types.Address
+	Owner    *types.Address
 	WordPos  *big.Int
-	Mask     *big.Int
 }
 
-func NewInvalidateUnorderedNoncesParams(contract, sender *types.Address, wordPos, mask *big.Int) *InvalidateUnorderedNoncesParams {
-	return &InvalidateUnorderedNoncesParams{
+func NewNonceBitmapRequest(contract, owner *types.Address, wordPos *big.Int) *NonceBitmapRequest {
+	return &NonceBitmapRequest{
 		Contract: contract,
-		Sender:   sender,
+		Owner:    owner,
 		WordPos:  wordPos,
-		Mask:     mask,
 	}
 }
 
-// ApproveParams is CreateApprove's argument list.
-type ApproveParams struct {
+func (r *NonceBitmapRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Owner == nil {
+		return fmt.Errorf("%w: owner is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.WordPos == nil {
+		return fmt.Errorf("%w: wordPos is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// ApproveRequest is approve(token, spender, amount, expiration)'s input on Contract.
+type ApproveRequest struct {
 	Contract   *types.Address
-	Sender     *types.Address
 	Token      *types.Address
 	Spender    *types.Address
 	Amount     *big.Int
 	Expiration *big.Int
 }
 
-func NewApproveParams(contract, sender, token, spender *types.Address, amount, expiration *big.Int) *ApproveParams {
-	return &ApproveParams{
+func NewApproveRequest(contract, token, spender *types.Address, amount, expiration *big.Int) *ApproveRequest {
+	return &ApproveRequest{
 		Contract:   contract,
-		Sender:     sender,
 		Token:      token,
 		Spender:    spender,
 		Amount:     amount,
@@ -814,8 +678,673 @@ func NewApproveParams(contract, sender, token, spender *types.Address, amount, e
 	}
 }
 
-// NonceInvalidation mirrors AllowanceTransfer's NonceInvalidation event.
-type NonceInvalidation struct {
+func (r *ApproveRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Token == nil {
+		return fmt.Errorf("%w: token is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Spender == nil {
+		return fmt.Errorf("%w: spender is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Amount == nil {
+		return fmt.Errorf("%w: amount is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Expiration == nil {
+		return fmt.Errorf("%w: expiration is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// PermitSingleRequest is permit(owner, permitSingle, signature)'s input on Contract.
+type PermitSingleRequest struct {
+	Contract     *types.Address
+	Owner        *types.Address
+	PermitSingle *PermitSingle
+	Signature    *types.Signature
+}
+
+func NewPermitSingleRequest(contract, owner *types.Address, permitSingle *PermitSingle, signature *types.Signature) *PermitSingleRequest {
+	return &PermitSingleRequest{
+		Contract:     contract,
+		Owner:        owner,
+		PermitSingle: permitSingle,
+		Signature:    signature,
+	}
+}
+
+func (r *PermitSingleRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Owner == nil {
+		return fmt.Errorf("%w: owner is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.PermitSingle == nil {
+		return fmt.Errorf("%w: permitSingle is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.PermitSingle.Details == nil {
+		return fmt.Errorf("%w: permitSingle.details is nil", bind.ErrInvalidRequest)
+	}
+
+	if err := validatePermitDetails("permitSingle.details", r.PermitSingle.Details); err != nil {
+		return err
+	}
+
+	if r.PermitSingle.Spender == nil {
+		return fmt.Errorf("%w: permitSingle.spender is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.PermitSingle.SigDeadline == nil {
+		return fmt.Errorf("%w: permitSingle.sigDeadline is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Signature == nil {
+		return fmt.Errorf("%w: signature is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// PermitBatchRequest is permit(owner, permitBatch, signature)'s input on Contract.
+type PermitBatchRequest struct {
+	Contract    *types.Address
+	Owner       *types.Address
+	PermitBatch *PermitBatch
+	Signature   *types.Signature
+}
+
+func NewPermitBatchRequest(contract, owner *types.Address, permitBatch *PermitBatch, signature *types.Signature) *PermitBatchRequest {
+	return &PermitBatchRequest{
+		Contract:    contract,
+		Owner:       owner,
+		PermitBatch: permitBatch,
+		Signature:   signature,
+	}
+}
+
+func (r *PermitBatchRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Owner == nil {
+		return fmt.Errorf("%w: owner is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.PermitBatch == nil {
+		return fmt.Errorf("%w: permitBatch is nil", bind.ErrInvalidRequest)
+	}
+
+	if len(r.PermitBatch.Details) == 0 {
+		return fmt.Errorf("%w: permitBatch.details is empty", bind.ErrInvalidRequest)
+	}
+
+	for i := range r.PermitBatch.Details {
+		if err := validatePermitDetails(fmt.Sprintf("permitBatch.details[%d]", i), &r.PermitBatch.Details[i]); err != nil {
+			return err
+		}
+	}
+
+	if r.PermitBatch.Spender == nil {
+		return fmt.Errorf("%w: permitBatch.spender is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.PermitBatch.SigDeadline == nil {
+		return fmt.Errorf("%w: permitBatch.sigDeadline is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Signature == nil {
+		return fmt.Errorf("%w: signature is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// TransferFromRequest is transferFrom(from, to, amount, token)'s input on Contract.
+type TransferFromRequest struct {
+	Contract *types.Address
+	From     *types.Address
+	To       *types.Address
+	Amount   *big.Int
+	Token    *types.Address
+}
+
+func NewTransferFromRequest(contract, from, to *types.Address, amount *big.Int, token *types.Address) *TransferFromRequest {
+	return &TransferFromRequest{
+		Contract: contract,
+		From:     from,
+		To:       to,
+		Amount:   amount,
+		Token:    token,
+	}
+}
+
+func (r *TransferFromRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.From == nil {
+		return fmt.Errorf("%w: from is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.To == nil {
+		return fmt.Errorf("%w: to is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Amount == nil {
+		return fmt.Errorf("%w: amount is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Token == nil {
+		return fmt.Errorf("%w: token is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// TransferFromBatchRequest is transferFrom(transferDetails)'s input on Contract.
+type TransferFromBatchRequest struct {
+	Contract        *types.Address
+	TransferDetails []AllowanceTransferDetails
+}
+
+func NewTransferFromBatchRequest(contract *types.Address, transferDetails []AllowanceTransferDetails) *TransferFromBatchRequest {
+	return &TransferFromBatchRequest{
+		Contract:        contract,
+		TransferDetails: transferDetails,
+	}
+}
+
+func (r *TransferFromBatchRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if len(r.TransferDetails) == 0 {
+		return fmt.Errorf("%w: transferDetails is empty", bind.ErrInvalidRequest)
+	}
+
+	for i, d := range r.TransferDetails {
+		if d.From == nil {
+			return fmt.Errorf("%w: transferDetails[%d].from is nil", bind.ErrInvalidRequest, i)
+		}
+		if d.To == nil {
+			return fmt.Errorf("%w: transferDetails[%d].to is nil", bind.ErrInvalidRequest, i)
+		}
+		if d.Amount == nil {
+			return fmt.Errorf("%w: transferDetails[%d].amount is nil", bind.ErrInvalidRequest, i)
+		}
+		if d.Token == nil {
+			return fmt.Errorf("%w: transferDetails[%d].token is nil", bind.ErrInvalidRequest, i)
+		}
+	}
+
+	return nil
+}
+
+// LockdownRequest is lockdown(approvals)'s input on Contract.
+type LockdownRequest struct {
+	Contract  *types.Address
+	Approvals []TokenSpenderPair
+}
+
+func NewLockdownRequest(contract *types.Address, approvals []TokenSpenderPair) *LockdownRequest {
+	return &LockdownRequest{
+		Contract:  contract,
+		Approvals: approvals,
+	}
+}
+
+func (r *LockdownRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if len(r.Approvals) == 0 {
+		return fmt.Errorf("%w: approvals is empty", bind.ErrInvalidRequest)
+	}
+
+	for i, a := range r.Approvals {
+		if a.Token == nil {
+			return fmt.Errorf("%w: approvals[%d].token is nil", bind.ErrInvalidRequest, i)
+		}
+		if a.Spender == nil {
+			return fmt.Errorf("%w: approvals[%d].spender is nil", bind.ErrInvalidRequest, i)
+		}
+	}
+
+	return nil
+}
+
+// InvalidateNoncesRequest is invalidateNonces(token, spender, newNonce)'s input on Contract.
+type InvalidateNoncesRequest struct {
+	Contract *types.Address
+	Token    *types.Address
+	Spender  *types.Address
+	NewNonce *big.Int
+}
+
+func NewInvalidateNoncesRequest(contract, token, spender *types.Address, newNonce *big.Int) *InvalidateNoncesRequest {
+	return &InvalidateNoncesRequest{
+		Contract: contract,
+		Token:    token,
+		Spender:  spender,
+		NewNonce: newNonce,
+	}
+}
+
+func (r *InvalidateNoncesRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Token == nil {
+		return fmt.Errorf("%w: token is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Spender == nil {
+		return fmt.Errorf("%w: spender is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.NewNonce == nil {
+		return fmt.Errorf("%w: newNonce is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// PermitTransferFromRequest is permitTransferFrom(permit, transferDetails, owner, signature)'s input on Contract.
+type PermitTransferFromRequest struct {
+	Contract        *types.Address
+	Permit          *PermitTransferFrom
+	TransferDetails *SignatureTransferDetails
+	Owner           *types.Address
+	Signature       *types.Signature
+}
+
+func NewPermitTransferFromRequest(contract *types.Address, permit *PermitTransferFrom, transferDetails *SignatureTransferDetails, owner *types.Address, signature *types.Signature) *PermitTransferFromRequest {
+	return &PermitTransferFromRequest{
+		Contract:        contract,
+		Permit:          permit,
+		TransferDetails: transferDetails,
+		Owner:           owner,
+		Signature:       signature,
+	}
+}
+
+func (r *PermitTransferFromRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if err := validatePermitTransferFrom(r.Permit); err != nil {
+		return err
+	}
+
+	if r.TransferDetails == nil {
+		return fmt.Errorf("%w: transferDetails is nil", bind.ErrInvalidRequest)
+	}
+
+	if err := validateSignatureTransferDetails("transferDetails", r.TransferDetails); err != nil {
+		return err
+	}
+
+	if r.Owner == nil {
+		return fmt.Errorf("%w: owner is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Signature == nil {
+		return fmt.Errorf("%w: signature is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// PermitWitnessTransferFromRequest is
+// permitWitnessTransferFrom(permit, transferDetails, owner, witness, witnessTypeString, signature)'s input on Contract.
+type PermitWitnessTransferFromRequest struct {
+	Contract          *types.Address
+	Permit            *PermitTransferFrom
+	TransferDetails   *SignatureTransferDetails
+	Owner             *types.Address
+	Witness           *types.Hash
+	WitnessTypeString string
+	Signature         *types.Signature
+}
+
+func NewPermitWitnessTransferFromRequest(contract *types.Address, permit *PermitTransferFrom, transferDetails *SignatureTransferDetails, owner *types.Address, witness *types.Hash, witnessTypeString string, signature *types.Signature) *PermitWitnessTransferFromRequest {
+	return &PermitWitnessTransferFromRequest{
+		Contract:          contract,
+		Permit:            permit,
+		TransferDetails:   transferDetails,
+		Owner:             owner,
+		Witness:           witness,
+		WitnessTypeString: witnessTypeString,
+		Signature:         signature,
+	}
+}
+
+func (r *PermitWitnessTransferFromRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if err := validatePermitTransferFrom(r.Permit); err != nil {
+		return err
+	}
+
+	if r.TransferDetails == nil {
+		return fmt.Errorf("%w: transferDetails is nil", bind.ErrInvalidRequest)
+	}
+
+	if err := validateSignatureTransferDetails("transferDetails", r.TransferDetails); err != nil {
+		return err
+	}
+
+	if r.Owner == nil {
+		return fmt.Errorf("%w: owner is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Witness == nil {
+		return fmt.Errorf("%w: witness is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.WitnessTypeString == "" {
+		return fmt.Errorf("%w: witnessTypeString is empty", bind.ErrInvalidRequest)
+	}
+
+	if r.Signature == nil {
+		return fmt.Errorf("%w: signature is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// PermitTransferFromBatchRequest is permitTransferFrom(permit, transferDetails, owner, signature)'s
+// batch-overload input on Contract.
+type PermitTransferFromBatchRequest struct {
+	Contract        *types.Address
+	Permit          *PermitBatchTransferFrom
+	TransferDetails []SignatureTransferDetails
+	Owner           *types.Address
+	Signature       *types.Signature
+}
+
+func NewPermitTransferFromBatchRequest(contract *types.Address, permit *PermitBatchTransferFrom, transferDetails []SignatureTransferDetails, owner *types.Address, signature *types.Signature) *PermitTransferFromBatchRequest {
+	return &PermitTransferFromBatchRequest{
+		Contract:        contract,
+		Permit:          permit,
+		TransferDetails: transferDetails,
+		Owner:           owner,
+		Signature:       signature,
+	}
+}
+
+func (r *PermitTransferFromBatchRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if err := validatePermitBatchTransferFrom(r.Permit, r.TransferDetails); err != nil {
+		return err
+	}
+
+	if r.Owner == nil {
+		return fmt.Errorf("%w: owner is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Signature == nil {
+		return fmt.Errorf("%w: signature is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// PermitWitnessTransferFromBatchRequest is
+// permitWitnessTransferFrom(permit, transferDetails, owner, witness, witnessTypeString, signature)'s
+// batch-overload input on Contract.
+type PermitWitnessTransferFromBatchRequest struct {
+	Contract          *types.Address
+	Permit            *PermitBatchTransferFrom
+	TransferDetails   []SignatureTransferDetails
+	Owner             *types.Address
+	Witness           *types.Hash
+	WitnessTypeString string
+	Signature         *types.Signature
+}
+
+func NewPermitWitnessTransferFromBatchRequest(contract *types.Address, permit *PermitBatchTransferFrom, transferDetails []SignatureTransferDetails, owner *types.Address, witness *types.Hash, witnessTypeString string, signature *types.Signature) *PermitWitnessTransferFromBatchRequest {
+	return &PermitWitnessTransferFromBatchRequest{
+		Contract:          contract,
+		Permit:            permit,
+		TransferDetails:   transferDetails,
+		Owner:             owner,
+		Witness:           witness,
+		WitnessTypeString: witnessTypeString,
+		Signature:         signature,
+	}
+}
+
+func (r *PermitWitnessTransferFromBatchRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if err := validatePermitBatchTransferFrom(r.Permit, r.TransferDetails); err != nil {
+		return err
+	}
+
+	if r.Owner == nil {
+		return fmt.Errorf("%w: owner is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Witness == nil {
+		return fmt.Errorf("%w: witness is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.WitnessTypeString == "" {
+		return fmt.Errorf("%w: witnessTypeString is empty", bind.ErrInvalidRequest)
+	}
+
+	if r.Signature == nil {
+		return fmt.Errorf("%w: signature is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// InvalidateUnorderedNoncesRequest is invalidateUnorderedNonces(wordPos, mask)'s input on Contract.
+type InvalidateUnorderedNoncesRequest struct {
+	Contract *types.Address
+	WordPos  *big.Int
+	Mask     *big.Int
+}
+
+func NewInvalidateUnorderedNoncesRequest(contract *types.Address, wordPos, mask *big.Int) *InvalidateUnorderedNoncesRequest {
+	return &InvalidateUnorderedNoncesRequest{
+		Contract: contract,
+		WordPos:  wordPos,
+		Mask:     mask,
+	}
+}
+
+func (r *InvalidateUnorderedNoncesRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.WordPos == nil {
+		return fmt.Errorf("%w: wordPos is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Mask == nil {
+		return fmt.Errorf("%w: mask is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// validatePermitDetails checks every field of d, reporting it under path.
+func validatePermitDetails(path string, d *PermitDetails) error {
+	if d.Token == nil {
+		return fmt.Errorf("%w: %s.token is nil", bind.ErrInvalidRequest, path)
+	}
+
+	if d.Amount == nil {
+		return fmt.Errorf("%w: %s.amount is nil", bind.ErrInvalidRequest, path)
+	}
+
+	if d.Expiration == nil {
+		return fmt.Errorf("%w: %s.expiration is nil", bind.ErrInvalidRequest, path)
+	}
+
+	if d.Nonce == nil {
+		return fmt.Errorf("%w: %s.nonce is nil", bind.ErrInvalidRequest, path)
+	}
+
+	return nil
+}
+
+// validateSignatureTransferDetails checks every field of d, reporting it under path.
+func validateSignatureTransferDetails(path string, d *SignatureTransferDetails) error {
+	if d.To == nil {
+		return fmt.Errorf("%w: %s.to is nil", bind.ErrInvalidRequest, path)
+	}
+
+	if d.RequestedAmount == nil {
+		return fmt.Errorf("%w: %s.requestedAmount is nil", bind.ErrInvalidRequest, path)
+	}
+
+	return nil
+}
+
+// validatePermitTransferFrom checks permit and its nested TokenPermissions.
+func validatePermitTransferFrom(permit *PermitTransferFrom) error {
+	if permit == nil {
+		return fmt.Errorf("%w: permit is nil", bind.ErrInvalidRequest)
+	}
+
+	if permit.Permitted == nil {
+		return fmt.Errorf("%w: permit.permitted is nil", bind.ErrInvalidRequest)
+	}
+
+	if permit.Permitted.Token == nil {
+		return fmt.Errorf("%w: permit.permitted.token is nil", bind.ErrInvalidRequest)
+	}
+
+	if permit.Permitted.Amount == nil {
+		return fmt.Errorf("%w: permit.permitted.amount is nil", bind.ErrInvalidRequest)
+	}
+
+	if permit.Nonce == nil {
+		return fmt.Errorf("%w: permit.nonce is nil", bind.ErrInvalidRequest)
+	}
+
+	if permit.Deadline == nil {
+		return fmt.Errorf("%w: permit.deadline is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// validatePermitBatchTransferFrom checks permit and the transferDetails paired with its Permitted list.
+func validatePermitBatchTransferFrom(permit *PermitBatchTransferFrom, transferDetails []SignatureTransferDetails) error {
+	if permit == nil {
+		return fmt.Errorf("%w: permit is nil", bind.ErrInvalidRequest)
+	}
+
+	if len(permit.Permitted) == 0 {
+		return fmt.Errorf("%w: permit.permitted is empty", bind.ErrInvalidRequest)
+	}
+
+	if len(transferDetails) != len(permit.Permitted) {
+		return fmt.Errorf("%w: transferDetails length %d does not match permit.permitted length %d", bind.ErrInvalidRequest, len(transferDetails), len(permit.Permitted))
+	}
+
+	for i := range permit.Permitted {
+		if permit.Permitted[i].Token == nil {
+			return fmt.Errorf("%w: permit.permitted[%d].token is nil", bind.ErrInvalidRequest, i)
+		}
+		if permit.Permitted[i].Amount == nil {
+			return fmt.Errorf("%w: permit.permitted[%d].amount is nil", bind.ErrInvalidRequest, i)
+		}
+		if err := validateSignatureTransferDetails(fmt.Sprintf("transferDetails[%d]", i), &transferDetails[i]); err != nil {
+			return err
+		}
+	}
+
+	if permit.Nonce == nil {
+		return fmt.Errorf("%w: permit.nonce is nil", bind.ErrInvalidRequest)
+	}
+
+	if permit.Deadline == nil {
+		return fmt.Errorf("%w: permit.deadline is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// NonceInvalidationEvent mirrors AllowanceTransfer's NonceInvalidation event.
+type NonceInvalidationEvent struct {
 	Contract *types.Address
 	Owner    *types.Address
 	Token    *types.Address
@@ -824,8 +1353,8 @@ type NonceInvalidation struct {
 	OldNonce *big.Int
 }
 
-func NewNonceInvalidation(contract, owner, token, spender *types.Address, newNonce, oldNonce *big.Int) *NonceInvalidation {
-	return &NonceInvalidation{
+func NewNonceInvalidationEvent(contract, owner, token, spender *types.Address, newNonce, oldNonce *big.Int) *NonceInvalidationEvent {
+	return &NonceInvalidationEvent{
 		Contract: contract,
 		Owner:    owner,
 		Token:    token,
@@ -835,8 +1364,8 @@ func NewNonceInvalidation(contract, owner, token, spender *types.Address, newNon
 	}
 }
 
-// Approval mirrors AllowanceTransfer's Approval event.
-type Approval struct {
+// ApprovalEvent mirrors AllowanceTransfer's Approval event.
+type ApprovalEvent struct {
 	Contract   *types.Address
 	Owner      *types.Address
 	Token      *types.Address
@@ -845,8 +1374,8 @@ type Approval struct {
 	Expiration *big.Int
 }
 
-func NewApproval(contract, owner, token, spender *types.Address, amount, expiration *big.Int) *Approval {
-	return &Approval{
+func NewApprovalEvent(contract, owner, token, spender *types.Address, amount, expiration *big.Int) *ApprovalEvent {
+	return &ApprovalEvent{
 		Contract:   contract,
 		Owner:      owner,
 		Token:      token,
@@ -856,8 +1385,8 @@ func NewApproval(contract, owner, token, spender *types.Address, amount, expirat
 	}
 }
 
-// Permit mirrors AllowanceTransfer's Permit event.
-type Permit struct {
+// PermitEvent mirrors AllowanceTransfer's Permit event.
+type PermitEvent struct {
 	Contract   *types.Address
 	Owner      *types.Address
 	Token      *types.Address
@@ -867,8 +1396,8 @@ type Permit struct {
 	Nonce      *big.Int
 }
 
-func NewPermit(contract, owner, token, spender *types.Address, amount, expiration, nonce *big.Int) *Permit {
-	return &Permit{
+func NewPermitEvent(contract, owner, token, spender *types.Address, amount, expiration, nonce *big.Int) *PermitEvent {
+	return &PermitEvent{
 		Contract:   contract,
 		Owner:      owner,
 		Token:      token,
@@ -879,16 +1408,16 @@ func NewPermit(contract, owner, token, spender *types.Address, amount, expiratio
 	}
 }
 
-// Lockdown mirrors AllowanceTransfer's Lockdown event.
-type Lockdown struct {
+// LockdownEvent mirrors AllowanceTransfer's Lockdown event.
+type LockdownEvent struct {
 	Contract *types.Address
 	Owner    *types.Address
 	Token    *types.Address
 	Spender  *types.Address
 }
 
-func NewLockdown(contract, owner, token, spender *types.Address) *Lockdown {
-	return &Lockdown{
+func NewLockdownEvent(contract, owner, token, spender *types.Address) *LockdownEvent {
+	return &LockdownEvent{
 		Contract: contract,
 		Owner:    owner,
 		Token:    token,
@@ -896,16 +1425,16 @@ func NewLockdown(contract, owner, token, spender *types.Address) *Lockdown {
 	}
 }
 
-// UnorderedNonceInvalidation mirrors SignatureTransfer's UnorderedNonceInvalidation event.
-type UnorderedNonceInvalidation struct {
+// UnorderedNonceInvalidationEvent mirrors SignatureTransfer's UnorderedNonceInvalidation event.
+type UnorderedNonceInvalidationEvent struct {
 	Contract *types.Address
 	Owner    *types.Address
 	Word     *big.Int
 	Mask     *big.Int
 }
 
-func NewUnorderedNonceInvalidation(contract, owner *types.Address, word, mask *big.Int) *UnorderedNonceInvalidation {
-	return &UnorderedNonceInvalidation{
+func NewUnorderedNonceInvalidationEvent(contract, owner *types.Address, word, mask *big.Int) *UnorderedNonceInvalidationEvent {
+	return &UnorderedNonceInvalidationEvent{
 		Contract: contract,
 		Owner:    owner,
 		Word:     word,
