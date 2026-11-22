@@ -28,18 +28,19 @@ var interfaceIDERC1155 = [4]byte{0xd9, 0xb6, 0x7a, 0x26}
 type ERC1155Suite struct {
 	suite.Suite
 
-	RPCURL         string
-	PrivateKeyHex  string
-	MulticallHex   string
-	NativeSymbol   string
-	NativeDecimals int
-	Timeout        time.Duration
-	ToHex          string
-	TokenCount     int
-	ByteCode       string
-	Constructor    *abi.Function
-	Args           []any
-	Salt           *types.Hash
+	RPCURL          string
+	PrivateKeyHex   string
+	MulticallHex    string
+	NicksFactoryHex string
+	NativeSymbol    string
+	NativeDecimals  int
+	Timeout         time.Duration
+	ToHex           string
+	TokenCount      int
+	ByteCode        string
+	Constructor     *abi.Function
+	Args            []any
+	Salt            *types.Hash
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -51,6 +52,7 @@ type ERC1155Suite struct {
 	contracts []*types.Address
 	to        *types.Address
 	multicall *types.Address
+	factory   *types.Address
 
 	erc1155 *ERC1155
 
@@ -65,18 +67,19 @@ func TestERC1155Suite(t *testing.T) {
 	c := testenv.MustLoad(t, testenv.UnknownNetworkType, testenv.UnknownNetwork)
 
 	suite.Run(t, &ERC1155Suite{
-		RPCURL:         c.RPCURL,
-		PrivateKeyHex:  c.ActorPrivateKeyHex,
-		MulticallHex:   c.Multicall,
-		NativeSymbol:   c.NativeSymbol,
-		NativeDecimals: c.NativeDecimals,
-		Timeout:        10 * time.Minute,
-		ToHex:          "",
-		TokenCount:     5,
-		ByteCode:       testenv.ERC1155ByteCodeHex,
-		Constructor:    abi.NewFunction("constructor", abi.NewTypes(abi.String), nil),
-		Args:           []any{"https://evmkit-fixtures.test/erc1155/{id}.json"},
-		Salt:           core.Keccak256([]byte("hello")),
+		RPCURL:          c.RPCURL,
+		PrivateKeyHex:   c.ActorPrivateKeyHex,
+		MulticallHex:    c.Multicall,
+		NicksFactoryHex: c.NicksFactory,
+		NativeSymbol:    c.NativeSymbol,
+		NativeDecimals:  c.NativeDecimals,
+		Timeout:         10 * time.Minute,
+		ToHex:           "",
+		TokenCount:      5,
+		ByteCode:        testenv.ERC1155ByteCodeHex,
+		Constructor:     abi.NewFunction("constructor", abi.NewTypes(abi.String), nil),
+		Args:            []any{"https://evmkit-fixtures.test/erc1155/{id}.json"},
+		Salt:            core.Keccak256([]byte("hello")),
 	})
 }
 
@@ -104,6 +107,9 @@ func (s *ERC1155Suite) SetupSuite() {
 	s.multicall, err = types.NewAddressFromHex(s.MulticallHex)
 	s.Require().NoError(err)
 
+	s.factory, err = types.NewAddressFromHex(s.NicksFactoryHex)
+	s.Require().NoError(err)
+
 	bytecode, err := encoding.Hex.Decode(s.ByteCode)
 	s.Require().NoError(err)
 
@@ -124,7 +130,7 @@ func (s *ERC1155Suite) SetupSuite() {
 			salt,
 		)
 
-		unsigned, err := s.deployer.CreateDeployment(s.ctx, tx.NewDynamicFeeBuilder(), s.from, deploy.DefaultNicksMethodFactory, big.NewInt(0), deployment)
+		unsigned, err := s.deployer.CreateDeployment(s.ctx, tx.NewDynamicFeeBuilder(), s.from, s.factory, big.NewInt(0), deployment)
 		s.Require().NoError(err)
 
 		s.Require().NoError(unsigned.Sign(s.signer))
@@ -139,7 +145,7 @@ func (s *ERC1155Suite) SetupSuite() {
 		s.Require().NoError(err)
 		s.Require().True(receipt.Status, "deploy transaction reverted")
 
-		contract, err := s.deployer.DeployAddress(deploy.DefaultNicksMethodFactory, deployment)
+		contract, err := s.deployer.DeployAddress(s.factory, deployment)
 		s.Require().NoError(err)
 		s.contracts[i] = contract
 

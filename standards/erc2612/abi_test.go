@@ -73,7 +73,7 @@ func TestEncodeNonces(t *testing.T) {
 }
 
 func TestDecodeNonces(t *testing.T) {
-	data, err := abi.Pack(abi.Types{abi.Uint256}, big.NewInt(42))
+	data, err := abi.Pack(abi.NewTypes(abi.Uint256), big.NewInt(42))
 	require.NoError(t, err)
 
 	n, err := DecodeNonces(data)
@@ -94,7 +94,7 @@ func TestEncodeDomainSeparator(t *testing.T) {
 func TestDecodeDomainSeparator(t *testing.T) {
 	want := make([]byte, 32)
 	want[31] = 0xab
-	data, err := abi.Pack(abi.Types{abi.Bytes32}, want)
+	data, err := abi.Pack(abi.NewTypes(abi.Bytes32), want)
 	require.NoError(t, err)
 
 	got, err := DecodeDomainSeparator(data)

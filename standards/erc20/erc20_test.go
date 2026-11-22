@@ -25,20 +25,21 @@ import (
 type ERC20Suite struct {
 	suite.Suite
 
-	RPCURL         string
-	PrivateKeyHex  string
-	MulticallHex   string
-	NativeSymbol   string
-	NativeDecimals int
-	Timeout        time.Duration
-	ToHex          string
-	Value          string
-	MintValue      string
-	TokenCount     int
-	ByteCode       string
-	Constructor    *abi.Function
-	Args           []any
-	Salt           *types.Hash
+	RPCURL          string
+	PrivateKeyHex   string
+	MulticallHex    string
+	NicksFactoryHex string
+	NativeSymbol    string
+	NativeDecimals  int
+	Timeout         time.Duration
+	ToHex           string
+	Value           string
+	MintValue       string
+	TokenCount      int
+	ByteCode        string
+	Constructor     *abi.Function
+	Args            []any
+	Salt            *types.Hash
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -50,6 +51,7 @@ type ERC20Suite struct {
 	tokens    []*types.Address
 	to        *types.Address
 	multicall *types.Address
+	factory   *types.Address
 	value     *big.Int
 	mintValue *big.Int
 
@@ -63,20 +65,21 @@ func TestERC20Suite(t *testing.T) {
 	c := testenv.MustLoad(t, testenv.UnknownNetworkType, testenv.UnknownNetwork)
 
 	suite.Run(t, &ERC20Suite{
-		RPCURL:         c.RPCURL,
-		PrivateKeyHex:  c.ActorPrivateKeyHex,
-		MulticallHex:   c.Multicall,
-		NativeSymbol:   c.NativeSymbol,
-		NativeDecimals: c.NativeDecimals,
-		Timeout:        10 * time.Minute,
-		ToHex:          "",
-		Value:          "100000",
-		MintValue:      "1000000000000000000000000",
-		TokenCount:     5,
-		ByteCode:       testenv.ERC20ByteCodeHex,
-		Constructor:    abi.NewFunction("constructor", abi.NewTypes(abi.String, abi.String, abi.Uint8), nil),
-		Args:           []any{"evmkit test ERC20", "EVK20", uint8(18)},
-		Salt:           core.Keccak256([]byte("go-evmkit")),
+		RPCURL:          c.RPCURL,
+		PrivateKeyHex:   c.ActorPrivateKeyHex,
+		MulticallHex:    c.Multicall,
+		NicksFactoryHex: c.NicksFactory,
+		NativeSymbol:    c.NativeSymbol,
+		NativeDecimals:  c.NativeDecimals,
+		Timeout:         10 * time.Minute,
+		ToHex:           "",
+		Value:           "100000",
+		MintValue:       "1000000000000000000000000",
+		TokenCount:      5,
+		ByteCode:        testenv.ERC20ByteCodeHex,
+		Constructor:     abi.NewFunction("constructor", abi.NewTypes(abi.String, abi.String, abi.Uint8), nil),
+		Args:            []any{"evmkit test ERC20", "EVK20", uint8(18)},
+		Salt:            core.Keccak256([]byte("go-evmkit")),
 	})
 }
 
@@ -99,6 +102,9 @@ func (s *ERC20Suite) SetupSuite() {
 	s.Require().NoError(err)
 
 	s.multicall, err = types.NewAddressFromHex(s.MulticallHex)
+	s.Require().NoError(err)
+
+	s.factory, err = types.NewAddressFromHex(s.NicksFactoryHex)
 	s.Require().NoError(err)
 
 	value, ok := new(big.Int).SetString(s.Value, 10)
@@ -125,7 +131,7 @@ func (s *ERC20Suite) SetupSuite() {
 			salt,
 		)
 
-		unsigned, err := s.deployer.CreateDeployment(s.ctx, tx.NewDynamicFeeBuilder(), s.from, deploy.DefaultNicksMethodFactory, big.NewInt(0), deployment)
+		unsigned, err := s.deployer.CreateDeployment(s.ctx, tx.NewDynamicFeeBuilder(), s.from, s.factory, big.NewInt(0), deployment)
 		s.Require().NoError(err)
 
 		s.Require().NoError(unsigned.Sign(s.signer))
@@ -140,7 +146,7 @@ func (s *ERC20Suite) SetupSuite() {
 		s.Require().NoError(err)
 		s.Require().True(receipt.Status, "deploy transaction reverted")
 
-		token, err := s.deployer.DeployAddress(deploy.DefaultNicksMethodFactory, deployment)
+		token, err := s.deployer.DeployAddress(s.factory, deployment)
 		s.Require().NoError(err)
 		s.tokens[i] = token
 

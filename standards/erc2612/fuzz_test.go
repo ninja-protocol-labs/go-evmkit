@@ -1,14 +1,22 @@
 package erc2612
 
 import (
+	"context"
 	"math/big"
 	"testing"
 
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/ninja-protocol-labs/go-evmkit/bind"
+	"github.com/ninja-protocol-labs/go-evmkit/core"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
+	"github.com/ninja-protocol-labs/go-evmkit/rpc"
+	"github.com/ninja-protocol-labs/go-evmkit/rpc/mocks"
 	"github.com/ninja-protocol-labs/go-evmkit/standards/eip712"
+	"github.com/ninja-protocol-labs/go-evmkit/tx"
+	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
 // go test -run '^$' -fuzz '^FuzzPermitHashCrashSafety$' -fuzztime=10s ./standards/erc2612
@@ -217,7 +225,7 @@ func FuzzDecodeNoncesRoundTrip(f *testing.F) {
 		}
 		want := new(big.Int).SetBytes(raw)
 
-		data, err := abi.Pack(abi.Types{abi.Uint256}, want)
+		data, err := abi.Pack(abi.NewTypes(abi.Uint256), want)
 		require.NoError(t, err)
 
 		got, err := DecodeNonces(data)
@@ -238,7 +246,7 @@ func FuzzDecodeDomainSeparatorRoundTrip(f *testing.F) {
 		}
 		copy(want[32-len(raw):], raw)
 
-		data, err := abi.Pack(abi.Types{abi.Bytes32}, want)
+		data, err := abi.Pack(abi.NewTypes(abi.Bytes32), want)
 		require.NoError(t, err)
 
 		got, err := DecodeDomainSeparator(data)
@@ -258,5 +266,97 @@ func FuzzSimpleDecodersDoNotPanic(f *testing.F) {
 	f.Fuzz(func(t *testing.T, data []byte) {
 		_, _ = DecodeNonces(data)
 		_, _ = DecodeDomainSeparator(data)
+	})
+}
+
+// go test -run '^$' -fuzz '^FuzzPermitThroughClient$' -fuzztime=10s ./standards/erc2612
+func FuzzPermitThroughClient(f *testing.F) {
+	f.Add([]byte{0x01}, []byte{}, []byte{}, []byte{}, uint64(0))
+	f.Add([]byte{0xa1, 0x1c, 0xe0}, []byte{0x2a}, []byte{0x01, 0x00}, []byte{0x70, 0x00, 0x00, 0x00}, uint64(5))
+	f.Add(make([]byte, 31), make([]byte, 20), make([]byte, 32), make([]byte, 32), ^uint64(0)-1)
+
+	relayerKey, err := types.NewPrivateKeyFromBig(big.NewInt(0xb0b))
+	require.NoError(f, err)
+	relayer := core.PubkeyToAddress(relayerKey.PublicKey())
+	contract := types.MustNewAddressFromHex("0x4200000000000000000000000000000000000006")
+
+	f.Fuzz(func(t *testing.T, ownerSeed, spenderRaw, amountRaw, deadlineRaw []byte, nonce uint64) {
+		if len(amountRaw) > 32 {
+			amountRaw = amountRaw[len(amountRaw)-32:]
+		}
+		if len(deadlineRaw) > 32 {
+			deadlineRaw = deadlineRaw[len(deadlineRaw)-32:]
+		}
+		ownerKey, err := types.NewPrivateKeyFromBig(new(big.Int).Add(new(big.Int).SetBytes(core.Keccak256(ownerSeed).Bytes()[:30]), big.NewInt(1)))
+		require.NoError(t, err)
+		owner := core.PubkeyToAddress(ownerKey.PublicKey())
+		spender := types.NewAddressFromBytes(spenderRaw)
+		amount := new(big.Int).SetBytes(amountRaw)
+		deadline := new(big.Int).SetBytes(deadlineRaw)
+
+		domain := eip712.NewDomain("Fuzz Token", DefaultVersion, big.NewInt(1), contract, nil)
+		sig, err := NewPermit(owner, spender, amount, new(big.Int).SetUint64(nonce), deadline).Sign(domain, ownerKey)
+		require.NoError(t, err)
+		calldata, err := EncodePermit(owner, spender, amount, deadline, sig)
+		require.NoError(t, err)
+
+		builder := tx.NewDynamicFeeBuilder()
+		builder.ChainID(big.NewInt(1))
+		builder.Nonce(nonce)
+		builder.Limit(100_000)
+		builder.Price(big.NewInt(30_000_000_000), big.NewInt(1_000_000_000))
+
+		var raw []byte
+		c := mocks.NewClient(t)
+		c.EXPECT().Call(mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, e rpc.Element) error {
+			raw, err = encoding.Hex.Decode(e.Params.([]any)[0].(string))
+			require.NoError(t, err)
+			*e.Result.(*string) = core.Keccak256(raw).String()
+			return nil
+		}).Once()
+
+		signed, hash, err := New(c).Permit(t.Context(), bind.NewTransactOptions(relayerKey, builder), NewPermitRequest(contract, owner, spender, amount, deadline, sig))
+		require.NoError(t, err)
+		require.True(t, hash.Equal(core.Keccak256(raw)))
+		require.Equal(t, nonce, signed.AddressNonce())
+
+		decoded, err := core.DecodeTransaction(raw)
+		require.NoError(t, err)
+		dyn, ok := decoded.(*core.DynamicFeeTx)
+		require.True(t, ok)
+		require.True(t, dyn.To.Equal(contract))
+		require.Equal(t, calldata, dyn.Data)
+		from, err := decoded.Sender()
+		require.NoError(t, err)
+		require.True(t, from.Equal(relayer))
+
+		vals, err := permitFn.DecodeCall(dyn.Data)
+		require.NoError(t, err)
+		require.Contains(t, []uint8{27, 28}, vals[4])
+	})
+}
+
+// go test -run '^$' -fuzz '^FuzzReadsSurviveArbitraryResult$' -fuzztime=10s ./standards/erc2612
+func FuzzReadsSurviveArbitraryResult(f *testing.F) {
+	f.Add([]byte{})
+	f.Add(make([]byte, 31))
+	f.Add(make([]byte, 32))
+	f.Add(make([]byte, 64))
+
+	contract := types.MustNewAddressFromHex("0x4200000000000000000000000000000000000006")
+	owner := types.MustNewAddressFromHex("0x6667c8dc9fbfec411e7c1ee2b24de960149f930f")
+
+	f.Fuzz(func(t *testing.T, result []byte) {
+		c := mocks.NewClient(t)
+		c.EXPECT().Call(mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, e rpc.Element) error {
+			*e.Result.(*string) = encoding.Hex.EncodePrefixed(result)
+			return nil
+		}).Twice()
+		e := New(c)
+
+		n, err := e.Nonces(t.Context(), nil, NewNoncesRequest(contract, owner))
+		require.True(t, (err == nil) != (n == nil))
+		h, err := e.DomainSeparator(t.Context(), nil, NewDomainSeparatorRequest(contract))
+		require.True(t, (err == nil) != (h == nil))
 	})
 }

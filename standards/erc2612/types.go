@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core"
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
@@ -82,4 +83,110 @@ func (p *Permit) Sign(domain *eip712.Domain, signer core.Signer) (*types.Signatu
 		return nil, fmt.Errorf("erc2612: sign: %w", err)
 	}
 	return sig, nil
+}
+
+// NoncesRequest is nonces(owner)'s input on Contract.
+type NoncesRequest struct {
+	Contract *types.Address
+	Owner    *types.Address
+}
+
+func NewNoncesRequest(contract, owner *types.Address) *NoncesRequest {
+	return &NoncesRequest{
+		Contract: contract,
+		Owner:    owner,
+	}
+}
+
+func (r *NoncesRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Owner == nil {
+		return fmt.Errorf("%w: owner is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// DomainSeparatorRequest is DOMAIN_SEPARATOR()'s input on Contract.
+type DomainSeparatorRequest struct {
+	Contract *types.Address
+}
+
+func NewDomainSeparatorRequest(contract *types.Address) *DomainSeparatorRequest {
+	return &DomainSeparatorRequest{
+		Contract: contract,
+	}
+}
+
+func (r *DomainSeparatorRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// PermitRequest is permit(owner, spender, value, deadline, v, r, s)'s input on Contract; Signature
+// is Owner's signature over the matching Permit, and anyone may relay it.
+type PermitRequest struct {
+	Contract  *types.Address
+	Owner     *types.Address
+	Spender   *types.Address
+	Amount    *big.Int
+	Deadline  *big.Int
+	Signature *types.Signature
+}
+
+func NewPermitRequest(contract, owner, spender *types.Address, amount, deadline *big.Int, signature *types.Signature) *PermitRequest {
+	return &PermitRequest{
+		Contract:  contract,
+		Owner:     owner,
+		Spender:   spender,
+		Amount:    amount,
+		Deadline:  deadline,
+		Signature: signature,
+	}
+}
+
+func (r *PermitRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Owner == nil {
+		return fmt.Errorf("%w: owner is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Spender == nil {
+		return fmt.Errorf("%w: spender is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Amount == nil {
+		return fmt.Errorf("%w: amount is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Deadline == nil {
+		return fmt.Errorf("%w: deadline is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Signature == nil {
+		return fmt.Errorf("%w: signature is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
 }
