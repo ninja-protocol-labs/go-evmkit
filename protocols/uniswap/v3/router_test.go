@@ -170,14 +170,8 @@ func (s *RouterSwapSuite) SetupSuite() {
 
 	path := append([]*types.Address{s.tokenIn}, s.hops...)
 	path = append(path, s.tokenOut)
-	previewPath := append([]byte{}, path[0].Bytes()...)
-	for i, fee := range s.fees {
-		feeBytes := make([]byte, 3)
-		feeRaw := fee.Bytes()
-		copy(feeBytes[3-len(feeRaw):], feeRaw)
-		previewPath = append(previewPath, feeBytes...)
-		previewPath = append(previewPath, path[i+1].Bytes()...)
-	}
+	previewPath, err := EncodePath(path, s.fees)
+	s.Require().NoError(err)
 	if s.NativeIn {
 		previewParams := NewExactInputParams(previewPath, s.from, s.amount, big.NewInt(0))
 		_, err = s.v3Router.CallExactInput(s.ctx, s.router, s.from, s.amount, previewParams, rpc.BlockTagLatest)
@@ -283,14 +277,8 @@ func (s *RouterSwapSuite) swap(path []*types.Address, fees []*big.Int, amountIn 
 		s.T().Logf("swap %s -> %s: approve confirmed in block %d", tokenIn, tokenOut, approveReceipt.BlockNumber)
 	}
 
-	encodedPath := append([]byte{}, path[0].Bytes()...)
-	for i, fee := range fees {
-		feeBytes := make([]byte, 3)
-		feeRaw := fee.Bytes()
-		copy(feeBytes[3-len(feeRaw):], feeRaw)
-		encodedPath = append(encodedPath, feeBytes...)
-		encodedPath = append(encodedPath, path[i+1].Bytes()...)
-	}
+	encodedPath, err := EncodePath(path, fees)
+	s.Require().NoError(err)
 
 	recipient := s.from
 	if nativeOut {
@@ -326,7 +314,7 @@ func (s *RouterSwapSuite) swap(path []*types.Address, fees []*big.Int, amountIn 
 		return true
 	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "swap not buildable: %v", lastErr)
 
-	quoterQuote, err := s.v3Quoter.CallQuoteExactInput(s.ctx, s.quoter, s.from, encodedPath, amountIn, rpc.BlockTagLatest)
+	quoterQuote, err := s.v3Quoter.CallQuoteExactInput(s.ctx, bind.NewCallOptions().WithFrom(s.from), NewQuoteExactInputRequest(s.quoter, encodedPath, amountIn))
 	s.Require().NoError(err)
 	s.T().Logf("swap %s -> %s: Quoter's own quote taken right before broadcast: amountOut=%s", tokenIn, tokenOut, quoterQuote.AmountOut)
 
@@ -1385,15 +1373,8 @@ func (s *RouterLifeCycleSuite) Test07MintBC() {
 func (s *RouterLifeCycleSuite) Test08ExactInput() {
 	amountIn := new(big.Int).Div(s.mintValue, big.NewInt(1000))
 
-	feeBytes := make([]byte, 3)
-	feeRaw := s.Fee.Bytes()
-	copy(feeBytes[3-len(feeRaw):], feeRaw)
-
-	path := append([]byte{}, s.tokenA.Bytes()...)
-	path = append(path, feeBytes...)
-	path = append(path, s.tokenB.Bytes()...)
-	path = append(path, feeBytes...)
-	path = append(path, s.tokenC.Bytes()...)
+	path, err := EncodePath([]*types.Address{s.tokenA, s.tokenB, s.tokenC}, []*big.Int{s.Fee, s.Fee})
+	s.Require().NoError(err)
 	s.T().Logf("Test08ExactInput: path=tokenA(%s) -> tokenB(%s) -> tokenC(%s) fee=%s amountIn=%s", s.tokenA, s.tokenB, s.tokenC, s.Fee, amountIn)
 
 	builder := tx.NewDynamicFeeBuilder()
@@ -1583,15 +1564,8 @@ func (s *RouterLifeCycleSuite) Test11ExactOutput() {
 	amountOut := new(big.Int).Div(s.mintValue, big.NewInt(2000))
 	approveCap := new(big.Int).Div(s.mintValue, big.NewInt(1000))
 
-	feeBytes := make([]byte, 3)
-	feeRaw := s.Fee.Bytes()
-	copy(feeBytes[3-len(feeRaw):], feeRaw)
-
-	path := append([]byte{}, s.tokenA.Bytes()...)
-	path = append(path, feeBytes...)
-	path = append(path, s.tokenB.Bytes()...)
-	path = append(path, feeBytes...)
-	path = append(path, s.tokenC.Bytes()...)
+	path, err := EncodePath([]*types.Address{s.tokenA, s.tokenB, s.tokenC}, []*big.Int{s.Fee, s.Fee})
+	s.Require().NoError(err)
 	s.T().Logf("Test11ExactOutput: path=tokenC(%s) -> tokenB(%s) -> tokenA(%s) fee=%s amountOut=%s approveCap=%s", s.tokenC, s.tokenB, s.tokenA, s.Fee, amountOut, approveCap)
 
 	builder := tx.NewDynamicFeeBuilder()
@@ -1701,15 +1675,8 @@ func (s *RouterLifeCycleSuite) Test12ExactInputTooLittleReceived() {
 	amountIn := new(big.Int).Div(s.mintValue, big.NewInt(1000))
 	unrealisticAmountOutMinimum := new(big.Int).Mul(amountIn, big.NewInt(2))
 
-	feeBytes := make([]byte, 3)
-	feeRaw := s.Fee.Bytes()
-	copy(feeBytes[3-len(feeRaw):], feeRaw)
-
-	path := append([]byte{}, s.tokenA.Bytes()...)
-	path = append(path, feeBytes...)
-	path = append(path, s.tokenB.Bytes()...)
-	path = append(path, feeBytes...)
-	path = append(path, s.tokenC.Bytes()...)
+	path, err := EncodePath([]*types.Address{s.tokenA, s.tokenB, s.tokenC}, []*big.Int{s.Fee, s.Fee})
+	s.Require().NoError(err)
 	s.T().Logf("Test12ExactInputTooLittleReceived: path=tokenA(%s) -> tokenB(%s) -> tokenC(%s) amountIn=%s amountOutMinimum=%s", s.tokenA, s.tokenB, s.tokenC, amountIn, unrealisticAmountOutMinimum)
 
 	builder := tx.NewDynamicFeeBuilder()
@@ -1744,15 +1711,8 @@ func (s *RouterLifeCycleSuite) Test13ExactOutputTooMuchRequested() {
 	approveCap := new(big.Int).Div(s.mintValue, big.NewInt(1000))
 	unrealisticAmountInMaximum := big.NewInt(1)
 
-	feeBytes := make([]byte, 3)
-	feeRaw := s.Fee.Bytes()
-	copy(feeBytes[3-len(feeRaw):], feeRaw)
-
-	path := append([]byte{}, s.tokenA.Bytes()...)
-	path = append(path, feeBytes...)
-	path = append(path, s.tokenB.Bytes()...)
-	path = append(path, feeBytes...)
-	path = append(path, s.tokenC.Bytes()...)
+	path, err := EncodePath([]*types.Address{s.tokenA, s.tokenB, s.tokenC}, []*big.Int{s.Fee, s.Fee})
+	s.Require().NoError(err)
 	s.T().Logf("Test13ExactOutputTooMuchRequested: path=tokenC(%s) -> tokenB(%s) -> tokenA(%s) amountOut=%s amountInMaximum=%s", s.tokenC, s.tokenB, s.tokenA, amountOut, unrealisticAmountInMaximum)
 
 	builder := tx.NewDynamicFeeBuilder()
