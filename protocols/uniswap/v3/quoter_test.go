@@ -367,7 +367,7 @@ func (s *QuoterLifeCycleSuite) Test02CreateAndInitializePoolIfNecessary() {
 
 	var registeredPool *types.Address
 	s.Require().Eventually(func() bool {
-		registeredPool, err = s.v3Factory.GetPool(s.ctx, NewGetPoolParams(s.factory, s.tokenA, s.tokenB, s.Fee), rpc.BlockTagLatest)
+		registeredPool, err = s.v3Factory.GetPool(s.ctx, nil, NewGetPoolRequest(s.factory, s.tokenA, s.tokenB, s.Fee))
 		return err == nil && registeredPool.Equal(s.pool)
 	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "Factory.getPool not yet reflecting the new pool")
 	s.T().Logf("Test02CreateAndInitializePoolIfNecessary: Factory.getPool(token0, token1, fee) = %s matches", registeredPool)
@@ -714,7 +714,7 @@ func (s *QuoterLifeCycleSuite) Test08CreateAndInitializePoolBC() {
 
 	var registeredPool *types.Address
 	s.Require().Eventually(func() bool {
-		registeredPool, err = s.v3Factory.GetPool(s.ctx, NewGetPoolParams(s.factory, s.tokenB, s.tokenC, s.Fee), rpc.BlockTagLatest)
+		registeredPool, err = s.v3Factory.GetPool(s.ctx, nil, NewGetPoolRequest(s.factory, s.tokenB, s.tokenC, s.Fee))
 		return err == nil && registeredPool.Equal(s.poolBC)
 	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "Factory.getPool not yet reflecting the new pool")
 	s.T().Logf("Test08CreateAndInitializePoolBC: Factory.getPool(token0, token1, fee) = %s matches", registeredPool)

@@ -6,213 +6,187 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
-	"github.com/ninja-protocol-labs/go-evmkit/tx"
-	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
-// IFactory mirrors IUniswapV3Factory. No tx.Builder-taking Create* constructors here -- see
-// CreateCreatePool, CreateSetOwner, and CreateEnableFeeAmount.
+// IFactory mirrors IUniswapV3Factory.
 type IFactory interface {
-	Owner(ctx context.Context, contract *types.Address, block string) (*types.Address, error)
-	FeeAmountTickSpacing(ctx context.Context, contract *types.Address, fee *big.Int, block string) (*big.Int, error)
-	GetPool(ctx context.Context, p *GetPoolParams, block string) (*types.Address, error)
+	Owner(ctx context.Context, opts *bind.CallOptions, req *OwnerRequest) (*types.Address, error)
+	FeeAmountTickSpacing(ctx context.Context, opts *bind.CallOptions, req *FeeAmountTickSpacingRequest) (*big.Int, error)
+	GetPool(ctx context.Context, opts *bind.CallOptions, req *GetPoolRequest) (*types.Address, error)
+	CallCreatePool(ctx context.Context, opts *bind.CallOptions, req *CreatePoolRequest) (*types.Address, error)
 
-	CreatePool(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	SetOwner(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	EnableFeeAmount(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
+	CreatePool(ctx context.Context, opts *bind.TransactOptions, req *CreatePoolRequest) (core.Transaction, *types.Hash, error)
+	SetOwner(ctx context.Context, opts *bind.TransactOptions, req *SetOwnerRequest) (core.Transaction, *types.Hash, error)
+	EnableFeeAmount(ctx context.Context, opts *bind.TransactOptions, req *EnableFeeAmountRequest) (core.Transaction, *types.Hash, error)
 }
 
 var _ IFactory = (*Factory)(nil)
 
-// Factory calls any UniswapV3Factory contract over a Client; it holds no contract address, so
-// one instance serves every network's deployment.
+// Factory calls any UniswapV3Factory contract over a Client; it holds no contract address, so one instance serves every deployment.
 type Factory struct {
 	c rpc.Client
 }
 
-// NewFactory returns a Factory calling factories via c.
-func NewFactory(c rpc.Client) *Factory {
+// NewFactory returns a Factory calling factories via cli.
+func NewFactory(cli rpc.Client) *Factory {
 	return &Factory{
-		c: c,
+		c: cli,
 	}
 }
 
-// Owner returns contract's current owner, the only account allowed to call
-// SetOwner/EnableFeeAmount.
-func (f *Factory) Owner(ctx context.Context, contract *types.Address, block string) (*types.Address, error) {
-	data, err := f.call(ctx, nil, contract, EncodeOwner(), block)
+// Owner returns req.Contract's owner, the only account allowed to call SetOwner/EnableFeeAmount.
+func (f *Factory) Owner(ctx context.Context, opts *bind.CallOptions, req *OwnerRequest) (*types.Address, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv3: owner: %w", err)
+	}
+
+	data, err := bind.Call(ctx, f.c, opts, req.Contract, EncodeOwner())
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv3: owner: %w", f.wrapRevertError(err))
+	}
+
+	out, err := DecodeOwner(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: owner: %w", err)
 	}
-	addr, err := DecodeOwner(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: owner: %w", err)
-	}
-	return addr, nil
+
+	return out, nil
 }
 
-// FeeAmountTickSpacing returns the tick spacing contract enforces for fee, or zero if fee
-// isn't an enabled tier.
-func (f *Factory) FeeAmountTickSpacing(ctx context.Context, contract *types.Address, fee *big.Int, block string) (*big.Int, error) {
-	calldata, err := EncodeFeeAmountTickSpacing(fee)
+// FeeAmountTickSpacing returns the tick spacing req.Contract enforces for req.Fee, or zero if the tier isn't enabled.
+func (f *Factory) FeeAmountTickSpacing(ctx context.Context, opts *bind.CallOptions, req *FeeAmountTickSpacingRequest) (*big.Int, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv3: feeAmountTickSpacing: %w", err)
+	}
+
+	calldata, err := EncodeFeeAmountTickSpacing(req.Fee)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: feeAmountTickSpacing: %w", err)
 	}
-	data, err := f.call(ctx, nil, contract, calldata, block)
+
+	data, err := bind.Call(ctx, f.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv3: feeAmountTickSpacing: %w", f.wrapRevertError(err))
+	}
+
+	out, err := DecodeFeeAmountTickSpacing(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: feeAmountTickSpacing: %w", err)
 	}
-	n, err := DecodeFeeAmountTickSpacing(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: feeAmountTickSpacing: %w", err)
-	}
-	return n, nil
+
+	return out, nil
 }
 
-// GetPool returns the pool contract deployed for (tokenA, tokenB, fee), or the zero address
-// if none exists yet.
-func (f *Factory) GetPool(ctx context.Context, p *GetPoolParams, block string) (*types.Address, error) {
-	calldata, err := EncodeGetPool(p.TokenA, p.TokenB, p.Fee)
+// GetPool returns the pool for (req.TokenA, req.TokenB, req.Fee), or the zero address if none exists yet.
+func (f *Factory) GetPool(ctx context.Context, opts *bind.CallOptions, req *GetPoolRequest) (*types.Address, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv3: getPool: %w", err)
+	}
+
+	calldata, err := EncodeGetPool(req.TokenA, req.TokenB, req.Fee)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: getPool: %w", err)
 	}
-	data, err := f.call(ctx, nil, p.Factory, calldata, block)
+
+	data, err := bind.Call(ctx, f.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv3: getPool: %w", f.wrapRevertError(err))
+	}
+
+	out, err := DecodeGetPool(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: getPool: %w", err)
 	}
-	addr, err := DecodeGetPool(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: getPool: %w", err)
-	}
-	return addr, nil
+
+	return out, nil
 }
 
-// CreateCreatePool builds an unsigned createPool(tokenA, tokenB, fee) transaction via b, sent by sender.
-func (f *Factory) CreateCreatePool(ctx context.Context, b tx.Builder, p *CreatePoolParams) (core.Transaction, error) {
-	calldata, err := EncodeCreatePool(p.TokenA, p.TokenB, p.Fee)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: createCreatePool: %w", err)
+// CallCreatePool runs createPool(tokenA, tokenB, fee) via eth_call as opts.From, returning the pool it would create or the revert.
+func (f *Factory) CallCreatePool(ctx context.Context, opts *bind.CallOptions, req *CreatePoolRequest) (*types.Address, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv3: callCreatePool: %w", err)
 	}
 
-	unsigned, err := b.Build(p.Sender, p.Factory, nil, calldata).Pack(ctx, f.c)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: createCreatePool: %w", f.wrapRevertError(err))
-	}
-	return unsigned, nil
-}
-
-// CallCreatePool simulates createPool(tokenA, tokenB, fee) via eth_call, as sender, returning the
-// pool address it would create -- without broadcasting anything.
-func (f *Factory) CallCreatePool(ctx context.Context, p *CreatePoolParams, block string) (*types.Address, error) {
-	calldata, err := EncodeCreatePool(p.TokenA, p.TokenB, p.Fee)
+	calldata, err := EncodeCreatePool(req.TokenA, req.TokenB, req.Fee)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: callCreatePool: %w", err)
 	}
-	data, err := f.call(ctx, p.Sender, p.Factory, calldata, block)
+
+	data, err := bind.Call(ctx, f.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv3: callCreatePool: %w", f.wrapRevertError(err))
+	}
+
+	out, err := DecodeCreatePool(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: callCreatePool: %w", err)
 	}
-	addr, err := DecodeCreatePool(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: callCreatePool: %w", err)
-	}
-	return addr, nil
+
+	return out, nil
 }
 
-// CreatePool broadcasts an already-signed createPool transaction. The new pool's address comes
-// back via the PoolCreated event (ExtractPoolCreated), not a return value -- a mined
-// transaction's return value isn't retrievable.
-func (f *Factory) CreatePool(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: createPool: %w", err)
+// CreatePool sends createPool(tokenA, tokenB, fee) on req.Contract, signed by opts.Signer; the new pool comes back via ExtractPoolCreated.
+func (f *Factory) CreatePool(ctx context.Context, opts *bind.TransactOptions, req *CreatePoolRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: createPool: %w", err)
 	}
-	hash, err := tx.Broadcast(ctx, f.c, raw)
+
+	calldata, err := EncodeCreatePool(req.TokenA, req.TokenB, req.Fee)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: createPool: %w", err)
+		return nil, nil, fmt.Errorf("uniswapv3: createPool: %w", err)
 	}
-	return hash, nil
+
+	signed, hash, err := bind.Transact(ctx, f.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv3: createPool: %w", f.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
 }
 
-// CreateSetOwner builds an unsigned setOwner(_owner) transaction via b, sent by sender -- which
-// must be contract's current owner, or the transaction reverts with ErrReverted.
-func (f *Factory) CreateSetOwner(ctx context.Context, b tx.Builder, p *SetOwnerParams) (core.Transaction, error) {
-	calldata, err := EncodeSetOwner(p.Owner)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: createSetOwner: %w", err)
+// SetOwner sends setOwner(_owner) on req.Contract, signed by opts.Signer, which must be the owner or it reverts with ErrReverted.
+func (f *Factory) SetOwner(ctx context.Context, opts *bind.TransactOptions, req *SetOwnerRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: setOwner: %w", err)
 	}
 
-	unsigned, err := b.Build(p.Sender, p.Factory, nil, calldata).Pack(ctx, f.c)
+	calldata, err := EncodeSetOwner(req.Owner)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: createSetOwner: %w", f.wrapRevertError(err))
+		return nil, nil, fmt.Errorf("uniswapv3: setOwner: %w", err)
 	}
-	return unsigned, nil
+
+	signed, hash, err := bind.Transact(ctx, f.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv3: setOwner: %w", f.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
 }
 
-// SetOwner broadcasts an already-signed setOwner transaction.
-func (f *Factory) SetOwner(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: setOwner: %w", err)
+// EnableFeeAmount sends enableFeeAmount(fee, tickSpacing) on req.Contract, signed by opts.Signer, which must be the owner or it reverts with ErrReverted.
+func (f *Factory) EnableFeeAmount(ctx context.Context, opts *bind.TransactOptions, req *EnableFeeAmountRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: enableFeeAmount: %w", err)
 	}
-	hash, err := tx.Broadcast(ctx, f.c, raw)
+
+	calldata, err := EncodeEnableFeeAmount(req.Fee, req.TickSpacing)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: setOwner: %w", err)
+		return nil, nil, fmt.Errorf("uniswapv3: enableFeeAmount: %w", err)
 	}
-	return hash, nil
+
+	signed, hash, err := bind.Transact(ctx, f.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv3: enableFeeAmount: %w", f.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
 }
 
-// CreateEnableFeeAmount builds an unsigned enableFeeAmount(fee, tickSpacing) transaction via b,
-// sent by sender -- which must be contract's current owner, or the transaction reverts with
-// ErrReverted.
-func (f *Factory) CreateEnableFeeAmount(ctx context.Context, b tx.Builder, p *EnableFeeAmountParams) (core.Transaction, error) {
-	calldata, err := EncodeEnableFeeAmount(p.Fee, p.TickSpacing)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: createEnableFeeAmount: %w", err)
-	}
-
-	unsigned, err := b.Build(p.Sender, p.Factory, nil, calldata).Pack(ctx, f.c)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: createEnableFeeAmount: %w", f.wrapRevertError(err))
-	}
-	return unsigned, nil
-}
-
-// EnableFeeAmount broadcasts an already-signed enableFeeAmount transaction.
-func (f *Factory) EnableFeeAmount(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: enableFeeAmount: %w", err)
-	}
-	hash, err := tx.Broadcast(ctx, f.c, raw)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: enableFeeAmount: %w", err)
-	}
-	return hash, nil
-}
-
-// call eth_calls contract with calldata, wrapping a revert via wrapRevertError.
-func (f *Factory) call(ctx context.Context, from, contract *types.Address, calldata []byte, block string) ([]byte, error) {
-	params := map[string]any{
-		"to":   contract.String(),
-		"data": encoding.Hex.EncodePrefixed(calldata),
-	}
-	if from != nil {
-		params["from"] = from.String()
-	}
-
-	var raw string
-	if err := f.c.Call(ctx, rpc.ETHCall("call", params, block, &raw)); err != nil {
-		return nil, f.wrapRevertError(err)
-	}
-	return encoding.Hex.Decode(raw)
-}
-
-// wrapRevertError maps any UniswapV3Factory revert to ErrReverted -- there's no reason string
-// or selector to switch on, since every require in UniswapV3Factory carries neither.
+// wrapRevertError maps any UniswapV3Factory revert to ErrReverted; its requires carry no reason string or selector to switch on.
 func (_ *Factory) wrapRevertError(err error) error {
 	if _, ok := errors.AsType[*rpc.ResponseError](err); !ok {
 		return err

@@ -859,12 +859,12 @@ func (s *RouterLifeCycleSuite) Test02CreateAndInitializePoolIfNecessary() {
 
 	var registeredPool *types.Address
 	s.Require().Eventually(func() bool {
-		registeredPool, err = s.v3Factory.GetPool(s.ctx, NewGetPoolParams(s.factory, s.tokenA, s.tokenB, s.Fee), rpc.BlockTagLatest)
+		registeredPool, err = s.v3Factory.GetPool(s.ctx, nil, NewGetPoolRequest(s.factory, s.tokenA, s.tokenB, s.Fee))
 		return err == nil && registeredPool.Equal(s.pool)
 	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "Factory.getPool not yet reflecting the new pool")
 	s.T().Logf("Test02CreateAndInitializePoolIfNecessary: Factory.getPool(token0, token1, fee) = %s matches", registeredPool)
 
-	expectedTickSpacing, err := s.v3Factory.FeeAmountTickSpacing(s.ctx, s.factory, s.Fee, rpc.BlockTagLatest)
+	expectedTickSpacing, err := s.v3Factory.FeeAmountTickSpacing(s.ctx, nil, NewFeeAmountTickSpacingRequest(s.factory, s.Fee))
 	s.Require().NoError(err)
 	s.Require().True(expectedTickSpacing.Sign() > 0, "fee tier %s isn't enabled on this Factory", s.Fee)
 
@@ -1258,7 +1258,7 @@ func (s *RouterLifeCycleSuite) Test06CreateAndInitializePoolBC() {
 
 	var registeredPool *types.Address
 	s.Require().Eventually(func() bool {
-		registeredPool, err = s.v3Factory.GetPool(s.ctx, NewGetPoolParams(s.factory, s.tokenB, s.tokenC, s.Fee), rpc.BlockTagLatest)
+		registeredPool, err = s.v3Factory.GetPool(s.ctx, nil, NewGetPoolRequest(s.factory, s.tokenB, s.tokenC, s.Fee))
 		return err == nil && registeredPool.Equal(s.poolBC)
 	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "Factory.getPool not yet reflecting the new pool")
 	s.T().Logf("Test06CreateAndInitializePoolBC: Factory.getPool(token0, token1, fee) = %s matches", registeredPool)
@@ -2063,7 +2063,7 @@ func (s *RouterLifeCycleSuite) Test17CreateAndInitializePoolWETH() {
 
 	var registeredPool *types.Address
 	s.Require().Eventually(func() bool {
-		registeredPool, err = s.v3Factory.GetPool(s.ctx, NewGetPoolParams(s.factory, s.wethToken0, s.wethToken1, s.Fee), rpc.BlockTagLatest)
+		registeredPool, err = s.v3Factory.GetPool(s.ctx, nil, NewGetPoolRequest(s.factory, s.wethToken0, s.wethToken1, s.Fee))
 		return err == nil && registeredPool.Equal(s.poolWETH)
 	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "Factory.getPool not yet reflecting the new pool")
 	s.T().Logf("Test17CreateAndInitializePoolWETH: Factory.getPool(token0, token1, fee) = %s matches", registeredPool)

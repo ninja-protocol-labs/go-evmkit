@@ -3,6 +3,7 @@ package v3
 import (
 	"context"
 	"fmt"
+	"github.com/ninja-protocol-labs/go-evmkit/internal/testenv"
 	"math/big"
 	"strings"
 	"sync"
@@ -82,7 +83,7 @@ func TestNFPMSuite(t *testing.T) {
 		Fee:           big.NewInt(FeeMedium),
 		Interval:      1500,
 		Timeout:       60,
-		ByteCode:      erc20ByteCodeHex,
+		ByteCode:      testenv.ERC20ByteCodeHex,
 		Constructor:   abi.NewFunction("constructor", abi.Types{abi.String, abi.String, abi.Uint8}, nil),
 		Salt:          core.Keccak256([]byte("go-evmkit")),
 		MintValue:     "1000000000000000000000000",

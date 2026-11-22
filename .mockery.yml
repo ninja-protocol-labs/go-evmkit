@@ -47,3 +47,8 @@ packages:
       IFactory:
       IPair:
       IRouter:
+  github.com/ninja-protocol-labs/go-evmkit/protocols/uniswap/v3:
+    config:
+      filename: "{{.InterfaceName | lower}}.go"
+    interfaces:
+      IFactory:

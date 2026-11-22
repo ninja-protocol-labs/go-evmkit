@@ -28,9 +28,15 @@ var configs = map[NetworkType]map[Network]Config{
 				},
 				Protocol: ProtocolAddressBook{
 					Uniswap: UniswapAddressBook{
-						V2: UniswapV2Config{
+						V2: UniswapV2AddressBook{
 							Factory: "0xf1D7CC64Fb4452F05c498126312eBE29f30Fbcf9",
 							Router:  "0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24",
+						},
+						V3: UniswapV3AddressBook{
+							Factory: "0x1F98431c8aD98523631AE4a59f267346ea31F984",
+							Router:  "0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45",
+							Quoter:  "0x61fFE014bA17989E743c5F6cB21bF9697530B21e",
+							NFPM:    "0xC36442b4a4522E871399CD717aBDD847Ab11FE88",
 						},
 					},
 				},
@@ -54,9 +60,15 @@ var configs = map[NetworkType]map[Network]Config{
 				},
 				Protocol: ProtocolAddressBook{
 					Uniswap: UniswapAddressBook{
-						V2: UniswapV2Config{
+						V2: UniswapV2AddressBook{
 							Factory: "0x89e5DB8B5aA49aA85AC63f691524311AEB649eba",
 							Router:  "0x1f7d7550B1b028f7571E69A784071F0205FD2EfA",
+						},
+						V3: UniswapV3AddressBook{
+							Factory: "0xf0db7b58379503491d857dB50AC9ece64c653918",
+							Router:  "0x53BF6B0684Ec7eF91e1387Da3D1a1769bC5A6F77",
+							Quoter:  "0x7DfD4F31be6814D2906BDE155c3e1B146EAc1468",
+							NFPM:    "0x39654A85A4C05127f5Fd6ED22CAeC077A0fB1377",
 						},
 					},
 				},
@@ -80,9 +92,15 @@ var configs = map[NetworkType]map[Network]Config{
 				},
 				Protocol: ProtocolAddressBook{
 					Uniswap: UniswapAddressBook{
-						V2: UniswapV2Config{
+						V2: UniswapV2AddressBook{
 							Factory: "0x9e5A52f57b3038F1B8EeE45F28b3C1967e22799C",
 							Router:  "0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24",
+						},
+						V3: UniswapV3AddressBook{
+							Factory: "0x740b1c1de25031C31FF4fC9A62f554A55cdC1baD",
+							Router:  "0xbb00FF08d01D300023C629E8fFfFcb65A5a578cE",
+							Quoter:  "0xbe0F5544EC67e9B3b2D979aaA43f18Fd87E6257F",
+							NFPM:    "0x655C406EBFa14EE2006250925e54ec43AD184f8B",
 						},
 					},
 				},
@@ -106,9 +124,15 @@ var configs = map[NetworkType]map[Network]Config{
 				},
 				Protocol: ProtocolAddressBook{
 					Uniswap: UniswapAddressBook{
-						V2: UniswapV2Config{
+						V2: UniswapV2AddressBook{
 							Factory: "0x8909Dc15e40173Ff4699343b6eB8132c65e18eC6",
 							Router:  "0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24",
+						},
+						V3: UniswapV3AddressBook{
+							Factory: "0x33128a8fC17869897dcE68Ed026d694621f6FDfD",
+							Router:  "0x2626664c2603336E57B271c5C0b26F421741e481",
+							Quoter:  "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
+							NFPM:    "0x03a520b32C04BF3bEEf7BEb72E919cf822Ed34f1",
 						},
 					},
 				},
@@ -132,9 +156,15 @@ var configs = map[NetworkType]map[Network]Config{
 				},
 				Protocol: ProtocolAddressBook{
 					Uniswap: UniswapAddressBook{
-						V2: UniswapV2Config{
+						V2: UniswapV2AddressBook{
 							Factory: "0x8909Dc15e40173Ff4699343b6eB8132c65e18eC6",
 							Router:  "0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24",
+						},
+						V3: UniswapV3AddressBook{
+							Factory: "0xdB1d10011AD0Ff90774D0C6Bb92e5C5c8b4461F7",
+							Router:  "0xB971eF87ede563556b2ED4b1C0b0019111Dd85d2",
+							Quoter:  "0x78D78E420Da98ad378D7799bE8f4AF69033EB077",
+							NFPM:    "0x7b8A01B39D58278b5DE7e48c8449c9f4F5170613",
 						},
 					},
 				},
@@ -158,9 +188,15 @@ var configs = map[NetworkType]map[Network]Config{
 				},
 				Protocol: ProtocolAddressBook{
 					Uniswap: UniswapAddressBook{
-						V2: UniswapV2Config{
+						V2: UniswapV2AddressBook{
 							Factory: "0x79a530c8e2fA8748B7B40dd3629C0520c2cCf03f",
 							Router:  "", // Not supported
+						},
+						V3: UniswapV3AddressBook{
+							Factory: "0xAfE208a311B21f13EF87E33A90049fC17A7acDEc",
+							Router:  "0x5615CDAb10dc425a742d643d949a7F474C01abc4",
+							Quoter:  "0x82825d0554fA07f7FC52Ab63c961F330fdEFa8E8",
+							NFPM:    "0x3d79EdAaBC0EaB6F08ED885C05Fc0B014290D95A",
 						},
 					},
 				},
@@ -184,9 +220,15 @@ var configs = map[NetworkType]map[Network]Config{
 				},
 				Protocol: ProtocolAddressBook{
 					Uniswap: UniswapAddressBook{
-						V2: UniswapV2Config{
+						V2: UniswapV2AddressBook{
 							Factory: "0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f",
 							Router:  "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D",
+						},
+						V3: UniswapV3AddressBook{
+							Factory: "0x1F98431c8aD98523631AE4a59f267346ea31F984",
+							Router:  "0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45",
+							Quoter:  "0x61fFE014bA17989E743c5F6cB21bF9697530B21e",
+							NFPM:    "0xC36442b4a4522E871399CD717aBDD847Ab11FE88",
 						},
 					},
 				},
@@ -210,9 +252,15 @@ var configs = map[NetworkType]map[Network]Config{
 				},
 				Protocol: ProtocolAddressBook{
 					Uniswap: UniswapAddressBook{
-						V2: UniswapV2Config{
+						V2: UniswapV2AddressBook{
 							Factory: "0x89e5DB8B5aA49aA85AC63f691524311AEB649eba",
 							Router:  "0x1f7d7550B1b028f7571E69A784071F0205FD2EfA",
+						},
+						V3: UniswapV3AddressBook{
+							Factory: "0xf0db7b58379503491d857dB50AC9ece64c653918",
+							Router:  "0x7AdF4701AbCDBc5Dcf5Cb58B526f897e048F0D11",
+							Quoter:  "0x7DfD4F31be6814D2906BDE155c3e1B146EAc1468",
+							NFPM:    "0x39654A85A4C05127f5Fd6ED22CAeC077A0fB1377",
 						},
 					},
 				},
@@ -236,9 +284,15 @@ var configs = map[NetworkType]map[Network]Config{
 				},
 				Protocol: ProtocolAddressBook{
 					Uniswap: UniswapAddressBook{
-						V2: UniswapV2Config{
+						V2: UniswapV2AddressBook{
 							Factory: "0xfe57A6BA1951F69aE2Ed4abe23e0f095DF500C04",
 							Router:  "0xB3FB126ACDd5AdCA2f50Ac644a7a2303745f18b4",
+						},
+						V3: UniswapV3AddressBook{
+							Factory: "0x640887A9ba3A9C53Ed27D0F7e8246A4F933f3424",
+							Router:  "0x177778F19E89dD1012BdBe603F144088A95C4B53",
+							Quoter:  "0x96b572D2d880cf2Fa2563651BD23ADE6f5516652",
+							NFPM:    "0xC0836E5B058BBE22ae2266e1AC488A1A0fD8DCE8",
 						},
 					},
 				},
@@ -262,9 +316,15 @@ var configs = map[NetworkType]map[Network]Config{
 				},
 				Protocol: ProtocolAddressBook{
 					Uniswap: UniswapAddressBook{
-						V2: UniswapV2Config{
+						V2: UniswapV2AddressBook{
 							Factory: "0x114A43DF6C5f54EBB8A9d70Cd1951D3dD68004c7",
 							Router:  "0x8702463e73f74d0b6765aBceb314Ef07aCb92650",
+						},
+						V3: UniswapV3AddressBook{
+							Factory: "0x31FAfd4889FA1269F7a13A66eE0fB458f27D72A9",
+							Router:  "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
+							Quoter:  "0x42bE4D6527829FeFA1493e1fb9F3676d2425C3C1",
+							NFPM:    "0x4615C383F85D0a2BbED973d83ccecf5CB7121463",
 						},
 					},
 				},
@@ -288,9 +348,15 @@ var configs = map[NetworkType]map[Network]Config{
 				},
 				Protocol: ProtocolAddressBook{
 					Uniswap: UniswapAddressBook{
-						V2: UniswapV2Config{
+						V2: UniswapV2AddressBook{
 							Factory: "0x182a927119D56008d921126764bF884221b10f59",
 							Router:  "0x4B2ab38DBF28D31D467aA8993f6c2585981D6804",
+						},
+						V3: UniswapV3AddressBook{
+							Factory: "0x204FAca1764B154221e35c0d20aBb3c525710498",
+							Router:  "0xfE31F71C1b106EAc32F1A19239c9a9A72ddfb900",
+							Quoter:  "0x661E93cca42AfacB172121EF892830cA3b70F08d",
+							NFPM:    "0x7197E214c0b767cFB76Fb734ab638E2c192F4E53",
 						},
 					},
 				},
@@ -314,9 +380,15 @@ var configs = map[NetworkType]map[Network]Config{
 				},
 				Protocol: ProtocolAddressBook{
 					Uniswap: UniswapAddressBook{
-						V2: UniswapV2Config{
+						V2: UniswapV2AddressBook{
 							Factory: "0x0c3c1c532F1e39EdF36BE9Fe0bE1410313E074Bf",
 							Router:  "0x4A7b5Da61326A6379179b40d00F57E5bbDC962c2",
+						},
+						V3: UniswapV3AddressBook{
+							Factory: "0x1F98431c8aD98523631AE4a59f267346ea31F984",
+							Router:  "0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45",
+							Quoter:  "0x61fFE014bA17989E743c5F6cB21bF9697530B21e",
+							NFPM:    "0xC36442b4a4522E871399CD717aBDD847Ab11FE88",
 						},
 					},
 				},
@@ -340,9 +412,15 @@ var configs = map[NetworkType]map[Network]Config{
 				},
 				Protocol: ProtocolAddressBook{
 					Uniswap: UniswapAddressBook{
-						V2: UniswapV2Config{
+						V2: UniswapV2AddressBook{
 							Factory: "0x9e5A52f57b3038F1B8EeE45F28b3C1967e22799C",
 							Router:  "0xedf6066a2b290C185783862C7F4776A2C8077AD1",
+						},
+						V3: UniswapV3AddressBook{
+							Factory: "0x1F98431c8aD98523631AE4a59f267346ea31F984",
+							Router:  "0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45",
+							Quoter:  "0x61fFE014bA17989E743c5F6cB21bF9697530B21e",
+							NFPM:    "0xC36442b4a4522E871399CD717aBDD847Ab11FE88",
 						},
 					},
 				},
@@ -366,9 +444,15 @@ var configs = map[NetworkType]map[Network]Config{
 				},
 				Protocol: ProtocolAddressBook{
 					Uniswap: UniswapAddressBook{
-						V2: UniswapV2Config{
+						V2: UniswapV2AddressBook{
 							Factory: "0x8bcEaA40B9AcdfAedF85AdF4FF01F5Ad6517937f",
 							Router:  "0x89e5DB8B5aA49aA85AC63f691524311AEB649eba",
+						},
+						V3: UniswapV3AddressBook{
+							Factory: "0x1f7d7550B1b028f7571E69A784071F0205FD2EfA",
+							Router:  "0xCaf681a66D020601342297493863E78C959E5cb2",
+							Quoter:  "0x33e885eD0Ec9bF04EcfB19341582aADCb4c8A9E7",
+							NFPM:    "0x73991a25C818Bf1f1128dEAaB1492D45638DE0D3",
 						},
 					},
 				},
@@ -392,9 +476,15 @@ var configs = map[NetworkType]map[Network]Config{
 				},
 				Protocol: ProtocolAddressBook{
 					Uniswap: UniswapAddressBook{
-						V2: UniswapV2Config{
+						V2: UniswapV2AddressBook{
 							Factory: "", // Not supported
 							Router:  "", // Not supported
+						},
+						V3: UniswapV3AddressBook{
+							Factory: "0x75FC67473A91335B5b8F8821277262a13B38c9b3",
+							Router:  "0xdD489C75be1039ec7d843A6aC2Fd658350B067Cf",
+							Quoter:  "0x807F4E281B7A3B324825C64ca53c69F0b418dE40",
+							NFPM:    "0x8B3c541c30f9b29560f56B9E44b59718916B69EF",
 						},
 					},
 				},
@@ -418,9 +508,15 @@ var configs = map[NetworkType]map[Network]Config{
 				},
 				Protocol: ProtocolAddressBook{
 					Uniswap: UniswapAddressBook{
-						V2: UniswapV2Config{
+						V2: UniswapV2AddressBook{
 							Factory: "0x1F98400000000000000000000000000000000002",
 							Router:  "0x284F11109359a7e1306C3e447ef14D38400063FF",
+						},
+						V3: UniswapV3AddressBook{
+							Factory: "0x1F98400000000000000000000000000000000003",
+							Router:  "0x73855d06DE49d0fe4A9c42636Ba96c62da12FF9C",
+							Quoter:  "0x385A5cf5F83e99f7BB2852b6A19C3538b9FA7658",
+							NFPM:    "0x943e6e07a7E8E791dAFC44083e54041D743C46E9",
 						},
 					},
 				},
@@ -446,9 +542,15 @@ var configs = map[NetworkType]map[Network]Config{
 				},
 				Protocol: ProtocolAddressBook{
 					Uniswap: UniswapAddressBook{
-						V2: UniswapV2Config{
+						V2: UniswapV2AddressBook{
 							Factory: "", // Not supported
 							Router:  "", // Not supported
+						},
+						V3: UniswapV3AddressBook{
+							Factory: "0x248AB79Bbb9bC29bB72f7Cd42F17e054Fc40188e",
+							Router:  "0x101F443B4d1b059569D643917553c771E1b9663E",
+							Quoter:  "0x2779a0CC1c3e0E44D2542EC3e79e3864Ae93Ef0B",
+							NFPM:    "0x6b2937Bde17889EDCf8fbD8dE31C3C2a70Bc4d65",
 						},
 					},
 				},
@@ -472,9 +574,15 @@ var configs = map[NetworkType]map[Network]Config{
 				},
 				Protocol: ProtocolAddressBook{
 					Uniswap: UniswapAddressBook{
-						V2: UniswapV2Config{
+						V2: UniswapV2AddressBook{
 							Factory: "", // Not supported
 							Router:  "", // Not supported
+						},
+						V3: UniswapV3AddressBook{
+							Factory: "", // Not supported
+							Router:  "", // Not supported
+							Quoter:  "", // Not supported
+							NFPM:    "", // Not supported
 						},
 					},
 				},
@@ -498,9 +606,15 @@ var configs = map[NetworkType]map[Network]Config{
 				},
 				Protocol: ProtocolAddressBook{
 					Uniswap: UniswapAddressBook{
-						V2: UniswapV2Config{
+						V2: UniswapV2AddressBook{
 							Factory: "", // Not supported
 							Router:  "", // Not supported
+						},
+						V3: UniswapV3AddressBook{
+							Factory: "", // Not supported
+							Router:  "", // Not supported
+							Quoter:  "", // Not supported
+							NFPM:    "", // Not supported
 						},
 					},
 				},
@@ -524,9 +638,15 @@ var configs = map[NetworkType]map[Network]Config{
 				},
 				Protocol: ProtocolAddressBook{
 					Uniswap: UniswapAddressBook{
-						V2: UniswapV2Config{
+						V2: UniswapV2AddressBook{
 							Factory: "", // Not supported
 							Router:  "", // Not supported
+						},
+						V3: UniswapV3AddressBook{
+							Factory: "0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24",
+							Router:  "0x94cC0AaC535CCDB3C01d6787D6413C739ae12bc4",
+							Quoter:  "0xC5290058841028F1614F3A6F0F5816cAd0df5E27",
+							NFPM:    "0x27F971cb582BF9E50F397e4d29a5C7A34f11faA2",
 						},
 					},
 				},
@@ -550,9 +670,15 @@ var configs = map[NetworkType]map[Network]Config{
 				},
 				Protocol: ProtocolAddressBook{
 					Uniswap: UniswapAddressBook{
-						V2: UniswapV2Config{
+						V2: UniswapV2AddressBook{
 							Factory: "", // Not supported
 							Router:  "", // Not supported
+						},
+						V3: UniswapV3AddressBook{
+							Factory: "", // Not supported
+							Router:  "", // Not supported
+							Quoter:  "", // Not supported
+							NFPM:    "", // Not supported
 						},
 					},
 				},
@@ -576,9 +702,15 @@ var configs = map[NetworkType]map[Network]Config{
 				},
 				Protocol: ProtocolAddressBook{
 					Uniswap: UniswapAddressBook{
-						V2: UniswapV2Config{
+						V2: UniswapV2AddressBook{
 							Factory: "", // Not supported
 							Router:  "", // Not supported
+						},
+						V3: UniswapV3AddressBook{
+							Factory: "", // Not supported
+							Router:  "", // Not supported
+							Quoter:  "", // Not supported
+							NFPM:    "", // Not supported
 						},
 					},
 				},
@@ -602,9 +734,15 @@ var configs = map[NetworkType]map[Network]Config{
 				},
 				Protocol: ProtocolAddressBook{
 					Uniswap: UniswapAddressBook{
-						V2: UniswapV2Config{
+						V2: UniswapV2AddressBook{
 							Factory: "0xF62c03E08ada871A0bEb309762E260a7a6a880E6",
 							Router:  "0xeE567Fe1712Faf6149d80dA1E6934E354124CfE3",
+						},
+						V3: UniswapV3AddressBook{
+							Factory: "0x0227628f3F023bb0B980b67D528571c95c6DaC1c",
+							Router:  "0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E",
+							Quoter:  "0xEd1f6473345F45b75F8179591dd5bA1888cf2FB3",
+							NFPM:    "0x1238536071E1c677A632429e3655c799b22cDA52",
 						},
 					},
 				},
@@ -628,9 +766,15 @@ var configs = map[NetworkType]map[Network]Config{
 				},
 				Protocol: ProtocolAddressBook{
 					Uniswap: UniswapAddressBook{
-						V2: UniswapV2Config{
+						V2: UniswapV2AddressBook{
 							Factory: "", // Not supported
 							Router:  "", // Not supported
+						},
+						V3: UniswapV3AddressBook{
+							Factory: "", // Not supported
+							Router:  "", // Not supported
+							Quoter:  "", // Not supported
+							NFPM:    "", // Not supported
 						},
 					},
 				},
@@ -654,9 +798,15 @@ var configs = map[NetworkType]map[Network]Config{
 				},
 				Protocol: ProtocolAddressBook{
 					Uniswap: UniswapAddressBook{
-						V2: UniswapV2Config{
+						V2: UniswapV2AddressBook{
 							Factory: "", // Not supported
 							Router:  "", // Not supported
+						},
+						V3: UniswapV3AddressBook{
+							Factory: "", // Not supported
+							Router:  "", // Not supported
+							Quoter:  "", // Not supported
+							NFPM:    "", // Not supported
 						},
 					},
 				},
@@ -680,9 +830,15 @@ var configs = map[NetworkType]map[Network]Config{
 				},
 				Protocol: ProtocolAddressBook{
 					Uniswap: UniswapAddressBook{
-						V2: UniswapV2Config{
+						V2: UniswapV2AddressBook{
 							Factory: "", // Not supported
 							Router:  "", // Not supported
+						},
+						V3: UniswapV3AddressBook{
+							Factory: "", // Not supported
+							Router:  "", // Not supported
+							Quoter:  "", // Not supported
+							NFPM:    "", // Not supported
 						},
 					},
 				},
@@ -706,9 +862,15 @@ var configs = map[NetworkType]map[Network]Config{
 				},
 				Protocol: ProtocolAddressBook{
 					Uniswap: UniswapAddressBook{
-						V2: UniswapV2Config{
+						V2: UniswapV2AddressBook{
 							Factory: "", // Not supported
 							Router:  "", // Not supported
+						},
+						V3: UniswapV3AddressBook{
+							Factory: "", // Not supported
+							Router:  "", // Not supported
+							Quoter:  "", // Not supported
+							NFPM:    "", // Not supported
 						},
 					},
 				},
@@ -732,9 +894,15 @@ var configs = map[NetworkType]map[Network]Config{
 				},
 				Protocol: ProtocolAddressBook{
 					Uniswap: UniswapAddressBook{
-						V2: UniswapV2Config{
+						V2: UniswapV2AddressBook{
 							Factory: "", // Not supported
 							Router:  "", // Not supported
+						},
+						V3: UniswapV3AddressBook{
+							Factory: "0x8CE191193D15ea94e11d327b4c7ad8bbE520f6aF",
+							Router:  "", // Not supported
+							Quoter:  "0x0FBEa6cf957d95ee9313490050F6A0DA68039404",
+							NFPM:    "0xdA75cEf1C93078e8b736FCA5D5a30adb97C8957d",
 						},
 					},
 				},
@@ -758,9 +926,15 @@ var configs = map[NetworkType]map[Network]Config{
 				},
 				Protocol: ProtocolAddressBook{
 					Uniswap: UniswapAddressBook{
-						V2: UniswapV2Config{
+						V2: UniswapV2AddressBook{
 							Factory: "", // Not supported
 							Router:  "", // Not supported
+						},
+						V3: UniswapV3AddressBook{
+							Factory: "", // Not supported
+							Router:  "", // Not supported
+							Quoter:  "", // Not supported
+							NFPM:    "", // Not supported
 						},
 					},
 				},
@@ -784,9 +958,15 @@ var configs = map[NetworkType]map[Network]Config{
 				},
 				Protocol: ProtocolAddressBook{
 					Uniswap: UniswapAddressBook{
-						V2: UniswapV2Config{
+						V2: UniswapV2AddressBook{
 							Factory: "", // Not supported
 							Router:  "", // Not supported
+						},
+						V3: UniswapV3AddressBook{
+							Factory: "", // Not supported
+							Router:  "", // Not supported
+							Quoter:  "", // Not supported
+							NFPM:    "", // Not supported
 						},
 					},
 				},
@@ -810,9 +990,15 @@ var configs = map[NetworkType]map[Network]Config{
 				},
 				Protocol: ProtocolAddressBook{
 					Uniswap: UniswapAddressBook{
-						V2: UniswapV2Config{
+						V2: UniswapV2AddressBook{
 							Factory: "", // Not supported
 							Router:  "", // Not supported
+						},
+						V3: UniswapV3AddressBook{
+							Factory: "", // Not supported
+							Router:  "", // Not supported
+							Quoter:  "", // Not supported
+							NFPM:    "", // Not supported
 						},
 					},
 				},
@@ -836,9 +1022,15 @@ var configs = map[NetworkType]map[Network]Config{
 				},
 				Protocol: ProtocolAddressBook{
 					Uniswap: UniswapAddressBook{
-						V2: UniswapV2Config{
+						V2: UniswapV2AddressBook{
 							Factory: "0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f",
 							Router:  "0x6e8C9D62A16419357eA998229126D2fD6B1CCfbF",
+						},
+						V3: UniswapV3AddressBook{
+							Factory: "0x1F98431c8aD98523631AE4a59f267346ea31F984",
+							Router:  "0xd1AAE39293221B77B0C71fBD6dCb7Ea29Bb5B166",
+							Quoter:  "0x6Dd37329A1A225a6Fca658265D460423DCafBF89",
+							NFPM:    "0xB7F724d6dDDFd008eFf5cc2834edDE5F9eF0d075",
 						},
 					},
 				},
