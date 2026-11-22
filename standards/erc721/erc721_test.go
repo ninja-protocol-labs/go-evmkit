@@ -124,22 +124,18 @@ func (s *ERC721Suite) SetupSuite() {
 			salt,
 		)
 
-		unsigned, err := s.deployer.CreateDeployment(s.ctx, tx.NewDynamicFeeBuilder(), s.from, s.factory, big.NewInt(0), deployment)
+		deployTx, hash, err := s.deployer.Deploy(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), deploy.NewCreate2Request(s.factory, deployment))
 		s.Require().NoError(err)
 
-		s.Require().NoError(unsigned.Sign(s.signer))
 		s.mu.Lock()
-		s.totalFee.Add(s.totalFee, unsigned.MaxFee())
+		s.totalFee.Add(s.totalFee, deployTx.MaxFee())
 		s.mu.Unlock()
-
-		hash, err := s.deployer.Deploy(s.ctx, unsigned)
-		s.Require().NoError(err)
 
 		receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, s.ReceiptPollInterval, s.ReceiptTimeout)
 		s.Require().NoError(err)
 		s.Require().True(receipt.Status, "deploy transaction reverted")
 
-		contract, err := s.deployer.DeployAddress(s.factory, deployment)
+		contract, err := s.deployer.DeployAddress(deploy.NewCreate2Request(s.factory, deployment))
 		s.Require().NoError(err)
 		s.contracts[i] = contract
 
@@ -152,7 +148,7 @@ func (s *ERC721Suite) SetupSuite() {
 			return err == nil && len(code) > 0
 		}, 10*time.Second, 500*time.Millisecond, "no code visible at deployed contract %s", contract)
 
-		s.T().Logf("SetupSuite: deployed contract %d/%d %s (nonce %d, tx %s)", i+1, s.NFTCount, contract, unsigned.AddressNonce(), hash)
+		s.T().Logf("SetupSuite: deployed contract %d/%d %s (nonce %d, tx %s)", i+1, s.NFTCount, contract, deployTx.AddressNonce(), hash)
 
 		for _, tokenId := range []*big.Int{big.NewInt(0), big.NewInt(1), big.NewInt(2)} {
 			calldata, err := mintFn.EncodeCall(s.from, tokenId)

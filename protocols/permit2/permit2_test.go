@@ -155,19 +155,15 @@ func (s *Permit2Suite) SetupSuite() {
 	builder := tx.NewDynamicFeeBuilder()
 	builder.PriceBuffer(s.PriceBuffer)
 	builder.LimitBuffer(s.LimitBuffer)
-	unsigned, err := s.deployer.CreateDeployment(s.ctx, builder, s.from, deploy.DefaultNicksMethodFactory, big.NewInt(0), deployment)
+	deployTx, hash, err := s.deployer.Deploy(s.ctx, bind.NewTransactOptions(s.signer, builder), deploy.NewCreate2Request(deploy.DefaultNicksMethodFactory, deployment))
 	s.Require().NoError(err)
-	s.Require().NoError(unsigned.Sign(s.signer))
-	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
-
-	hash, err := s.deployer.Deploy(s.ctx, unsigned)
-	s.Require().NoError(err)
+	s.totalFee.Add(s.totalFee, deployTx.MaxFee())
 
 	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
 	s.Require().NoError(err)
 	s.Require().True(receipt.Status, "deploy transaction reverted")
 
-	token, err := s.deployer.DeployAddress(deploy.DefaultNicksMethodFactory, deployment)
+	token, err := s.deployer.DeployAddress(deploy.NewCreate2Request(deploy.DefaultNicksMethodFactory, deployment))
 	s.Require().NoError(err)
 	s.token = token
 

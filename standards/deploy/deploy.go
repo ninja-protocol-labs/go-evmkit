@@ -1,31 +1,43 @@
-// Package deploy deploys standards via CREATE (a plain contract-creation
-// transaction) or CREATE2 (via a well-known deterministic deployment
-// factory). Each deployer is a standalone type; pick the one matching how
-// you want the deployed address determined.
+// Package deploy deploys contracts via CREATE (a contract-creation transaction) or CREATE2 (through a
+// deterministic deployment factory). Pick the deployer matching how the address should be determined.
 package deploy
 
 import (
 	"context"
 	"fmt"
 
+	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core"
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 )
 
-// Deployer is implemented by *CreateDeployer, *NicksDeployer, and *ERC2470Deployer.
-type Deployer interface {
-	Deploy(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
+// ICreateDeployer is implemented by *CreateDeployer.
+type ICreateDeployer interface {
+	Deploy(ctx context.Context, opts *bind.TransactOptions, req *CreateRequest) (core.Transaction, *types.Hash, error)
+	DeployAddress(signed core.Transaction) (*types.Address, error)
+}
+
+// ICreate2Deployer is implemented by *NicksDeployer and *ERC2470Deployer.
+type ICreate2Deployer interface {
+	Deploy(ctx context.Context, opts *bind.TransactOptions, req *Create2Request) (core.Transaction, *types.Hash, error)
+	DeployAddress(req *Create2Request) (*types.Address, error)
+}
+
+// IERC2470Deployer adds the Singleton Factory's deploy simulation to ICreate2Deployer.
+type IERC2470Deployer interface {
+	ICreate2Deployer
+
+	CallDeploy(ctx context.Context, opts *bind.CallOptions, req *Create2Request) (*types.Address, error)
 }
 
 var (
-	_ Deployer = (*CreateDeployer)(nil)
-	_ Deployer = (*ERC2470Deployer)(nil)
-	_ Deployer = (*NicksDeployer)(nil)
+	_ ICreateDeployer  = (*CreateDeployer)(nil)
+	_ ICreate2Deployer = (*NicksDeployer)(nil)
+	_ IERC2470Deployer = (*ERC2470Deployer)(nil)
 )
 
-// ContractDeployment is a contract's creation bytecode plus its
-// constructor's arguments, shared by every Deployer implementation.
+// ContractDeployment is a contract's creation bytecode plus its constructor's arguments.
 type ContractDeployment struct {
 	Bytecode    []byte
 	Constructor abi.Types
@@ -53,6 +65,7 @@ func (d *ContractDeployment) InitCode() ([]byte, error) {
 	return initCode, nil
 }
 
+// DeterministicContractDeployment is a ContractDeployment plus the CREATE2 salt.
 type DeterministicContractDeployment struct {
 	*ContractDeployment
 	Salt [32]byte

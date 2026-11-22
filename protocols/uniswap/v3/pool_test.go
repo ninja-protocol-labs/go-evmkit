@@ -16,6 +16,7 @@ import (
 	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 	"github.com/stretchr/testify/suite"
 
+	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
@@ -124,31 +125,21 @@ func (s *PoolSuite) SetupSuite() {
 			salt,
 		)
 
-		predicted, err := s.deployer.DeployAddress(deploy.DefaultNicksMethodFactory, deployment)
+		predicted, err := s.deployer.DeployAddress(deploy.NewCreate2Request(deploy.DefaultNicksMethodFactory, deployment))
 		s.Require().NoError(err)
 		s.T().Logf("SetupSuite: deploying token %s %s, predicted address %s", names[i], symbols[i], predicted)
 
 		builder := tx.NewDynamicFeeBuilder()
 		builder.PriceBuffer(150)
 
-		unsigned, err := s.deployer.CreateDeployment(
-			s.ctx,
-			builder,
-			s.from,
-			deploy.DefaultNicksMethodFactory,
-			big.NewInt(0),
-			deployment,
-		)
+		deployTx, hash, err := s.deployer.Deploy(s.ctx, bind.NewTransactOptions(s.signer, builder), deploy.NewCreate2Request(deploy.DefaultNicksMethodFactory, deployment))
 		s.Require().NoError(err)
 
-		s.Require().NoError(unsigned.Sign(s.signer))
 		s.mu.Lock()
-		s.totalFee.Add(s.totalFee, unsigned.MaxFee())
+		s.totalFee.Add(s.totalFee, deployTx.MaxFee())
 		s.mu.Unlock()
-		s.T().Logf("SetupSuite: signed deployment of %s (nonce %d, maxFee %s)", symbols[i], unsigned.AddressNonce(), unsigned.MaxFee())
+		s.T().Logf("SetupSuite: signed deployment of %s (nonce %d, maxFee %s)", symbols[i], deployTx.AddressNonce(), deployTx.MaxFee())
 
-		hash, err := s.deployer.Deploy(s.ctx, unsigned)
-		s.Require().NoError(err)
 		s.T().Logf("SetupSuite: broadcast deployment of %s, tx %s", symbols[i], hash)
 
 		receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
@@ -156,7 +147,7 @@ func (s *PoolSuite) SetupSuite() {
 		s.Require().True(receipt.Status, "deploy transaction reverted")
 		s.T().Logf("SetupSuite: %s mined in block %d", symbols[i], receipt.BlockNumber)
 
-		token, err := s.deployer.DeployAddress(deploy.DefaultNicksMethodFactory, deployment)
+		token, err := s.deployer.DeployAddress(deploy.NewCreate2Request(deploy.DefaultNicksMethodFactory, deployment))
 		s.Require().NoError(err)
 		tokens[i] = token
 
@@ -169,7 +160,7 @@ func (s *PoolSuite) SetupSuite() {
 			return err == nil && len(code) > 0
 		}, 20*time.Second, time.Duration(s.Interval)*time.Millisecond, "no code visible at deployed token %s", token)
 
-		s.T().Logf("SetupSuite: deployed token %s %s (nonce %d, tx %s)", symbols[i], token, unsigned.AddressNonce(), hash)
+		s.T().Logf("SetupSuite: deployed token %s %s (nonce %d, tx %s)", symbols[i], token, deployTx.AddressNonce(), hash)
 	}
 
 	s.tokenA, s.tokenB = tokens[0], tokens[1]

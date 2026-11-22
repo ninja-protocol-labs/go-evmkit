@@ -3,68 +3,60 @@ package deploy
 import (
 	"context"
 	"fmt"
-	"math/big"
 
+	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
-	"github.com/ninja-protocol-labs/go-evmkit/tx"
 )
 
-// CreateDeployer deploys standards via a plain CREATE (to is nil) transaction.
+// CreateDeployer deploys contracts via a plain CREATE transaction (no to address).
 type CreateDeployer struct {
 	c rpc.Client
 }
 
-// NewCreateDeployer returns a CreateDeployer broadcasting deployments via cli.
+// NewCreateDeployer returns a CreateDeployer sending deployments via cli.
 func NewCreateDeployer(cli rpc.Client) *CreateDeployer {
 	return &CreateDeployer{
 		c: cli,
 	}
 }
 
-// CreateDeployment builds an unsigned contract-creation transaction via b.
-func (d *CreateDeployer) CreateDeployment(
-	ctx context.Context,
-	b tx.Builder,
-	from *types.Address,
-	value *big.Int,
-	deployment *ContractDeployment,
-) (core.Transaction, error) {
-	initCode, err := deployment.InitCode()
-	if err != nil {
-		return nil, fmt.Errorf("deploy: createDeployment: %w", err)
+// Deploy sends a contract-creation transaction for req.Deployment, signed by opts.Signer;
+// opts.Value is passed to the constructor.
+func (d *CreateDeployer) Deploy(ctx context.Context, opts *bind.TransactOptions, req *CreateRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("deploy: create: %w", err)
 	}
 
-	unsigned, err := b.Build(from, nil, value, initCode).Pack(ctx, d.c)
+	initCode, err := req.Deployment.InitCode()
 	if err != nil {
-		return nil, fmt.Errorf("deploy: createDeployment: %w", err)
+		return nil, nil, fmt.Errorf("deploy: create: %w", err)
 	}
-	return unsigned, nil
+
+	signed, hash, err := bind.Transact(ctx, d.c, opts, nil, initCode)
+	if err != nil {
+		return signed, nil, fmt.Errorf("deploy: create: %w", err)
+	}
+
+	return signed, hash, nil
 }
 
-// DeployAddress returns the address a CREATE from from with nonce deploys
-// to. nonce must be the nonce the signed transaction actually carries (e.g.
-// by reading it back via the same Packer's Nonce before Pack).
-func (d *CreateDeployer) DeployAddress(from *types.Address, nonce uint64) (*types.Address, error) {
-	addr, err := core.CreateAddress(from, nonce)
+// DeployAddress returns the address signed deploys to, from its sender and nonce.
+func (d *CreateDeployer) DeployAddress(signed core.Transaction) (*types.Address, error) {
+	if signed == nil {
+		return nil, fmt.Errorf("deploy: deployAddress: %w: transaction is nil", bind.ErrInvalidRequest)
+	}
+
+	from, err := signed.Sender()
 	if err != nil {
 		return nil, fmt.Errorf("deploy: deployAddress: %w", err)
 	}
+
+	addr, err := core.CreateAddress(from, signed.AddressNonce())
+	if err != nil {
+		return nil, fmt.Errorf("deploy: deployAddress: %w", err)
+	}
+
 	return addr, nil
-}
-
-// Deploy broadcasts an already-signed contract-creation transaction.
-func (d *CreateDeployer) Deploy(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("deploy: deploy: %w", err)
-	}
-
-	hash, err := tx.Broadcast(ctx, d.c, raw)
-	if err != nil {
-		return nil, fmt.Errorf("deploy: deploy: %w", err)
-	}
-
-	return hash, nil
 }
