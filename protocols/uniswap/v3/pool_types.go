@@ -1,8 +1,10 @@
 package v3
 
 import (
+	"fmt"
 	"math/big"
 
+	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 )
 
@@ -132,27 +134,459 @@ func NewSnapshotCumulativesInside(tickCumulativeInside, secondsPerLiquidityInsid
 	}
 }
 
-// InitializeParams mirrors IUniswapV3PoolEvents' Initialize event: Contract was initialized at
-// SqrtPriceX96/Tick, emitted exactly once, before any Mint/Burn/Swap.
-// InitializeParams is CreateInitialize's argument list.
-type InitializeParams struct {
-	Pool         *types.Address
-	Sender       *types.Address
+// FactoryRequest is factory()'s input on Contract.
+type FactoryRequest struct {
+	Contract *types.Address
+}
+
+func NewFactoryRequest(contract *types.Address) *FactoryRequest {
+	return &FactoryRequest{
+		Contract: contract,
+	}
+}
+
+func (r *FactoryRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// Token0Request is token0()'s input on Contract.
+type Token0Request struct {
+	Contract *types.Address
+}
+
+func NewToken0Request(contract *types.Address) *Token0Request {
+	return &Token0Request{
+		Contract: contract,
+	}
+}
+
+func (r *Token0Request) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// Token1Request is token1()'s input on Contract.
+type Token1Request struct {
+	Contract *types.Address
+}
+
+func NewToken1Request(contract *types.Address) *Token1Request {
+	return &Token1Request{
+		Contract: contract,
+	}
+}
+
+func (r *Token1Request) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// FeeRequest is fee()'s input on Contract.
+type FeeRequest struct {
+	Contract *types.Address
+}
+
+func NewFeeRequest(contract *types.Address) *FeeRequest {
+	return &FeeRequest{
+		Contract: contract,
+	}
+}
+
+func (r *FeeRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// TickSpacingRequest is tickSpacing()'s input on Contract.
+type TickSpacingRequest struct {
+	Contract *types.Address
+}
+
+func NewTickSpacingRequest(contract *types.Address) *TickSpacingRequest {
+	return &TickSpacingRequest{
+		Contract: contract,
+	}
+}
+
+func (r *TickSpacingRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// MaxLiquidityPerTickRequest is maxLiquidityPerTick()'s input on Contract.
+type MaxLiquidityPerTickRequest struct {
+	Contract *types.Address
+}
+
+func NewMaxLiquidityPerTickRequest(contract *types.Address) *MaxLiquidityPerTickRequest {
+	return &MaxLiquidityPerTickRequest{
+		Contract: contract,
+	}
+}
+
+func (r *MaxLiquidityPerTickRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// Slot0Request is slot0()'s input on Contract.
+type Slot0Request struct {
+	Contract *types.Address
+}
+
+func NewSlot0Request(contract *types.Address) *Slot0Request {
+	return &Slot0Request{
+		Contract: contract,
+	}
+}
+
+func (r *Slot0Request) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// FeeGrowthGlobal0X128Request is feeGrowthGlobal0X128()'s input on Contract.
+type FeeGrowthGlobal0X128Request struct {
+	Contract *types.Address
+}
+
+func NewFeeGrowthGlobal0X128Request(contract *types.Address) *FeeGrowthGlobal0X128Request {
+	return &FeeGrowthGlobal0X128Request{
+		Contract: contract,
+	}
+}
+
+func (r *FeeGrowthGlobal0X128Request) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// FeeGrowthGlobal1X128Request is feeGrowthGlobal1X128()'s input on Contract.
+type FeeGrowthGlobal1X128Request struct {
+	Contract *types.Address
+}
+
+func NewFeeGrowthGlobal1X128Request(contract *types.Address) *FeeGrowthGlobal1X128Request {
+	return &FeeGrowthGlobal1X128Request{
+		Contract: contract,
+	}
+}
+
+func (r *FeeGrowthGlobal1X128Request) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// ProtocolFeesRequest is protocolFees()'s input on Contract.
+type ProtocolFeesRequest struct {
+	Contract *types.Address
+}
+
+func NewProtocolFeesRequest(contract *types.Address) *ProtocolFeesRequest {
+	return &ProtocolFeesRequest{
+		Contract: contract,
+	}
+}
+
+func (r *ProtocolFeesRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// LiquidityRequest is liquidity()'s input on Contract.
+type LiquidityRequest struct {
+	Contract *types.Address
+}
+
+func NewLiquidityRequest(contract *types.Address) *LiquidityRequest {
+	return &LiquidityRequest{
+		Contract: contract,
+	}
+}
+
+func (r *LiquidityRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// TicksRequest is ticks(tick)'s input on Contract.
+type TicksRequest struct {
+	Contract *types.Address
+	Tick     *big.Int
+}
+
+func NewTicksRequest(contract *types.Address, tick *big.Int) *TicksRequest {
+	return &TicksRequest{
+		Contract: contract,
+		Tick:     tick,
+	}
+}
+
+func (r *TicksRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Tick == nil {
+		return fmt.Errorf("%w: tick is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// TickBitmapRequest is tickBitmap(wordPosition)'s input on Contract.
+type TickBitmapRequest struct {
+	Contract     *types.Address
+	WordPosition int16
+}
+
+func NewTickBitmapRequest(contract *types.Address, wordPosition int16) *TickBitmapRequest {
+	return &TickBitmapRequest{
+		Contract:     contract,
+		WordPosition: wordPosition,
+	}
+}
+
+func (r *TickBitmapRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// PositionsRequest is positions(key)'s input on Contract.
+type PositionsRequest struct {
+	Contract *types.Address
+	Key      [32]byte
+}
+
+func NewPositionsRequest(contract *types.Address, key [32]byte) *PositionsRequest {
+	return &PositionsRequest{
+		Contract: contract,
+		Key:      key,
+	}
+}
+
+func (r *PositionsRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// ObservationsRequest is observations(index)'s input on Contract.
+type ObservationsRequest struct {
+	Contract *types.Address
+	Index    *big.Int
+}
+
+func NewObservationsRequest(contract *types.Address, index *big.Int) *ObservationsRequest {
+	return &ObservationsRequest{
+		Contract: contract,
+		Index:    index,
+	}
+}
+
+func (r *ObservationsRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Index == nil {
+		return fmt.Errorf("%w: index is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// ObserveRequest is observe(secondsAgos)'s input on Contract.
+type ObserveRequest struct {
+	Contract    *types.Address
+	SecondsAgos []uint32
+}
+
+func NewObserveRequest(contract *types.Address, secondsAgos []uint32) *ObserveRequest {
+	return &ObserveRequest{
+		Contract:    contract,
+		SecondsAgos: secondsAgos,
+	}
+}
+
+func (r *ObserveRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// SnapshotCumulativesInsideRequest is snapshotCumulativesInside(tickLower, tickUpper)'s input on Contract.
+type SnapshotCumulativesInsideRequest struct {
+	Contract  *types.Address
+	TickLower *big.Int
+	TickUpper *big.Int
+}
+
+func NewSnapshotCumulativesInsideRequest(contract *types.Address, tickLower, tickUpper *big.Int) *SnapshotCumulativesInsideRequest {
+	return &SnapshotCumulativesInsideRequest{
+		Contract:  contract,
+		TickLower: tickLower,
+		TickUpper: tickUpper,
+	}
+}
+
+func (r *SnapshotCumulativesInsideRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.TickLower == nil {
+		return fmt.Errorf("%w: tickLower is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.TickUpper == nil {
+		return fmt.Errorf("%w: tickUpper is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// InitializeRequest is initialize(sqrtPriceX96)'s input on Contract.
+type InitializeRequest struct {
+	Contract     *types.Address
 	SqrtPriceX96 *big.Int
 }
 
-func NewInitializeParams(pool, sender *types.Address, sqrtPriceX96 *big.Int) *InitializeParams {
-	return &InitializeParams{
-		Pool:         pool,
-		Sender:       sender,
+func NewInitializeRequest(contract *types.Address, sqrtPriceX96 *big.Int) *InitializeRequest {
+	return &InitializeRequest{
+		Contract:     contract,
 		SqrtPriceX96: sqrtPriceX96,
 	}
 }
 
-// PoolMintParams is CreateMint's and CallMint's argument list.
-type PoolMintParams struct {
-	Pool         *types.Address
-	Sender       *types.Address
+func (r *InitializeRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.SqrtPriceX96 == nil {
+		return fmt.Errorf("%w: sqrtPriceX96 is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// PoolMintRequest is mint(recipient, tickLower, tickUpper, amount, data)'s input on Contract.
+type PoolMintRequest struct {
+	Contract     *types.Address
 	Recipient    *types.Address
 	TickLower    *big.Int
 	TickUpper    *big.Int
@@ -160,10 +594,9 @@ type PoolMintParams struct {
 	CallbackData []byte
 }
 
-func NewPoolMintParams(pool, sender, recipient *types.Address, tickLower, tickUpper, amount *big.Int, callbackData []byte) *PoolMintParams {
-	return &PoolMintParams{
-		Pool:         pool,
-		Sender:       sender,
+func NewPoolMintRequest(contract, recipient *types.Address, tickLower, tickUpper, amount *big.Int, callbackData []byte) *PoolMintRequest {
+	return &PoolMintRequest{
+		Contract:     contract,
 		Recipient:    recipient,
 		TickLower:    tickLower,
 		TickUpper:    tickUpper,
@@ -172,10 +605,37 @@ func NewPoolMintParams(pool, sender, recipient *types.Address, tickLower, tickUp
 	}
 }
 
-// PoolCollectParams is CreateCollect's and CallCollect's argument list.
-type PoolCollectParams struct {
-	Pool             *types.Address
-	Sender           *types.Address
+func (r *PoolMintRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Recipient == nil {
+		return fmt.Errorf("%w: recipient is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.TickLower == nil {
+		return fmt.Errorf("%w: tickLower is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.TickUpper == nil {
+		return fmt.Errorf("%w: tickUpper is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Amount == nil {
+		return fmt.Errorf("%w: amount is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// PoolCollectRequest is collect(recipient, tickLower, tickUpper, amount0Requested, amount1Requested)'s input on Contract.
+type PoolCollectRequest struct {
+	Contract         *types.Address
 	Recipient        *types.Address
 	TickLower        *big.Int
 	TickUpper        *big.Int
@@ -183,10 +643,9 @@ type PoolCollectParams struct {
 	Amount1Requested *big.Int
 }
 
-func NewPoolCollectParams(pool, sender, recipient *types.Address, tickLower, tickUpper, amount0Requested, amount1Requested *big.Int) *PoolCollectParams {
-	return &PoolCollectParams{
-		Pool:             pool,
-		Sender:           sender,
+func NewPoolCollectRequest(contract, recipient *types.Address, tickLower, tickUpper, amount0Requested, amount1Requested *big.Int) *PoolCollectRequest {
+	return &PoolCollectRequest{
+		Contract:         contract,
 		Recipient:        recipient,
 		TickLower:        tickLower,
 		TickUpper:        tickUpper,
@@ -195,29 +654,82 @@ func NewPoolCollectParams(pool, sender, recipient *types.Address, tickLower, tic
 	}
 }
 
-// BurnParams is CreateBurn's and CallBurn's argument list.
-type BurnParams struct {
-	Pool      *types.Address
-	Sender    *types.Address
+func (r *PoolCollectRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Recipient == nil {
+		return fmt.Errorf("%w: recipient is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.TickLower == nil {
+		return fmt.Errorf("%w: tickLower is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.TickUpper == nil {
+		return fmt.Errorf("%w: tickUpper is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Amount0Requested == nil {
+		return fmt.Errorf("%w: amount0Requested is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Amount1Requested == nil {
+		return fmt.Errorf("%w: amount1Requested is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// BurnRequest is burn(tickLower, tickUpper, amount)'s input on Contract.
+type BurnRequest struct {
+	Contract  *types.Address
 	TickLower *big.Int
 	TickUpper *big.Int
 	Amount    *big.Int
 }
 
-func NewBurnParams(pool, sender *types.Address, tickLower, tickUpper, amount *big.Int) *BurnParams {
-	return &BurnParams{
-		Pool:      pool,
-		Sender:    sender,
+func NewBurnRequest(contract *types.Address, tickLower, tickUpper, amount *big.Int) *BurnRequest {
+	return &BurnRequest{
+		Contract:  contract,
 		TickLower: tickLower,
 		TickUpper: tickUpper,
 		Amount:    amount,
 	}
 }
 
-// SwapParams is CreateSwap's and CallSwap's argument list.
-type SwapParams struct {
-	Pool              *types.Address
-	Sender            *types.Address
+func (r *BurnRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.TickLower == nil {
+		return fmt.Errorf("%w: tickLower is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.TickUpper == nil {
+		return fmt.Errorf("%w: tickUpper is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Amount == nil {
+		return fmt.Errorf("%w: amount is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// SwapRequest is swap(recipient, zeroForOne, amountSpecified, sqrtPriceLimitX96, data)'s input on Contract.
+type SwapRequest struct {
+	Contract          *types.Address
 	Recipient         *types.Address
 	ZeroForOne        bool
 	AmountSpecified   *big.Int
@@ -225,10 +737,9 @@ type SwapParams struct {
 	CallbackData      []byte
 }
 
-func NewSwapParams(pool, sender, recipient *types.Address, zeroForOne bool, amountSpecified, sqrtPriceLimitX96 *big.Int, callbackData []byte) *SwapParams {
-	return &SwapParams{
-		Pool:              pool,
-		Sender:            sender,
+func NewSwapRequest(contract, recipient *types.Address, zeroForOne bool, amountSpecified, sqrtPriceLimitX96 *big.Int, callbackData []byte) *SwapRequest {
+	return &SwapRequest{
+		Contract:          contract,
 		Recipient:         recipient,
 		ZeroForOne:        zeroForOne,
 		AmountSpecified:   amountSpecified,
@@ -237,20 +748,42 @@ func NewSwapParams(pool, sender, recipient *types.Address, zeroForOne bool, amou
 	}
 }
 
-// FlashParams is CreateFlash's argument list.
-type FlashParams struct {
-	Pool         *types.Address
-	Sender       *types.Address
+func (r *SwapRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Recipient == nil {
+		return fmt.Errorf("%w: recipient is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.AmountSpecified == nil {
+		return fmt.Errorf("%w: amountSpecified is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.SqrtPriceLimitX96 == nil {
+		return fmt.Errorf("%w: sqrtPriceLimitX96 is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// FlashRequest is flash(recipient, amount0, amount1, data)'s input on Contract.
+type FlashRequest struct {
+	Contract     *types.Address
 	Recipient    *types.Address
 	Amount0      *big.Int
 	Amount1      *big.Int
 	CallbackData []byte
 }
 
-func NewFlashParams(pool, sender, recipient *types.Address, amount0, amount1 *big.Int, callbackData []byte) *FlashParams {
-	return &FlashParams{
-		Pool:         pool,
-		Sender:       sender,
+func NewFlashRequest(contract, recipient *types.Address, amount0, amount1 *big.Int, callbackData []byte) *FlashRequest {
+	return &FlashRequest{
+		Contract:     contract,
 		Recipient:    recipient,
 		Amount0:      amount0,
 		Amount1:      amount1,
@@ -258,75 +791,141 @@ func NewFlashParams(pool, sender, recipient *types.Address, amount0, amount1 *bi
 	}
 }
 
-// IncreaseObservationCardinalityNextParams is CreateIncreaseObservationCardinalityNext's
-// argument list.
-type IncreaseObservationCardinalityNextParams struct {
-	Pool                       *types.Address
-	Sender                     *types.Address
+func (r *FlashRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Recipient == nil {
+		return fmt.Errorf("%w: recipient is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Amount0 == nil {
+		return fmt.Errorf("%w: amount0 is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Amount1 == nil {
+		return fmt.Errorf("%w: amount1 is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// IncreaseObservationCardinalityNextRequest is increaseObservationCardinalityNext(observationCardinalityNext)'s input on Contract.
+type IncreaseObservationCardinalityNextRequest struct {
+	Contract                   *types.Address
 	ObservationCardinalityNext uint16
 }
 
-func NewIncreaseObservationCardinalityNextParams(pool, sender *types.Address, observationCardinalityNext uint16) *IncreaseObservationCardinalityNextParams {
-	return &IncreaseObservationCardinalityNextParams{
-		Pool:                       pool,
-		Sender:                     sender,
+func NewIncreaseObservationCardinalityNextRequest(contract *types.Address, observationCardinalityNext uint16) *IncreaseObservationCardinalityNextRequest {
+	return &IncreaseObservationCardinalityNextRequest{
+		Contract:                   contract,
 		ObservationCardinalityNext: observationCardinalityNext,
 	}
 }
 
-// SetFeeProtocolParams is CreateSetFeeProtocol's argument list.
-type SetFeeProtocolParams struct {
-	Pool         *types.Address
-	Sender       *types.Address
+func (r *IncreaseObservationCardinalityNextRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// SetFeeProtocolRequest is setFeeProtocol(feeProtocol0, feeProtocol1)'s input on Contract.
+type SetFeeProtocolRequest struct {
+	Contract     *types.Address
 	FeeProtocol0 uint8
 	FeeProtocol1 uint8
 }
 
-func NewSetFeeProtocolParams(pool, sender *types.Address, feeProtocol0, feeProtocol1 uint8) *SetFeeProtocolParams {
-	return &SetFeeProtocolParams{
-		Pool:         pool,
-		Sender:       sender,
+func NewSetFeeProtocolRequest(contract *types.Address, feeProtocol0, feeProtocol1 uint8) *SetFeeProtocolRequest {
+	return &SetFeeProtocolRequest{
+		Contract:     contract,
 		FeeProtocol0: feeProtocol0,
 		FeeProtocol1: feeProtocol1,
 	}
 }
 
-// CollectProtocolParams is CreateCollectProtocol's and CallCollectProtocol's argument list.
-type CollectProtocolParams struct {
-	Pool             *types.Address
-	Sender           *types.Address
+func (r *SetFeeProtocolRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// CollectProtocolRequest is collectProtocol(recipient, amount0Requested, amount1Requested)'s input on Contract.
+type CollectProtocolRequest struct {
+	Contract         *types.Address
 	Recipient        *types.Address
 	Amount0Requested *big.Int
 	Amount1Requested *big.Int
 }
 
-func NewCollectProtocolParams(pool, sender, recipient *types.Address, amount0Requested, amount1Requested *big.Int) *CollectProtocolParams {
-	return &CollectProtocolParams{
-		Pool:             pool,
-		Sender:           sender,
+func NewCollectProtocolRequest(contract, recipient *types.Address, amount0Requested, amount1Requested *big.Int) *CollectProtocolRequest {
+	return &CollectProtocolRequest{
+		Contract:         contract,
 		Recipient:        recipient,
 		Amount0Requested: amount0Requested,
 		Amount1Requested: amount1Requested,
 	}
 }
 
-type Initialize struct {
+func (r *CollectProtocolRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Recipient == nil {
+		return fmt.Errorf("%w: recipient is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Amount0Requested == nil {
+		return fmt.Errorf("%w: amount0Requested is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Amount1Requested == nil {
+		return fmt.Errorf("%w: amount1Requested is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// InitializeEvent mirrors IUniswapV3PoolEvents' Initialize event: Contract was initialized at SqrtPriceX96/Tick.
+type InitializeEvent struct {
 	Contract     *types.Address
 	SqrtPriceX96 *big.Int
 	Tick         *big.Int
 }
 
-func NewInitialize(contract *types.Address, sqrtPriceX96, tick *big.Int) *Initialize {
-	return &Initialize{
+func NewInitializeEvent(contract *types.Address, sqrtPriceX96, tick *big.Int) *InitializeEvent {
+	return &InitializeEvent{
 		Contract:     contract,
 		SqrtPriceX96: sqrtPriceX96,
 		Tick:         tick,
 	}
 }
 
-// Mint mirrors IUniswapV3PoolEvents' Mint event: Sender minted Amount liquidity into Owner's
+// MintEvent mirrors IUniswapV3PoolEvents' Mint event: Sender minted Amount liquidity into Owner's
 // [TickLower, TickUpper] position, paying Amount0/Amount1.
-type Mint struct {
+type MintEvent struct {
 	Contract  *types.Address
 	Sender    *types.Address
 	Owner     *types.Address
@@ -337,8 +936,8 @@ type Mint struct {
 	Amount1   *big.Int
 }
 
-func NewMint(contract, sender, owner *types.Address, tickLower, tickUpper, amount, amount0, amount1 *big.Int) *Mint {
-	return &Mint{
+func NewMintEvent(contract, sender, owner *types.Address, tickLower, tickUpper, amount, amount0, amount1 *big.Int) *MintEvent {
+	return &MintEvent{
 		Contract:  contract,
 		Sender:    sender,
 		Owner:     owner,
@@ -350,9 +949,9 @@ func NewMint(contract, sender, owner *types.Address, tickLower, tickUpper, amoun
 	}
 }
 
-// Collect mirrors IUniswapV3PoolEvents' Collect event: fees owed to Owner's [TickLower,
+// CollectEvent mirrors IUniswapV3PoolEvents' Collect event: fees owed to Owner's [TickLower,
 // TickUpper] position were sent to Recipient.
-type Collect struct {
+type CollectEvent struct {
 	Contract  *types.Address
 	Owner     *types.Address
 	Recipient *types.Address
@@ -362,8 +961,8 @@ type Collect struct {
 	Amount1   *big.Int
 }
 
-func NewCollect(contract, owner, recipient *types.Address, tickLower, tickUpper, amount0, amount1 *big.Int) *Collect {
-	return &Collect{
+func NewCollectEvent(contract, owner, recipient *types.Address, tickLower, tickUpper, amount0, amount1 *big.Int) *CollectEvent {
+	return &CollectEvent{
 		Contract:  contract,
 		Owner:     owner,
 		Recipient: recipient,
@@ -374,10 +973,10 @@ func NewCollect(contract, owner, recipient *types.Address, tickLower, tickUpper,
 	}
 }
 
-// Burn mirrors IUniswapV3PoolEvents' Burn event: Amount liquidity was removed from Owner's
+// BurnEvent mirrors IUniswapV3PoolEvents' Burn event: Amount liquidity was removed from Owner's
 // [TickLower, TickUpper] position, returning Amount0/Amount1 (fees must be withdrawn separately
 // via Collect).
-type Burn struct {
+type BurnEvent struct {
 	Contract  *types.Address
 	Owner     *types.Address
 	TickLower *big.Int
@@ -387,8 +986,8 @@ type Burn struct {
 	Amount1   *big.Int
 }
 
-func NewBurn(contract, owner *types.Address, tickLower, tickUpper, amount, amount0, amount1 *big.Int) *Burn {
-	return &Burn{
+func NewBurnEvent(contract, owner *types.Address, tickLower, tickUpper, amount, amount0, amount1 *big.Int) *BurnEvent {
+	return &BurnEvent{
 		Contract:  contract,
 		Owner:     owner,
 		TickLower: tickLower,
@@ -399,10 +998,10 @@ func NewBurn(contract, owner *types.Address, tickLower, tickUpper, amount, amoun
 	}
 }
 
-// Swap mirrors IUniswapV3PoolEvents' Swap event: Sender swapped, sending the output to
+// SwapEvent mirrors IUniswapV3PoolEvents' Swap event: Sender swapped, sending the output to
 // Recipient; Amount0/Amount1 are the pool's balance deltas, SqrtPriceX96/Liquidity/Tick are the
 // pool's state right after the swap.
-type Swap struct {
+type SwapEvent struct {
 	Contract     *types.Address
 	Sender       *types.Address
 	Recipient    *types.Address
@@ -413,8 +1012,8 @@ type Swap struct {
 	Tick         *big.Int
 }
 
-func NewSwap(contract, sender, recipient *types.Address, amount0, amount1, sqrtPriceX96, liquidity, tick *big.Int) *Swap {
-	return &Swap{
+func NewSwapEvent(contract, sender, recipient *types.Address, amount0, amount1, sqrtPriceX96, liquidity, tick *big.Int) *SwapEvent {
+	return &SwapEvent{
 		Contract:     contract,
 		Sender:       sender,
 		Recipient:    recipient,
@@ -426,9 +1025,9 @@ func NewSwap(contract, sender, recipient *types.Address, amount0, amount1, sqrtP
 	}
 }
 
-// Flash mirrors IUniswapV3PoolEvents' Flash event: Sender flash-borrowed Amount0/Amount1 to
+// FlashEvent mirrors IUniswapV3PoolEvents' Flash event: Sender flash-borrowed Amount0/Amount1 to
 // Recipient, repaying Paid0/Paid1 (which can exceed Amount plus the fee).
-type Flash struct {
+type FlashEvent struct {
 	Contract  *types.Address
 	Sender    *types.Address
 	Recipient *types.Address
@@ -438,8 +1037,8 @@ type Flash struct {
 	Paid1     *big.Int
 }
 
-func NewFlash(contract, sender, recipient *types.Address, amount0, amount1, paid0, paid1 *big.Int) *Flash {
-	return &Flash{
+func NewFlashEvent(contract, sender, recipient *types.Address, amount0, amount1, paid0, paid1 *big.Int) *FlashEvent {
+	return &FlashEvent{
 		Contract:  contract,
 		Sender:    sender,
 		Recipient: recipient,
@@ -450,25 +1049,25 @@ func NewFlash(contract, sender, recipient *types.Address, amount0, amount1, paid
 	}
 }
 
-// IncreaseObservationCardinalityNext mirrors IUniswapV3PoolEvents' same-named event: the
+// IncreaseObservationCardinalityNextEvent mirrors IUniswapV3PoolEvents' same-named event: the
 // pool's observationCardinalityNext moved from Old to New.
-type IncreaseObservationCardinalityNext struct {
+type IncreaseObservationCardinalityNextEvent struct {
 	Contract *types.Address
 	Old      *big.Int
 	New      *big.Int
 }
 
-func NewIncreaseObservationCardinalityNext(contract *types.Address, old, new_ *big.Int) *IncreaseObservationCardinalityNext {
-	return &IncreaseObservationCardinalityNext{
+func NewIncreaseObservationCardinalityNextEvent(contract *types.Address, old, new_ *big.Int) *IncreaseObservationCardinalityNextEvent {
+	return &IncreaseObservationCardinalityNextEvent{
 		Contract: contract,
 		Old:      old,
 		New:      new_,
 	}
 }
 
-// SetFeeProtocol mirrors IUniswapV3PoolEvents' same-named event: the pool's protocol fee for
+// SetFeeProtocolEvent mirrors IUniswapV3PoolEvents' same-named event: the pool's protocol fee for
 // token0/token1 moved from the Old pair to the New pair.
-type SetFeeProtocol struct {
+type SetFeeProtocolEvent struct {
 	Contract        *types.Address
 	FeeProtocol0Old *big.Int
 	FeeProtocol1Old *big.Int
@@ -476,8 +1075,8 @@ type SetFeeProtocol struct {
 	FeeProtocol1New *big.Int
 }
 
-func NewSetFeeProtocol(contract *types.Address, feeProtocol0Old, feeProtocol1Old, feeProtocol0New, feeProtocol1New *big.Int) *SetFeeProtocol {
-	return &SetFeeProtocol{
+func NewSetFeeProtocolEvent(contract *types.Address, feeProtocol0Old, feeProtocol1Old, feeProtocol0New, feeProtocol1New *big.Int) *SetFeeProtocolEvent {
+	return &SetFeeProtocolEvent{
 		Contract:        contract,
 		FeeProtocol0Old: feeProtocol0Old,
 		FeeProtocol1Old: feeProtocol1Old,
@@ -486,9 +1085,9 @@ func NewSetFeeProtocol(contract *types.Address, feeProtocol0Old, feeProtocol1Old
 	}
 }
 
-// CollectProtocol mirrors IUniswapV3PoolEvents' same-named event: Sender withdrew the
+// CollectProtocolEvent mirrors IUniswapV3PoolEvents' same-named event: Sender withdrew the
 // pool's accrued protocol fees to Recipient.
-type CollectProtocol struct {
+type CollectProtocolEvent struct {
 	Contract  *types.Address
 	Sender    *types.Address
 	Recipient *types.Address
@@ -496,8 +1095,8 @@ type CollectProtocol struct {
 	Amount1   *big.Int
 }
 
-func NewCollectProtocol(contract, sender, recipient *types.Address, amount0, amount1 *big.Int) *CollectProtocol {
-	return &CollectProtocol{
+func NewCollectProtocolEvent(contract, sender, recipient *types.Address, amount0, amount1 *big.Int) *CollectProtocolEvent {
+	return &CollectProtocolEvent{
 		Contract:  contract,
 		Sender:    sender,
 		Recipient: recipient,

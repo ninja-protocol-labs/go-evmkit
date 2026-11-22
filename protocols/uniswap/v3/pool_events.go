@@ -10,8 +10,8 @@ import (
 )
 
 // ExtractInitialize pulls every Initialize-shaped log out of logs, from any pool.
-func ExtractInitialize(logs []tx.Log) ([]Initialize, error) {
-	var initialized []Initialize
+func ExtractInitialize(logs []tx.Log) ([]InitializeEvent, error) {
+	var initialized []InitializeEvent
 	for i, log := range logs {
 		if len(log.Topics) == 0 || log.Topics[0] == nil {
 			continue
@@ -38,14 +38,14 @@ func ExtractInitialize(logs []tx.Log) ([]Initialize, error) {
 		if !ok {
 			return nil, fmt.Errorf("uniswapv3: extractInitialize: logs[%d]: unexpected decoded type for tick: %T", i, vals[1])
 		}
-		initialized = append(initialized, *NewInitialize(log.Address, sqrtPriceX96, tick))
+		initialized = append(initialized, *NewInitializeEvent(log.Address, sqrtPriceX96, tick))
 	}
 	return initialized, nil
 }
 
 // ExtractMint pulls every Mint-shaped log out of logs, from any pool.
-func ExtractMint(logs []tx.Log) ([]Mint, error) {
-	var minted []Mint
+func ExtractMint(logs []tx.Log) ([]MintEvent, error) {
+	var minted []MintEvent
 	for i, log := range logs {
 		if len(log.Topics) == 0 || log.Topics[0] == nil {
 			continue
@@ -92,14 +92,14 @@ func ExtractMint(logs []tx.Log) ([]Mint, error) {
 		if !ok {
 			return nil, fmt.Errorf("uniswapv3: extractMint: logs[%d]: unexpected decoded type for amount1: %T", i, vals[6])
 		}
-		minted = append(minted, *NewMint(log.Address, sender, owner, tickLower, tickUpper, amount, amount0, amount1))
+		minted = append(minted, *NewMintEvent(log.Address, sender, owner, tickLower, tickUpper, amount, amount0, amount1))
 	}
 	return minted, nil
 }
 
 // ExtractCollect pulls every Collect-shaped log out of logs, from any pool.
-func ExtractCollect(logs []tx.Log) ([]Collect, error) {
-	var collected []Collect
+func ExtractCollect(logs []tx.Log) ([]CollectEvent, error) {
+	var collected []CollectEvent
 	for i, log := range logs {
 		if len(log.Topics) == 0 || log.Topics[0] == nil {
 			continue
@@ -142,14 +142,14 @@ func ExtractCollect(logs []tx.Log) ([]Collect, error) {
 		if !ok {
 			return nil, fmt.Errorf("uniswapv3: extractCollect: logs[%d]: unexpected decoded type for amount1: %T", i, vals[5])
 		}
-		collected = append(collected, *NewCollect(log.Address, owner, recipient, tickLower, tickUpper, amount0, amount1))
+		collected = append(collected, *NewCollectEvent(log.Address, owner, recipient, tickLower, tickUpper, amount0, amount1))
 	}
 	return collected, nil
 }
 
 // ExtractBurn pulls every Burn-shaped log out of logs, from any pool.
-func ExtractBurn(logs []tx.Log) ([]Burn, error) {
-	var burned []Burn
+func ExtractBurn(logs []tx.Log) ([]BurnEvent, error) {
+	var burned []BurnEvent
 	for i, log := range logs {
 		if len(log.Topics) == 0 || log.Topics[0] == nil {
 			continue
@@ -192,14 +192,14 @@ func ExtractBurn(logs []tx.Log) ([]Burn, error) {
 		if !ok {
 			return nil, fmt.Errorf("uniswapv3: extractBurn: logs[%d]: unexpected decoded type for amount1: %T", i, vals[5])
 		}
-		burned = append(burned, *NewBurn(log.Address, owner, tickLower, tickUpper, amount, amount0, amount1))
+		burned = append(burned, *NewBurnEvent(log.Address, owner, tickLower, tickUpper, amount, amount0, amount1))
 	}
 	return burned, nil
 }
 
 // ExtractSwap pulls every Swap-shaped log out of logs, from any pool.
-func ExtractSwap(logs []tx.Log) ([]Swap, error) {
-	var swapped []Swap
+func ExtractSwap(logs []tx.Log) ([]SwapEvent, error) {
+	var swapped []SwapEvent
 	for i, log := range logs {
 		if len(log.Topics) == 0 || log.Topics[0] == nil {
 			continue
@@ -246,14 +246,14 @@ func ExtractSwap(logs []tx.Log) ([]Swap, error) {
 		if !ok {
 			return nil, fmt.Errorf("uniswapv3: extractSwap: logs[%d]: unexpected decoded type for tick: %T", i, vals[6])
 		}
-		swapped = append(swapped, *NewSwap(log.Address, sender, recipient, amount0, amount1, sqrtPriceX96, liquidity, tick))
+		swapped = append(swapped, *NewSwapEvent(log.Address, sender, recipient, amount0, amount1, sqrtPriceX96, liquidity, tick))
 	}
 	return swapped, nil
 }
 
 // ExtractFlash pulls every Flash-shaped log out of logs, from any pool.
-func ExtractFlash(logs []tx.Log) ([]Flash, error) {
-	var flashed []Flash
+func ExtractFlash(logs []tx.Log) ([]FlashEvent, error) {
+	var flashed []FlashEvent
 	for i, log := range logs {
 		if len(log.Topics) == 0 || log.Topics[0] == nil {
 			continue
@@ -296,15 +296,15 @@ func ExtractFlash(logs []tx.Log) ([]Flash, error) {
 		if !ok {
 			return nil, fmt.Errorf("uniswapv3: extractFlash: logs[%d]: unexpected decoded type for paid1: %T", i, vals[5])
 		}
-		flashed = append(flashed, *NewFlash(log.Address, sender, recipient, amount0, amount1, paid0, paid1))
+		flashed = append(flashed, *NewFlashEvent(log.Address, sender, recipient, amount0, amount1, paid0, paid1))
 	}
 	return flashed, nil
 }
 
 // ExtractIncreaseObservationCardinalityNext pulls every IncreaseObservationCardinalityNext-shaped
 // log out of logs, from any pool.
-func ExtractIncreaseObservationCardinalityNext(logs []tx.Log) ([]IncreaseObservationCardinalityNext, error) {
-	var increased []IncreaseObservationCardinalityNext
+func ExtractIncreaseObservationCardinalityNext(logs []tx.Log) ([]IncreaseObservationCardinalityNextEvent, error) {
+	var increased []IncreaseObservationCardinalityNextEvent
 	for i, log := range logs {
 		if len(log.Topics) == 0 || log.Topics[0] == nil {
 			continue
@@ -331,14 +331,14 @@ func ExtractIncreaseObservationCardinalityNext(logs []tx.Log) ([]IncreaseObserva
 		if !ok {
 			return nil, fmt.Errorf("uniswapv3: extractIncreaseObservationCardinalityNext: logs[%d]: unexpected decoded type for new: %T", i, vals[1])
 		}
-		increased = append(increased, *NewIncreaseObservationCardinalityNext(log.Address, big.NewInt(int64(old)), big.NewInt(int64(new_))))
+		increased = append(increased, *NewIncreaseObservationCardinalityNextEvent(log.Address, big.NewInt(int64(old)), big.NewInt(int64(new_))))
 	}
 	return increased, nil
 }
 
 // ExtractSetFeeProtocol pulls every SetFeeProtocol-shaped log out of logs, from any pool.
-func ExtractSetFeeProtocol(logs []tx.Log) ([]SetFeeProtocol, error) {
-	var set []SetFeeProtocol
+func ExtractSetFeeProtocol(logs []tx.Log) ([]SetFeeProtocolEvent, error) {
+	var set []SetFeeProtocolEvent
 	for i, log := range logs {
 		if len(log.Topics) == 0 || log.Topics[0] == nil {
 			continue
@@ -373,14 +373,14 @@ func ExtractSetFeeProtocol(logs []tx.Log) ([]SetFeeProtocol, error) {
 		if !ok {
 			return nil, fmt.Errorf("uniswapv3: extractSetFeeProtocol: logs[%d]: unexpected decoded type for feeProtocol1New: %T", i, vals[3])
 		}
-		set = append(set, *NewSetFeeProtocol(log.Address, big.NewInt(int64(feeProtocol0Old)), big.NewInt(int64(feeProtocol1Old)), big.NewInt(int64(feeProtocol0New)), big.NewInt(int64(feeProtocol1New))))
+		set = append(set, *NewSetFeeProtocolEvent(log.Address, big.NewInt(int64(feeProtocol0Old)), big.NewInt(int64(feeProtocol1Old)), big.NewInt(int64(feeProtocol0New)), big.NewInt(int64(feeProtocol1New))))
 	}
 	return set, nil
 }
 
 // ExtractCollectProtocol pulls every CollectProtocol-shaped log out of logs, from any pool.
-func ExtractCollectProtocol(logs []tx.Log) ([]CollectProtocol, error) {
-	var collected []CollectProtocol
+func ExtractCollectProtocol(logs []tx.Log) ([]CollectProtocolEvent, error) {
+	var collected []CollectProtocolEvent
 	for i, log := range logs {
 		if len(log.Topics) == 0 || log.Topics[0] == nil {
 			continue
@@ -415,7 +415,7 @@ func ExtractCollectProtocol(logs []tx.Log) ([]CollectProtocol, error) {
 		if !ok {
 			return nil, fmt.Errorf("uniswapv3: extractCollectProtocol: logs[%d]: unexpected decoded type for amount1: %T", i, vals[3])
 		}
-		collected = append(collected, *NewCollectProtocol(log.Address, sender, recipient, amount0, amount1))
+		collected = append(collected, *NewCollectProtocolEvent(log.Address, sender, recipient, amount0, amount1))
 	}
 	return collected, nil
 }

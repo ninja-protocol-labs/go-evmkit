@@ -372,25 +372,25 @@ func (s *QuoterLifeCycleSuite) Test02CreateAndInitializePoolIfNecessary() {
 	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "Factory.getPool not yet reflecting the new pool")
 	s.T().Logf("Test02CreateAndInitializePoolIfNecessary: Factory.getPool(token0, token1, fee) = %s matches", registeredPool)
 
-	poolToken0, err := s.v3Pool.Token0(s.ctx, s.pool, rpc.BlockTagLatest)
+	poolToken0, err := s.v3Pool.Token0(s.ctx, nil, NewToken0Request(s.pool))
 	s.Require().NoError(err)
 	s.Require().True(poolToken0.Equal(s.tokenA))
-	poolToken1, err := s.v3Pool.Token1(s.ctx, s.pool, rpc.BlockTagLatest)
+	poolToken1, err := s.v3Pool.Token1(s.ctx, nil, NewToken1Request(s.pool))
 	s.Require().NoError(err)
 	s.Require().True(poolToken1.Equal(s.tokenB))
-	poolFee, err := s.v3Pool.Fee(s.ctx, s.pool, rpc.BlockTagLatest)
+	poolFee, err := s.v3Pool.Fee(s.ctx, nil, NewFeeRequest(s.pool))
 	s.Require().NoError(err)
 	s.Require().Zero(s.Fee.Cmp(poolFee))
 	s.T().Logf("Test02CreateAndInitializePoolIfNecessary: pool confirms token0=%s token1=%s fee=%s", poolToken0, poolToken1, poolFee)
 
-	slot0, err := s.v3Pool.Slot0(s.ctx, s.pool, rpc.BlockTagLatest)
+	slot0, err := s.v3Pool.Slot0(s.ctx, nil, NewSlot0Request(s.pool))
 	s.Require().NoError(err)
 	s.Require().Zero(sqrtPriceX96.Cmp(slot0.SqrtPriceX96))
 	s.Require().Zero(slot0.Tick.Sign())
 	s.Require().True(slot0.Unlocked)
 	s.T().Logf("Test02CreateAndInitializePoolIfNecessary: pool slot0 confirms sqrtPriceX96=%s tick=%s unlocked=%t", slot0.SqrtPriceX96, slot0.Tick, slot0.Unlocked)
 
-	liquidity, err := s.v3Pool.Liquidity(s.ctx, s.pool, rpc.BlockTagLatest)
+	liquidity, err := s.v3Pool.Liquidity(s.ctx, nil, NewLiquidityRequest(s.pool))
 	s.Require().NoError(err)
 	s.Require().Zero(liquidity.Sign(), "freshly initialized pool must have 0 active liquidity")
 	s.T().Logf("Test02CreateAndInitializePoolIfNecessary: pool liquidity() = %s", liquidity)
@@ -470,7 +470,7 @@ func (s *QuoterLifeCycleSuite) Test03Mint() {
 
 	var liquidity *big.Int
 	s.Require().Eventually(func() bool {
-		liquidity, err = s.v3Pool.Liquidity(s.ctx, s.pool, rpc.BlockTagLatest)
+		liquidity, err = s.v3Pool.Liquidity(s.ctx, nil, NewLiquidityRequest(s.pool))
 		return err == nil && predictedLiquidity.Cmp(liquidity) == 0
 	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "pool's active liquidity not visible after mint")
 	s.T().Logf("Test03Mint: pool liquidity() = %s", liquidity)
@@ -567,7 +567,7 @@ func (s *QuoterLifeCycleSuite) Test05QuoteExactInputSingleMatchesActualSwap() {
 
 	var slot0After *Slot0
 	s.Require().Eventually(func() bool {
-		slot0After, err = s.v3Pool.Slot0(s.ctx, s.pool, rpc.BlockTagLatest)
+		slot0After, err = s.v3Pool.Slot0(s.ctx, nil, NewSlot0Request(s.pool))
 		return err == nil && quote.SqrtPriceX96After.Cmp(slot0After.SqrtPriceX96) == 0
 	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "pool's sqrtPriceX96 not yet matching the quote's predicted sqrtPriceX96After")
 	s.Require().Zero(quote.InitializedTicksCrossed.Sign(), "the swap stayed within our wide position's single range, so it shouldn't have crossed any initialized ticks")
@@ -668,7 +668,7 @@ func (s *QuoterLifeCycleSuite) Test07QuoteExactOutputSingleMatchesActualSwap() {
 
 	var slot0After *Slot0
 	s.Require().Eventually(func() bool {
-		slot0After, err = s.v3Pool.Slot0(s.ctx, s.pool, rpc.BlockTagLatest)
+		slot0After, err = s.v3Pool.Slot0(s.ctx, nil, NewSlot0Request(s.pool))
 		return err == nil && quote.SqrtPriceX96After.Cmp(slot0After.SqrtPriceX96) == 0
 	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "pool's sqrtPriceX96 not yet matching the quote's predicted sqrtPriceX96After")
 	s.T().Logf("Test07QuoteExactOutputSingleMatchesActualSwap: pool's actual post-swap sqrtPriceX96=%s matches the quote's predicted sqrtPriceX96After exactly", slot0After.SqrtPriceX96)
@@ -786,7 +786,7 @@ func (s *QuoterLifeCycleSuite) Test09MintBC() {
 
 	var liquidity *big.Int
 	s.Require().Eventually(func() bool {
-		liquidity, err = s.v3Pool.Liquidity(s.ctx, s.poolBC, rpc.BlockTagLatest)
+		liquidity, err = s.v3Pool.Liquidity(s.ctx, nil, NewLiquidityRequest(s.poolBC))
 		return err == nil && predictedLiquidity.Cmp(liquidity) == 0
 	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "pool's active liquidity not visible after mint")
 	s.T().Logf("Test09MintBC: pool liquidity() = %s", liquidity)
@@ -853,7 +853,7 @@ func (s *QuoterLifeCycleSuite) Test10QuoteExactInputMatchesActualMultihopSwap() 
 	s.Require().NoError(err)
 	s.Require().Len(swaps, 2, "multihop exactInput over 2 pools must emit exactly 2 Swap events")
 
-	var hopAB, hopBC *Swap
+	var hopAB, hopBC *SwapEvent
 	for i := range swaps {
 		if swaps[i].Contract.Equal(s.pool) {
 			hopAB = &swaps[i]
@@ -870,11 +870,11 @@ func (s *QuoterLifeCycleSuite) Test10QuoteExactInputMatchesActualMultihopSwap() 
 
 	var slot0ABAfter, slot0BCAfter *Slot0
 	s.Require().Eventually(func() bool {
-		slot0ABAfter, err = s.v3Pool.Slot0(s.ctx, s.pool, rpc.BlockTagLatest)
+		slot0ABAfter, err = s.v3Pool.Slot0(s.ctx, nil, NewSlot0Request(s.pool))
 		if err != nil {
 			return false
 		}
-		slot0BCAfter, err = s.v3Pool.Slot0(s.ctx, s.poolBC, rpc.BlockTagLatest)
+		slot0BCAfter, err = s.v3Pool.Slot0(s.ctx, nil, NewSlot0Request(s.poolBC))
 		return err == nil && quote.SqrtPriceX96AfterList[0].Cmp(slot0ABAfter.SqrtPriceX96) == 0 && quote.SqrtPriceX96AfterList[1].Cmp(slot0BCAfter.SqrtPriceX96) == 0
 	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "pool states not yet matching the quote's predicted sqrtPriceX96AfterList")
 	s.T().Logf("Test10QuoteExactInputMatchesActualMultihopSwap: both pools' actual post-swap sqrtPriceX96 match the quote's predicted list exactly: AB=%s BC=%s", slot0ABAfter.SqrtPriceX96, slot0BCAfter.SqrtPriceX96)
@@ -942,7 +942,7 @@ func (s *QuoterLifeCycleSuite) Test11QuoteExactOutputMatchesActualMultihopSwap()
 	s.Require().NoError(err)
 	s.Require().Len(swaps, 2, "multihop exactOutput over 2 pools must emit exactly 2 Swap events")
 
-	var hopAB, hopBC *Swap
+	var hopAB, hopBC *SwapEvent
 	for i := range swaps {
 		if swaps[i].Contract.Equal(s.pool) {
 			hopAB = &swaps[i]
@@ -959,11 +959,11 @@ func (s *QuoterLifeCycleSuite) Test11QuoteExactOutputMatchesActualMultihopSwap()
 
 	var slot0ABAfter, slot0BCAfter *Slot0
 	s.Require().Eventually(func() bool {
-		slot0ABAfter, err = s.v3Pool.Slot0(s.ctx, s.pool, rpc.BlockTagLatest)
+		slot0ABAfter, err = s.v3Pool.Slot0(s.ctx, nil, NewSlot0Request(s.pool))
 		if err != nil {
 			return false
 		}
-		slot0BCAfter, err = s.v3Pool.Slot0(s.ctx, s.poolBC, rpc.BlockTagLatest)
+		slot0BCAfter, err = s.v3Pool.Slot0(s.ctx, nil, NewSlot0Request(s.poolBC))
 		return err == nil && quote.SqrtPriceX96AfterList[0].Cmp(slot0ABAfter.SqrtPriceX96) == 0 && quote.SqrtPriceX96AfterList[1].Cmp(slot0BCAfter.SqrtPriceX96) == 0
 	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "pool states not yet matching the quote's predicted sqrtPriceX96AfterList")
 	s.T().Logf("Test11QuoteExactOutputMatchesActualMultihopSwap: both pools' actual post-swap sqrtPriceX96 match the quote's predicted list exactly: AB=%s BC=%s", slot0ABAfter.SqrtPriceX96, slot0BCAfter.SqrtPriceX96)

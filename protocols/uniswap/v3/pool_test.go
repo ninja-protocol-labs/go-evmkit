@@ -3,42 +3,43 @@ package v3
 import (
 	"context"
 	"fmt"
-	"github.com/ninja-protocol-labs/go-evmkit/internal/testenv"
 	"math/big"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
-	"github.com/ninja-protocol-labs/go-evmkit/standards/deploy"
-	"github.com/ninja-protocol-labs/go-evmkit/standards/erc20"
-	"github.com/ninja-protocol-labs/go-evmkit/standards/multicall3"
-	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core"
+	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
+	"github.com/ninja-protocol-labs/go-evmkit/internal/testenv"
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
+	"github.com/ninja-protocol-labs/go-evmkit/standards/deploy"
+	"github.com/ninja-protocol-labs/go-evmkit/standards/erc20"
 	"github.com/ninja-protocol-labs/go-evmkit/tx"
+	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
 type PoolSuite struct {
 	suite.Suite
 
-	Enable        bool
-	RPCURL        string
-	PrivateKeyHex string
-	FactoryHex    string
-	MulticallHex  string
-	NativeSymbol  string
-	Fee           *big.Int
-	Interval      int
-	Timeout       int
-	ByteCode      string
-	Constructor   *abi.Function
-	Salt          *types.Hash
+	RPCURL              string
+	PrivateKeyHex       string
+	FactoryHex          string
+	MulticallHex        string
+	NicksFactoryHex     string
+	NativeSymbol        string
+	NativeDecimals      int
+	Fee                 *big.Int
+	Timeout             time.Duration
+	ReceiptPollInterval time.Duration
+	ReceiptTimeout      time.Duration
+	ByteCode            string
+	Constructor         *abi.Function
+	Salt                *types.Hash
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -49,6 +50,7 @@ type PoolSuite struct {
 	from      *types.Address
 	factory   *types.Address
 	multicall *types.Address
+	nicks     *types.Address
 	tokenA    *types.Address
 	tokenB    *types.Address
 	pool      *types.Address
@@ -62,28 +64,31 @@ type PoolSuite struct {
 }
 
 func TestPoolSuite(t *testing.T) {
+	c := testenv.MustLoad(t, testenv.Testnet, testenv.UnknownNetwork)
+	if c.Addresses.Protocol.Uniswap.V3.Factory == "" {
+		t.Skip("testenv: no Uniswap V3 factory configured for this network")
+	}
+
 	suite.Run(t, &PoolSuite{
-		Enable:        false,
-		RPCURL:        "",
-		PrivateKeyHex: "",
-		FactoryHex:    "",
-		MulticallHex:  multicall3.DefaultMulticall3Address.String(),
-		NativeSymbol:  "",
-		Fee:           big.NewInt(FeeMedium),
-		Interval:      1500,
-		Timeout:       60,
-		ByteCode:      testenv.ERC20ByteCodeHex,
-		Constructor:   abi.NewFunction("constructor", abi.Types{abi.String, abi.String, abi.Uint8}, nil),
-		Salt:          core.Keccak256([]byte("go-evmkit")),
+		RPCURL:              c.RPCURL,
+		PrivateKeyHex:       c.ActorPrivateKeyHex,
+		FactoryHex:          c.Addresses.Protocol.Uniswap.V3.Factory,
+		MulticallHex:        c.Addresses.Standard.Multicall,
+		NicksFactoryHex:     c.Addresses.Standard.NicksFactory,
+		NativeSymbol:        c.Constant.NativeSymbol,
+		NativeDecimals:      c.Constant.NativeDecimals,
+		Fee:                 big.NewInt(FeeMedium),
+		Timeout:             10 * time.Minute,
+		ReceiptPollInterval: c.Constant.ReceiptPollInterval,
+		ReceiptTimeout:      c.Constant.ReceiptTimeout,
+		ByteCode:            testenv.ERC20ByteCodeHex,
+		Constructor:         abi.NewFunction("constructor", abi.Types{abi.String, abi.String, abi.Uint8}, nil),
+		Salt:                core.Keccak256([]byte("go-evmkit")),
 	})
 }
 
 func (s *PoolSuite) SetupSuite() {
-	if !s.Enable {
-		s.T().Skip("disabled")
-	}
-
-	s.ctx, s.cancel = context.WithTimeout(context.Background(), 10*time.Minute)
+	s.ctx, s.cancel = context.WithTimeout(s.T().Context(), s.Timeout)
 
 	s.client = rpc.NewClient(s.RPCURL, rpc.WithRetry(5, rpc.ExponentialBackoff(500*time.Millisecond, 10*time.Second)))
 	s.deployer = deploy.NewNicksDeployer(s.client)
@@ -108,6 +113,9 @@ func (s *PoolSuite) SetupSuite() {
 	s.multicall, err = types.NewAddressFromHex(s.MulticallHex)
 	s.Require().NoError(err)
 
+	s.nicks, err = types.NewAddressFromHex(s.NicksFactoryHex)
+	s.Require().NoError(err)
+
 	bytecode, err := encoding.Hex.Decode(s.ByteCode)
 	s.Require().NoError(err)
 
@@ -126,14 +134,14 @@ func (s *PoolSuite) SetupSuite() {
 			salt,
 		)
 
-		predicted, err := s.deployer.DeployAddress(deploy.NewCreate2Request(deploy.DefaultNicksMethodFactory, deployment))
+		predicted, err := s.deployer.DeployAddress(deploy.NewCreate2Request(s.nicks, deployment))
 		s.Require().NoError(err)
 		s.T().Logf("SetupSuite: deploying token %s %s, predicted address %s", names[i], symbols[i], predicted)
 
 		builder := tx.NewDynamicFeeBuilder()
 		builder.PriceBuffer(150)
 
-		deployTx, hash, err := s.deployer.Deploy(s.ctx, bind.NewTransactOptions(s.signer, builder), deploy.NewCreate2Request(deploy.DefaultNicksMethodFactory, deployment))
+		deployTx, hash, err := s.deployer.Deploy(s.ctx, bind.NewTransactOptions(s.signer, builder), deploy.NewCreate2Request(s.nicks, deployment))
 		s.Require().NoError(err)
 
 		s.mu.Lock()
@@ -143,12 +151,12 @@ func (s *PoolSuite) SetupSuite() {
 
 		s.T().Logf("SetupSuite: broadcast deployment of %s, tx %s", symbols[i], hash)
 
-		receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+		receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, s.ReceiptPollInterval, s.ReceiptTimeout)
 		s.Require().NoError(err)
 		s.Require().True(receipt.Status, "deploy transaction reverted")
-		s.T().Logf("SetupSuite: %s mined in block %d", symbols[i], receipt.BlockNumber)
+		s.T().Logf("SetupSuite: %s mined in block %d (gas %d)", symbols[i], receipt.BlockNumber, receipt.GasUsed)
 
-		token, err := s.deployer.DeployAddress(deploy.NewCreate2Request(deploy.DefaultNicksMethodFactory, deployment))
+		token, err := s.deployer.DeployAddress(deploy.NewCreate2Request(s.nicks, deployment))
 		s.Require().NoError(err)
 		tokens[i] = token
 
@@ -159,7 +167,7 @@ func (s *PoolSuite) SetupSuite() {
 			}
 			code, err := encoding.Hex.Decode(codeHex)
 			return err == nil && len(code) > 0
-		}, 20*time.Second, time.Duration(s.Interval)*time.Millisecond, "no code visible at deployed token %s", token)
+		}, 20*time.Second, s.ReceiptPollInterval, "no code visible at deployed token %s", token)
 
 		s.T().Logf("SetupSuite: deployed token %s %s (nonce %d, tx %s)", symbols[i], token, deployTx.AddressNonce(), hash)
 	}
@@ -177,9 +185,9 @@ func (s *PoolSuite) SetupSuite() {
 	s.mu.Lock()
 	s.totalFee.Add(s.totalFee, createTx.MaxFee())
 	s.mu.Unlock()
-	s.T().Logf("SetupSuite: broadcast createPool, tx %s", createHash)
+	s.T().Logf("SetupSuite: sent createPool (nonce %d), tx %s", createTx.AddressNonce(), createHash)
 
-	createReceipt, err := tx.WaitForReceipt(s.ctx, s.client, createHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	createReceipt, err := tx.WaitForReceipt(s.ctx, s.client, createHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(createReceipt.Status, "createPool transaction reverted")
 
@@ -187,7 +195,7 @@ func (s *PoolSuite) SetupSuite() {
 	s.Require().NoError(err)
 	s.Require().Len(created, 1)
 	s.pool = created[0].Pool
-	s.T().Logf("SetupSuite: created pool %s for (%s, %s, %s)", s.pool, s.tokenA, s.tokenB, s.Fee)
+	s.T().Logf("SetupSuite: created pool %s for (%s, %s, %s) tickSpacing=%s (block %d, gas %d)", s.pool, s.tokenA, s.tokenB, s.Fee, created[0].TickSpacing, createReceipt.BlockNumber, createReceipt.GasUsed)
 }
 
 func (s *PoolSuite) TearDownSuite() {
@@ -217,20 +225,20 @@ func (s *PoolSuite) TearDownSuite() {
 			burnHash, err := tx.Broadcast(s.ctx, s.client, raw)
 			s.Require().NoError(err)
 
-			burnReceipt, err := tx.WaitForReceipt(s.ctx, s.client, burnHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+			burnReceipt, err := tx.WaitForReceipt(s.ctx, s.client, burnHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 			s.Require().NoError(err)
 			s.Require().True(burnReceipt.Status, "burn transaction reverted")
 
-			s.T().Logf("TearDownSuite: burned %s of %s from %s (tx %s)", tb.Amount, tb.Token, s.from, burnHash)
+			s.T().Logf("TearDownSuite: burned %s of %s from %s (tx %s, block %d, gas %d)", tb.Amount, tb.Token, s.from, burnHash, burnReceipt.BlockNumber, burnReceipt.GasUsed)
 		}
 	}
 
 	if s.totalFee != nil {
-		base := new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil)
+		base := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(s.NativeDecimals)), nil)
 		whole, frac := new(big.Int), new(big.Int)
 		whole.DivMod(s.totalFee, base, frac)
 
-		fracStr := strings.TrimRight(fmt.Sprintf("%018s", frac.String()), "0")
+		fracStr := strings.TrimRight(fmt.Sprintf("%0*s", s.NativeDecimals, frac.String()), "0")
 		decimal := whole.String()
 		if fracStr != "" {
 			decimal += "." + fracStr
@@ -245,106 +253,134 @@ func (s *PoolSuite) TearDownSuite() {
 }
 
 func (s *PoolSuite) Test01Initialize() {
-	before, err := s.v3Pool.Slot0(s.ctx, s.pool, rpc.BlockTagLatest)
+	before, err := s.v3Pool.Slot0(s.ctx, nil, NewSlot0Request(s.pool))
 	s.Require().NoError(err)
 	s.Require().Zero(before.SqrtPriceX96.Sign(), "pool shouldn't be initialized yet")
-	s.T().Logf("Test01Initialize: confirmed pool %s not yet initialized", s.pool)
 
 	sqrtPriceX96 := new(big.Int).Lsh(big.NewInt(1), 96)
 
 	initBuilder := tx.NewDynamicFeeBuilder()
 	initBuilder.PriceBuffer(150)
-	unsigned, err := s.v3Pool.CreateInitialize(s.ctx, initBuilder, NewInitializeParams(s.pool, s.from, sqrtPriceX96))
+	sentTx, hash, err := s.v3Pool.Initialize(s.ctx, bind.NewTransactOptions(s.signer, initBuilder), NewInitializeRequest(s.pool, sqrtPriceX96))
 	s.Require().NoError(err)
-	s.Require().NoError(unsigned.Sign(s.signer))
 	s.mu.Lock()
-	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
+	s.totalFee.Add(s.totalFee, sentTx.MaxFee())
 	s.mu.Unlock()
-	s.T().Logf("Test01Initialize: signed initialize (nonce %d, maxFee %s)", unsigned.AddressNonce(), unsigned.MaxFee())
+	s.T().Logf("Test01Initialize: sent initialize(%s) (nonce %d, maxFee %s), tx %s", sqrtPriceX96, sentTx.AddressNonce(), sentTx.MaxFee(), hash)
 
-	hash, err := s.v3Pool.Initialize(s.ctx, unsigned)
-	s.Require().NoError(err)
-	s.T().Logf("Test01Initialize: broadcast initialize, tx %s", hash)
-
-	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(receipt.Status, "initialize transaction reverted")
-	s.T().Logf("Test01Initialize: mined in block %d", receipt.BlockNumber)
 
 	initialized, err := ExtractInitialize(receipt.Logs)
 	s.Require().NoError(err)
 	s.Require().Len(initialized, 1)
 	s.Require().True(initialized[0].Contract.Equal(s.pool))
 	s.Require().Zero(sqrtPriceX96.Cmp(initialized[0].SqrtPriceX96))
-	s.T().Logf("Test01Initialize: Initialize event confirms sqrtPriceX96=%s tick=%s", initialized[0].SqrtPriceX96, initialized[0].Tick)
+	s.Require().Zero(initialized[0].Tick.Sign())
 
-	after, err := s.v3Pool.Slot0(s.ctx, s.pool, rpc.BlockTagLatest)
-	s.Require().NoError(err)
+	var after *Slot0
+	s.Require().Eventually(func() bool {
+		var err error
+		after, err = s.v3Pool.Slot0(s.ctx, bind.NewCallOptions().WithBlock(fmt.Sprintf("0x%x", receipt.BlockNumber)), NewSlot0Request(s.pool))
+		return err == nil
+	}, 20*time.Second, s.ReceiptPollInterval, "slot0 not readable at the receipt block")
 	s.Require().Zero(sqrtPriceX96.Cmp(after.SqrtPriceX96))
+	s.Require().Zero(after.Tick.Sign())
 	s.Require().True(after.Unlocked)
-	s.T().Logf("Test01Initialize: slot0 confirms sqrtPriceX96=%s tick=%s", after.SqrtPriceX96, after.Tick)
 
 	s.T().Logf("UniswapV3Pool %s Test01Initialize Result", s.pool)
-	s.T().Logf("\tSqrtPriceX96: %s", after.SqrtPriceX96)
-	s.T().Logf("\tTick: %s", after.Tick)
-	s.T().Logf("\tTx: %s", hash)
+	s.T().Logf("\tInitialize event: sqrtPriceX96=%s tick=%s", initialized[0].SqrtPriceX96, initialized[0].Tick)
+	s.T().Logf("\tSlot0: sqrtPriceX96=%s tick=%s observationIndex=%s observationCardinality=%s observationCardinalityNext=%s feeProtocol=%s unlocked=%v", after.SqrtPriceX96, after.Tick, after.ObservationIndex, after.ObservationCardinality, after.ObservationCardinalityNext, after.FeeProtocol, after.Unlocked)
+	s.T().Logf("\tTx: %s (nonce %d, block %d, gas %d)", hash, sentTx.AddressNonce(), receipt.BlockNumber, receipt.GasUsed)
 }
 
 func (s *PoolSuite) Test02InitializeAlreadyInitialized() {
 	sqrtPriceX96 := new(big.Int).Lsh(big.NewInt(1), 96)
 
-	_, err := s.v3Pool.CreateInitialize(s.ctx, tx.NewDynamicFeeBuilder(), NewInitializeParams(s.pool, s.from, sqrtPriceX96))
-	s.Require().Error(err)
+	revertTx, revertHash, err := s.v3Pool.Initialize(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewInitializeRequest(s.pool, sqrtPriceX96))
 	s.Require().ErrorIs(err, ErrAlreadyInitialized)
-	s.T().Logf("Test02InitializeAlreadyInitialized: initialize(%s) reverted as expected: %v", sqrtPriceX96, err)
+	s.Require().Nil(revertTx)
+	s.Require().Nil(revertHash)
+
+	s.T().Logf("UniswapV3Pool %s Test02InitializeAlreadyInitialized Result", s.pool)
+	s.T().Logf("\tRequest: sqrtPriceX96=%s", sqrtPriceX96)
+	s.T().Logf("\tError: %v", err)
 }
 
 func (s *PoolSuite) Test03ReadMethods() {
-	factory, err := s.v3Pool.Factory(s.ctx, s.pool, rpc.BlockTagLatest)
+	factory, err := s.v3Pool.Factory(s.ctx, nil, NewFactoryRequest(s.pool))
 	s.Require().NoError(err)
 	s.Require().True(factory.Equal(s.factory))
 
-	token0, err := s.v3Pool.Token0(s.ctx, s.pool, rpc.BlockTagLatest)
+	token0, err := s.v3Pool.Token0(s.ctx, nil, NewToken0Request(s.pool))
 	s.Require().NoError(err)
 	s.Require().True(token0.Equal(s.tokenA))
 
-	token1, err := s.v3Pool.Token1(s.ctx, s.pool, rpc.BlockTagLatest)
+	token1, err := s.v3Pool.Token1(s.ctx, nil, NewToken1Request(s.pool))
 	s.Require().NoError(err)
 	s.Require().True(token1.Equal(s.tokenB))
 
-	fee, err := s.v3Pool.Fee(s.ctx, s.pool, rpc.BlockTagLatest)
+	fee, err := s.v3Pool.Fee(s.ctx, nil, NewFeeRequest(s.pool))
 	s.Require().NoError(err)
 	s.Require().Zero(s.Fee.Cmp(fee))
 
-	tickSpacing, err := s.v3Pool.TickSpacing(s.ctx, s.pool, rpc.BlockTagLatest)
+	tickSpacing, err := s.v3Pool.TickSpacing(s.ctx, nil, NewTickSpacingRequest(s.pool))
 	s.Require().NoError(err)
 	s.Require().Zero(big.NewInt(60).Cmp(tickSpacing))
 
-	maxLiquidityPerTick, err := s.v3Pool.MaxLiquidityPerTick(s.ctx, s.pool, rpc.BlockTagLatest)
+	maxLiquidityPerTick, err := s.v3Pool.MaxLiquidityPerTick(s.ctx, nil, NewMaxLiquidityPerTickRequest(s.pool))
 	s.Require().NoError(err)
 	s.Require().Positive(maxLiquidityPerTick.Sign())
 
-	slot0, err := s.v3Pool.Slot0(s.ctx, s.pool, rpc.BlockTagLatest)
+	slot0, err := s.v3Pool.Slot0(s.ctx, nil, NewSlot0Request(s.pool))
 	s.Require().NoError(err)
 	s.Require().NotZero(slot0.SqrtPriceX96.Sign())
 	s.Require().True(slot0.Unlocked)
 
-	liquidity, err := s.v3Pool.Liquidity(s.ctx, s.pool, rpc.BlockTagLatest)
+	liquidity, err := s.v3Pool.Liquidity(s.ctx, nil, NewLiquidityRequest(s.pool))
 	s.Require().NoError(err)
 	s.Require().Zero(liquidity.Sign(), "no liquidity minted yet")
 
-	protocolFees, err := s.v3Pool.ProtocolFees(s.ctx, s.pool, rpc.BlockTagLatest)
+	protocolFees, err := s.v3Pool.ProtocolFees(s.ctx, nil, NewProtocolFeesRequest(s.pool))
 	s.Require().NoError(err)
 	s.Require().Zero(protocolFees.Token0.Sign())
 	s.Require().Zero(protocolFees.Token1.Sign())
 
-	feeGrowthGlobal0X128, err := s.v3Pool.FeeGrowthGlobal0X128(s.ctx, s.pool, rpc.BlockTagLatest)
+	feeGrowthGlobal0X128, err := s.v3Pool.FeeGrowthGlobal0X128(s.ctx, nil, NewFeeGrowthGlobal0X128Request(s.pool))
 	s.Require().NoError(err)
 	s.Require().Zero(feeGrowthGlobal0X128.Sign())
 
-	feeGrowthGlobal1X128, err := s.v3Pool.FeeGrowthGlobal1X128(s.ctx, s.pool, rpc.BlockTagLatest)
+	feeGrowthGlobal1X128, err := s.v3Pool.FeeGrowthGlobal1X128(s.ctx, nil, NewFeeGrowthGlobal1X128Request(s.pool))
 	s.Require().NoError(err)
 	s.Require().Zero(feeGrowthGlobal1X128.Sign())
+
+	tickInfo, err := s.v3Pool.Ticks(s.ctx, nil, NewTicksRequest(s.pool, big.NewInt(-60)))
+	s.Require().NoError(err)
+	s.Require().False(tickInfo.Initialized)
+	s.Require().Zero(tickInfo.LiquidityGross.Sign())
+
+	bitmap, err := s.v3Pool.TickBitmap(s.ctx, nil, NewTickBitmapRequest(s.pool, 0))
+	s.Require().NoError(err)
+	s.Require().Zero(bitmap.Sign())
+
+	var key [32]byte
+	copy(key[:], core.Keccak256(append(append(s.from.Bytes(), 0xff, 0xff, 0xc4), 0x00, 0x00, 0x3c)).Bytes())
+	position, err := s.v3Pool.Positions(s.ctx, nil, NewPositionsRequest(s.pool, key))
+	s.Require().NoError(err)
+	s.Require().Zero(position.Liquidity.Sign())
+	s.Require().Zero(position.TokensOwed0.Sign())
+	s.Require().Zero(position.TokensOwed1.Sign())
+
+	observation, err := s.v3Pool.Observations(s.ctx, nil, NewObservationsRequest(s.pool, big.NewInt(0)))
+	s.Require().NoError(err)
+	s.Require().True(observation.Initialized)
+	s.Require().Positive(observation.BlockTimestamp.Sign())
+
+	observed, err := s.v3Pool.Observe(s.ctx, nil, NewObserveRequest(s.pool, []uint32{0}))
+	s.Require().NoError(err)
+	s.Require().Len(observed.TickCumulatives, 1)
+	s.Require().Len(observed.SecondsPerLiquidityCumulativeX128s, 1)
 
 	s.T().Logf("UniswapV3Pool %s Test03ReadMethods Result", s.pool)
 	s.T().Logf("\tFactory: %s", factory)
@@ -353,96 +389,90 @@ func (s *PoolSuite) Test03ReadMethods() {
 	s.T().Logf("\tFee: %s", fee)
 	s.T().Logf("\tTickSpacing: %s", tickSpacing)
 	s.T().Logf("\tMaxLiquidityPerTick: %s", maxLiquidityPerTick)
-	s.T().Logf("\tSlot0.SqrtPriceX96: %s", slot0.SqrtPriceX96)
+	s.T().Logf("\tSlot0: sqrtPriceX96=%s tick=%s observationCardinality=%s unlocked=%v", slot0.SqrtPriceX96, slot0.Tick, slot0.ObservationCardinality, slot0.Unlocked)
 	s.T().Logf("\tLiquidity: %s", liquidity)
+	s.T().Logf("\tProtocolFees: token0=%s token1=%s", protocolFees.Token0, protocolFees.Token1)
+	s.T().Logf("\tFeeGrowthGlobal0X128/1X128: %s/%s", feeGrowthGlobal0X128, feeGrowthGlobal1X128)
+	s.T().Logf("\tTicks(-60): liquidityGross=%s liquidityNet=%s initialized=%v", tickInfo.LiquidityGross, tickInfo.LiquidityNet, tickInfo.Initialized)
+	s.T().Logf("\tTickBitmap(0): %s", bitmap)
+	s.T().Logf("\tPositions(%s, -60, 60): liquidity=%s tokensOwed0=%s tokensOwed1=%s", s.from, position.Liquidity, position.TokensOwed0, position.TokensOwed1)
+	s.T().Logf("\tObservations(0): blockTimestamp=%s tickCumulative=%s initialized=%v", observation.BlockTimestamp, observation.TickCumulative, observation.Initialized)
+	s.T().Logf("\tObserve([0]): tickCumulatives=%v secondsPerLiquidityCumulativeX128s=%v", observed.TickCumulatives, observed.SecondsPerLiquidityCumulativeX128s)
 }
 
 func (s *PoolSuite) Test04BurnNoPosition() {
 	tickLower, tickUpper := big.NewInt(-60), big.NewInt(60)
 
-	_, _, err := s.v3Pool.CallBurn(s.ctx, NewBurnParams(s.pool, s.from, tickLower, tickUpper, big.NewInt(0)), rpc.BlockTagLatest)
-	s.Require().Error(err)
+	amount0, amount1, err := s.v3Pool.CallBurn(s.ctx, bind.NewCallOptions().WithFrom(s.from), NewBurnRequest(s.pool, tickLower, tickUpper, big.NewInt(0)))
 	s.Require().ErrorIs(err, ErrNoPosition)
-	s.T().Logf("Test04BurnNoPosition: callBurn(%s, %s, 0) reverted as expected: %v", tickLower, tickUpper, err)
+	s.Require().Nil(amount0)
+	s.Require().Nil(amount1)
 
-	_, err = s.v3Pool.CreateBurn(s.ctx, tx.NewDynamicFeeBuilder(), NewBurnParams(s.pool, s.from, tickLower, tickUpper, big.NewInt(0)))
-	s.Require().Error(err)
+	s.T().Logf("UniswapV3Pool %s Test04BurnNoPosition Result", s.pool)
+	s.T().Logf("\tCallBurn(%s, %s, 0) error: %v", tickLower, tickUpper, err)
+
+	revertTx, revertHash, err := s.v3Pool.Burn(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewBurnRequest(s.pool, tickLower, tickUpper, big.NewInt(0)))
 	s.Require().ErrorIs(err, ErrNoPosition)
-	s.T().Logf("Test04BurnNoPosition: createBurn(%s, %s, 0) reverted as expected: %v", tickLower, tickUpper, err)
+	s.Require().Nil(revertTx)
+	s.Require().Nil(revertHash)
+
+	s.T().Logf("\tBurn(%s, %s, 0) error: %v", tickLower, tickUpper, err)
 }
 
 func (s *PoolSuite) Test05CollectZeroLiquidity() {
 	tickLower, tickUpper := big.NewInt(-60), big.NewInt(60)
 
-	predictedAmount0, predictedAmount1, err := s.v3Pool.CallCollect(s.ctx, NewPoolCollectParams(s.pool, s.from, s.from, tickLower, tickUpper, big.NewInt(0), big.NewInt(0)), rpc.BlockTagLatest)
+	predictedAmount0, predictedAmount1, err := s.v3Pool.CallCollect(s.ctx, bind.NewCallOptions().WithFrom(s.from), NewPoolCollectRequest(s.pool, s.from, tickLower, tickUpper, big.NewInt(0), big.NewInt(0)))
 	s.Require().NoError(err)
 	s.Require().Zero(predictedAmount0.Sign())
 	s.Require().Zero(predictedAmount1.Sign())
-	s.T().Logf("Test05CollectZeroLiquidity: predicted amount0=%s amount1=%s", predictedAmount0, predictedAmount1)
 
 	collectBuilder := tx.NewDynamicFeeBuilder()
 	collectBuilder.PriceBuffer(150)
-	unsigned, err := s.v3Pool.CreateCollect(s.ctx, collectBuilder, NewPoolCollectParams(s.pool, s.from, s.from, tickLower, tickUpper, big.NewInt(0), big.NewInt(0)))
+	sentTx, hash, err := s.v3Pool.Collect(s.ctx, bind.NewTransactOptions(s.signer, collectBuilder), NewPoolCollectRequest(s.pool, s.from, tickLower, tickUpper, big.NewInt(0), big.NewInt(0)))
 	s.Require().NoError(err)
-	s.Require().NoError(unsigned.Sign(s.signer))
 	s.mu.Lock()
-	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
+	s.totalFee.Add(s.totalFee, sentTx.MaxFee())
 	s.mu.Unlock()
-	s.T().Logf("Test05CollectZeroLiquidity: signed collect (nonce %d, maxFee %s)", unsigned.AddressNonce(), unsigned.MaxFee())
 
-	hash, err := s.v3Pool.Collect(s.ctx, unsigned)
-	s.Require().NoError(err)
-	s.T().Logf("Test05CollectZeroLiquidity: broadcast collect, tx %s", hash)
-
-	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(receipt.Status, "collect transaction reverted")
-	s.T().Logf("Test05CollectZeroLiquidity: mined in block %d", receipt.BlockNumber)
 
 	collected, err := ExtractCollect(receipt.Logs)
 	s.Require().NoError(err)
 	s.Require().Len(collected, 1)
+	s.Require().True(collected[0].Contract.Equal(s.pool))
 	s.Require().True(collected[0].Owner.Equal(s.from))
 	s.Require().True(collected[0].Recipient.Equal(s.from))
 	s.Require().Zero(tickLower.Cmp(collected[0].TickLower))
 	s.Require().Zero(tickUpper.Cmp(collected[0].TickUpper))
 	s.Require().Zero(collected[0].Amount0.Sign())
 	s.Require().Zero(collected[0].Amount1.Sign())
-	s.T().Logf("Test05CollectZeroLiquidity: Collect event confirms amount0=%s amount1=%s", collected[0].Amount0, collected[0].Amount1)
 
 	s.T().Logf("UniswapV3Pool %s Test05CollectZeroLiquidity Result", s.pool)
-	s.T().Logf("\tTickLower: %s", tickLower)
-	s.T().Logf("\tTickUpper: %s", tickUpper)
-	s.T().Logf("\tAmount0: %s", collected[0].Amount0)
-	s.T().Logf("\tAmount1: %s", collected[0].Amount1)
-	s.T().Logf("\tTx: %s", hash)
+	s.T().Logf("\tCallCollect predicted amount0=%s amount1=%s", predictedAmount0, predictedAmount1)
+	s.T().Logf("\tCollect event: owner=%s recipient=%s tickLower=%s tickUpper=%s amount0=%s amount1=%s", collected[0].Owner, collected[0].Recipient, collected[0].TickLower, collected[0].TickUpper, collected[0].Amount0, collected[0].Amount1)
+	s.T().Logf("\tTx: %s (nonce %d, block %d, gas %d)", hash, sentTx.AddressNonce(), receipt.BlockNumber, receipt.GasUsed)
 }
 
 func (s *PoolSuite) Test06IncreaseObservationCardinalityNext() {
-	before, err := s.v3Pool.Slot0(s.ctx, s.pool, rpc.BlockTagLatest)
+	before, err := s.v3Pool.Slot0(s.ctx, nil, NewSlot0Request(s.pool))
 	s.Require().NoError(err)
-	s.T().Logf("Test06IncreaseObservationCardinalityNext: observationCardinalityNext before=%s", before.ObservationCardinalityNext)
 
 	next := uint16(before.ObservationCardinalityNext.Uint64() + 5)
 
 	increaseBuilder := tx.NewDynamicFeeBuilder()
 	increaseBuilder.PriceBuffer(150)
-	unsigned, err := s.v3Pool.CreateIncreaseObservationCardinalityNext(s.ctx, increaseBuilder, NewIncreaseObservationCardinalityNextParams(s.pool, s.from, next))
+	sentTx, hash, err := s.v3Pool.IncreaseObservationCardinalityNext(s.ctx, bind.NewTransactOptions(s.signer, increaseBuilder), NewIncreaseObservationCardinalityNextRequest(s.pool, next))
 	s.Require().NoError(err)
-	s.Require().NoError(unsigned.Sign(s.signer))
 	s.mu.Lock()
-	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
+	s.totalFee.Add(s.totalFee, sentTx.MaxFee())
 	s.mu.Unlock()
-	s.T().Logf("Test06IncreaseObservationCardinalityNext: signed increaseObservationCardinalityNext(%d) (nonce %d, maxFee %s)", next, unsigned.AddressNonce(), unsigned.MaxFee())
 
-	hash, err := s.v3Pool.IncreaseObservationCardinalityNext(s.ctx, unsigned)
-	s.Require().NoError(err)
-	s.T().Logf("Test06IncreaseObservationCardinalityNext: broadcast increaseObservationCardinalityNext, tx %s", hash)
-
-	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(receipt.Status, "increaseObservationCardinalityNext transaction reverted")
-	s.T().Logf("Test06IncreaseObservationCardinalityNext: mined in block %d", receipt.BlockNumber)
 
 	increased, err := ExtractIncreaseObservationCardinalityNext(receipt.Logs)
 	s.Require().NoError(err)
@@ -450,53 +480,180 @@ func (s *PoolSuite) Test06IncreaseObservationCardinalityNext() {
 	s.Require().True(increased[0].Contract.Equal(s.pool))
 	s.Require().Zero(before.ObservationCardinalityNext.Cmp(increased[0].Old))
 	s.Require().Zero(big.NewInt(int64(next)).Cmp(increased[0].New))
-	s.T().Logf("Test06IncreaseObservationCardinalityNext: event confirms old=%s new=%s", increased[0].Old, increased[0].New)
 
-	after, err := s.v3Pool.Slot0(s.ctx, s.pool, rpc.BlockTagLatest)
-	s.Require().NoError(err)
+	var after *Slot0
+	s.Require().Eventually(func() bool {
+		var err error
+		after, err = s.v3Pool.Slot0(s.ctx, bind.NewCallOptions().WithBlock(fmt.Sprintf("0x%x", receipt.BlockNumber)), NewSlot0Request(s.pool))
+		return err == nil
+	}, 20*time.Second, s.ReceiptPollInterval, "slot0 not readable at the receipt block")
 	s.Require().Zero(big.NewInt(int64(next)).Cmp(after.ObservationCardinalityNext))
 
 	s.T().Logf("UniswapV3Pool %s Test06IncreaseObservationCardinalityNext Result", s.pool)
-	s.T().Logf("\tObservationCardinalityNext: %s -> %s", before.ObservationCardinalityNext, after.ObservationCardinalityNext)
-	s.T().Logf("\tTx: %s", hash)
+	s.T().Logf("\tRequest: observationCardinalityNext=%d", next)
+	s.T().Logf("\tIncreaseObservationCardinalityNext event: old=%s new=%s", increased[0].Old, increased[0].New)
+	s.T().Logf("\tSlot0.ObservationCardinalityNext: %s -> %s", before.ObservationCardinalityNext, after.ObservationCardinalityNext)
+	s.T().Logf("\tTx: %s (nonce %d, block %d, gas %d)", hash, sentTx.AddressNonce(), receipt.BlockNumber, receipt.GasUsed)
 }
 
 func (s *PoolSuite) Test07BurnTickLowerGreaterThanOrEqualUpper() {
-	_, err := s.v3Pool.CreateBurn(s.ctx, tx.NewDynamicFeeBuilder(), NewBurnParams(s.pool, s.from, big.NewInt(60), big.NewInt(-60), big.NewInt(0)))
-	s.Require().Error(err)
+	revertTx, revertHash, err := s.v3Pool.Burn(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewBurnRequest(s.pool, big.NewInt(60), big.NewInt(-60), big.NewInt(0)))
 	s.Require().ErrorIs(err, ErrTickLowerGreaterThanOrEqual)
-	s.T().Logf("Test07BurnTickLowerGreaterThanOrEqualUpper: burn(60, -60, 0) reverted as expected: %v", err)
+	s.Require().Nil(revertTx)
+	s.Require().Nil(revertHash)
+
+	s.T().Logf("UniswapV3Pool %s Test07BurnTickLowerGreaterThanOrEqualUpper Result", s.pool)
+	s.T().Logf("\tRequest: tickLower=60 tickUpper=-60 amount=0")
+	s.T().Logf("\tError: %v", err)
 }
 
 func (s *PoolSuite) Test08BurnTickLowerTooLow() {
 	tooLow := big.NewInt(-887273)
-	_, err := s.v3Pool.CreateBurn(s.ctx, tx.NewDynamicFeeBuilder(), NewBurnParams(s.pool, s.from, tooLow, big.NewInt(60), big.NewInt(0)))
-	s.Require().Error(err)
+
+	revertTx, revertHash, err := s.v3Pool.Burn(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewBurnRequest(s.pool, tooLow, big.NewInt(60), big.NewInt(0)))
 	s.Require().ErrorIs(err, ErrTickLowerTooLow)
-	s.T().Logf("Test08BurnTickLowerTooLow: burn(%s, 60, 0) reverted as expected: %v", tooLow, err)
+	s.Require().Nil(revertTx)
+	s.Require().Nil(revertHash)
+
+	s.T().Logf("UniswapV3Pool %s Test08BurnTickLowerTooLow Result", s.pool)
+	s.T().Logf("\tRequest: tickLower=%s (MIN_TICK-1) tickUpper=60 amount=0", tooLow)
+	s.T().Logf("\tError: %v", err)
 }
 
 func (s *PoolSuite) Test09BurnTickUpperTooHigh() {
 	tooHigh := big.NewInt(887273)
-	_, err := s.v3Pool.CreateBurn(s.ctx, tx.NewDynamicFeeBuilder(), NewBurnParams(s.pool, s.from, big.NewInt(-60), tooHigh, big.NewInt(0)))
-	s.Require().Error(err)
+
+	revertTx, revertHash, err := s.v3Pool.Burn(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewBurnRequest(s.pool, big.NewInt(-60), tooHigh, big.NewInt(0)))
 	s.Require().ErrorIs(err, ErrTickUpperTooHigh)
-	s.T().Logf("Test09BurnTickUpperTooHigh: burn(-60, %s, 0) reverted as expected: %v", tooHigh, err)
+	s.Require().Nil(revertTx)
+	s.Require().Nil(revertHash)
+
+	s.T().Logf("UniswapV3Pool %s Test09BurnTickUpperTooHigh Result", s.pool)
+	s.T().Logf("\tRequest: tickLower=-60 tickUpper=%s (MAX_TICK+1) amount=0", tooHigh)
+	s.T().Logf("\tError: %v", err)
 }
 
 func (s *PoolSuite) Test10SetFeeProtocolForbidden() {
-	_, err := s.v3Factory.Owner(s.ctx, nil, NewOwnerRequest(s.factory))
+	owner, err := s.v3Factory.Owner(s.ctx, nil, NewOwnerRequest(s.factory))
 	s.Require().NoError(err)
+	s.Require().False(owner.Equal(s.from), "s.from shouldn't be the factory owner")
 
-	_, err = s.v3Pool.CreateSetFeeProtocol(s.ctx, tx.NewDynamicFeeBuilder(), NewSetFeeProtocolParams(s.pool, s.from, 4, 10))
-	s.Require().Error(err)
+	revertTx, revertHash, err := s.v3Pool.SetFeeProtocol(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewSetFeeProtocolRequest(s.pool, 4, 10))
 	s.Require().ErrorIs(err, ErrReverted)
-	s.T().Logf("Test10SetFeeProtocolForbidden: setFeeProtocol(4, 10) from non-owner %s reverted as expected: %v", s.from, err)
+	s.Require().Nil(revertTx)
+	s.Require().Nil(revertHash)
+
+	s.T().Logf("UniswapV3Pool %s Test10SetFeeProtocolForbidden Result", s.pool)
+	s.T().Logf("\tCaller: %s (factory owner is %s)", s.from, owner)
+	s.T().Logf("\tRequest: feeProtocol0=4 feeProtocol1=10")
+	s.T().Logf("\tError: %v", err)
 }
 
 func (s *PoolSuite) Test11CollectProtocolForbidden() {
-	_, err := s.v3Pool.CreateCollectProtocol(s.ctx, tx.NewDynamicFeeBuilder(), NewCollectProtocolParams(s.pool, s.from, s.from, big.NewInt(0), big.NewInt(0)))
-	s.Require().Error(err)
+	owner, err := s.v3Factory.Owner(s.ctx, nil, NewOwnerRequest(s.factory))
+	s.Require().NoError(err)
+
+	amount0, amount1, err := s.v3Pool.CallCollectProtocol(s.ctx, bind.NewCallOptions().WithFrom(s.from), NewCollectProtocolRequest(s.pool, s.from, big.NewInt(0), big.NewInt(0)))
 	s.Require().ErrorIs(err, ErrReverted)
-	s.T().Logf("Test11CollectProtocolForbidden: collectProtocol(%s, 0, 0) from non-owner %s reverted as expected: %v", s.from, s.from, err)
+	s.Require().Nil(amount0)
+	s.Require().Nil(amount1)
+
+	s.T().Logf("UniswapV3Pool %s Test11CollectProtocolForbidden Result", s.pool)
+	s.T().Logf("\tCaller: %s (factory owner is %s)", s.from, owner)
+	s.T().Logf("\tCallCollectProtocol error: %v", err)
+
+	revertTx, revertHash, err := s.v3Pool.CollectProtocol(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewCollectProtocolRequest(s.pool, s.from, big.NewInt(0), big.NewInt(0)))
+	s.Require().ErrorIs(err, ErrReverted)
+	s.Require().Nil(revertTx)
+	s.Require().Nil(revertHash)
+
+	s.T().Logf("\tCollectProtocol error: %v", err)
+}
+
+func (s *PoolSuite) Test12MintZeroAmount() {
+	amount0, amount1, err := s.v3Pool.CallMint(s.ctx, bind.NewCallOptions().WithFrom(s.from), NewPoolMintRequest(s.pool, s.from, big.NewInt(-60), big.NewInt(60), big.NewInt(0), nil))
+	s.Require().ErrorIs(err, ErrReverted)
+	s.Require().Nil(amount0)
+	s.Require().Nil(amount1)
+
+	s.T().Logf("UniswapV3Pool %s Test12MintZeroAmount Result", s.pool)
+	s.T().Logf("\tCallMint(-60, 60, 0) error: %v", err)
+
+	revertTx, revertHash, err := s.v3Pool.Mint(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewPoolMintRequest(s.pool, s.from, big.NewInt(-60), big.NewInt(60), big.NewInt(0), nil))
+	s.Require().ErrorIs(err, ErrReverted)
+	s.Require().Nil(revertTx)
+	s.Require().Nil(revertHash)
+
+	s.T().Logf("\tMint(-60, 60, 0) error: %v", err)
+}
+
+func (s *PoolSuite) Test13MintWithoutCallback() {
+	amount0, amount1, err := s.v3Pool.CallMint(s.ctx, bind.NewCallOptions().WithFrom(s.from), NewPoolMintRequest(s.pool, s.from, big.NewInt(-60), big.NewInt(60), big.NewInt(1_000_000), nil))
+	s.Require().ErrorIs(err, ErrReverted)
+	s.Require().Nil(amount0)
+	s.Require().Nil(amount1)
+
+	s.T().Logf("UniswapV3Pool %s Test13MintWithoutCallback Result", s.pool)
+	s.T().Logf("\tCaller: %s (EOA, no uniswapV3MintCallback)", s.from)
+	s.T().Logf("\tCallMint(-60, 60, 1000000) error: %v", err)
+}
+
+func (s *PoolSuite) Test14SwapAmountSpecifiedZero() {
+	amount0, amount1, err := s.v3Pool.CallSwap(s.ctx, bind.NewCallOptions().WithFrom(s.from), NewSwapRequest(s.pool, s.from, true, big.NewInt(0), big.NewInt(4295128740), nil))
+	s.Require().ErrorIs(err, ErrAmountSpecifiedZero)
+	s.Require().Nil(amount0)
+	s.Require().Nil(amount1)
+
+	s.T().Logf("UniswapV3Pool %s Test14SwapAmountSpecifiedZero Result", s.pool)
+	s.T().Logf("\tCallSwap(zeroForOne=true, amountSpecified=0) error: %v", err)
+
+	revertTx, revertHash, err := s.v3Pool.Swap(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewSwapRequest(s.pool, s.from, true, big.NewInt(0), big.NewInt(4295128740), nil))
+	s.Require().ErrorIs(err, ErrAmountSpecifiedZero)
+	s.Require().Nil(revertTx)
+	s.Require().Nil(revertHash)
+
+	s.T().Logf("\tSwap(zeroForOne=true, amountSpecified=0) error: %v", err)
+}
+
+func (s *PoolSuite) Test15SwapInvalidSqrtPriceLimit() {
+	slot0, err := s.v3Pool.Slot0(s.ctx, nil, NewSlot0Request(s.pool))
+	s.Require().NoError(err)
+
+	limit := new(big.Int).Add(slot0.SqrtPriceX96, big.NewInt(1))
+
+	amount0, amount1, err := s.v3Pool.CallSwap(s.ctx, bind.NewCallOptions().WithFrom(s.from), NewSwapRequest(s.pool, s.from, true, big.NewInt(1_000), limit, nil))
+	s.Require().ErrorIs(err, ErrInvalidSqrtPriceLimit)
+	s.Require().Nil(amount0)
+	s.Require().Nil(amount1)
+
+	s.T().Logf("UniswapV3Pool %s Test15SwapInvalidSqrtPriceLimit Result", s.pool)
+	s.T().Logf("\tSlot0.SqrtPriceX96: %s", slot0.SqrtPriceX96)
+	s.T().Logf("\tRequest: zeroForOne=true amountSpecified=1000 sqrtPriceLimitX96=%s (above current price)", limit)
+	s.T().Logf("\tError: %v", err)
+}
+
+func (s *PoolSuite) Test16FlashNoLiquidity() {
+	liquidity, err := s.v3Pool.Liquidity(s.ctx, nil, NewLiquidityRequest(s.pool))
+	s.Require().NoError(err)
+	s.Require().Zero(liquidity.Sign())
+
+	revertTx, revertHash, err := s.v3Pool.Flash(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewFlashRequest(s.pool, s.from, big.NewInt(1), big.NewInt(0), nil))
+	s.Require().ErrorIs(err, ErrNoLiquidity)
+	s.Require().Nil(revertTx)
+	s.Require().Nil(revertHash)
+
+	s.T().Logf("UniswapV3Pool %s Test16FlashNoLiquidity Result", s.pool)
+	s.T().Logf("\tLiquidity: %s", liquidity)
+	s.T().Logf("\tRequest: recipient=%s amount0=1 amount1=0", s.from)
+	s.T().Logf("\tError: %v", err)
+}
+
+func (s *PoolSuite) Test17SnapshotCumulativesInsideUninitializedTicks() {
+	snapshot, err := s.v3Pool.SnapshotCumulativesInside(s.ctx, nil, NewSnapshotCumulativesInsideRequest(s.pool, big.NewInt(-60), big.NewInt(60)))
+	s.Require().ErrorIs(err, ErrReverted)
+	s.Require().Nil(snapshot)
+
+	s.T().Logf("UniswapV3Pool %s Test17SnapshotCumulativesInsideUninitializedTicks Result", s.pool)
+	s.T().Logf("\tRequest: tickLower=-60 tickUpper=60 (neither initialized)")
+	s.T().Logf("\tError: %v", err)
 }
