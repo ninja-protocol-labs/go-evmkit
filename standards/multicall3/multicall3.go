@@ -350,9 +350,7 @@ func (m *Multicall3) GetBasefee(ctx context.Context, opts *bind.CallOptions, req
 		return nil, fmt.Errorf("multicall3: getBasefee: %w", err)
 	}
 
-	calldata := EncodeGetBasefee()
-
-	data, err := bind.Call(ctx, m.c, opts, req.Contract, calldata)
+	data, err := bind.Call(ctx, m.c, opts, req.Contract, EncodeGetBasefee())
 	if err != nil {
 		if _, ok := errors.AsType[*rpc.ResponseError](err); ok {
 			return nil, fmt.Errorf("multicall3: getBasefee: %w: %w", ErrBasefeeNotImplemented, err)
@@ -398,9 +396,7 @@ func (m *Multicall3) GetBlockNumber(ctx context.Context, opts *bind.CallOptions,
 		return nil, fmt.Errorf("multicall3: getBlockNumber: %w", err)
 	}
 
-	calldata := EncodeGetBlockNumber()
-
-	data, err := bind.Call(ctx, m.c, opts, req.Contract, calldata)
+	data, err := bind.Call(ctx, m.c, opts, req.Contract, EncodeGetBlockNumber())
 	if err != nil {
 		return nil, fmt.Errorf("multicall3: getBlockNumber: %w", m.wrapRevertError(err))
 	}
@@ -419,9 +415,7 @@ func (m *Multicall3) GetChainID(ctx context.Context, opts *bind.CallOptions, req
 		return nil, fmt.Errorf("multicall3: getChainId: %w", err)
 	}
 
-	calldata := EncodeGetChainID()
-
-	data, err := bind.Call(ctx, m.c, opts, req.Contract, calldata)
+	data, err := bind.Call(ctx, m.c, opts, req.Contract, EncodeGetChainID())
 	if err != nil {
 		return nil, fmt.Errorf("multicall3: getChainId: %w", m.wrapRevertError(err))
 	}
@@ -440,9 +434,7 @@ func (m *Multicall3) GetCurrentBlockCoinbase(ctx context.Context, opts *bind.Cal
 		return nil, fmt.Errorf("multicall3: getCurrentBlockCoinbase: %w", err)
 	}
 
-	calldata := EncodeGetCurrentBlockCoinbase()
-
-	data, err := bind.Call(ctx, m.c, opts, req.Contract, calldata)
+	data, err := bind.Call(ctx, m.c, opts, req.Contract, EncodeGetCurrentBlockCoinbase())
 	if err != nil {
 		return nil, fmt.Errorf("multicall3: getCurrentBlockCoinbase: %w", m.wrapRevertError(err))
 	}
@@ -461,9 +453,7 @@ func (m *Multicall3) GetCurrentBlockDifficulty(ctx context.Context, opts *bind.C
 		return nil, fmt.Errorf("multicall3: getCurrentBlockDifficulty: %w", err)
 	}
 
-	calldata := EncodeGetCurrentBlockDifficulty()
-
-	data, err := bind.Call(ctx, m.c, opts, req.Contract, calldata)
+	data, err := bind.Call(ctx, m.c, opts, req.Contract, EncodeGetCurrentBlockDifficulty())
 	if err != nil {
 		return nil, fmt.Errorf("multicall3: getCurrentBlockDifficulty: %w", m.wrapRevertError(err))
 	}
@@ -482,9 +472,7 @@ func (m *Multicall3) GetCurrentBlockGasLimit(ctx context.Context, opts *bind.Cal
 		return nil, fmt.Errorf("multicall3: getCurrentBlockGasLimit: %w", err)
 	}
 
-	calldata := EncodeGetCurrentBlockGasLimit()
-
-	data, err := bind.Call(ctx, m.c, opts, req.Contract, calldata)
+	data, err := bind.Call(ctx, m.c, opts, req.Contract, EncodeGetCurrentBlockGasLimit())
 	if err != nil {
 		return nil, fmt.Errorf("multicall3: getCurrentBlockGasLimit: %w", m.wrapRevertError(err))
 	}
@@ -503,9 +491,7 @@ func (m *Multicall3) GetCurrentBlockTimestamp(ctx context.Context, opts *bind.Ca
 		return nil, fmt.Errorf("multicall3: getCurrentBlockTimestamp: %w", err)
 	}
 
-	calldata := EncodeGetCurrentBlockTimestamp()
-
-	data, err := bind.Call(ctx, m.c, opts, req.Contract, calldata)
+	data, err := bind.Call(ctx, m.c, opts, req.Contract, EncodeGetCurrentBlockTimestamp())
 	if err != nil {
 		return nil, fmt.Errorf("multicall3: getCurrentBlockTimestamp: %w", m.wrapRevertError(err))
 	}
@@ -548,9 +534,7 @@ func (m *Multicall3) GetLastBlockHash(ctx context.Context, opts *bind.CallOption
 		return nil, fmt.Errorf("multicall3: getLastBlockHash: %w", err)
 	}
 
-	calldata := EncodeGetLastBlockHash()
-
-	data, err := bind.Call(ctx, m.c, opts, req.Contract, calldata)
+	data, err := bind.Call(ctx, m.c, opts, req.Contract, EncodeGetLastBlockHash())
 	if err != nil {
 		return nil, fmt.Errorf("multicall3: getLastBlockHash: %w", m.wrapRevertError(err))
 	}

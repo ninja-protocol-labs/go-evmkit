@@ -143,13 +143,15 @@ func (s *FactorySuite) SetupSuite() {
 			return err == nil && len(code) > 0
 		}, 20*time.Second, s.ReceiptPollInterval, "no code visible at deployed token %s", token)
 
-		s.T().Logf("SetupSuite: deployed token %s %s (nonce %d, tx %s)", symbols[i], token, deployTx.AddressNonce(), hash)
+		s.T().Logf("SetupSuite: deployed token %s %s (nonce %d, tx %s, block %d, gas %d)", symbols[i], token, deployTx.AddressNonce(), hash, receipt.BlockNumber, receipt.GasUsed)
 	}
 
 	s.tokenA, s.tokenB = tokens[0], tokens[1]
 	if s.tokenA.Big().Cmp(s.tokenB.Big()) > 0 {
 		s.tokenA, s.tokenB = s.tokenB, s.tokenA
 	}
+
+	s.T().Logf("SetupSuite: factory %s, from %s, sorted tokens (%s, %s)", s.factory, s.from, s.tokenA, s.tokenB)
 }
 
 func (s *FactorySuite) TearDownSuite() {
@@ -204,28 +206,48 @@ func (s *FactorySuite) Test01CreatePair() {
 
 	atBlock := bind.NewCallOptions().WithBlock(fmt.Sprintf("0x%x", receipt.BlockNumber))
 
-	after, err := s.v2Factory.GetPair(s.ctx, atBlock, NewGetPairRequest(s.factory, s.tokenA, s.tokenB))
-	s.Require().NoError(err)
+	var after *types.Address
+	s.Require().Eventually(func() bool {
+		var err error
+		after, err = s.v2Factory.GetPair(s.ctx, atBlock, NewGetPairRequest(s.factory, s.tokenA, s.tokenB))
+		return err == nil
+	}, 20*time.Second, s.ReceiptPollInterval, "after not readable at the receipt block")
 	s.Require().True(after.Equal(predicted))
 
-	reversed, err := s.v2Factory.GetPair(s.ctx, atBlock, NewGetPairRequest(s.factory, s.tokenB, s.tokenA))
-	s.Require().NoError(err)
+	var reversed *types.Address
+	s.Require().Eventually(func() bool {
+		var err error
+		reversed, err = s.v2Factory.GetPair(s.ctx, atBlock, NewGetPairRequest(s.factory, s.tokenB, s.tokenA))
+		return err == nil
+	}, 20*time.Second, s.ReceiptPollInterval, "reversed not readable at the receipt block")
 	s.Require().True(reversed.Equal(predicted))
 
-	allPairsLengthAfter, err := s.v2Factory.AllPairsLength(s.ctx, atBlock, NewAllPairsLengthRequest(s.factory))
-	s.Require().NoError(err)
+	var allPairsLengthAfter *big.Int
+	s.Require().Eventually(func() bool {
+		var err error
+		allPairsLengthAfter, err = s.v2Factory.AllPairsLength(s.ctx, atBlock, NewAllPairsLengthRequest(s.factory))
+		return err == nil
+	}, 20*time.Second, s.ReceiptPollInterval, "allPairsLengthAfter not readable at the receipt block")
 	s.Require().Zero(created[0].AllPairsLength.Cmp(allPairsLengthAfter))
 
-	last, err := s.v2Factory.AllPairs(s.ctx, atBlock, NewAllPairsRequest(s.factory, new(big.Int).Sub(allPairsLengthAfter, big.NewInt(1))))
-	s.Require().NoError(err)
+	var last *types.Address
+	s.Require().Eventually(func() bool {
+		var err error
+		last, err = s.v2Factory.AllPairs(s.ctx, atBlock, NewAllPairsRequest(s.factory, new(big.Int).Sub(allPairsLengthAfter, big.NewInt(1))))
+		return err == nil
+	}, 20*time.Second, s.ReceiptPollInterval, "last not readable at the receipt block")
 	s.Require().True(last.Equal(predicted))
 
 	s.T().Logf("UniswapV2Factory %s Test01CreatePair Result", s.factory)
+	s.T().Logf("\tFrom: %s", s.from)
 	s.T().Logf("\tToken0: %s", s.tokenA)
 	s.T().Logf("\tToken1: %s", s.tokenB)
-	s.T().Logf("\tPair: %s", created[0].Pair)
+	s.T().Logf("\tCallCreatePair predicted: %s", predicted)
+	s.T().Logf("\tPairCreated event: token0=%s token1=%s pair=%s allPairsLength=%s", created[0].Token0, created[0].Token1, created[0].Pair, created[0].AllPairsLength)
+	s.T().Logf("\tGetPair(A,B)/GetPair(B,A): %s/%s", after, reversed)
+	s.T().Logf("\tAllPairs(%s): %s", new(big.Int).Sub(allPairsLengthAfter, big.NewInt(1)), last)
 	s.T().Logf("\tAllPairsLength: %s -> %s", allPairsLengthBefore, allPairsLengthAfter)
-	s.T().Logf("\tTx: %s (block %d)", hash, receipt.BlockNumber)
+	s.T().Logf("\tTx: %s (nonce %d, block %d, gas %d)", hash, sentTx.AddressNonce(), receipt.BlockNumber, receipt.GasUsed)
 }
 
 func (s *FactorySuite) Test02CreatePairExists() {
@@ -234,9 +256,14 @@ func (s *FactorySuite) Test02CreatePairExists() {
 	s.Require().Nil(revertTx)
 	s.Require().Nil(revertHash)
 
+	s.T().Logf("UniswapV2Factory %s Test02CreatePairExists Result", s.factory)
+	s.T().Logf("\tCreatePair(%s, %s) error: %v", s.tokenA, s.tokenB, err)
+
 	predicted, err := s.v2Factory.CallCreatePair(s.ctx, bind.NewCallOptions().WithFrom(s.from), NewCreatePairRequest(s.factory, s.tokenB, s.tokenA))
 	s.Require().ErrorIs(err, ErrPairExists)
 	s.Require().Nil(predicted)
+
+	s.T().Logf("\tCallCreatePair(%s, %s) error: %v", s.tokenB, s.tokenA, err)
 }
 
 func (s *FactorySuite) Test03CreatePairIdenticalAddresses() {
@@ -244,6 +271,10 @@ func (s *FactorySuite) Test03CreatePairIdenticalAddresses() {
 	s.Require().ErrorIs(err, ErrIdenticalAddresses)
 	s.Require().Nil(revertTx)
 	s.Require().Nil(revertHash)
+
+	s.T().Logf("UniswapV2Factory %s Test03CreatePairIdenticalAddresses Result", s.factory)
+	s.T().Logf("\tRequest: tokenA=%s tokenB=%s", s.tokenA, s.tokenA)
+	s.T().Logf("\tError: %v", err)
 }
 
 func (s *FactorySuite) Test04CreatePairZeroAddress() {
@@ -251,6 +282,10 @@ func (s *FactorySuite) Test04CreatePairZeroAddress() {
 	s.Require().ErrorIs(err, ErrZeroAddress)
 	s.Require().Nil(revertTx)
 	s.Require().Nil(revertHash)
+
+	s.T().Logf("UniswapV2Factory %s Test04CreatePairZeroAddress Result", s.factory)
+	s.T().Logf("\tRequest: tokenA=%s tokenB=%s", s.tokenA, types.ZeroAddress())
+	s.T().Logf("\tError: %v", err)
 }
 
 func (s *FactorySuite) Test05ReadMethods() {
@@ -268,23 +303,44 @@ func (s *FactorySuite) Test05ReadMethods() {
 	s.Require().NoError(err)
 	s.Require().False(first.IsZero())
 
+	last, err := s.v2Factory.AllPairs(s.ctx, nil, NewAllPairsRequest(s.factory, new(big.Int).Sub(allPairsLength, big.NewInt(1))))
+	s.Require().NoError(err)
+	s.Require().False(last.IsZero())
+
 	s.T().Logf("UniswapV2Factory %s Test05ReadMethods Result", s.factory)
 	s.T().Logf("\tFeeTo: %s", feeTo)
 	s.T().Logf("\tFeeToSetter: %s", feeToSetter)
 	s.T().Logf("\tAllPairsLength: %s", allPairsLength)
 	s.T().Logf("\tAllPairs(0): %s", first)
+	s.T().Logf("\tAllPairs(%s): %s", new(big.Int).Sub(allPairsLength, big.NewInt(1)), last)
 }
 
 func (s *FactorySuite) Test06SetFeeToForbidden() {
+	feeToSetter, err := s.v2Factory.FeeToSetter(s.ctx, nil, NewFeeToSetterRequest(s.factory))
+	s.Require().NoError(err)
+
 	revertTx, revertHash, err := s.v2Factory.SetFeeTo(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewSetFeeToRequest(s.factory, s.from))
 	s.Require().ErrorIs(err, ErrForbidden)
 	s.Require().Nil(revertTx)
 	s.Require().Nil(revertHash)
+
+	s.T().Logf("UniswapV2Factory %s Test06SetFeeToForbidden Result", s.factory)
+	s.T().Logf("\tCaller: %s (feeToSetter is %s)", s.from, feeToSetter)
+	s.T().Logf("\tRequest: feeTo=%s", s.from)
+	s.T().Logf("\tError: %v", err)
 }
 
 func (s *FactorySuite) Test07SetFeeToSetterForbidden() {
+	feeToSetter, err := s.v2Factory.FeeToSetter(s.ctx, nil, NewFeeToSetterRequest(s.factory))
+	s.Require().NoError(err)
+
 	revertTx, revertHash, err := s.v2Factory.SetFeeToSetter(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewSetFeeToSetterRequest(s.factory, s.from))
 	s.Require().ErrorIs(err, ErrForbidden)
 	s.Require().Nil(revertTx)
 	s.Require().Nil(revertHash)
+
+	s.T().Logf("UniswapV2Factory %s Test07SetFeeToSetterForbidden Result", s.factory)
+	s.T().Logf("\tCaller: %s (feeToSetter is %s)", s.from, feeToSetter)
+	s.T().Logf("\tRequest: feeToSetter=%s", s.from)
+	s.T().Logf("\tError: %v", err)
 }

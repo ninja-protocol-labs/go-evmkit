@@ -341,7 +341,7 @@ func (s *RouterSwapSuite) swap(path []*types.Address, amountIn *big.Int, nativeI
 	}
 	for _, sw := range swaps {
 		s.T().Logf("\t\tSwap: contract=%s sender=%s to=%s amount0In=%s amount1In=%s amount0Out=%s amount1Out=%s",
-			sw.Pair, sw.Sender, sw.To, sw.Amount0In, sw.Amount1In, sw.Amount0Out, sw.Amount1Out)
+			sw.Contract, sw.Sender, sw.To, sw.Amount0In, sw.Amount1In, sw.Amount0Out, sw.Amount1Out)
 	}
 
 	return actualAmountOut
@@ -699,7 +699,7 @@ func (s *RouterLifeCycleSuite) Test02AddLiquidity() {
 
 	var reserves *Reserves
 	s.Require().Eventually(func() bool {
-		reserves, err = s.v2Pair.GetReserves(s.ctx, s.pair, rpc.BlockTagLatest)
+		reserves, err = s.v2Pair.GetReserves(s.ctx, nil, NewGetReservesRequest(s.pair))
 		return err == nil && reserves.Reserve0.Sign() > 0 && reserves.Reserve1.Sign() > 0
 	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "reserves not visible after addLiquidity")
 	s.Require().Zero(s.liquidityAmount.Cmp(reserves.Reserve0))
@@ -715,7 +715,7 @@ func (s *RouterLifeCycleSuite) Test03GetAmounts() {
 	path := []*types.Address{s.token0, s.token1}
 	s.T().Logf("Test03GetAmounts: path=[%s, %s] swapAmount=%s", s.token0, s.token1, s.swapAmount)
 
-	reserves, err := s.v2Pair.GetReserves(s.ctx, s.pair, rpc.BlockTagLatest)
+	reserves, err := s.v2Pair.GetReserves(s.ctx, nil, NewGetReservesRequest(s.pair))
 	s.Require().NoError(err)
 	s.T().Logf("Test03GetAmounts: pair %s reserves reserve0=%s reserve1=%s", s.pair, reserves.Reserve0, reserves.Reserve1)
 
@@ -910,7 +910,7 @@ func (s *RouterLifeCycleSuite) Test05RemoveLiquidity() {
 	s.T().Logf("Test05RemoveLiquidity: balances after: token0=%s (%s -> %s) token1=%s (%s -> %s), remaining LP balance=%s",
 		afterA, beforeA, afterA, afterB, beforeB, afterB, remainingLiquidity)
 
-	reserves, err := s.v2Pair.GetReserves(s.ctx, s.pair, rpc.BlockTagLatest)
+	reserves, err := s.v2Pair.GetReserves(s.ctx, nil, NewGetReservesRequest(s.pair))
 	s.Require().NoError(err)
 	s.T().Logf("Test05RemoveLiquidity: pair %s reserves after full exit: reserve0=%s reserve1=%s", s.pair, reserves.Reserve0, reserves.Reserve1)
 }
@@ -977,7 +977,7 @@ func (s *RouterLifeCycleSuite) Test06AddLiquidityETH() {
 
 	var reserves *Reserves
 	s.Require().Eventually(func() bool {
-		reserves, err = s.v2Pair.GetReserves(s.ctx, s.pairETH, rpc.BlockTagLatest)
+		reserves, err = s.v2Pair.GetReserves(s.ctx, nil, NewGetReservesRequest(s.pairETH))
 		return err == nil && reserves.Reserve0.Sign() > 0 && reserves.Reserve1.Sign() > 0
 	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "reserves not visible after addLiquidityETH")
 	s.T().Logf("Test06AddLiquidityETH: pair %s reserves reserve0=%s reserve1=%s", s.pairETH, reserves.Reserve0, reserves.Reserve1)
@@ -991,9 +991,9 @@ func (s *RouterLifeCycleSuite) Test07SwapExactETHForTokens() {
 	path := []*types.Address{s.wethAddr, s.token0}
 	deadline := big.NewInt(time.Now().Add(time.Duration(s.DeadlineSeconds) * time.Second).Unix())
 
-	pairToken0, err := s.v2Pair.Token0(s.ctx, s.pairETH, rpc.BlockTagLatest)
+	pairToken0, err := s.v2Pair.Token0(s.ctx, nil, NewToken0Request(s.pairETH))
 	s.Require().NoError(err)
-	reserves, err := s.v2Pair.GetReserves(s.ctx, s.pairETH, rpc.BlockTagLatest)
+	reserves, err := s.v2Pair.GetReserves(s.ctx, nil, NewGetReservesRequest(s.pairETH))
 	s.Require().NoError(err)
 
 	wethReserve := reserves.Reserve1
@@ -1039,7 +1039,7 @@ func (s *RouterLifeCycleSuite) Test07SwapExactETHForTokens() {
 	swaps, err := ExtractSwap(receipt.Logs)
 	s.Require().NoError(err)
 	s.Require().Len(swaps, 1)
-	s.Require().True(swaps[0].Pair.Equal(s.pairETH))
+	s.Require().True(swaps[0].Contract.Equal(s.pairETH))
 	s.T().Logf("Test07SwapExactETHForTokens: Swap sender=%s to=%s amount0In=%s amount1In=%s amount0Out=%s amount1Out=%s",
 		swaps[0].Sender, swaps[0].To, swaps[0].Amount0In, swaps[0].Amount1In, swaps[0].Amount0Out, swaps[0].Amount1Out)
 
@@ -1107,7 +1107,7 @@ func (s *RouterLifeCycleSuite) Test08SwapExactTokensForETH() {
 	swaps, err := ExtractSwap(receipt.Logs)
 	s.Require().NoError(err)
 	s.Require().Len(swaps, 1)
-	s.Require().True(swaps[0].Pair.Equal(s.pairETH))
+	s.Require().True(swaps[0].Contract.Equal(s.pairETH))
 	s.T().Logf("Test08SwapExactTokensForETH: Swap sender=%s to=%s amount0In=%s amount1In=%s amount0Out=%s amount1Out=%s",
 		swaps[0].Sender, swaps[0].To, swaps[0].Amount0In, swaps[0].Amount1In, swaps[0].Amount0Out, swaps[0].Amount1Out)
 
@@ -1172,7 +1172,7 @@ func (s *RouterLifeCycleSuite) Test09SwapETHForExactTokens() {
 	swaps, err := ExtractSwap(receipt.Logs)
 	s.Require().NoError(err)
 	s.Require().Len(swaps, 1)
-	s.Require().True(swaps[0].Pair.Equal(s.pairETH))
+	s.Require().True(swaps[0].Contract.Equal(s.pairETH))
 	actualOut := swaps[0].Amount0Out
 	actualIn := swaps[0].Amount1In
 	if actualOut.Sign() == 0 {
@@ -1237,9 +1237,9 @@ func (s *RouterLifeCycleSuite) Test12SwapTokensForExactTokens() {
 	path := []*types.Address{s.token0, s.token1}
 	deadline := big.NewInt(time.Now().Add(time.Duration(s.DeadlineSeconds) * time.Second).Unix())
 
-	pairToken0, err := s.v2Pair.Token0(s.ctx, s.pair, rpc.BlockTagLatest)
+	pairToken0, err := s.v2Pair.Token0(s.ctx, nil, NewToken0Request(s.pair))
 	s.Require().NoError(err)
-	currentReserves, err := s.v2Pair.GetReserves(s.ctx, s.pair, rpc.BlockTagLatest)
+	currentReserves, err := s.v2Pair.GetReserves(s.ctx, nil, NewGetReservesRequest(s.pair))
 	s.Require().NoError(err)
 	reserve0, reserve1 := currentReserves.Reserve0, currentReserves.Reserve1
 	if !pairToken0.Equal(s.token0) {
@@ -1292,7 +1292,7 @@ func (s *RouterLifeCycleSuite) Test12SwapTokensForExactTokens() {
 	s.Require().True(addReceipt.Status, "addLiquidity transaction reverted")
 	s.T().Logf("Test12SwapTokensForExactTokens: re-add liquidity confirmed in block %d", addReceipt.BlockNumber)
 
-	reserves, err := s.v2Pair.GetReserves(s.ctx, s.pair, rpc.BlockTagLatest)
+	reserves, err := s.v2Pair.GetReserves(s.ctx, nil, NewGetReservesRequest(s.pair))
 	s.Require().NoError(err)
 	s.T().Logf("Test12SwapTokensForExactTokens: pair %s reserves reserve0=%s reserve1=%s", s.pair, reserves.Reserve0, reserves.Reserve1)
 
@@ -1380,9 +1380,9 @@ func (s *RouterLifeCycleSuite) Test13SwapTokensForExactETH() {
 	path := []*types.Address{s.token0, s.wethAddr}
 	deadline := big.NewInt(time.Now().Add(time.Duration(s.DeadlineSeconds) * time.Second).Unix())
 
-	pairToken0, err := s.v2Pair.Token0(s.ctx, s.pairETH, rpc.BlockTagLatest)
+	pairToken0, err := s.v2Pair.Token0(s.ctx, nil, NewToken0Request(s.pairETH))
 	s.Require().NoError(err)
-	reserves, err := s.v2Pair.GetReserves(s.ctx, s.pairETH, rpc.BlockTagLatest)
+	reserves, err := s.v2Pair.GetReserves(s.ctx, nil, NewGetReservesRequest(s.pairETH))
 	s.Require().NoError(err)
 
 	wethReserve := reserves.Reserve1
@@ -1446,7 +1446,7 @@ func (s *RouterLifeCycleSuite) Test13SwapTokensForExactETH() {
 	swaps, err := ExtractSwap(receipt.Logs)
 	s.Require().NoError(err)
 	s.Require().Len(swaps, 1)
-	s.Require().True(swaps[0].Pair.Equal(s.pairETH))
+	s.Require().True(swaps[0].Contract.Equal(s.pairETH))
 	actualOut, actualIn := swaps[0].Amount0Out, swaps[0].Amount1In
 	if actualOut.Sign() == 0 {
 		actualOut, actualIn = swaps[0].Amount1Out, swaps[0].Amount0In
@@ -1744,9 +1744,9 @@ func (s *RouterLifeCycleSuite) Test17SwapExactTokensForTokensSupportingFeeOnTran
 	path := []*types.Address{s.token0, s.token1}
 	deadline := big.NewInt(time.Now().Add(time.Duration(s.DeadlineSeconds) * time.Second).Unix())
 
-	pairToken0, err := s.v2Pair.Token0(s.ctx, s.pair, rpc.BlockTagLatest)
+	pairToken0, err := s.v2Pair.Token0(s.ctx, nil, NewToken0Request(s.pair))
 	s.Require().NoError(err)
-	currentReserves, err := s.v2Pair.GetReserves(s.ctx, s.pair, rpc.BlockTagLatest)
+	currentReserves, err := s.v2Pair.GetReserves(s.ctx, nil, NewGetReservesRequest(s.pair))
 	s.Require().NoError(err)
 	reserve0, reserve1 := currentReserves.Reserve0, currentReserves.Reserve1
 	if !pairToken0.Equal(s.token0) {
@@ -1801,7 +1801,7 @@ func (s *RouterLifeCycleSuite) Test17SwapExactTokensForTokensSupportingFeeOnTran
 
 	wantToken0Reserve := new(big.Int).Add(reserve0, amount0Desired)
 	s.Require().Eventually(func() bool {
-		newReserves, err := s.v2Pair.GetReserves(s.ctx, s.pair, rpc.BlockTagLatest)
+		newReserves, err := s.v2Pair.GetReserves(s.ctx, nil, NewGetReservesRequest(s.pair))
 		if err != nil {
 			return false
 		}
@@ -1872,9 +1872,9 @@ func (s *RouterLifeCycleSuite) Test18SwapExactETHForTokensSupportingFeeOnTransfe
 	path := []*types.Address{s.wethAddr, s.token0}
 	deadline := big.NewInt(time.Now().Add(time.Duration(s.DeadlineSeconds) * time.Second).Unix())
 
-	pairToken0, err := s.v2Pair.Token0(s.ctx, s.pairETH, rpc.BlockTagLatest)
+	pairToken0, err := s.v2Pair.Token0(s.ctx, nil, NewToken0Request(s.pairETH))
 	s.Require().NoError(err)
-	currentReserves, err := s.v2Pair.GetReserves(s.ctx, s.pairETH, rpc.BlockTagLatest)
+	currentReserves, err := s.v2Pair.GetReserves(s.ctx, nil, NewGetReservesRequest(s.pairETH))
 	s.Require().NoError(err)
 	tokenReserve, wethReserve := currentReserves.Reserve0, currentReserves.Reserve1
 	if !pairToken0.Equal(s.token0) {
@@ -1924,7 +1924,7 @@ func (s *RouterLifeCycleSuite) Test18SwapExactETHForTokensSupportingFeeOnTransfe
 	wantWethReserve := new(big.Int).Add(wethReserve, s.nativeValue)
 	var reserves *Reserves
 	s.Require().Eventually(func() bool {
-		reserves, err = s.v2Pair.GetReserves(s.ctx, s.pairETH, rpc.BlockTagLatest)
+		reserves, err = s.v2Pair.GetReserves(s.ctx, nil, NewGetReservesRequest(s.pairETH))
 		if err != nil {
 			return false
 		}
@@ -1975,7 +1975,7 @@ func (s *RouterLifeCycleSuite) Test18SwapExactETHForTokensSupportingFeeOnTransfe
 	swaps, err := ExtractSwap(receipt.Logs)
 	s.Require().NoError(err)
 	s.Require().Len(swaps, 1)
-	s.Require().True(swaps[0].Pair.Equal(s.pairETH))
+	s.Require().True(swaps[0].Contract.Equal(s.pairETH))
 	s.T().Logf("Test18SwapExactETHForTokensSupportingFeeOnTransferTokens: Swap sender=%s to=%s amount0In=%s amount1In=%s amount0Out=%s amount1Out=%s",
 		swaps[0].Sender, swaps[0].To, swaps[0].Amount0In, swaps[0].Amount1In, swaps[0].Amount0Out, swaps[0].Amount1Out)
 
@@ -1991,9 +1991,9 @@ func (s *RouterLifeCycleSuite) Test19SwapExactTokensForETHSupportingFeeOnTransfe
 	path := []*types.Address{s.token0, s.wethAddr}
 	deadline := big.NewInt(time.Now().Add(time.Duration(s.DeadlineSeconds) * time.Second).Unix())
 
-	pairToken0, err := s.v2Pair.Token0(s.ctx, s.pairETH, rpc.BlockTagLatest)
+	pairToken0, err := s.v2Pair.Token0(s.ctx, nil, NewToken0Request(s.pairETH))
 	s.Require().NoError(err)
-	reserves, err := s.v2Pair.GetReserves(s.ctx, s.pairETH, rpc.BlockTagLatest)
+	reserves, err := s.v2Pair.GetReserves(s.ctx, nil, NewGetReservesRequest(s.pairETH))
 	s.Require().NoError(err)
 	tokenReserve := reserves.Reserve1
 	if pairToken0.Equal(s.token0) {
@@ -2049,7 +2049,7 @@ func (s *RouterLifeCycleSuite) Test19SwapExactTokensForETHSupportingFeeOnTransfe
 	swaps, err := ExtractSwap(receipt.Logs)
 	s.Require().NoError(err)
 	s.Require().Len(swaps, 1)
-	s.Require().True(swaps[0].Pair.Equal(s.pairETH))
+	s.Require().True(swaps[0].Contract.Equal(s.pairETH))
 	s.T().Logf("Test19SwapExactTokensForETHSupportingFeeOnTransferTokens: Swap sender=%s to=%s amount0In=%s amount1In=%s amount0Out=%s amount1Out=%s",
 		swaps[0].Sender, swaps[0].To, swaps[0].Amount0In, swaps[0].Amount1In, swaps[0].Amount0Out, swaps[0].Amount1Out)
 
@@ -2142,9 +2142,9 @@ func (s *RouterLifeCycleSuite) Test20RemoveLiquidityETHSupportingFeeOnTransferTo
 }
 
 func (s *RouterLifeCycleSuite) Test21RemoveLiquidityETHWithPermitSupportingFeeOnTransferTokens() {
-	pairToken0, err := s.v2Pair.Token0(s.ctx, s.pairETH, rpc.BlockTagLatest)
+	pairToken0, err := s.v2Pair.Token0(s.ctx, nil, NewToken0Request(s.pairETH))
 	s.Require().NoError(err)
-	currentReserves, err := s.v2Pair.GetReserves(s.ctx, s.pairETH, rpc.BlockTagLatest)
+	currentReserves, err := s.v2Pair.GetReserves(s.ctx, nil, NewGetReservesRequest(s.pairETH))
 	s.Require().NoError(err)
 	tokenReserve, wethReserve := currentReserves.Reserve0, currentReserves.Reserve1
 	if !pairToken0.Equal(s.token0) {
@@ -2417,7 +2417,7 @@ func (s *RouterLifeCycleSuite) Test29MultihopSwap() {
 
 	var pair12Reserves *Reserves
 	s.Require().Eventually(func() bool {
-		pair12Reserves, err = s.v2Pair.GetReserves(s.ctx, s.pair12, rpc.BlockTagLatest)
+		pair12Reserves, err = s.v2Pair.GetReserves(s.ctx, nil, NewGetReservesRequest(s.pair12))
 		return err == nil && pair12Reserves.Reserve0.Sign() > 0 && pair12Reserves.Reserve1.Sign() > 0
 	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "reserves not visible after addLiquidity")
 	s.T().Logf("Test29MultihopSwap: pair12 %s reserves reserve0=%s reserve1=%s", s.pair12, pair12Reserves.Reserve0, pair12Reserves.Reserve1)
@@ -2469,21 +2469,21 @@ func (s *RouterLifeCycleSuite) Test29MultihopSwap() {
 	s.Require().NoError(err)
 	s.Require().Len(swaps, 2, "a 2-hop path should emit one Swap per pair it crosses")
 
-	var hopOnPair, hopOnPair12 *Swap
+	var hopOnPair, hopOnPair12 *SwapEvent
 	for i := range swaps {
 		switch {
-		case swaps[i].Pair.Equal(s.pair):
+		case swaps[i].Contract.Equal(s.pair):
 			hopOnPair = &swaps[i]
-		case swaps[i].Pair.Equal(s.pair12):
+		case swaps[i].Contract.Equal(s.pair12):
 			hopOnPair12 = &swaps[i]
 		}
 	}
 	s.Require().NotNil(hopOnPair, "expected a Swap on (token0, token1) pair %s", s.pair)
 	s.Require().NotNil(hopOnPair12, "expected a Swap on (token1, token2) pair %s", s.pair12)
 	s.T().Logf("Test29MultihopSwap: hop1 (pair %s) sender=%s to=%s amount0In=%s amount1In=%s amount0Out=%s amount1Out=%s",
-		hopOnPair.Pair, hopOnPair.Sender, hopOnPair.To, hopOnPair.Amount0In, hopOnPair.Amount1In, hopOnPair.Amount0Out, hopOnPair.Amount1Out)
+		hopOnPair.Contract, hopOnPair.Sender, hopOnPair.To, hopOnPair.Amount0In, hopOnPair.Amount1In, hopOnPair.Amount0Out, hopOnPair.Amount1Out)
 	s.T().Logf("Test29MultihopSwap: hop2 (pair12 %s) sender=%s to=%s amount0In=%s amount1In=%s amount0Out=%s amount1Out=%s",
-		hopOnPair12.Pair, hopOnPair12.Sender, hopOnPair12.To, hopOnPair12.Amount0In, hopOnPair12.Amount1In, hopOnPair12.Amount0Out, hopOnPair12.Amount1Out)
+		hopOnPair12.Contract, hopOnPair12.Sender, hopOnPair12.To, hopOnPair12.Amount0In, hopOnPair12.Amount1In, hopOnPair12.Amount0Out, hopOnPair12.Amount1Out)
 
 	hop1Out := hopOnPair.Amount0Out
 	if hop1Out.Sign() == 0 {

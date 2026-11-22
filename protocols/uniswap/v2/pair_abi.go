@@ -78,19 +78,19 @@ const (
 
 // ErrLocked, etc. mirror UniswapV2Pair's revert reasons, for errors.Is.
 var (
-	ErrLocked                      = errors.New("uniswapv2: locked")
-	ErrTransferFailed              = errors.New("uniswapv2: transfer failed")
-	ErrOverflow                    = errors.New("uniswapv2: overflow")
-	ErrInsufficientLiquidityMinted = errors.New("uniswapv2: insufficient liquidity minted")
-	ErrInsufficientLiquidityBurned = errors.New("uniswapv2: insufficient liquidity burned")
-	ErrInsufficientOutputAmount    = errors.New("uniswapv2: insufficient output amount")
-	ErrInsufficientLiquidity       = errors.New("uniswapv2: insufficient liquidity")
-	ErrInvalidTo                   = errors.New("uniswapv2: invalid to")
-	ErrInsufficientInputAmount     = errors.New("uniswapv2: insufficient input amount")
-	ErrK                           = errors.New("uniswapv2: k")
-	ErrAddOverflow                 = errors.New("uniswapv2: add overflow")
-	ErrSubUnderflow                = errors.New("uniswapv2: sub underflow")
-	ErrMulOverflow                 = errors.New("uniswapv2: mul overflow")
+	ErrLocked                      = errors.New("locked")
+	ErrTransferFailed              = errors.New("transfer failed")
+	ErrOverflow                    = errors.New("overflow")
+	ErrInsufficientLiquidityMinted = errors.New("insufficient liquidity minted")
+	ErrInsufficientLiquidityBurned = errors.New("insufficient liquidity burned")
+	ErrInsufficientOutputAmount    = errors.New("insufficient output amount")
+	ErrInsufficientLiquidity       = errors.New("insufficient liquidity")
+	ErrInvalidTo                   = errors.New("invalid to")
+	ErrInsufficientInputAmount     = errors.New("insufficient input amount")
+	ErrK                           = errors.New("k")
+	ErrAddOverflow                 = errors.New("add overflow")
+	ErrSubUnderflow                = errors.New("sub underflow")
+	ErrMulOverflow                 = errors.New("mul overflow")
 )
 
 // EncodeMinimumLiquidity returns the calldata for MINIMUM_LIQUIDITY().

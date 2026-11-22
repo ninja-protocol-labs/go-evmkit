@@ -277,8 +277,7 @@ func (e *ERC20) Name(ctx context.Context, opts *bind.CallOptions, req *NameReque
 		return "", fmt.Errorf("erc20: name: %w", err)
 	}
 
-	calldata := EncodeName()
-	data, err := bind.Call(ctx, e.c, opts, req.Contract, calldata)
+	data, err := bind.Call(ctx, e.c, opts, req.Contract, EncodeName())
 	if err != nil {
 		return "", fmt.Errorf("erc20: name: %w", e.wrapRevertError(err))
 	}
@@ -297,8 +296,7 @@ func (e *ERC20) Symbol(ctx context.Context, opts *bind.CallOptions, req *SymbolR
 		return "", fmt.Errorf("erc20: symbol: %w", err)
 	}
 
-	calldata := EncodeSymbol()
-	data, err := bind.Call(ctx, e.c, opts, req.Contract, calldata)
+	data, err := bind.Call(ctx, e.c, opts, req.Contract, EncodeSymbol())
 	if err != nil {
 		return "", fmt.Errorf("erc20: symbol: %w", e.wrapRevertError(err))
 	}
@@ -317,8 +315,7 @@ func (e *ERC20) Decimals(ctx context.Context, opts *bind.CallOptions, req *Decim
 		return 0, fmt.Errorf("erc20: decimals: %w", err)
 	}
 
-	calldata := EncodeDecimals()
-	data, err := bind.Call(ctx, e.c, opts, req.Contract, calldata)
+	data, err := bind.Call(ctx, e.c, opts, req.Contract, EncodeDecimals())
 	if err != nil {
 		return 0, fmt.Errorf("erc20: decimals: %w", e.wrapRevertError(err))
 	}

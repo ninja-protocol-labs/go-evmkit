@@ -10,8 +10,8 @@ import (
 )
 
 // ExtractMint pulls every Mint-shaped log out of logs, from any pair; filter by Contract afterward.
-func ExtractMint(logs []tx.Log) ([]Mint, error) {
-	var mints []Mint
+func ExtractMint(logs []tx.Log) ([]MintEvent, error) {
+	var mints []MintEvent
 	for i, log := range logs {
 		if len(log.Topics) == 0 || log.Topics[0] == nil {
 			continue
@@ -42,14 +42,14 @@ func ExtractMint(logs []tx.Log) ([]Mint, error) {
 		if !ok {
 			return nil, fmt.Errorf("uniswapv2: extractMint: logs[%d]: unexpected decoded type for amount1: %T", i, vals[2])
 		}
-		mints = append(mints, *NewMint(log.Address, sender, amount0, amount1))
+		mints = append(mints, *NewMintEvent(log.Address, sender, amount0, amount1))
 	}
 	return mints, nil
 }
 
 // ExtractBurn pulls every Burn-shaped log out of logs, from any pair; filter by Contract afterward.
-func ExtractBurn(logs []tx.Log) ([]Burn, error) {
-	var burns []Burn
+func ExtractBurn(logs []tx.Log) ([]BurnEvent, error) {
+	var burns []BurnEvent
 	for i, log := range logs {
 		if len(log.Topics) == 0 || log.Topics[0] == nil {
 			continue
@@ -84,14 +84,14 @@ func ExtractBurn(logs []tx.Log) ([]Burn, error) {
 		if !ok {
 			return nil, fmt.Errorf("uniswapv2: extractBurn: logs[%d]: unexpected decoded type for to: %T", i, vals[3])
 		}
-		burns = append(burns, *NewBurn(log.Address, sender, amount0, amount1, to))
+		burns = append(burns, *NewBurnEvent(log.Address, sender, amount0, amount1, to))
 	}
 	return burns, nil
 }
 
 // ExtractSwap pulls every Swap-shaped log out of logs, from any pair; filter by Contract afterward.
-func ExtractSwap(logs []tx.Log) ([]Swap, error) {
-	var swaps []Swap
+func ExtractSwap(logs []tx.Log) ([]SwapEvent, error) {
+	var swaps []SwapEvent
 	for i, log := range logs {
 		if len(log.Topics) == 0 || log.Topics[0] == nil {
 			continue
@@ -134,14 +134,14 @@ func ExtractSwap(logs []tx.Log) ([]Swap, error) {
 		if !ok {
 			return nil, fmt.Errorf("uniswapv2: extractSwap: logs[%d]: unexpected decoded type for to: %T", i, vals[5])
 		}
-		swaps = append(swaps, *NewSwap(log.Address, sender, amount0In, amount1In, amount0Out, amount1Out, to))
+		swaps = append(swaps, *NewSwapEvent(log.Address, sender, amount0In, amount1In, amount0Out, amount1Out, to))
 	}
 	return swaps, nil
 }
 
 // ExtractSync pulls every Sync-shaped log out of logs, from any pair; filter by Contract afterward.
-func ExtractSync(logs []tx.Log) ([]Sync, error) {
-	var syncs []Sync
+func ExtractSync(logs []tx.Log) ([]SyncEvent, error) {
+	var syncs []SyncEvent
 	for i, log := range logs {
 		if len(log.Topics) == 0 || log.Topics[0] == nil {
 			continue
@@ -168,7 +168,7 @@ func ExtractSync(logs []tx.Log) ([]Sync, error) {
 		if !ok {
 			return nil, fmt.Errorf("uniswapv2: extractSync: logs[%d]: unexpected decoded type for reserve1: %T", i, vals[1])
 		}
-		syncs = append(syncs, *NewSync(log.Address, reserve0, reserve1))
+		syncs = append(syncs, *NewSyncEvent(log.Address, reserve0, reserve1))
 	}
 	return syncs, nil
 }

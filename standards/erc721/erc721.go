@@ -85,9 +85,7 @@ func (e *ERC721) Name(ctx context.Context, opts *bind.CallOptions, req *NameRequ
 		return "", fmt.Errorf("erc721: name: %w", err)
 	}
 
-	calldata := EncodeName()
-
-	data, err := bind.Call(ctx, e.c, opts, req.Contract, calldata)
+	data, err := bind.Call(ctx, e.c, opts, req.Contract, EncodeName())
 	if err != nil {
 		return "", fmt.Errorf("erc721: name: %w", e.wrapRevertError(err))
 	}
@@ -106,9 +104,7 @@ func (e *ERC721) Symbol(ctx context.Context, opts *bind.CallOptions, req *Symbol
 		return "", fmt.Errorf("erc721: symbol: %w", err)
 	}
 
-	calldata := EncodeSymbol()
-
-	data, err := bind.Call(ctx, e.c, opts, req.Contract, calldata)
+	data, err := bind.Call(ctx, e.c, opts, req.Contract, EncodeSymbol())
 	if err != nil {
 		return "", fmt.Errorf("erc721: symbol: %w", e.wrapRevertError(err))
 	}

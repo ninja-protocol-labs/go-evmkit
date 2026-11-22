@@ -9,35 +9,36 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ninja-protocol-labs/go-evmkit/bind"
-	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
-	"github.com/ninja-protocol-labs/go-evmkit/standards/deploy"
-	"github.com/ninja-protocol-labs/go-evmkit/standards/erc20"
-	"github.com/ninja-protocol-labs/go-evmkit/standards/multicall3"
-	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 	"github.com/stretchr/testify/suite"
 
+	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core"
+	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 	"github.com/ninja-protocol-labs/go-evmkit/internal/testenv"
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
+	"github.com/ninja-protocol-labs/go-evmkit/standards/deploy"
+	"github.com/ninja-protocol-labs/go-evmkit/standards/erc20"
 	"github.com/ninja-protocol-labs/go-evmkit/tx"
+	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
 type PairLifeCycleSuite struct {
 	suite.Suite
 
-	Enable        bool
-	RPCURL        string
-	PrivateKeyHex string
-	FactoryHex    string
-	Interval      int
-	Timeout       int
-	ByteCode      string
-	Constructor   *abi.Function
-	MintValue     string
-	NativeSymbol  string
-	Salt          *types.Hash
+	RPCURL              string
+	PrivateKeyHex       string
+	FactoryHex          string
+	NicksFactoryHex     string
+	NativeSymbol        string
+	NativeDecimals      int
+	Timeout             time.Duration
+	ReceiptPollInterval time.Duration
+	ReceiptTimeout      time.Duration
+	ByteCode            string
+	Constructor         *abi.Function
+	MintValue           string
+	Salt                *types.Hash
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -47,6 +48,7 @@ type PairLifeCycleSuite struct {
 	deployer  *deploy.NicksDeployer
 	from      *types.Address
 	factory   *types.Address
+	nicks     *types.Address
 	token0    *types.Address
 	token1    *types.Address
 	pair      *types.Address
@@ -61,27 +63,30 @@ type PairLifeCycleSuite struct {
 }
 
 func TestPairLifeCycleSuite(t *testing.T) {
+	c := testenv.MustLoad(t, testenv.Testnet, testenv.UnknownNetwork)
+	if c.Addresses.Protocol.Uniswap.V2.Factory == "" {
+		t.Skip("testenv: no Uniswap V2 factory configured for this network")
+	}
+
 	suite.Run(t, &PairLifeCycleSuite{
-		Enable:        false,
-		RPCURL:        "",
-		PrivateKeyHex: "",
-		FactoryHex:    "",
-		Interval:      1500,
-		Timeout:       60,
-		ByteCode:      testenv.ERC20ByteCodeHex,
-		Constructor:   abi.NewFunction("constructor", abi.NewTypes(abi.String, abi.String, abi.Uint8), nil),
-		MintValue:     "1000000000000000000000000",
-		NativeSymbol:  "",
-		Salt:          core.Keccak256([]byte("go-evmkit")),
+		RPCURL:              c.RPCURL,
+		PrivateKeyHex:       c.ActorPrivateKeyHex,
+		FactoryHex:          c.Addresses.Protocol.Uniswap.V2.Factory,
+		NicksFactoryHex:     c.Addresses.Standard.NicksFactory,
+		NativeSymbol:        c.Constant.NativeSymbol,
+		NativeDecimals:      c.Constant.NativeDecimals,
+		Timeout:             10 * time.Minute,
+		ReceiptPollInterval: c.Constant.ReceiptPollInterval,
+		ReceiptTimeout:      c.Constant.ReceiptTimeout,
+		ByteCode:            testenv.ERC20ByteCodeHex,
+		Constructor:         abi.NewFunction("constructor", abi.NewTypes(abi.String, abi.String, abi.Uint8), nil),
+		MintValue:           "1000000000000000000000000",
+		Salt:                core.Keccak256([]byte("go-evmkit")),
 	})
 }
 
 func (s *PairLifeCycleSuite) SetupSuite() {
-	if !s.Enable {
-		s.T().Skip("disabled")
-	}
-
-	s.ctx, s.cancel = context.WithTimeout(s.T().Context(), 10*time.Minute)
+	s.ctx, s.cancel = context.WithTimeout(s.T().Context(), s.Timeout)
 
 	s.client = rpc.NewClient(s.RPCURL, rpc.WithRetry(5, rpc.ExponentialBackoff(500*time.Millisecond, 10*time.Second)))
 	s.deployer = deploy.NewNicksDeployer(s.client)
@@ -89,7 +94,7 @@ func (s *PairLifeCycleSuite) SetupSuite() {
 	s.v2Pair = NewPair(s.client)
 	s.erc20 = erc20.New(s.client)
 
-	s.mu = new(sync.Mutex)
+	s.mu = &sync.Mutex{}
 	s.totalFee = big.NewInt(0)
 
 	privKey, err := types.NewPrivateKeyFromHex(s.PrivateKeyHex)
@@ -98,6 +103,9 @@ func (s *PairLifeCycleSuite) SetupSuite() {
 	s.from = core.PubkeyToAddress(privKey.PublicKey())
 
 	s.factory, err = types.NewAddressFromHex(s.FactoryHex)
+	s.Require().NoError(err)
+
+	s.nicks, err = types.NewAddressFromHex(s.NicksFactoryHex)
 	s.Require().NoError(err)
 
 	mintValue, ok := new(big.Int).SetString(s.MintValue, 10)
@@ -126,18 +134,18 @@ func (s *PairLifeCycleSuite) SetupSuite() {
 		builder := tx.NewDynamicFeeBuilder()
 		builder.PriceBuffer(150)
 
-		deployTx, hash, err := s.deployer.Deploy(s.ctx, bind.NewTransactOptions(s.signer, builder), deploy.NewCreate2Request(deploy.DefaultNicksMethodFactory, deployment))
+		deployTx, hash, err := s.deployer.Deploy(s.ctx, bind.NewTransactOptions(s.signer, builder), deploy.NewCreate2Request(s.nicks, deployment))
 		s.Require().NoError(err)
 
 		s.mu.Lock()
 		s.totalFee.Add(s.totalFee, deployTx.MaxFee())
 		s.mu.Unlock()
 
-		receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+		receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, s.ReceiptPollInterval, s.ReceiptTimeout)
 		s.Require().NoError(err)
 		s.Require().True(receipt.Status, "deploy transaction reverted")
 
-		token, err := s.deployer.DeployAddress(deploy.NewCreate2Request(deploy.DefaultNicksMethodFactory, deployment))
+		token, err := s.deployer.DeployAddress(deploy.NewCreate2Request(s.nicks, deployment))
 		s.Require().NoError(err)
 		tokens[i] = token
 
@@ -148,9 +156,9 @@ func (s *PairLifeCycleSuite) SetupSuite() {
 			}
 			code, err := encoding.Hex.Decode(codeHex)
 			return err == nil && len(code) > 0
-		}, 10*time.Second, time.Duration(s.Interval)*time.Millisecond, "no code visible at deployed token %s", token)
+		}, 20*time.Second, s.ReceiptPollInterval, "no code visible at deployed token %s", token)
 
-		s.T().Logf("SetupSuite: deployed token %s %s (nonce %d, tx %s)", symbols[i], token, deployTx.AddressNonce(), hash)
+		s.T().Logf("SetupSuite: deployed token %s %s (nonce %d, tx %s, block %d, gas %d)", symbols[i], token, deployTx.AddressNonce(), hash, receipt.BlockNumber, receipt.GasUsed)
 
 		calldata, err := tokenMintFn.EncodeCall(s.from, s.mintValue)
 		s.Require().NoError(err)
@@ -163,7 +171,7 @@ func (s *PairLifeCycleSuite) SetupSuite() {
 			}
 			unsignedMint = u
 			return true
-		}, 10*time.Second, time.Duration(s.Interval)*time.Millisecond, "mint gas estimate looked like a no-code call")
+		}, 20*time.Second, s.ReceiptPollInterval, "mint gas estimate looked like a no-code call")
 		s.Require().NoError(unsignedMint.Sign(s.signer))
 		s.mu.Lock()
 		s.totalFee.Add(s.totalFee, unsignedMint.MaxFee())
@@ -174,11 +182,11 @@ func (s *PairLifeCycleSuite) SetupSuite() {
 		mintHash, err := tx.Broadcast(s.ctx, s.client, raw)
 		s.Require().NoError(err)
 
-		mintReceipt, err := tx.WaitForReceipt(s.ctx, s.client, mintHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+		mintReceipt, err := tx.WaitForReceipt(s.ctx, s.client, mintHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 		s.Require().NoError(err)
 		s.Require().True(mintReceipt.Status, "mint transaction reverted")
 
-		s.T().Logf("SetupSuite: minted %s of %s to owner %s (tx %s)", s.mintValue, token, s.from, mintHash)
+		s.T().Logf("SetupSuite: minted %s of %s to owner %s (tx %s, block %d, gas %d)", s.mintValue, token, s.from, mintHash, mintReceipt.BlockNumber, mintReceipt.GasUsed)
 	}
 
 	s.token0, s.token1 = tokens[0], tokens[1]
@@ -194,7 +202,7 @@ func (s *PairLifeCycleSuite) SetupSuite() {
 	s.totalFee.Add(s.totalFee, createTx.MaxFee())
 	s.mu.Unlock()
 
-	createReceipt, err := tx.WaitForReceipt(s.ctx, s.client, createHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	createReceipt, err := tx.WaitForReceipt(s.ctx, s.client, createHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(createReceipt.Status, "createPair transaction reverted")
 
@@ -210,9 +218,9 @@ func (s *PairLifeCycleSuite) SetupSuite() {
 		}
 		code, err := encoding.Hex.Decode(codeHex)
 		return err == nil && len(code) > 0
-	}, 10*time.Second, time.Duration(s.Interval)*time.Millisecond, "no code visible at created pair %s", s.pair)
+	}, 20*time.Second, s.ReceiptPollInterval, "no code visible at created pair %s", s.pair)
 
-	s.T().Logf("SetupSuite: created pair %s for (%s, %s) (tx %s)", s.pair, s.token0, s.token1, createHash)
+	s.T().Logf("SetupSuite: created pair %s for (%s, %s) (nonce %d, tx %s, block %d, gas %d)", s.pair, s.token0, s.token1, createTx.AddressNonce(), createHash, createReceipt.BlockNumber, createReceipt.GasUsed)
 }
 
 func (s *PairLifeCycleSuite) TearDownSuite() {
@@ -241,26 +249,26 @@ func (s *PairLifeCycleSuite) TearDownSuite() {
 			burnHash, err := tx.Broadcast(s.ctx, s.client, raw)
 			s.Require().NoError(err)
 
-			burnReceipt, err := tx.WaitForReceipt(s.ctx, s.client, burnHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+			burnReceipt, err := tx.WaitForReceipt(s.ctx, s.client, burnHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 			s.Require().NoError(err)
 			s.Require().True(burnReceipt.Status, "burn transaction reverted")
 
-			s.T().Logf("TearDownSuite: burned %s of %s from %s (tx %s)", balance, token, s.from, burnHash)
+			s.T().Logf("TearDownSuite: burned %s of %s from %s (tx %s, block %d, gas %d)", balance, token, s.from, burnHash, burnReceipt.BlockNumber, burnReceipt.GasUsed)
 		}
 	}
 
 	if s.totalFee != nil {
-		base := new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil)
+		base := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(s.NativeDecimals)), nil)
 		whole, frac := new(big.Int), new(big.Int)
 		whole.DivMod(s.totalFee, base, frac)
 
-		fracStr := strings.TrimRight(fmt.Sprintf("%018s", frac.String()), "0")
+		fracStr := strings.TrimRight(fmt.Sprintf("%0*s", s.NativeDecimals, frac.String()), "0")
 		decimal := whole.String()
 		if fracStr != "" {
 			decimal += "." + fracStr
 		}
 
-		s.T().Logf("PairSuite total fee spent: %s %s", decimal, s.NativeSymbol)
+		s.T().Logf("PairLifeCycleSuite total fee spent: %s %s", decimal, s.NativeSymbol)
 	}
 
 	if s.cancel != nil {
@@ -269,38 +277,40 @@ func (s *PairLifeCycleSuite) TearDownSuite() {
 }
 
 func (s *PairLifeCycleSuite) Test01ReadMethods() {
-	factory, err := s.v2Pair.Factory(s.ctx, s.pair, rpc.BlockTagLatest)
+	factory, err := s.v2Pair.Factory(s.ctx, nil, NewFactoryRequest(s.pair))
 	s.Require().NoError(err)
 	s.Require().True(factory.Equal(s.factory))
 
-	token0, err := s.v2Pair.Token0(s.ctx, s.pair, rpc.BlockTagLatest)
+	token0, err := s.v2Pair.Token0(s.ctx, nil, NewToken0Request(s.pair))
 	s.Require().NoError(err)
 	s.Require().True(token0.Equal(s.token0))
 
-	token1, err := s.v2Pair.Token1(s.ctx, s.pair, rpc.BlockTagLatest)
+	token1, err := s.v2Pair.Token1(s.ctx, nil, NewToken1Request(s.pair))
 	s.Require().NoError(err)
 	s.Require().True(token1.Equal(s.token1))
 
-	reserves, err := s.v2Pair.GetReserves(s.ctx, s.pair, rpc.BlockTagLatest)
+	reserves, err := s.v2Pair.GetReserves(s.ctx, nil, NewGetReservesRequest(s.pair))
 	s.Require().NoError(err)
 	s.Require().Zero(reserves.Reserve0.Sign())
 	s.Require().Zero(reserves.Reserve1.Sign())
 
-	minimumLiquidity, err := s.v2Pair.MinimumLiquidity(s.ctx, s.pair, rpc.BlockTagLatest)
+	minimumLiquidity, err := s.v2Pair.MinimumLiquidity(s.ctx, nil, NewMinimumLiquidityRequest(s.pair))
 	s.Require().NoError(err)
+	s.Require().Zero(big.NewInt(1000).Cmp(minimumLiquidity))
 
-	kLast, err := s.v2Pair.KLast(s.ctx, s.pair, rpc.BlockTagLatest)
+	kLast, err := s.v2Pair.KLast(s.ctx, nil, NewKLastRequest(s.pair))
 	s.Require().NoError(err)
 	s.Require().Zero(kLast.Sign())
 
-	permitTypehash, err := s.v2Pair.PermitTypehash(s.ctx, s.pair, rpc.BlockTagLatest)
+	permitTypehash, err := s.v2Pair.PermitTypehash(s.ctx, nil, NewPermitTypehashRequest(s.pair))
 	s.Require().NoError(err)
+	s.Require().Equal(core.Keccak256([]byte("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)")).Bytes(), permitTypehash)
 
-	price0, err := s.v2Pair.Price0CumulativeLast(s.ctx, s.pair, rpc.BlockTagLatest)
+	price0, err := s.v2Pair.Price0CumulativeLast(s.ctx, nil, NewPrice0CumulativeLastRequest(s.pair))
 	s.Require().NoError(err)
 	s.Require().Zero(price0.Sign())
 
-	price1, err := s.v2Pair.Price1CumulativeLast(s.ctx, s.pair, rpc.BlockTagLatest)
+	price1, err := s.v2Pair.Price1CumulativeLast(s.ctx, nil, NewPrice1CumulativeLastRequest(s.pair))
 	s.Require().NoError(err)
 	s.Require().Zero(price1.Sign())
 
@@ -323,91 +333,100 @@ func (s *PairLifeCycleSuite) Test01ReadMethods() {
 	s.T().Logf("\tReserves: %s / %s (blockTimestampLast %d)", reserves.Reserve0, reserves.Reserve1, reserves.BlockTimestampLast)
 	s.T().Logf("\tMinimumLiquidity: %s", minimumLiquidity)
 	s.T().Logf("\tKLast: %s", kLast)
+	s.T().Logf("\tPrice0CumulativeLast: %s", price0)
+	s.T().Logf("\tPrice1CumulativeLast: %s", price1)
 	s.T().Logf("\tPermitTypehash: %s", encoding.Hex.EncodePrefixed(permitTypehash))
-	s.T().Logf("\tName/Symbol/Decimals: %s/%s/%d", name, symbol, decimals)
+	s.T().Logf("\tName: %s", name)
+	s.T().Logf("\tSymbol: %s", symbol)
+	s.T().Logf("\tDecimals: %d", decimals)
 }
 
 func (s *PairLifeCycleSuite) Test02Mint() {
 	amount0 := new(big.Int).Div(s.mintValue, big.NewInt(1000))
 	amount1 := new(big.Int).Div(s.mintValue, big.NewInt(1000))
 
-	tokens := map[*types.Address]*big.Int{
-		s.token0: amount0,
-		s.token1: amount1,
-	}
-	for token, amount := range tokens {
+	for token, amount := range map[*types.Address]*big.Int{s.token0: amount0, s.token1: amount1} {
 		transferTx, transferHash, err := s.erc20.Transfer(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), erc20.NewTransferRequest(token, s.pair, amount))
 		s.Require().NoError(err)
 		s.mu.Lock()
 		s.totalFee.Add(s.totalFee, transferTx.MaxFee())
 		s.mu.Unlock()
 
-		transferReceipt, err := tx.WaitForReceipt(s.ctx, s.client, transferHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+		transferReceipt, err := tx.WaitForReceipt(s.ctx, s.client, transferHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 		s.Require().NoError(err)
 		s.Require().True(transferReceipt.Status, "transfer transaction reverted")
+
+		s.T().Logf("Test02Mint: transferred %s of %s to pair (nonce %d, tx %s, block %d, gas %d)", amount, token, transferTx.AddressNonce(), transferHash, transferReceipt.BlockNumber, transferReceipt.GasUsed)
 	}
 
 	var predicted *big.Int
 	s.Require().Eventually(func() bool {
 		var err error
-		predicted, err = s.v2Pair.CallMint(s.ctx, NewMintParams(s.pair, s.from, s.from), rpc.BlockTagLatest)
+		predicted, err = s.v2Pair.CallMint(s.ctx, bind.NewCallOptions().WithFrom(s.from), NewMintRequest(s.pair, s.from))
 		return err == nil
-	}, 10*time.Second, time.Duration(s.Interval)*time.Millisecond, "deposited balances not visible before mint")
+	}, 20*time.Second, s.ReceiptPollInterval, "deposited balances not visible before mint")
 
-	unsignedMint, err := s.v2Pair.CreateMint(s.ctx, tx.NewDynamicFeeBuilder(), NewMintParams(s.pair, s.from, s.from))
+	mintTx, mintHash, err := s.v2Pair.Mint(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewMintRequest(s.pair, s.from))
 	s.Require().NoError(err)
-	s.Require().NoError(unsignedMint.Sign(s.signer))
 	s.mu.Lock()
-	s.totalFee.Add(s.totalFee, unsignedMint.MaxFee())
+	s.totalFee.Add(s.totalFee, mintTx.MaxFee())
 	s.mu.Unlock()
 
-	mintHash, err := s.v2Pair.Mint(s.ctx, unsignedMint)
-	s.Require().NoError(err)
-
-	mintReceipt, err := tx.WaitForReceipt(s.ctx, s.client, mintHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	mintReceipt, err := tx.WaitForReceipt(s.ctx, s.client, mintHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(mintReceipt.Status, "mint transaction reverted")
 
 	mints, err := ExtractMint(mintReceipt.Logs)
 	s.Require().NoError(err)
 	s.Require().Len(mints, 1)
-	s.Require().True(mints[0].Pair.Equal(s.pair))
+	s.Require().True(mints[0].Contract.Equal(s.pair))
 	s.Require().True(mints[0].Sender.Equal(s.from))
 	s.Require().Zero(amount0.Cmp(mints[0].Amount0))
 	s.Require().Zero(amount1.Cmp(mints[0].Amount1))
 
+	atBlock := bind.NewCallOptions().WithBlock(fmt.Sprintf("0x%x", mintReceipt.BlockNumber))
+
 	var reserves *Reserves
 	s.Require().Eventually(func() bool {
 		var err error
-		reserves, err = s.v2Pair.GetReserves(s.ctx, s.pair, rpc.BlockTagLatest)
-		return err == nil && amount0.Cmp(reserves.Reserve0) == 0 && amount1.Cmp(reserves.Reserve1) == 0
-	}, 10*time.Second, time.Duration(s.Interval)*time.Millisecond, "reserves not visible after mint")
+		reserves, err = s.v2Pair.GetReserves(s.ctx, atBlock, NewGetReservesRequest(s.pair))
+		return err == nil
+	}, 20*time.Second, s.ReceiptPollInterval, "reserves not readable at the receipt block")
+	s.Require().Zero(amount0.Cmp(reserves.Reserve0))
+	s.Require().Zero(amount1.Cmp(reserves.Reserve1))
 
-	lpBalance, err := s.v2Pair.BalanceOf(s.ctx, nil, erc20.NewBalanceOfRequest(s.pair, s.from))
-	s.Require().NoError(err)
+	var lpBalance *big.Int
+	s.Require().Eventually(func() bool {
+		var err error
+		lpBalance, err = s.v2Pair.BalanceOf(s.ctx, atBlock, erc20.NewBalanceOfRequest(s.pair, s.from))
+		return err == nil
+	}, 20*time.Second, s.ReceiptPollInterval, "lpBalance not readable at the receipt block")
 	s.Require().Zero(predicted.Cmp(lpBalance))
 	s.Require().True(lpBalance.Sign() > 0)
 
 	s.T().Logf("UniswapV2Pair %s Test02Mint Result", s.pair)
-	s.T().Logf("\tAmount0/Amount1: %s/%s", amount0, amount1)
-	s.T().Logf("\tReserves: %s/%s", reserves.Reserve0, reserves.Reserve1)
+	s.T().Logf("\tFrom: %s", s.from)
+	s.T().Logf("\tDeposited Amount0/Amount1: %s/%s", amount0, amount1)
+	s.T().Logf("\tCallMint predicted liquidity: %s", predicted)
+	s.T().Logf("\tMint event: sender=%s amount0=%s amount1=%s", mints[0].Sender, mints[0].Amount0, mints[0].Amount1)
+	s.T().Logf("\tReserves: %s/%s (blockTimestampLast %d)", reserves.Reserve0, reserves.Reserve1, reserves.BlockTimestampLast)
 	s.T().Logf("\tLP balance: %s", lpBalance)
-	s.T().Logf("\tTx: %s", mintHash)
+	s.T().Logf("\tTx: %s (nonce %d, block %d, gas %d)", mintHash, mintTx.AddressNonce(), mintReceipt.BlockNumber, mintReceipt.GasUsed)
 }
 
 func (s *PairLifeCycleSuite) Test03ReadMethodsAfterMint() {
-	reserves, err := s.v2Pair.GetReserves(s.ctx, s.pair, rpc.BlockTagLatest)
+	reserves, err := s.v2Pair.GetReserves(s.ctx, nil, NewGetReservesRequest(s.pair))
 	s.Require().NoError(err)
 	s.Require().True(reserves.Reserve0.Sign() > 0)
 	s.Require().True(reserves.Reserve1.Sign() > 0)
 
-	kLast, err := s.v2Pair.KLast(s.ctx, s.pair, rpc.BlockTagLatest)
+	kLast, err := s.v2Pair.KLast(s.ctx, nil, NewKLastRequest(s.pair))
 	s.Require().NoError(err)
 
 	lpBalance, err := s.v2Pair.BalanceOf(s.ctx, nil, erc20.NewBalanceOfRequest(s.pair, s.from))
 	s.Require().NoError(err)
 
-	minimumLiquidity, err := s.v2Pair.MinimumLiquidity(s.ctx, s.pair, rpc.BlockTagLatest)
+	minimumLiquidity, err := s.v2Pair.MinimumLiquidity(s.ctx, nil, NewMinimumLiquidityRequest(s.pair))
 	s.Require().NoError(err)
 
 	totalSupply, err := s.v2Pair.TotalSupply(s.ctx, nil, erc20.NewTotalSupplyRequest(s.pair))
@@ -418,11 +437,12 @@ func (s *PairLifeCycleSuite) Test03ReadMethodsAfterMint() {
 	s.T().Logf("\tReserves: %s/%s", reserves.Reserve0, reserves.Reserve1)
 	s.T().Logf("\tKLast: %s", kLast)
 	s.T().Logf("\tLP balance: %s", lpBalance)
-	s.T().Logf("\tTotalSupply: %s", totalSupply)
+	s.T().Logf("\tMinimumLiquidity (locked at zero address): %s", minimumLiquidity)
+	s.T().Logf("\tTotalSupply: %s (= LP balance + MinimumLiquidity)", totalSupply)
 }
 
 func (s *PairLifeCycleSuite) Test04Swap() {
-	reservesBefore, err := s.v2Pair.GetReserves(s.ctx, s.pair, rpc.BlockTagLatest)
+	reservesBefore, err := s.v2Pair.GetReserves(s.ctx, nil, NewGetReservesRequest(s.pair))
 	s.Require().NoError(err)
 
 	amountIn := new(big.Int).Div(reservesBefore.Reserve0, big.NewInt(100))
@@ -438,72 +458,87 @@ func (s *PairLifeCycleSuite) Test04Swap() {
 	s.totalFee.Add(s.totalFee, transferTx.MaxFee())
 	s.mu.Unlock()
 
-	transferReceipt, err := tx.WaitForReceipt(s.ctx, s.client, transferHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	transferReceipt, err := tx.WaitForReceipt(s.ctx, s.client, transferHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(transferReceipt.Status, "transfer transaction reverted")
 
-	var unsignedSwap core.Transaction
+	s.T().Logf("Test04Swap: transferred %s of token0 %s to pair (nonce %d, tx %s, block %d, gas %d)", amountIn, s.token0, transferTx.AddressNonce(), transferHash, transferReceipt.BlockNumber, transferReceipt.GasUsed)
+
+	var swapTx core.Transaction
+	var swapHash *types.Hash
+	attempt := 0
 	s.Require().Eventually(func() bool {
-		u, err := s.v2Pair.CreateSwap(s.ctx, tx.NewDynamicFeeBuilder(), NewSwapParams(s.pair, s.from, big.NewInt(0), amountOut, s.from, nil))
+		attempt++
+		sent, hash, err := s.v2Pair.Swap(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewSwapRequest(s.pair, big.NewInt(0), amountOut, s.from, nil))
 		if err != nil {
+			s.T().Logf("Test04Swap: attempt %d failed: %v", attempt, err)
 			return false
 		}
-		unsignedSwap = u
+		s.mu.Lock()
+		s.totalFee.Add(s.totalFee, sent.MaxFee())
+		s.mu.Unlock()
+		swapTx, swapHash = sent, hash
 		return true
-	}, 10*time.Second, time.Duration(s.Interval)*time.Millisecond, "deposited balance not visible before swap")
-	s.Require().NoError(unsignedSwap.Sign(s.signer))
-	s.mu.Lock()
-	s.totalFee.Add(s.totalFee, unsignedSwap.MaxFee())
-	s.mu.Unlock()
+	}, 20*time.Second, s.ReceiptPollInterval, "deposited balance not visible before swap")
 
-	swapHash, err := s.v2Pair.Swap(s.ctx, unsignedSwap)
-	s.Require().NoError(err)
-
-	swapReceipt, err := tx.WaitForReceipt(s.ctx, s.client, swapHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	swapReceipt, err := tx.WaitForReceipt(s.ctx, s.client, swapHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(swapReceipt.Status, "swap transaction reverted")
 
 	swaps, err := ExtractSwap(swapReceipt.Logs)
 	s.Require().NoError(err)
 	s.Require().Len(swaps, 1)
-	s.Require().True(swaps[0].Pair.Equal(s.pair))
+	s.Require().True(swaps[0].Contract.Equal(s.pair))
 	s.Require().True(swaps[0].Sender.Equal(s.from))
 	s.Require().Zero(amountIn.Cmp(swaps[0].Amount0In))
-	s.Require().Zero(big.NewInt(0).Cmp(swaps[0].Amount1In))
-	s.Require().Zero(big.NewInt(0).Cmp(swaps[0].Amount0Out))
+	s.Require().Zero(swaps[0].Amount1In.Sign())
+	s.Require().Zero(swaps[0].Amount0Out.Sign())
 	s.Require().Zero(amountOut.Cmp(swaps[0].Amount1Out))
 	s.Require().True(swaps[0].To.Equal(s.from))
 
-	wantReserve0 := new(big.Int).Add(reservesBefore.Reserve0, amountIn)
-	wantReserve1 := new(big.Int).Sub(reservesBefore.Reserve1, amountOut)
+	syncs, err := ExtractSync(swapReceipt.Logs)
+	s.Require().NoError(err)
+	s.Require().Len(syncs, 1)
+	s.Require().True(syncs[0].Contract.Equal(s.pair))
+
 	var reservesAfter *Reserves
 	s.Require().Eventually(func() bool {
 		var err error
-		reservesAfter, err = s.v2Pair.GetReserves(s.ctx, s.pair, rpc.BlockTagLatest)
-		return err == nil && wantReserve0.Cmp(reservesAfter.Reserve0) == 0 && wantReserve1.Cmp(reservesAfter.Reserve1) == 0
-	}, 10*time.Second, time.Duration(s.Interval)*time.Millisecond, "reserves not visible after swap")
+		reservesAfter, err = s.v2Pair.GetReserves(s.ctx, bind.NewCallOptions().WithBlock(fmt.Sprintf("0x%x", swapReceipt.BlockNumber)), NewGetReservesRequest(s.pair))
+		return err == nil
+	}, 20*time.Second, s.ReceiptPollInterval, "reservesAfter not readable at the receipt block")
+	s.Require().Zero(new(big.Int).Add(reservesBefore.Reserve0, amountIn).Cmp(reservesAfter.Reserve0))
+	s.Require().Zero(new(big.Int).Sub(reservesBefore.Reserve1, amountOut).Cmp(reservesAfter.Reserve1))
+	s.Require().Zero(syncs[0].Reserve0.Cmp(reservesAfter.Reserve0))
+	s.Require().Zero(syncs[0].Reserve1.Cmp(reservesAfter.Reserve1))
 
 	s.T().Logf("UniswapV2Pair %s Test04Swap Result", s.pair)
 	s.T().Logf("\tAmountIn (token0): %s", amountIn)
-	s.T().Logf("\tAmountOut (token1): %s", amountOut)
+	s.T().Logf("\tAmountOut (token1): %s (x*y=k with 0.3%% fee)", amountOut)
+	s.T().Logf("\tSwap event: sender=%s to=%s amount0In=%s amount1In=%s amount0Out=%s amount1Out=%s", swaps[0].Sender, swaps[0].To, swaps[0].Amount0In, swaps[0].Amount1In, swaps[0].Amount0Out, swaps[0].Amount1Out)
+	s.T().Logf("\tSync event: reserve0=%s reserve1=%s", syncs[0].Reserve0, syncs[0].Reserve1)
 	s.T().Logf("\tReserves: %s/%s -> %s/%s", reservesBefore.Reserve0, reservesBefore.Reserve1, reservesAfter.Reserve0, reservesAfter.Reserve1)
-	s.T().Logf("\tTx: %s", swapHash)
+	s.T().Logf("\tTx: %s (nonce %d, attempts %d, block %d, gas %d)", swapHash, swapTx.AddressNonce(), attempt, swapReceipt.BlockNumber, swapReceipt.GasUsed)
 }
 
 func (s *PairLifeCycleSuite) Test05ReadMethodsAfterSwap() {
-	reserves, err := s.v2Pair.GetReserves(s.ctx, s.pair, rpc.BlockTagLatest)
+	reserves, err := s.v2Pair.GetReserves(s.ctx, nil, NewGetReservesRequest(s.pair))
 	s.Require().NoError(err)
 
-	price0, err := s.v2Pair.Price0CumulativeLast(s.ctx, s.pair, rpc.BlockTagLatest)
+	kLast, err := s.v2Pair.KLast(s.ctx, nil, NewKLastRequest(s.pair))
+	s.Require().NoError(err)
+
+	price0, err := s.v2Pair.Price0CumulativeLast(s.ctx, nil, NewPrice0CumulativeLastRequest(s.pair))
 	s.Require().NoError(err)
 	s.Require().True(price0.Sign() > 0)
 
-	price1, err := s.v2Pair.Price1CumulativeLast(s.ctx, s.pair, rpc.BlockTagLatest)
+	price1, err := s.v2Pair.Price1CumulativeLast(s.ctx, nil, NewPrice1CumulativeLastRequest(s.pair))
 	s.Require().NoError(err)
 	s.Require().True(price1.Sign() > 0)
 
 	s.T().Logf("UniswapV2Pair %s Test05ReadMethodsAfterSwap Result", s.pair)
-	s.T().Logf("\tReserves: %s/%s", reserves.Reserve0, reserves.Reserve1)
+	s.T().Logf("\tReserves: %s/%s (blockTimestampLast %d)", reserves.Reserve0, reserves.Reserve1, reserves.BlockTimestampLast)
+	s.T().Logf("\tKLast: %s", kLast)
 	s.T().Logf("\tPrice0CumulativeLast: %s", price0)
 	s.T().Logf("\tPrice1CumulativeLast: %s", price1)
 }
@@ -513,7 +548,7 @@ func (s *PairLifeCycleSuite) Test06Burn() {
 	s.Require().NoError(err)
 	burnAmount := new(big.Int).Div(lpBalanceBefore, big.NewInt(2))
 
-	reservesBefore, err := s.v2Pair.GetReserves(s.ctx, s.pair, rpc.BlockTagLatest)
+	reservesBefore, err := s.v2Pair.GetReserves(s.ctx, nil, NewGetReservesRequest(s.pair))
 	s.Require().NoError(err)
 
 	totalSupplyBefore, err := s.v2Pair.TotalSupply(s.ctx, nil, erc20.NewTotalSupplyRequest(s.pair))
@@ -528,90 +563,241 @@ func (s *PairLifeCycleSuite) Test06Burn() {
 	s.totalFee.Add(s.totalFee, transferTx.MaxFee())
 	s.mu.Unlock()
 
-	transferReceipt, err := tx.WaitForReceipt(s.ctx, s.client, transferHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	transferReceipt, err := tx.WaitForReceipt(s.ctx, s.client, transferHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(transferReceipt.Status, "transfer transaction reverted")
 
-	var unsignedBurn core.Transaction
+	s.T().Logf("Test06Burn: transferred %s LP to pair (nonce %d, tx %s, block %d, gas %d)", burnAmount, transferTx.AddressNonce(), transferHash, transferReceipt.BlockNumber, transferReceipt.GasUsed)
+
+	var amount0, amount1 *big.Int
 	s.Require().Eventually(func() bool {
-		u, err := s.v2Pair.CreateBurn(s.ctx, tx.NewDynamicFeeBuilder(), NewBurnParams(s.pair, s.from, s.from))
-		if err != nil {
-			return false
-		}
-		unsignedBurn = u
-		return true
-	}, 10*time.Second, time.Duration(s.Interval)*time.Millisecond, "deposited LP balance not visible before burn")
-	s.Require().NoError(unsignedBurn.Sign(s.signer))
+		var err error
+		amount0, amount1, err = s.v2Pair.CallBurn(s.ctx, bind.NewCallOptions().WithFrom(s.from), NewBurnRequest(s.pair, s.from))
+		return err == nil
+	}, 20*time.Second, s.ReceiptPollInterval, "deposited LP balance not visible before burn")
+	s.Require().Zero(wantAmount0.Cmp(amount0))
+	s.Require().Zero(wantAmount1.Cmp(amount1))
+
+	burnTx, burnHash, err := s.v2Pair.Burn(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewBurnRequest(s.pair, s.from))
+	s.Require().NoError(err)
 	s.mu.Lock()
-	s.totalFee.Add(s.totalFee, unsignedBurn.MaxFee())
+	s.totalFee.Add(s.totalFee, burnTx.MaxFee())
 	s.mu.Unlock()
 
-	burnHash, err := s.v2Pair.Burn(s.ctx, unsignedBurn)
-	s.Require().NoError(err)
-
-	burnReceipt, err := tx.WaitForReceipt(s.ctx, s.client, burnHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	burnReceipt, err := tx.WaitForReceipt(s.ctx, s.client, burnHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(burnReceipt.Status, "burn transaction reverted")
 
 	burns, err := ExtractBurn(burnReceipt.Logs)
 	s.Require().NoError(err)
 	s.Require().Len(burns, 1)
-	s.Require().True(burns[0].Pair.Equal(s.pair))
+	s.Require().True(burns[0].Contract.Equal(s.pair))
 	s.Require().True(burns[0].Sender.Equal(s.from))
 	s.Require().Zero(wantAmount0.Cmp(burns[0].Amount0))
 	s.Require().Zero(wantAmount1.Cmp(burns[0].Amount1))
 	s.Require().True(burns[0].To.Equal(s.from))
 
-	wantReserve0 := new(big.Int).Sub(reservesBefore.Reserve0, wantAmount0)
-	wantReserve1 := new(big.Int).Sub(reservesBefore.Reserve1, wantAmount1)
+	atBlock := bind.NewCallOptions().WithBlock(fmt.Sprintf("0x%x", burnReceipt.BlockNumber))
+
 	var reservesAfter *Reserves
 	s.Require().Eventually(func() bool {
 		var err error
-		reservesAfter, err = s.v2Pair.GetReserves(s.ctx, s.pair, rpc.BlockTagLatest)
-		return err == nil && wantReserve0.Cmp(reservesAfter.Reserve0) == 0 && wantReserve1.Cmp(reservesAfter.Reserve1) == 0
-	}, 10*time.Second, time.Duration(s.Interval)*time.Millisecond, "reserves not visible after burn")
+		reservesAfter, err = s.v2Pair.GetReserves(s.ctx, atBlock, NewGetReservesRequest(s.pair))
+		return err == nil
+	}, 20*time.Second, s.ReceiptPollInterval, "reservesAfter not readable at the receipt block")
+	s.Require().Zero(new(big.Int).Sub(reservesBefore.Reserve0, wantAmount0).Cmp(reservesAfter.Reserve0))
+	s.Require().Zero(new(big.Int).Sub(reservesBefore.Reserve1, wantAmount1).Cmp(reservesAfter.Reserve1))
 
-	lpBalanceAfter, err := s.v2Pair.BalanceOf(s.ctx, nil, erc20.NewBalanceOfRequest(s.pair, s.from))
-	s.Require().NoError(err)
+	var lpBalanceAfter *big.Int
+	s.Require().Eventually(func() bool {
+		var err error
+		lpBalanceAfter, err = s.v2Pair.BalanceOf(s.ctx, atBlock, erc20.NewBalanceOfRequest(s.pair, s.from))
+		return err == nil
+	}, 20*time.Second, s.ReceiptPollInterval, "lpBalanceAfter not readable at the receipt block")
 	s.Require().Zero(new(big.Int).Sub(lpBalanceBefore, burnAmount).Cmp(lpBalanceAfter))
 
 	s.T().Logf("UniswapV2Pair %s Test06Burn Result", s.pair)
-	s.T().Logf("\tBurnAmount: %s", burnAmount)
-	s.T().Logf("\tAmount0/Amount1: %s/%s", wantAmount0, wantAmount1)
+	s.T().Logf("\tBurnAmount: %s of TotalSupply %s", burnAmount, totalSupplyBefore)
+	s.T().Logf("\tCallBurn predicted Amount0/Amount1: %s/%s", amount0, amount1)
+	s.T().Logf("\tBurn event: sender=%s to=%s amount0=%s amount1=%s", burns[0].Sender, burns[0].To, burns[0].Amount0, burns[0].Amount1)
 	s.T().Logf("\tReserves: %s/%s -> %s/%s", reservesBefore.Reserve0, reservesBefore.Reserve1, reservesAfter.Reserve0, reservesAfter.Reserve1)
 	s.T().Logf("\tLP balance: %s -> %s", lpBalanceBefore, lpBalanceAfter)
-	s.T().Logf("\tTx: %s", burnHash)
+	s.T().Logf("\tTx: %s (nonce %d, block %d, gas %d)", burnHash, burnTx.AddressNonce(), burnReceipt.BlockNumber, burnReceipt.GasUsed)
 }
 
-func (s *PairLifeCycleSuite) Test07SwapInsufficientOutputAmount() {
-	_, err := s.v2Pair.CreateSwap(s.ctx, tx.NewDynamicFeeBuilder(), NewSwapParams(s.pair, s.from, big.NewInt(0), big.NewInt(0), s.from, nil))
-	s.Require().Error(err)
-	s.Require().ErrorIs(err, ErrInsufficientOutputAmount)
-}
+func (s *PairLifeCycleSuite) Test07Skim() {
+	excess := big.NewInt(1_000_000)
 
-func (s *PairLifeCycleSuite) Test08SwapInvalidTo() {
-	_, err := s.v2Pair.CreateSwap(s.ctx, tx.NewDynamicFeeBuilder(), NewSwapParams(s.pair, s.from, big.NewInt(0), big.NewInt(1), s.token1, nil))
-	s.Require().Error(err)
-	s.Require().ErrorIs(err, ErrInvalidTo)
-}
-
-func (s *PairLifeCycleSuite) Test09SwapInsufficientLiquidity() {
-	reserves, err := s.v2Pair.GetReserves(s.ctx, s.pair, rpc.BlockTagLatest)
+	reservesBefore, err := s.v2Pair.GetReserves(s.ctx, nil, NewGetReservesRequest(s.pair))
 	s.Require().NoError(err)
 
-	_, err = s.v2Pair.CreateSwap(s.ctx, tx.NewDynamicFeeBuilder(), NewSwapParams(s.pair, s.from, big.NewInt(0), reserves.Reserve1, s.from, nil))
-	s.Require().Error(err)
+	balanceBefore, err := s.erc20.BalanceOf(s.ctx, nil, erc20.NewBalanceOfRequest(s.token1, s.from))
+	s.Require().NoError(err)
+
+	transferTx, transferHash, err := s.erc20.Transfer(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), erc20.NewTransferRequest(s.token1, s.pair, excess))
+	s.Require().NoError(err)
+	s.mu.Lock()
+	s.totalFee.Add(s.totalFee, transferTx.MaxFee())
+	s.mu.Unlock()
+
+	transferReceipt, err := tx.WaitForReceipt(s.ctx, s.client, transferHash, s.ReceiptPollInterval, s.ReceiptTimeout)
+	s.Require().NoError(err)
+	s.Require().True(transferReceipt.Status, "transfer transaction reverted")
+
+	skimTx, skimHash, err := s.v2Pair.Skim(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewSkimRequest(s.pair, s.from))
+	s.Require().NoError(err)
+	s.mu.Lock()
+	s.totalFee.Add(s.totalFee, skimTx.MaxFee())
+	s.mu.Unlock()
+
+	skimReceipt, err := tx.WaitForReceipt(s.ctx, s.client, skimHash, s.ReceiptPollInterval, s.ReceiptTimeout)
+	s.Require().NoError(err)
+	s.Require().True(skimReceipt.Status, "skim transaction reverted")
+
+	transfers, err := erc20.ExtractTransfers(skimReceipt.Logs)
+	s.Require().NoError(err)
+	s.Require().Len(transfers, 2)
+	s.Require().True(transfers[0].Contract.Equal(s.token0))
+	s.Require().True(transfers[0].From.Equal(s.pair))
+	s.Require().True(transfers[0].To.Equal(s.from))
+	s.Require().Zero(transfers[0].Value.Sign())
+	s.Require().True(transfers[1].Contract.Equal(s.token1))
+	s.Require().True(transfers[1].From.Equal(s.pair))
+	s.Require().True(transfers[1].To.Equal(s.from))
+	s.Require().Zero(excess.Cmp(transfers[1].Value))
+
+	atBlock := bind.NewCallOptions().WithBlock(fmt.Sprintf("0x%x", skimReceipt.BlockNumber))
+
+	var reservesAfter *Reserves
+	s.Require().Eventually(func() bool {
+		var err error
+		reservesAfter, err = s.v2Pair.GetReserves(s.ctx, atBlock, NewGetReservesRequest(s.pair))
+		return err == nil
+	}, 20*time.Second, s.ReceiptPollInterval, "reservesAfter not readable at the receipt block")
+	s.Require().Zero(reservesBefore.Reserve0.Cmp(reservesAfter.Reserve0))
+	s.Require().Zero(reservesBefore.Reserve1.Cmp(reservesAfter.Reserve1))
+
+	var balanceAfter *big.Int
+	s.Require().Eventually(func() bool {
+		var err error
+		balanceAfter, err = s.erc20.BalanceOf(s.ctx, atBlock, erc20.NewBalanceOfRequest(s.token1, s.from))
+		return err == nil
+	}, 20*time.Second, s.ReceiptPollInterval, "balanceAfter not readable at the receipt block")
+	s.Require().Zero(balanceBefore.Cmp(balanceAfter))
+
+	s.T().Logf("UniswapV2Pair %s Test07Skim Result", s.pair)
+	s.T().Logf("\tExcess (token1): %s", excess)
+	s.T().Logf("\tTransfer in: tx %s (nonce %d, block %d, gas %d)", transferHash, transferTx.AddressNonce(), transferReceipt.BlockNumber, transferReceipt.GasUsed)
+	for _, transfer := range transfers {
+		s.T().Logf("\tSkim Transfer: contract=%s from=%s to=%s value=%s", transfer.Contract, transfer.From, transfer.To, transfer.Value)
+	}
+	s.T().Logf("\tReserves: %s/%s -> %s/%s (unchanged)", reservesBefore.Reserve0, reservesBefore.Reserve1, reservesAfter.Reserve0, reservesAfter.Reserve1)
+	s.T().Logf("\tToken1 balance: %s -> %s", balanceBefore, balanceAfter)
+	s.T().Logf("\tTx: %s (nonce %d, block %d, gas %d)", skimHash, skimTx.AddressNonce(), skimReceipt.BlockNumber, skimReceipt.GasUsed)
+}
+
+func (s *PairLifeCycleSuite) Test08Sync() {
+	donation := big.NewInt(1_000_000)
+
+	reservesBefore, err := s.v2Pair.GetReserves(s.ctx, nil, NewGetReservesRequest(s.pair))
+	s.Require().NoError(err)
+
+	transferTx, transferHash, err := s.erc20.Transfer(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), erc20.NewTransferRequest(s.token0, s.pair, donation))
+	s.Require().NoError(err)
+	s.mu.Lock()
+	s.totalFee.Add(s.totalFee, transferTx.MaxFee())
+	s.mu.Unlock()
+
+	transferReceipt, err := tx.WaitForReceipt(s.ctx, s.client, transferHash, s.ReceiptPollInterval, s.ReceiptTimeout)
+	s.Require().NoError(err)
+	s.Require().True(transferReceipt.Status, "transfer transaction reverted")
+
+	syncTx, syncHash, err := s.v2Pair.Sync(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewSyncRequest(s.pair))
+	s.Require().NoError(err)
+	s.mu.Lock()
+	s.totalFee.Add(s.totalFee, syncTx.MaxFee())
+	s.mu.Unlock()
+
+	syncReceipt, err := tx.WaitForReceipt(s.ctx, s.client, syncHash, s.ReceiptPollInterval, s.ReceiptTimeout)
+	s.Require().NoError(err)
+	s.Require().True(syncReceipt.Status, "sync transaction reverted")
+
+	wantReserve0 := new(big.Int).Add(reservesBefore.Reserve0, donation)
+
+	syncs, err := ExtractSync(syncReceipt.Logs)
+	s.Require().NoError(err)
+	s.Require().Len(syncs, 1)
+	s.Require().True(syncs[0].Contract.Equal(s.pair))
+	s.Require().Zero(wantReserve0.Cmp(syncs[0].Reserve0))
+	s.Require().Zero(reservesBefore.Reserve1.Cmp(syncs[0].Reserve1))
+
+	var reservesAfter *Reserves
+	s.Require().Eventually(func() bool {
+		var err error
+		reservesAfter, err = s.v2Pair.GetReserves(s.ctx, bind.NewCallOptions().WithBlock(fmt.Sprintf("0x%x", syncReceipt.BlockNumber)), NewGetReservesRequest(s.pair))
+		return err == nil
+	}, 20*time.Second, s.ReceiptPollInterval, "reservesAfter not readable at the receipt block")
+	s.Require().Zero(wantReserve0.Cmp(reservesAfter.Reserve0))
+	s.Require().Zero(reservesBefore.Reserve1.Cmp(reservesAfter.Reserve1))
+
+	s.T().Logf("UniswapV2Pair %s Test08Sync Result", s.pair)
+	s.T().Logf("\tDonation (token0): %s", donation)
+	s.T().Logf("\tTransfer in: tx %s (nonce %d, block %d, gas %d)", transferHash, transferTx.AddressNonce(), transferReceipt.BlockNumber, transferReceipt.GasUsed)
+	s.T().Logf("\tSync event: reserve0=%s reserve1=%s", syncs[0].Reserve0, syncs[0].Reserve1)
+	s.T().Logf("\tReserves: %s/%s -> %s/%s (blockTimestampLast %d)", reservesBefore.Reserve0, reservesBefore.Reserve1, reservesAfter.Reserve0, reservesAfter.Reserve1, reservesAfter.BlockTimestampLast)
+	s.T().Logf("\tTx: %s (nonce %d, block %d, gas %d)", syncHash, syncTx.AddressNonce(), syncReceipt.BlockNumber, syncReceipt.GasUsed)
+}
+
+func (s *PairLifeCycleSuite) Test09SwapInsufficientOutputAmount() {
+	revertTx, revertHash, err := s.v2Pair.Swap(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewSwapRequest(s.pair, big.NewInt(0), big.NewInt(0), s.from, nil))
+	s.Require().ErrorIs(err, ErrInsufficientOutputAmount)
+	s.Require().Nil(revertTx)
+	s.Require().Nil(revertHash)
+
+	s.T().Logf("UniswapV2Pair %s Test09SwapInsufficientOutputAmount Result", s.pair)
+	s.T().Logf("\tRequest: amount0Out=0 amount1Out=0 to=%s", s.from)
+	s.T().Logf("\tError: %v", err)
+}
+
+func (s *PairLifeCycleSuite) Test10SwapInvalidTo() {
+	revertTx, revertHash, err := s.v2Pair.Swap(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewSwapRequest(s.pair, big.NewInt(0), big.NewInt(1), s.token1, nil))
+	s.Require().ErrorIs(err, ErrInvalidTo)
+	s.Require().Nil(revertTx)
+	s.Require().Nil(revertHash)
+
+	s.T().Logf("UniswapV2Pair %s Test10SwapInvalidTo Result", s.pair)
+	s.T().Logf("\tRequest: amount0Out=0 amount1Out=1 to=%s (token1)", s.token1)
+	s.T().Logf("\tError: %v", err)
+}
+
+func (s *PairLifeCycleSuite) Test11SwapInsufficientLiquidity() {
+	reserves, err := s.v2Pair.GetReserves(s.ctx, nil, NewGetReservesRequest(s.pair))
+	s.Require().NoError(err)
+
+	revertTx, revertHash, err := s.v2Pair.Swap(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewSwapRequest(s.pair, big.NewInt(0), reserves.Reserve1, s.from, nil))
 	s.Require().ErrorIs(err, ErrInsufficientLiquidity)
+	s.Require().Nil(revertTx)
+	s.Require().Nil(revertHash)
+
+	s.T().Logf("UniswapV2Pair %s Test11SwapInsufficientLiquidity Result", s.pair)
+	s.T().Logf("\tReserves: %s/%s", reserves.Reserve0, reserves.Reserve1)
+	s.T().Logf("\tRequest: amount0Out=0 amount1Out=%s (= reserve1) to=%s", reserves.Reserve1, s.from)
+	s.T().Logf("\tError: %v", err)
 }
 
-func (s *PairLifeCycleSuite) Test10SwapInsufficientInputAmount() {
-	_, err := s.v2Pair.CreateSwap(s.ctx, tx.NewDynamicFeeBuilder(), NewSwapParams(s.pair, s.from, big.NewInt(0), big.NewInt(1), s.from, nil))
-	s.Require().Error(err)
+func (s *PairLifeCycleSuite) Test12SwapInsufficientInputAmount() {
+	revertTx, revertHash, err := s.v2Pair.Swap(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewSwapRequest(s.pair, big.NewInt(0), big.NewInt(1), s.from, nil))
 	s.Require().ErrorIs(err, ErrInsufficientInputAmount)
+	s.Require().Nil(revertTx)
+	s.Require().Nil(revertHash)
+
+	s.T().Logf("UniswapV2Pair %s Test12SwapInsufficientInputAmount Result", s.pair)
+	s.T().Logf("\tRequest: amount0Out=0 amount1Out=1 to=%s (nothing deposited)", s.from)
+	s.T().Logf("\tError: %v", err)
 }
 
-func (s *PairLifeCycleSuite) Test11SwapK() {
-	reserves, err := s.v2Pair.GetReserves(s.ctx, s.pair, rpc.BlockTagLatest)
+func (s *PairLifeCycleSuite) Test13SwapK() {
+	reserves, err := s.v2Pair.GetReserves(s.ctx, nil, NewGetReservesRequest(s.pair))
 	s.Require().NoError(err)
 	s.Require().True(reserves.Reserve0.Sign() > 0, "pair has no liquidity yet")
 
@@ -628,7 +814,7 @@ func (s *PairLifeCycleSuite) Test11SwapK() {
 	s.totalFee.Add(s.totalFee, transferTx.MaxFee())
 	s.mu.Unlock()
 
-	transferReceipt, err := tx.WaitForReceipt(s.ctx, s.client, transferHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	transferReceipt, err := tx.WaitForReceipt(s.ctx, s.client, transferHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(transferReceipt.Status, "transfer transaction reverted")
 
@@ -636,33 +822,47 @@ func (s *PairLifeCycleSuite) Test11SwapK() {
 	s.Require().Eventually(func() bool {
 		balance, err := s.erc20.BalanceOf(s.ctx, nil, erc20.NewBalanceOfRequest(s.token0, s.pair))
 		return err == nil && expectedBalance.Cmp(balance) == 0
-	}, 10*time.Second, time.Duration(s.Interval)*time.Millisecond, "deposited balance not visible before swap")
+	}, 20*time.Second, s.ReceiptPollInterval, "deposited balance not visible before swap")
 
-	_, err = s.v2Pair.CreateSwap(s.ctx, tx.NewDynamicFeeBuilder(), NewSwapParams(s.pair, s.from, big.NewInt(0), tooMuchAmountOut, s.from, nil))
+	revertTx, revertHash, err := s.v2Pair.Swap(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewSwapRequest(s.pair, big.NewInt(0), tooMuchAmountOut, s.from, nil))
 	s.Require().ErrorIs(err, ErrK)
+	s.Require().Nil(revertTx)
+	s.Require().Nil(revertHash)
+
+	s.T().Logf("UniswapV2Pair %s Test13SwapK Result", s.pair)
+	s.T().Logf("\tReserves: %s/%s", reserves.Reserve0, reserves.Reserve1)
+	s.T().Logf("\tAmountIn (token0): %s, tx %s (nonce %d, block %d)", amountIn, transferHash, transferTx.AddressNonce(), transferReceipt.BlockNumber)
+	s.T().Logf("\tAmountOut: correct %s, requested %s", correctAmountOut, tooMuchAmountOut)
+	s.T().Logf("\tError: %v", err)
 }
 
-func (s *PairLifeCycleSuite) Test12InitializeForbidden() {
-	_, err := s.v2Pair.CreateInitialize(s.ctx, tx.NewDynamicFeeBuilder(), NewInitializeParams(s.pair, s.from, s.token0, s.token1))
-	s.Require().Error(err)
+func (s *PairLifeCycleSuite) Test14InitializeForbidden() {
+	revertTx, revertHash, err := s.v2Pair.Initialize(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewInitializeRequest(s.pair, s.token0, s.token1))
 	s.Require().ErrorIs(err, ErrForbidden)
+	s.Require().Nil(revertTx)
+	s.Require().Nil(revertHash)
+
+	s.T().Logf("UniswapV2Pair %s Test14InitializeForbidden Result", s.pair)
+	s.T().Logf("\tCaller: %s (factory is %s)", s.from, s.factory)
+	s.T().Logf("\tError: %v", err)
 }
 
 type PairSwapSuite struct {
 	suite.Suite
 
-	Enable        bool
-	RPCURL        string
-	PrivateKeyHex string
-	FactoryHex    string
-	TokenInHex    string
-	TokenOutHex   string
-	MulticallHex  string
-	AmountIn      string
-	NativeSymbol  string
-	RoundTrip     bool
-	Interval      int
-	Timeout       int
+	RPCURL              string
+	PrivateKeyHex       string
+	FactoryHex          string
+	MulticallHex        string
+	TokenInHex          string
+	TokenOutHex         string
+	AmountIn            string
+	RoundTrip           bool
+	NativeSymbol        string
+	NativeDecimals      int
+	Timeout             time.Duration
+	ReceiptPollInterval time.Duration
+	ReceiptTimeout      time.Duration
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -684,29 +884,36 @@ type PairSwapSuite struct {
 	totalFee *big.Int
 }
 
-func TestRealSwapSuite(t *testing.T) {
-	suite.Run(t, &PairSwapSuite{
-		Enable:        false,
-		RoundTrip:     false,
-		RPCURL:        "",
-		PrivateKeyHex: "",
-		FactoryHex:    "",
-		TokenInHex:    "",
-		TokenOutHex:   "",
-		MulticallHex:  multicall3.DefaultMulticall3Address.String(),
-		AmountIn:      "1000000000000000",
-		NativeSymbol:  "",
-		Interval:      200,
-		Timeout:       60,
-	})
+func TestPairSwapSuite(t *testing.T) {
+	c := testenv.MustLoad(t, testenv.Testnet, testenv.UnknownNetwork)
+	if c.Addresses.Protocol.Uniswap.V2.Factory == "" {
+		t.Skip("testenv: no Uniswap V2 factory configured for this network")
+	}
+
+	s := &PairSwapSuite{
+		RPCURL:              c.RPCURL,
+		PrivateKeyHex:       c.ActorPrivateKeyHex,
+		FactoryHex:          c.Addresses.Protocol.Uniswap.V2.Factory,
+		MulticallHex:        c.Addresses.Standard.Multicall,
+		TokenInHex:          "",
+		TokenOutHex:         "",
+		AmountIn:            "1000000000000000",
+		RoundTrip:           false,
+		NativeSymbol:        c.Constant.NativeSymbol,
+		NativeDecimals:      c.Constant.NativeDecimals,
+		Timeout:             10 * time.Minute,
+		ReceiptPollInterval: c.Constant.ReceiptPollInterval,
+		ReceiptTimeout:      c.Constant.ReceiptTimeout,
+	}
+	if s.TokenInHex == "" || s.TokenOutHex == "" {
+		t.Skip("PairSwapSuite: TokenInHex/TokenOutHex not set")
+	}
+
+	suite.Run(t, s)
 }
 
 func (s *PairSwapSuite) SetupSuite() {
-	if !s.Enable {
-		s.T().Skip("disabled")
-	}
-
-	s.ctx, s.cancel = context.WithTimeout(context.Background(), 10*time.Minute)
+	s.ctx, s.cancel = context.WithTimeout(s.T().Context(), s.Timeout)
 
 	s.client = rpc.NewClient(s.RPCURL, rpc.WithRetry(5, rpc.ExponentialBackoff(500*time.Millisecond, 10*time.Second)))
 	s.v2Factory = NewFactory(s.client)
@@ -743,17 +950,17 @@ func (s *PairSwapSuite) SetupSuite() {
 
 func (s *PairSwapSuite) TearDownSuite() {
 	if s.totalFee != nil {
-		base := new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil)
+		base := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(s.NativeDecimals)), nil)
 		whole, frac := new(big.Int), new(big.Int)
 		whole.DivMod(s.totalFee, base, frac)
 
-		fracStr := strings.TrimRight(fmt.Sprintf("%018s", frac.String()), "0")
+		fracStr := strings.TrimRight(fmt.Sprintf("%0*s", s.NativeDecimals, frac.String()), "0")
 		decimal := whole.String()
 		if fracStr != "" {
 			decimal += "." + fracStr
 		}
 
-		s.T().Logf("RealSwapSuite total fee spent: %s %s", decimal, s.NativeSymbol)
+		s.T().Logf("PairSwapSuite total fee spent: %s %s", decimal, s.NativeSymbol)
 	}
 
 	if s.cancel != nil {
@@ -788,9 +995,9 @@ func (s *PairSwapSuite) TestSwap() {
 }
 
 func (s *PairSwapSuite) swap(tokenIn, tokenOut *types.Address, amountIn *big.Int) *big.Int {
-	token0, err := s.v2Pair.Token0(s.ctx, s.pair, rpc.BlockTagLatest)
+	token0, err := s.v2Pair.Token0(s.ctx, nil, NewToken0Request(s.pair))
 	s.Require().NoError(err)
-	token1, err := s.v2Pair.Token1(s.ctx, s.pair, rpc.BlockTagLatest)
+	token1, err := s.v2Pair.Token1(s.ctx, nil, NewToken1Request(s.pair))
 	s.Require().NoError(err)
 
 	inIsToken0 := tokenIn.Equal(token0)
@@ -813,18 +1020,18 @@ func (s *PairSwapSuite) swap(tokenIn, tokenOut *types.Address, amountIn *big.Int
 
 	s.T().Logf("swap %s -> %s: broadcast transfer of %s tokenIn to pair, tx %s", tokenIn, tokenOut, amountIn, transferHash)
 
-	transferReceipt, err := tx.WaitForReceipt(s.ctx, s.client, transferHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	transferReceipt, err := tx.WaitForReceipt(s.ctx, s.client, transferHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(transferReceipt.Status, "transfer transaction reverted")
 	s.T().Logf("swap %s -> %s: transfer confirmed in block %d", tokenIn, tokenOut, transferReceipt.BlockNumber)
 
 	var amountOut, amount0Out, amount1Out *big.Int
-	var unsignedSwap core.Transaction
+	var swapHash *types.Hash
 	var lastErr error
 	attempt := 0
 	s.Require().Eventually(func() bool {
 		attempt++
-		reserves, err := s.v2Pair.GetReserves(s.ctx, s.pair, rpc.BlockTagLatest)
+		reserves, err := s.v2Pair.GetReserves(s.ctx, nil, NewGetReservesRequest(s.pair))
 		if err != nil {
 			lastErr = err
 			return false
@@ -848,24 +1055,19 @@ func (s *PairSwapSuite) swap(tokenIn, tokenOut *types.Address, amountIn *big.Int
 
 		s.T().Logf("swap %s -> %s: attempt %d: reserveIn=%s reserveOut=%s amountOut=%s", tokenIn, tokenOut, attempt, reserveIn, reserveOut, amountOut)
 
-		u, err := s.v2Pair.CreateSwap(s.ctx, tx.NewDynamicFeeBuilder(), NewSwapParams(s.pair, s.from, amount0Out, amount1Out, s.from, nil))
+		swapTx, hash, err := s.v2Pair.Swap(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewSwapRequest(s.pair, amount0Out, amount1Out, s.from, nil))
 		if err != nil {
 			lastErr = err
 			s.T().Logf("swap %s -> %s: attempt %d failed: %v", tokenIn, tokenOut, attempt, err)
 			return false
 		}
-		unsignedSwap = u
+		s.totalFee.Add(s.totalFee, swapTx.MaxFee())
+		swapHash = hash
 		return true
-	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "deposited balance not visible before swap: %v", lastErr)
-	s.Require().NoError(unsignedSwap.Sign(s.signer))
-	s.totalFee.Add(s.totalFee, unsignedSwap.MaxFee())
-	s.T().Logf("swap %s -> %s: CreateSwap succeeded after %d attempt(s), estimated amountOut=%s", tokenIn, tokenOut, attempt, amountOut)
+	}, s.ReceiptTimeout, s.ReceiptPollInterval, "deposited balance not visible before swap: %v", lastErr)
+	s.T().Logf("swap %s -> %s: swap sent after %d attempt(s), estimated amountOut=%s, tx %s", tokenIn, tokenOut, attempt, amountOut, swapHash)
 
-	swapHash, err := s.v2Pair.Swap(s.ctx, unsignedSwap)
-	s.Require().NoError(err)
-	s.T().Logf("swap %s -> %s: broadcast swap, tx %s", tokenIn, tokenOut, swapHash)
-
-	swapReceipt, err := tx.WaitForReceipt(s.ctx, s.client, swapHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	swapReceipt, err := tx.WaitForReceipt(s.ctx, s.client, swapHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(swapReceipt.Status, "swap transaction reverted")
 	s.T().Logf("swap %s -> %s: swap confirmed in block %d", tokenIn, tokenOut, swapReceipt.BlockNumber)
