@@ -11,390 +11,838 @@ const (
 var configs = map[NetworkType]map[Network]Config{
 	Mainnet: {
 		Arbitrum: {
-			ChainID:             42161,
-			NativeSymbol:        "ETH",
-			NativeDecimals:      18,
-			RPCURL:              "https://arb-mainnet.g.alchemy.com/v2/%s",
-			Multicall:           "0xcA11bde05977b3631167028862bE2a173976CA11",
-			NicksFactory:        "0x4e59b44847b379578588920cA78FbF26c0B4956C",
-			WETH:                "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
-			Permit2:             "0x000000000022D473030F116dDEE9F6B43aC78BA3",
-			ReceiptPollInterval: 500 * time.Millisecond,
-			ReceiptTimeout:      10 * time.Second,
+			RPCURL: "https://arb-mainnet.g.alchemy.com/v2/%s",
+			Constant: ChainConstants{
+				ChainID:             42161,
+				NativeSymbol:        "ETH",
+				NativeDecimals:      18,
+				ReceiptPollInterval: 500 * time.Millisecond,
+				ReceiptTimeout:      10 * time.Second,
+			},
+			Addresses: AddressBook{
+				Standard: StandardAddressBook{
+					Multicall:    "0xcA11bde05977b3631167028862bE2a173976CA11",
+					NicksFactory: "0x4e59b44847b379578588920cA78FbF26c0B4956C",
+					WETH:         "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
+					Permit2:      "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+				},
+				Protocol: ProtocolAddressBook{
+					Uniswap: UniswapAddressBook{
+						V2: UniswapV2Config{
+							Factory: "0xf1D7CC64Fb4452F05c498126312eBE29f30Fbcf9",
+							Router:  "0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24",
+						},
+					},
+				},
+			},
 		},
 		Arc: {
-			ChainID:             5042,
-			NativeSymbol:        "USDC",
-			NativeDecimals:      6,
-			RPCURL:              "https://arc-mainnet.g.alchemy.com/v2/%s",
-			Multicall:           "0xcA11bde05977b3631167028862bE2a173976CA11",
-			NicksFactory:        "0x4e59b44847b379578588920cA78FbF26c0B4956C",
-			WETH:                "",
-			Permit2:             "0x000000000022D473030F116dDEE9F6B43aC78BA3",
-			ReceiptPollInterval: 500 * time.Millisecond,
-			ReceiptTimeout:      10 * time.Second,
+			RPCURL: "https://arc-mainnet.g.alchemy.com/v2/%s",
+			Constant: ChainConstants{
+				ChainID:             5042,
+				NativeSymbol:        "USDC",
+				NativeDecimals:      6,
+				ReceiptPollInterval: 500 * time.Millisecond,
+				ReceiptTimeout:      10 * time.Second,
+			},
+			Addresses: AddressBook{
+				Standard: StandardAddressBook{
+					Multicall:    "0xcA11bde05977b3631167028862bE2a173976CA11",
+					NicksFactory: "0x4e59b44847b379578588920cA78FbF26c0B4956C",
+					WETH:         "", // Not supported
+					Permit2:      "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+				},
+				Protocol: ProtocolAddressBook{
+					Uniswap: UniswapAddressBook{
+						V2: UniswapV2Config{
+							Factory: "0x89e5DB8B5aA49aA85AC63f691524311AEB649eba",
+							Router:  "0x1f7d7550B1b028f7571E69A784071F0205FD2EfA",
+						},
+					},
+				},
+			},
 		},
 		Avalanche: {
-			ChainID:             43114,
-			NativeSymbol:        "AVAX",
-			NativeDecimals:      18,
-			RPCURL:              "https://avax-mainnet.g.alchemy.com/v2/%s",
-			Multicall:           "0xcA11bde05977b3631167028862bE2a173976CA11",
-			NicksFactory:        "0x4e59b44847b379578588920cA78FbF26c0B4956C",
-			WETH:                "0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7",
-			Permit2:             "0x000000000022D473030F116dDEE9F6B43aC78BA3",
-			ReceiptPollInterval: 500 * time.Millisecond,
-			ReceiptTimeout:      10 * time.Second,
+			RPCURL: "https://avax-mainnet.g.alchemy.com/v2/%s",
+			Constant: ChainConstants{
+				ChainID:             43114,
+				NativeSymbol:        "AVAX",
+				NativeDecimals:      18,
+				ReceiptPollInterval: 500 * time.Millisecond,
+				ReceiptTimeout:      10 * time.Second,
+			},
+			Addresses: AddressBook{
+				Standard: StandardAddressBook{
+					Multicall:    "0xcA11bde05977b3631167028862bE2a173976CA11",
+					NicksFactory: "0x4e59b44847b379578588920cA78FbF26c0B4956C",
+					WETH:         "0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7",
+					Permit2:      "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+				},
+				Protocol: ProtocolAddressBook{
+					Uniswap: UniswapAddressBook{
+						V2: UniswapV2Config{
+							Factory: "0x9e5A52f57b3038F1B8EeE45F28b3C1967e22799C",
+							Router:  "0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24",
+						},
+					},
+				},
+			},
 		},
 		Base: {
-			ChainID:             8453,
-			NativeSymbol:        "ETH",
-			NativeDecimals:      18,
-			RPCURL:              "https://base-mainnet.g.alchemy.com/v2/%s",
-			Multicall:           "0xcA11bde05977b3631167028862bE2a173976CA11",
-			NicksFactory:        "0x4e59b44847b379578588920cA78FbF26c0B4956C",
-			WETH:                "0x4200000000000000000000000000000000000006",
-			Permit2:             "0x000000000022D473030F116dDEE9F6B43aC78BA3",
-			ReceiptPollInterval: 500 * time.Millisecond,
-			ReceiptTimeout:      10 * time.Second,
+			RPCURL: "https://base-mainnet.g.alchemy.com/v2/%s",
+			Constant: ChainConstants{
+				ChainID:             8453,
+				NativeSymbol:        "ETH",
+				NativeDecimals:      18,
+				ReceiptPollInterval: 500 * time.Millisecond,
+				ReceiptTimeout:      10 * time.Second,
+			},
+			Addresses: AddressBook{
+				Standard: StandardAddressBook{
+					Multicall:    "0xcA11bde05977b3631167028862bE2a173976CA11",
+					NicksFactory: "0x4e59b44847b379578588920cA78FbF26c0B4956C",
+					WETH:         "0x4200000000000000000000000000000000000006",
+					Permit2:      "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+				},
+				Protocol: ProtocolAddressBook{
+					Uniswap: UniswapAddressBook{
+						V2: UniswapV2Config{
+							Factory: "0x8909Dc15e40173Ff4699343b6eB8132c65e18eC6",
+							Router:  "0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24",
+						},
+					},
+				},
+			},
 		},
 		BSC: {
-			ChainID:             56,
-			NativeSymbol:        "BNB",
-			NativeDecimals:      18,
-			RPCURL:              "https://bnb-mainnet.g.alchemy.com/v2/%s",
-			Multicall:           "0xcA11bde05977b3631167028862bE2a173976CA11",
-			NicksFactory:        "0x4e59b44847b379578588920cA78FbF26c0B4956C",
-			WETH:                "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c",
-			Permit2:             "0x000000000022D473030F116dDEE9F6B43aC78BA3",
-			ReceiptPollInterval: 500 * time.Millisecond,
-			ReceiptTimeout:      10 * time.Second,
+			RPCURL: "https://bnb-mainnet.g.alchemy.com/v2/%s",
+			Constant: ChainConstants{
+				ChainID:             56,
+				NativeSymbol:        "BNB",
+				NativeDecimals:      18,
+				ReceiptPollInterval: 500 * time.Millisecond,
+				ReceiptTimeout:      10 * time.Second,
+			},
+			Addresses: AddressBook{
+				Standard: StandardAddressBook{
+					Multicall:    "0xcA11bde05977b3631167028862bE2a173976CA11",
+					NicksFactory: "0x4e59b44847b379578588920cA78FbF26c0B4956C",
+					WETH:         "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c",
+					Permit2:      "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+				},
+				Protocol: ProtocolAddressBook{
+					Uniswap: UniswapAddressBook{
+						V2: UniswapV2Config{
+							Factory: "0x8909Dc15e40173Ff4699343b6eB8132c65e18eC6",
+							Router:  "0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24",
+						},
+					},
+				},
+			},
 		},
 		Celo: {
-			ChainID:             42220,
-			NativeSymbol:        "CELO",
-			NativeDecimals:      18,
-			RPCURL:              "https://celo-mainnet.g.alchemy.com/v2/%s",
-			Multicall:           "0xcA11bde05977b3631167028862bE2a173976CA11",
-			NicksFactory:        "0x4e59b44847b379578588920cA78FbF26c0B4956C",
-			WETH:                "",
-			Permit2:             "0x000000000022D473030F116dDEE9F6B43aC78BA3",
-			ReceiptPollInterval: 500 * time.Millisecond,
-			ReceiptTimeout:      10 * time.Second,
+			RPCURL: "https://celo-mainnet.g.alchemy.com/v2/%s",
+			Constant: ChainConstants{
+				ChainID:             42220,
+				NativeSymbol:        "CELO",
+				NativeDecimals:      18,
+				ReceiptPollInterval: 500 * time.Millisecond,
+				ReceiptTimeout:      10 * time.Second,
+			},
+			Addresses: AddressBook{
+				Standard: StandardAddressBook{
+					Multicall:    "0xcA11bde05977b3631167028862bE2a173976CA11",
+					NicksFactory: "0x4e59b44847b379578588920cA78FbF26c0B4956C",
+					WETH:         "", // Not supported
+					Permit2:      "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+				},
+				Protocol: ProtocolAddressBook{
+					Uniswap: UniswapAddressBook{
+						V2: UniswapV2Config{
+							Factory: "0x79a530c8e2fA8748B7B40dd3629C0520c2cCf03f",
+							Router:  "", // Not supported
+						},
+					},
+				},
+			},
 		},
 		Ethereum: {
-			ChainID:             1,
-			NativeSymbol:        "ETH",
-			NativeDecimals:      18,
-			RPCURL:              "https://eth-mainnet.g.alchemy.com/v2/%s",
-			Multicall:           "0xcA11bde05977b3631167028862bE2a173976CA11",
-			NicksFactory:        "0x4e59b44847b379578588920cA78FbF26c0B4956C",
-			WETH:                "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
-			Permit2:             "0x000000000022D473030F116dDEE9F6B43aC78BA3",
-			ReceiptPollInterval: time.Second,
-			ReceiptTimeout:      30 * time.Second,
+			RPCURL: "https://eth-mainnet.g.alchemy.com/v2/%s",
+			Constant: ChainConstants{
+				ChainID:             1,
+				NativeSymbol:        "ETH",
+				NativeDecimals:      18,
+				ReceiptPollInterval: time.Second,
+				ReceiptTimeout:      30 * time.Second,
+			},
+			Addresses: AddressBook{
+				Standard: StandardAddressBook{
+					Multicall:    "0xcA11bde05977b3631167028862bE2a173976CA11",
+					NicksFactory: "0x4e59b44847b379578588920cA78FbF26c0B4956C",
+					WETH:         "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+					Permit2:      "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+				},
+				Protocol: ProtocolAddressBook{
+					Uniswap: UniswapAddressBook{
+						V2: UniswapV2Config{
+							Factory: "0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f",
+							Router:  "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D",
+						},
+					},
+				},
+			},
 		},
 		HyperEVM: {
-			ChainID:             999,
-			NativeSymbol:        "HYPE",
-			NativeDecimals:      18,
-			RPCURL:              "https://hyperliquid-mainnet.g.alchemy.com/v2/%s",
-			Multicall:           "0xcA11bde05977b3631167028862bE2a173976CA11",
-			NicksFactory:        "0x4e59b44847b379578588920cA78FbF26c0B4956C",
-			WETH:                "0x5555555555555555555555555555555555555555",
-			Permit2:             "0x000000000022D473030F116dDEE9F6B43aC78BA3",
-			ReceiptPollInterval: 500 * time.Millisecond,
-			ReceiptTimeout:      10 * time.Second,
+			RPCURL: "https://hyperliquid-mainnet.g.alchemy.com/v2/%s",
+			Constant: ChainConstants{
+				ChainID:             999,
+				NativeSymbol:        "HYPE",
+				NativeDecimals:      18,
+				ReceiptPollInterval: 500 * time.Millisecond,
+				ReceiptTimeout:      10 * time.Second,
+			},
+			Addresses: AddressBook{
+				Standard: StandardAddressBook{
+					Multicall:    "0xcA11bde05977b3631167028862bE2a173976CA11",
+					NicksFactory: "0x4e59b44847b379578588920cA78FbF26c0B4956C",
+					WETH:         "0x5555555555555555555555555555555555555555",
+					Permit2:      "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+				},
+				Protocol: ProtocolAddressBook{
+					Uniswap: UniswapAddressBook{
+						V2: UniswapV2Config{
+							Factory: "0x89e5DB8B5aA49aA85AC63f691524311AEB649eba",
+							Router:  "0x1f7d7550B1b028f7571E69A784071F0205FD2EfA",
+						},
+					},
+				},
+			},
 		},
 		Ink: {
-			ChainID:             57073,
-			NativeSymbol:        "ETH",
-			NativeDecimals:      18,
-			RPCURL:              "https://ink-mainnet.g.alchemy.com/v2/%s",
-			Multicall:           "0xcA11bde05977b3631167028862bE2a173976CA11",
-			NicksFactory:        "0x4e59b44847b379578588920cA78FbF26c0B4956C",
-			WETH:                "0x4200000000000000000000000000000000000006",
-			Permit2:             "0x000000000022D473030F116dDEE9F6B43aC78BA3",
-			ReceiptPollInterval: 500 * time.Millisecond,
-			ReceiptTimeout:      10 * time.Second,
+			RPCURL: "https://ink-mainnet.g.alchemy.com/v2/%s",
+			Constant: ChainConstants{
+				ChainID:             57073,
+				NativeSymbol:        "ETH",
+				NativeDecimals:      18,
+				ReceiptPollInterval: 500 * time.Millisecond,
+				ReceiptTimeout:      10 * time.Second,
+			},
+			Addresses: AddressBook{
+				Standard: StandardAddressBook{
+					Multicall:    "0xcA11bde05977b3631167028862bE2a173976CA11",
+					NicksFactory: "0x4e59b44847b379578588920cA78FbF26c0B4956C",
+					WETH:         "0x4200000000000000000000000000000000000006",
+					Permit2:      "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+				},
+				Protocol: ProtocolAddressBook{
+					Uniswap: UniswapAddressBook{
+						V2: UniswapV2Config{
+							Factory: "0xfe57A6BA1951F69aE2Ed4abe23e0f095DF500C04",
+							Router:  "0xB3FB126ACDd5AdCA2f50Ac644a7a2303745f18b4",
+						},
+					},
+				},
+			},
 		},
 		Linea: {
-			ChainID:             59144,
-			NativeSymbol:        "ETH",
-			NativeDecimals:      18,
-			RPCURL:              "https://linea-mainnet.g.alchemy.com/v2/%s",
-			Multicall:           "0xcA11bde05977b3631167028862bE2a173976CA11",
-			NicksFactory:        "0x4e59b44847b379578588920cA78FbF26c0B4956C",
-			WETH:                "0xe5D7C2a44FfDDf6b295A15c148167daaAf5Cf34f",
-			Permit2:             "0x000000000022D473030F116dDEE9F6B43aC78BA3",
-			ReceiptPollInterval: 500 * time.Millisecond,
-			ReceiptTimeout:      10 * time.Second,
+			RPCURL: "https://linea-mainnet.g.alchemy.com/v2/%s",
+			Constant: ChainConstants{
+				ChainID:             59144,
+				NativeSymbol:        "ETH",
+				NativeDecimals:      18,
+				ReceiptPollInterval: 500 * time.Millisecond,
+				ReceiptTimeout:      10 * time.Second,
+			},
+			Addresses: AddressBook{
+				Standard: StandardAddressBook{
+					Multicall:    "0xcA11bde05977b3631167028862bE2a173976CA11",
+					NicksFactory: "0x4e59b44847b379578588920cA78FbF26c0B4956C",
+					WETH:         "0xe5D7C2a44FfDDf6b295A15c148167daaAf5Cf34f",
+					Permit2:      "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+				},
+				Protocol: ProtocolAddressBook{
+					Uniswap: UniswapAddressBook{
+						V2: UniswapV2Config{
+							Factory: "0x114A43DF6C5f54EBB8A9d70Cd1951D3dD68004c7",
+							Router:  "0x8702463e73f74d0b6765aBceb314Ef07aCb92650",
+						},
+					},
+				},
+			},
 		},
 		Monad: {
-			ChainID:             143,
-			NativeSymbol:        "MON",
-			NativeDecimals:      18,
-			RPCURL:              "https://monad-mainnet.g.alchemy.com/v2/%s",
-			Multicall:           "0xcA11bde05977b3631167028862bE2a173976CA11",
-			NicksFactory:        "0x4e59b44847b379578588920cA78FbF26c0B4956C",
-			WETH:                "0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A",
-			Permit2:             "0x000000000022D473030F116dDEE9F6B43aC78BA3",
-			ReceiptPollInterval: 500 * time.Millisecond,
-			ReceiptTimeout:      10 * time.Second,
+			RPCURL: "https://monad-mainnet.g.alchemy.com/v2/%s",
+			Constant: ChainConstants{
+				ChainID:             143,
+				NativeSymbol:        "MON",
+				NativeDecimals:      18,
+				ReceiptPollInterval: 500 * time.Millisecond,
+				ReceiptTimeout:      10 * time.Second,
+			},
+			Addresses: AddressBook{
+				Standard: StandardAddressBook{
+					Multicall:    "0xcA11bde05977b3631167028862bE2a173976CA11",
+					NicksFactory: "0x4e59b44847b379578588920cA78FbF26c0B4956C",
+					WETH:         "0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A",
+					Permit2:      "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+				},
+				Protocol: ProtocolAddressBook{
+					Uniswap: UniswapAddressBook{
+						V2: UniswapV2Config{
+							Factory: "0x182a927119D56008d921126764bF884221b10f59",
+							Router:  "0x4B2ab38DBF28D31D467aA8993f6c2585981D6804",
+						},
+					},
+				},
+			},
 		},
 		Optimism: {
-			ChainID:             10,
-			NativeSymbol:        "ETH",
-			NativeDecimals:      18,
-			RPCURL:              "https://opt-mainnet.g.alchemy.com/v2/%s",
-			Multicall:           "0xcA11bde05977b3631167028862bE2a173976CA11",
-			NicksFactory:        "0x4e59b44847b379578588920cA78FbF26c0B4956C",
-			WETH:                "0x4200000000000000000000000000000000000006",
-			Permit2:             "0x000000000022D473030F116dDEE9F6B43aC78BA3",
-			ReceiptPollInterval: 500 * time.Millisecond,
-			ReceiptTimeout:      10 * time.Second,
+			RPCURL: "https://opt-mainnet.g.alchemy.com/v2/%s",
+			Constant: ChainConstants{
+				ChainID:             10,
+				NativeSymbol:        "ETH",
+				NativeDecimals:      18,
+				ReceiptPollInterval: 500 * time.Millisecond,
+				ReceiptTimeout:      10 * time.Second,
+			},
+			Addresses: AddressBook{
+				Standard: StandardAddressBook{
+					Multicall:    "0xcA11bde05977b3631167028862bE2a173976CA11",
+					NicksFactory: "0x4e59b44847b379578588920cA78FbF26c0B4956C",
+					WETH:         "0x4200000000000000000000000000000000000006",
+					Permit2:      "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+				},
+				Protocol: ProtocolAddressBook{
+					Uniswap: UniswapAddressBook{
+						V2: UniswapV2Config{
+							Factory: "0x0c3c1c532F1e39EdF36BE9Fe0bE1410313E074Bf",
+							Router:  "0x4A7b5Da61326A6379179b40d00F57E5bbDC962c2",
+						},
+					},
+				},
+			},
 		},
 		Polygon: {
-			ChainID:             137,
-			NativeSymbol:        "POL",
-			NativeDecimals:      18,
-			RPCURL:              "https://polygon-mainnet.g.alchemy.com/v2/%s",
-			Multicall:           "0xcA11bde05977b3631167028862bE2a173976CA11",
-			NicksFactory:        "0x4e59b44847b379578588920cA78FbF26c0B4956C",
-			WETH:                "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270",
-			Permit2:             "0x000000000022D473030F116dDEE9F6B43aC78BA3",
-			ReceiptPollInterval: 500 * time.Millisecond,
-			ReceiptTimeout:      10 * time.Second,
+			RPCURL: "https://polygon-mainnet.g.alchemy.com/v2/%s",
+			Constant: ChainConstants{
+				ChainID:             137,
+				NativeSymbol:        "POL",
+				NativeDecimals:      18,
+				ReceiptPollInterval: 500 * time.Millisecond,
+				ReceiptTimeout:      10 * time.Second,
+			},
+			Addresses: AddressBook{
+				Standard: StandardAddressBook{
+					Multicall:    "0xcA11bde05977b3631167028862bE2a173976CA11",
+					NicksFactory: "0x4e59b44847b379578588920cA78FbF26c0B4956C",
+					WETH:         "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270",
+					Permit2:      "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+				},
+				Protocol: ProtocolAddressBook{
+					Uniswap: UniswapAddressBook{
+						V2: UniswapV2Config{
+							Factory: "0x9e5A52f57b3038F1B8EeE45F28b3C1967e22799C",
+							Router:  "0xedf6066a2b290C185783862C7F4776A2C8077AD1",
+						},
+					},
+				},
+			},
 		},
 		Robinhood: {
-			ChainID:             4663,
-			NativeSymbol:        "ETH",
-			NativeDecimals:      18,
-			RPCURL:              "https://robinhood-mainnet.g.alchemy.com/v2/%s",
-			Multicall:           "0xcA11bde05977b3631167028862bE2a173976CA11",
-			NicksFactory:        "0x4e59b44847b379578588920cA78FbF26c0B4956C",
-			WETH:                "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
-			Permit2:             "0x000000000022D473030F116dDEE9F6B43aC78BA3",
-			ReceiptPollInterval: 500 * time.Millisecond,
-			ReceiptTimeout:      10 * time.Second,
+			RPCURL: "https://robinhood-mainnet.g.alchemy.com/v2/%s",
+			Constant: ChainConstants{
+				ChainID:             4663,
+				NativeSymbol:        "ETH",
+				NativeDecimals:      18,
+				ReceiptPollInterval: 500 * time.Millisecond,
+				ReceiptTimeout:      10 * time.Second,
+			},
+			Addresses: AddressBook{
+				Standard: StandardAddressBook{
+					Multicall:    "0xcA11bde05977b3631167028862bE2a173976CA11",
+					NicksFactory: "0x4e59b44847b379578588920cA78FbF26c0B4956C",
+					WETH:         "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
+					Permit2:      "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+				},
+				Protocol: ProtocolAddressBook{
+					Uniswap: UniswapAddressBook{
+						V2: UniswapV2Config{
+							Factory: "0x8bcEaA40B9AcdfAedF85AdF4FF01F5Ad6517937f",
+							Router:  "0x89e5DB8B5aA49aA85AC63f691524311AEB649eba",
+						},
+					},
+				},
+			},
 		},
 		Sei: {
-			ChainID:             1329,
-			NativeSymbol:        "SEI",
-			NativeDecimals:      18,
-			RPCURL:              "https://sei-mainnet.g.alchemy.com/v2/%s",
-			Multicall:           "0xcA11bde05977b3631167028862bE2a173976CA11",
-			NicksFactory:        "0x4e59b44847b379578588920cA78FbF26c0B4956C",
-			WETH:                "0xE30feDd158A2e3b13e9badaeABaFc5516e95e8C7",
-			Permit2:             "0x000000000022D473030F116dDEE9F6B43aC78BA3",
-			ReceiptPollInterval: 500 * time.Millisecond,
-			ReceiptTimeout:      10 * time.Second,
+			RPCURL: "https://sei-mainnet.g.alchemy.com/v2/%s",
+			Constant: ChainConstants{
+				ChainID:             1329,
+				NativeSymbol:        "SEI",
+				NativeDecimals:      18,
+				ReceiptPollInterval: 500 * time.Millisecond,
+				ReceiptTimeout:      10 * time.Second,
+			},
+			Addresses: AddressBook{
+				Standard: StandardAddressBook{
+					Multicall:    "0xcA11bde05977b3631167028862bE2a173976CA11",
+					NicksFactory: "0x4e59b44847b379578588920cA78FbF26c0B4956C",
+					WETH:         "0xE30feDd158A2e3b13e9badaeABaFc5516e95e8C7",
+					Permit2:      "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+				},
+				Protocol: ProtocolAddressBook{
+					Uniswap: UniswapAddressBook{
+						V2: UniswapV2Config{
+							Factory: "", // Not supported
+							Router:  "", // Not supported
+						},
+					},
+				},
+			},
 		},
 		Unichain: {
-			ChainID:             130,
-			NativeSymbol:        "ETH",
-			NativeDecimals:      18,
-			RPCURL:              "https://unichain-mainnet.g.alchemy.com/v2/%s",
-			Multicall:           "0xcA11bde05977b3631167028862bE2a173976CA11",
-			NicksFactory:        "0x4e59b44847b379578588920cA78FbF26c0B4956C",
-			WETH:                "0x4200000000000000000000000000000000000006",
-			Permit2:             "0x000000000022D473030F116dDEE9F6B43aC78BA3",
-			ReceiptPollInterval: 500 * time.Millisecond,
-			ReceiptTimeout:      10 * time.Second,
+			RPCURL: "https://unichain-mainnet.g.alchemy.com/v2/%s",
+			Constant: ChainConstants{
+				ChainID:             130,
+				NativeSymbol:        "ETH",
+				NativeDecimals:      18,
+				ReceiptPollInterval: 500 * time.Millisecond,
+				ReceiptTimeout:      10 * time.Second,
+			},
+			Addresses: AddressBook{
+				Standard: StandardAddressBook{
+					Multicall:    "0xcA11bde05977b3631167028862bE2a173976CA11",
+					NicksFactory: "0x4e59b44847b379578588920cA78FbF26c0B4956C",
+					WETH:         "0x4200000000000000000000000000000000000006",
+					Permit2:      "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+				},
+				Protocol: ProtocolAddressBook{
+					Uniswap: UniswapAddressBook{
+						V2: UniswapV2Config{
+							Factory: "0x1F98400000000000000000000000000000000002",
+							Router:  "0x284F11109359a7e1306C3e447ef14D38400063FF",
+						},
+					},
+				},
+			},
 		},
 	},
 	Testnet: {
 		Arbitrum: {
-			ChainID:             421614,
-			NativeSymbol:        "ETH",
-			NativeDecimals:      18,
-			RPCURL:              "https://arb-sepolia.g.alchemy.com/v2/%s",
-			Multicall:           "0xcA11bde05977b3631167028862bE2a173976CA11",
-			NicksFactory:        "0x4e59b44847b379578588920cA78FbF26c0B4956C",
-			WETH:                "0x980B62Da83eFf3D4576C647993b0c1D7faf17c73",
-			Permit2:             "0x000000000022D473030F116dDEE9F6B43aC78BA3",
-			ReceiptPollInterval: 500 * time.Millisecond,
-			ReceiptTimeout:      10 * time.Second,
+			RPCURL: "https://arb-sepolia.g.alchemy.com/v2/%s",
+			Constant: ChainConstants{
+				ChainID:             421614,
+				NativeSymbol:        "ETH",
+				NativeDecimals:      18,
+				ReceiptPollInterval: 500 * time.Millisecond,
+				ReceiptTimeout:      10 * time.Second,
+			},
+			Addresses: AddressBook{
+				Standard: StandardAddressBook{
+					Multicall:    "0xcA11bde05977b3631167028862bE2a173976CA11",
+					NicksFactory: "0x4e59b44847b379578588920cA78FbF26c0B4956C",
+					WETH:         "0x980B62Da83eFf3D4576C647993b0c1D7faf17c73",
+					Permit2:      "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+				},
+				Protocol: ProtocolAddressBook{
+					Uniswap: UniswapAddressBook{
+						V2: UniswapV2Config{
+							Factory: "", // Not supported
+							Router:  "", // Not supported
+						},
+					},
+				},
+			},
 		},
 		Arc: {
-			ChainID:             5042002,
-			NativeSymbol:        "USDC",
-			NativeDecimals:      6,
-			RPCURL:              "https://arc-testnet.g.alchemy.com/v2/%s",
-			Multicall:           "0xcA11bde05977b3631167028862bE2a173976CA11",
-			NicksFactory:        "0x4e59b44847b379578588920cA78FbF26c0B4956C",
-			WETH:                "",
-			Permit2:             "0x000000000022D473030F116dDEE9F6B43aC78BA3",
-			ReceiptPollInterval: 500 * time.Millisecond,
-			ReceiptTimeout:      10 * time.Second,
+			RPCURL: "https://arc-testnet.g.alchemy.com/v2/%s",
+			Constant: ChainConstants{
+				ChainID:             5042002,
+				NativeSymbol:        "USDC",
+				NativeDecimals:      6,
+				ReceiptPollInterval: 500 * time.Millisecond,
+				ReceiptTimeout:      10 * time.Second,
+			},
+			Addresses: AddressBook{
+				Standard: StandardAddressBook{
+					Multicall:    "0xcA11bde05977b3631167028862bE2a173976CA11",
+					NicksFactory: "0x4e59b44847b379578588920cA78FbF26c0B4956C",
+					WETH:         "", // Not supported
+					Permit2:      "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+				},
+				Protocol: ProtocolAddressBook{
+					Uniswap: UniswapAddressBook{
+						V2: UniswapV2Config{
+							Factory: "", // Not supported
+							Router:  "", // Not supported
+						},
+					},
+				},
+			},
 		},
 		Avalanche: {
-			ChainID:             43113,
-			NativeSymbol:        "AVAX",
-			NativeDecimals:      18,
-			RPCURL:              "https://avax-fuji.g.alchemy.com/v2/%s",
-			Multicall:           "0xcA11bde05977b3631167028862bE2a173976CA11",
-			NicksFactory:        "0x4e59b44847b379578588920cA78FbF26c0B4956C",
-			WETH:                "0xd00ae08403B9bbb9124bB305C09058E32C39A48c",
-			Permit2:             "0x000000000022D473030F116dDEE9F6B43aC78BA3",
-			ReceiptPollInterval: 500 * time.Millisecond,
-			ReceiptTimeout:      10 * time.Second,
+			RPCURL: "https://avax-fuji.g.alchemy.com/v2/%s",
+			Constant: ChainConstants{
+				ChainID:             43113,
+				NativeSymbol:        "AVAX",
+				NativeDecimals:      18,
+				ReceiptPollInterval: 500 * time.Millisecond,
+				ReceiptTimeout:      10 * time.Second,
+			},
+			Addresses: AddressBook{
+				Standard: StandardAddressBook{
+					Multicall:    "0xcA11bde05977b3631167028862bE2a173976CA11",
+					NicksFactory: "0x4e59b44847b379578588920cA78FbF26c0B4956C",
+					WETH:         "0xd00ae08403B9bbb9124bB305C09058E32C39A48c",
+					Permit2:      "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+				},
+				Protocol: ProtocolAddressBook{
+					Uniswap: UniswapAddressBook{
+						V2: UniswapV2Config{
+							Factory: "", // Not supported
+							Router:  "", // Not supported
+						},
+					},
+				},
+			},
 		},
 		Base: {
-			ChainID:             84532,
-			NativeSymbol:        "ETH",
-			NativeDecimals:      18,
-			RPCURL:              "https://base-sepolia.g.alchemy.com/v2/%s",
-			Multicall:           "0xcA11bde05977b3631167028862bE2a173976CA11",
-			NicksFactory:        "0x4e59b44847b379578588920cA78FbF26c0B4956C",
-			WETH:                "0x4200000000000000000000000000000000000006",
-			Permit2:             "0x000000000022D473030F116dDEE9F6B43aC78BA3",
-			ReceiptPollInterval: 500 * time.Millisecond,
-			ReceiptTimeout:      10 * time.Second,
+			RPCURL: "https://base-sepolia.g.alchemy.com/v2/%s",
+			Constant: ChainConstants{
+				ChainID:             84532,
+				NativeSymbol:        "ETH",
+				NativeDecimals:      18,
+				ReceiptPollInterval: 500 * time.Millisecond,
+				ReceiptTimeout:      10 * time.Second,
+			},
+			Addresses: AddressBook{
+				Standard: StandardAddressBook{
+					Multicall:    "0xcA11bde05977b3631167028862bE2a173976CA11",
+					NicksFactory: "0x4e59b44847b379578588920cA78FbF26c0B4956C",
+					WETH:         "0x4200000000000000000000000000000000000006",
+					Permit2:      "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+				},
+				Protocol: ProtocolAddressBook{
+					Uniswap: UniswapAddressBook{
+						V2: UniswapV2Config{
+							Factory: "", // Not supported
+							Router:  "", // Not supported
+						},
+					},
+				},
+			},
 		},
 		BSC: {
-			ChainID:             97,
-			NativeSymbol:        "BNB",
-			NativeDecimals:      18,
-			RPCURL:              "https://bnb-testnet.g.alchemy.com/v2/%s",
-			Multicall:           "0xcA11bde05977b3631167028862bE2a173976CA11",
-			NicksFactory:        "0x4e59b44847b379578588920cA78FbF26c0B4956C",
-			WETH:                "0xae13d989daC2f0dEbFf460aC112a837C89BAa7cd",
-			Permit2:             "0x000000000022D473030F116dDEE9F6B43aC78BA3",
-			ReceiptPollInterval: 500 * time.Millisecond,
-			ReceiptTimeout:      10 * time.Second,
+			RPCURL: "https://bnb-testnet.g.alchemy.com/v2/%s",
+			Constant: ChainConstants{
+				ChainID:             97,
+				NativeSymbol:        "BNB",
+				NativeDecimals:      18,
+				ReceiptPollInterval: 500 * time.Millisecond,
+				ReceiptTimeout:      10 * time.Second,
+			},
+			Addresses: AddressBook{
+				Standard: StandardAddressBook{
+					Multicall:    "0xcA11bde05977b3631167028862bE2a173976CA11",
+					NicksFactory: "0x4e59b44847b379578588920cA78FbF26c0B4956C",
+					WETH:         "0xae13d989daC2f0dEbFf460aC112a837C89BAa7cd",
+					Permit2:      "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+				},
+				Protocol: ProtocolAddressBook{
+					Uniswap: UniswapAddressBook{
+						V2: UniswapV2Config{
+							Factory: "", // Not supported
+							Router:  "", // Not supported
+						},
+					},
+				},
+			},
 		},
 		Celo: {
-			ChainID:             11142220,
-			NativeSymbol:        "CELO",
-			NativeDecimals:      18,
-			RPCURL:              "https://celo-sepolia.g.alchemy.com/v2/%s",
-			Multicall:           "0xcA11bde05977b3631167028862bE2a173976CA11",
-			NicksFactory:        "0x4e59b44847b379578588920cA78FbF26c0B4956C",
-			WETH:                "",
-			Permit2:             "0x000000000022D473030F116dDEE9F6B43aC78BA3",
-			ReceiptPollInterval: 500 * time.Millisecond,
-			ReceiptTimeout:      10 * time.Second,
+			RPCURL: "https://celo-sepolia.g.alchemy.com/v2/%s",
+			Constant: ChainConstants{
+				ChainID:             11142220,
+				NativeSymbol:        "CELO",
+				NativeDecimals:      18,
+				ReceiptPollInterval: 500 * time.Millisecond,
+				ReceiptTimeout:      10 * time.Second,
+			},
+			Addresses: AddressBook{
+				Standard: StandardAddressBook{
+					Multicall:    "0xcA11bde05977b3631167028862bE2a173976CA11",
+					NicksFactory: "0x4e59b44847b379578588920cA78FbF26c0B4956C",
+					WETH:         "", // Not supported
+					Permit2:      "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+				},
+				Protocol: ProtocolAddressBook{
+					Uniswap: UniswapAddressBook{
+						V2: UniswapV2Config{
+							Factory: "", // Not supported
+							Router:  "", // Not supported
+						},
+					},
+				},
+			},
 		},
 		Ethereum: {
-			ChainID:             11155111,
-			NativeSymbol:        "ETH",
-			NativeDecimals:      18,
-			RPCURL:              "https://eth-sepolia.g.alchemy.com/v2/%s",
-			Multicall:           "0xcA11bde05977b3631167028862bE2a173976CA11",
-			NicksFactory:        "0x4e59b44847b379578588920cA78FbF26c0B4956C",
-			WETH:                "0xfff9976782d46cc05630d1f6ebab18b2324d6b14",
-			Permit2:             "0x000000000022D473030F116dDEE9F6B43aC78BA3",
-			ReceiptPollInterval: time.Second,
-			ReceiptTimeout:      30 * time.Second,
+			RPCURL: "https://eth-sepolia.g.alchemy.com/v2/%s",
+			Constant: ChainConstants{
+				ChainID:             11155111,
+				NativeSymbol:        "ETH",
+				NativeDecimals:      18,
+				ReceiptPollInterval: time.Second,
+				ReceiptTimeout:      30 * time.Second,
+			},
+			Addresses: AddressBook{
+				Standard: StandardAddressBook{
+					Multicall:    "0xcA11bde05977b3631167028862bE2a173976CA11",
+					NicksFactory: "0x4e59b44847b379578588920cA78FbF26c0B4956C",
+					WETH:         "0xfff9976782d46cc05630d1f6ebab18b2324d6b14",
+					Permit2:      "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+				},
+				Protocol: ProtocolAddressBook{
+					Uniswap: UniswapAddressBook{
+						V2: UniswapV2Config{
+							Factory: "0xF62c03E08ada871A0bEb309762E260a7a6a880E6",
+							Router:  "0xeE567Fe1712Faf6149d80dA1E6934E354124CfE3",
+						},
+					},
+				},
+			},
 		},
 		HyperEVM: {
-			ChainID:             998,
-			NativeSymbol:        "HYPE",
-			NativeDecimals:      18,
-			RPCURL:              "https://hyperliquid-testnet.g.alchemy.com/v2/%s",
-			Multicall:           "0xcA11bde05977b3631167028862bE2a173976CA11",
-			NicksFactory:        "0x4e59b44847b379578588920cA78FbF26c0B4956C",
-			WETH:                "0x5555555555555555555555555555555555555555",
-			Permit2:             "0x000000000022D473030F116dDEE9F6B43aC78BA3",
-			ReceiptPollInterval: 500 * time.Millisecond,
-			ReceiptTimeout:      10 * time.Second,
+			RPCURL: "https://hyperliquid-testnet.g.alchemy.com/v2/%s",
+			Constant: ChainConstants{
+				ChainID:             998,
+				NativeSymbol:        "HYPE",
+				NativeDecimals:      18,
+				ReceiptPollInterval: 500 * time.Millisecond,
+				ReceiptTimeout:      10 * time.Second,
+			},
+			Addresses: AddressBook{
+				Standard: StandardAddressBook{
+					Multicall:    "0xcA11bde05977b3631167028862bE2a173976CA11",
+					NicksFactory: "0x4e59b44847b379578588920cA78FbF26c0B4956C",
+					WETH:         "0x5555555555555555555555555555555555555555",
+					Permit2:      "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+				},
+				Protocol: ProtocolAddressBook{
+					Uniswap: UniswapAddressBook{
+						V2: UniswapV2Config{
+							Factory: "", // Not supported
+							Router:  "", // Not supported
+						},
+					},
+				},
+			},
 		},
 		Ink: {
-			ChainID:             763373,
-			NativeSymbol:        "ETH",
-			NativeDecimals:      18,
-			RPCURL:              "https://ink-sepolia.g.alchemy.com/v2/%s",
-			Multicall:           "0xcA11bde05977b3631167028862bE2a173976CA11",
-			NicksFactory:        "0x4e59b44847b379578588920cA78FbF26c0B4956C",
-			WETH:                "0x4200000000000000000000000000000000000006",
-			Permit2:             "0x000000000022D473030F116dDEE9F6B43aC78BA3",
-			ReceiptPollInterval: 500 * time.Millisecond,
-			ReceiptTimeout:      10 * time.Second,
+			RPCURL: "https://ink-sepolia.g.alchemy.com/v2/%s",
+			Constant: ChainConstants{
+				ChainID:             763373,
+				NativeSymbol:        "ETH",
+				NativeDecimals:      18,
+				ReceiptPollInterval: 500 * time.Millisecond,
+				ReceiptTimeout:      10 * time.Second,
+			},
+			Addresses: AddressBook{
+				Standard: StandardAddressBook{
+					Multicall:    "0xcA11bde05977b3631167028862bE2a173976CA11",
+					NicksFactory: "0x4e59b44847b379578588920cA78FbF26c0B4956C",
+					WETH:         "0x4200000000000000000000000000000000000006",
+					Permit2:      "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+				},
+				Protocol: ProtocolAddressBook{
+					Uniswap: UniswapAddressBook{
+						V2: UniswapV2Config{
+							Factory: "", // Not supported
+							Router:  "", // Not supported
+						},
+					},
+				},
+			},
 		},
 		Linea: {
-			ChainID:             59141,
-			NativeSymbol:        "ETH",
-			NativeDecimals:      18,
-			RPCURL:              "https://linea-sepolia.g.alchemy.com/v2/%s",
-			Multicall:           "0xcA11bde05977b3631167028862bE2a173976CA11",
-			NicksFactory:        "0x4e59b44847b379578588920cA78FbF26c0B4956C",
-			WETH:                "0x06565ed324Ee9fb4DB0FF80B7eDbE4Cb007555a3",
-			Permit2:             "0x000000000022D473030F116dDEE9F6B43aC78BA3",
-			ReceiptPollInterval: 500 * time.Millisecond,
-			ReceiptTimeout:      10 * time.Second,
+			RPCURL: "https://linea-sepolia.g.alchemy.com/v2/%s",
+			Constant: ChainConstants{
+				ChainID:             59141,
+				NativeSymbol:        "ETH",
+				NativeDecimals:      18,
+				ReceiptPollInterval: 500 * time.Millisecond,
+				ReceiptTimeout:      10 * time.Second,
+			},
+			Addresses: AddressBook{
+				Standard: StandardAddressBook{
+					Multicall:    "0xcA11bde05977b3631167028862bE2a173976CA11",
+					NicksFactory: "0x4e59b44847b379578588920cA78FbF26c0B4956C",
+					WETH:         "0x06565ed324Ee9fb4DB0FF80B7eDbE4Cb007555a3",
+					Permit2:      "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+				},
+				Protocol: ProtocolAddressBook{
+					Uniswap: UniswapAddressBook{
+						V2: UniswapV2Config{
+							Factory: "", // Not supported
+							Router:  "", // Not supported
+						},
+					},
+				},
+			},
 		},
 		Monad: {
-			ChainID:             10143,
-			NativeSymbol:        "MON",
-			NativeDecimals:      18,
-			RPCURL:              "https://monad-testnet.g.alchemy.com/v2/%s",
-			Multicall:           "0xcA11bde05977b3631167028862bE2a173976CA11",
-			NicksFactory:        "0x4e59b44847b379578588920cA78FbF26c0B4956C",
-			WETH:                "0xFb8bf4c1CC7a94c73D209a149eA2AbEa852BC541",
-			Permit2:             "0x000000000022D473030F116dDEE9F6B43aC78BA3",
-			ReceiptPollInterval: 500 * time.Millisecond,
-			ReceiptTimeout:      10 * time.Second,
+			RPCURL: "https://monad-testnet.g.alchemy.com/v2/%s",
+			Constant: ChainConstants{
+				ChainID:             10143,
+				NativeSymbol:        "MON",
+				NativeDecimals:      18,
+				ReceiptPollInterval: 500 * time.Millisecond,
+				ReceiptTimeout:      10 * time.Second,
+			},
+			Addresses: AddressBook{
+				Standard: StandardAddressBook{
+					Multicall:    "0xcA11bde05977b3631167028862bE2a173976CA11",
+					NicksFactory: "0x4e59b44847b379578588920cA78FbF26c0B4956C",
+					WETH:         "0xFb8bf4c1CC7a94c73D209a149eA2AbEa852BC541",
+					Permit2:      "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+				},
+				Protocol: ProtocolAddressBook{
+					Uniswap: UniswapAddressBook{
+						V2: UniswapV2Config{
+							Factory: "", // Not supported
+							Router:  "", // Not supported
+						},
+					},
+				},
+			},
 		},
 		Optimism: {
-			ChainID:             11155420,
-			NativeSymbol:        "ETH",
-			NativeDecimals:      18,
-			RPCURL:              "https://opt-sepolia.g.alchemy.com/v2/%s",
-			Multicall:           "0xcA11bde05977b3631167028862bE2a173976CA11",
-			NicksFactory:        "0x4e59b44847b379578588920cA78FbF26c0B4956C",
-			WETH:                "0x4200000000000000000000000000000000000006",
-			Permit2:             "0x000000000022D473030F116dDEE9F6B43aC78BA3",
-			ReceiptPollInterval: 500 * time.Millisecond,
-			ReceiptTimeout:      10 * time.Second,
+			RPCURL: "https://opt-sepolia.g.alchemy.com/v2/%s",
+			Constant: ChainConstants{
+				ChainID:             11155420,
+				NativeSymbol:        "ETH",
+				NativeDecimals:      18,
+				ReceiptPollInterval: 500 * time.Millisecond,
+				ReceiptTimeout:      10 * time.Second,
+			},
+			Addresses: AddressBook{
+				Standard: StandardAddressBook{
+					Multicall:    "0xcA11bde05977b3631167028862bE2a173976CA11",
+					NicksFactory: "0x4e59b44847b379578588920cA78FbF26c0B4956C",
+					WETH:         "0x4200000000000000000000000000000000000006",
+					Permit2:      "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+				},
+				Protocol: ProtocolAddressBook{
+					Uniswap: UniswapAddressBook{
+						V2: UniswapV2Config{
+							Factory: "", // Not supported
+							Router:  "", // Not supported
+						},
+					},
+				},
+			},
 		},
 		Polygon: {
-			ChainID:             80002,
-			NativeSymbol:        "POL",
-			NativeDecimals:      18,
-			RPCURL:              "https://polygon-amoy.g.alchemy.com/v2/%s",
-			Multicall:           "0xcA11bde05977b3631167028862bE2a173976CA11",
-			NicksFactory:        "0x4e59b44847b379578588920cA78FbF26c0B4956C",
-			WETH:                "0x360ad4f9a9A8EFe9A8DCB5f461c4Cc1047E1Dcf9",
-			Permit2:             "0x000000000022D473030F116dDEE9F6B43aC78BA3",
-			ReceiptPollInterval: 500 * time.Millisecond,
-			ReceiptTimeout:      10 * time.Second,
+			RPCURL: "https://polygon-amoy.g.alchemy.com/v2/%s",
+			Constant: ChainConstants{
+				ChainID:             80002,
+				NativeSymbol:        "POL",
+				NativeDecimals:      18,
+				ReceiptPollInterval: 500 * time.Millisecond,
+				ReceiptTimeout:      10 * time.Second,
+			},
+			Addresses: AddressBook{
+				Standard: StandardAddressBook{
+					Multicall:    "0xcA11bde05977b3631167028862bE2a173976CA11",
+					NicksFactory: "0x4e59b44847b379578588920cA78FbF26c0B4956C",
+					WETH:         "0x360ad4f9a9A8EFe9A8DCB5f461c4Cc1047E1Dcf9",
+					Permit2:      "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+				},
+				Protocol: ProtocolAddressBook{
+					Uniswap: UniswapAddressBook{
+						V2: UniswapV2Config{
+							Factory: "", // Not supported
+							Router:  "", // Not supported
+						},
+					},
+				},
+			},
 		},
 		Robinhood: {
-			ChainID:             46630,
-			NativeSymbol:        "ETH",
-			NativeDecimals:      18,
-			RPCURL:              "https://robinhood-testnet.g.alchemy.com/v2/%s",
-			Multicall:           "0xcA11bde05977b3631167028862bE2a173976CA11",
-			NicksFactory:        "0x4e59b44847b379578588920cA78FbF26c0B4956C",
-			WETH:                "0x7943e237c7F95DA44E0301572D358911207852Fa",
-			Permit2:             "0x000000000022D473030F116dDEE9F6B43aC78BA3",
-			ReceiptPollInterval: 500 * time.Millisecond,
-			ReceiptTimeout:      10 * time.Second,
+			RPCURL: "https://robinhood-testnet.g.alchemy.com/v2/%s",
+			Constant: ChainConstants{
+				ChainID:             46630,
+				NativeSymbol:        "ETH",
+				NativeDecimals:      18,
+				ReceiptPollInterval: 500 * time.Millisecond,
+				ReceiptTimeout:      10 * time.Second,
+			},
+			Addresses: AddressBook{
+				Standard: StandardAddressBook{
+					Multicall:    "0xcA11bde05977b3631167028862bE2a173976CA11",
+					NicksFactory: "0x4e59b44847b379578588920cA78FbF26c0B4956C",
+					WETH:         "0x7943e237c7F95DA44E0301572D358911207852Fa",
+					Permit2:      "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+				},
+				Protocol: ProtocolAddressBook{
+					Uniswap: UniswapAddressBook{
+						V2: UniswapV2Config{
+							Factory: "", // Not supported
+							Router:  "", // Not supported
+						},
+					},
+				},
+			},
 		},
 		Sei: {
-			ChainID:             1328,
-			NativeSymbol:        "SEI",
-			NativeDecimals:      18,
-			RPCURL:              "https://sei-testnet.g.alchemy.com/v2/%s",
-			Multicall:           "0xcA11bde05977b3631167028862bE2a173976CA11",
-			NicksFactory:        "0x4e59b44847b379578588920cA78FbF26c0B4956C",
-			WETH:                "0xF8EB55EC97B59d91fe9E91A1d61147e0d2A7b6F7",
-			Permit2:             "0x000000000022D473030F116dDEE9F6B43aC78BA3",
-			ReceiptPollInterval: 500 * time.Millisecond,
-			ReceiptTimeout:      10 * time.Second,
+			RPCURL: "https://sei-testnet.g.alchemy.com/v2/%s",
+			Constant: ChainConstants{
+				ChainID:             1328,
+				NativeSymbol:        "SEI",
+				NativeDecimals:      18,
+				ReceiptPollInterval: 500 * time.Millisecond,
+				ReceiptTimeout:      10 * time.Second,
+			},
+			Addresses: AddressBook{
+				Standard: StandardAddressBook{
+					Multicall:    "0xcA11bde05977b3631167028862bE2a173976CA11",
+					NicksFactory: "0x4e59b44847b379578588920cA78FbF26c0B4956C",
+					WETH:         "0xF8EB55EC97B59d91fe9E91A1d61147e0d2A7b6F7",
+					Permit2:      "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+				},
+				Protocol: ProtocolAddressBook{
+					Uniswap: UniswapAddressBook{
+						V2: UniswapV2Config{
+							Factory: "", // Not supported
+							Router:  "", // Not supported
+						},
+					},
+				},
+			},
 		},
 		Unichain: {
-			ChainID:             1301,
-			NativeSymbol:        "ETH",
-			NativeDecimals:      18,
-			RPCURL:              "https://unichain-sepolia.g.alchemy.com/v2/%s",
-			Multicall:           "0xcA11bde05977b3631167028862bE2a173976CA11",
-			NicksFactory:        "0x4e59b44847b379578588920cA78FbF26c0B4956C",
-			WETH:                "0x4200000000000000000000000000000000000006",
-			Permit2:             "0x000000000022D473030F116dDEE9F6B43aC78BA3",
-			ReceiptPollInterval: 500 * time.Millisecond,
-			ReceiptTimeout:      10 * time.Second,
+			RPCURL: "https://unichain-sepolia.g.alchemy.com/v2/%s",
+			Constant: ChainConstants{
+				ChainID:             1301,
+				NativeSymbol:        "ETH",
+				NativeDecimals:      18,
+				ReceiptPollInterval: 500 * time.Millisecond,
+				ReceiptTimeout:      10 * time.Second,
+			},
+			Addresses: AddressBook{
+				Standard: StandardAddressBook{
+					Multicall:    "0xcA11bde05977b3631167028862bE2a173976CA11",
+					NicksFactory: "0x4e59b44847b379578588920cA78FbF26c0B4956C",
+					WETH:         "0x4200000000000000000000000000000000000006",
+					Permit2:      "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+				},
+				Protocol: ProtocolAddressBook{
+					Uniswap: UniswapAddressBook{
+						V2: UniswapV2Config{
+							Factory: "0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f",
+							Router:  "0x6e8C9D62A16419357eA998229126D2fD6B1CCfbF",
+						},
+					},
+				},
+			},
 		},
 	},
 }

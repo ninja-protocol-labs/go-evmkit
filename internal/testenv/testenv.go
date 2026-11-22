@@ -89,17 +89,44 @@ func (n Network) String() string {
 }
 
 type Config struct {
+	RPCURL             string
+	ActorPrivateKeyHex string
+
+	Constant  ChainConstants
+	Addresses AddressBook
+}
+
+type ChainConstants struct {
 	ChainID             int
 	NativeSymbol        string
 	NativeDecimals      int
-	RPCURL              string
-	ActorPrivateKeyHex  string
-	Multicall           string
-	NicksFactory        string
-	WETH                string
-	Permit2             string
 	ReceiptPollInterval time.Duration
 	ReceiptTimeout      time.Duration
+}
+
+type AddressBook struct {
+	Standard StandardAddressBook
+	Protocol ProtocolAddressBook
+}
+
+type StandardAddressBook struct {
+	Multicall    string
+	NicksFactory string
+	WETH         string
+	Permit2      string
+}
+
+type ProtocolAddressBook struct {
+	Uniswap UniswapAddressBook
+}
+
+type UniswapAddressBook struct {
+	V2 UniswapV2Config
+}
+
+type UniswapV2Config struct {
+	Factory string
+	Router  string
 }
 
 // MustLoad returns n's config on nt with the API key and actor key filled in.
