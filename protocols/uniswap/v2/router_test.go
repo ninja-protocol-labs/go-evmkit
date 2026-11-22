@@ -21,7 +21,6 @@ import (
 	"github.com/ninja-protocol-labs/go-evmkit/standards/eip712"
 	"github.com/ninja-protocol-labs/go-evmkit/standards/erc20"
 	"github.com/ninja-protocol-labs/go-evmkit/standards/erc2612"
-	"github.com/ninja-protocol-labs/go-evmkit/standards/multicall3"
 	"github.com/ninja-protocol-labs/go-evmkit/tx"
 	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
@@ -29,24 +28,25 @@ import (
 type RouterSwapSuite struct {
 	suite.Suite
 
-	Enable          bool
-	RPCURL          string
-	PrivateKeyHex   string
-	RouterHex       string
-	TokenInHex      string
-	TokenOutHex     string
-	HopsHex         []string
-	NativeIn        bool
-	NativeOut       bool
-	MulticallHex    string
-	AmountIn        string
-	NativeSymbol    string
-	RoundTrip       bool
-	Interval        int
-	Timeout         int
-	DeadlineSeconds int
-	PriceBuffer     uint64
-	LimitBuffer     uint64
+	RPCURL              string
+	PrivateKeyHex       string
+	RouterHex           string
+	MulticallHex        string
+	TokenInHex          string
+	TokenOutHex         string
+	HopsHex             []string
+	NativeIn            bool
+	NativeOut           bool
+	AmountIn            string
+	RoundTrip           bool
+	NativeSymbol        string
+	NativeDecimals      int
+	Timeout             time.Duration
+	ReceiptPollInterval time.Duration
+	ReceiptTimeout      time.Duration
+	DeadlineSeconds     int
+	PriceBuffer         uint64
+	LimitBuffer         uint64
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -69,34 +69,41 @@ type RouterSwapSuite struct {
 }
 
 func TestRouterSwapSuite(t *testing.T) {
-	suite.Run(t, &RouterSwapSuite{
-		Enable:          false,
-		RoundTrip:       false,
-		RPCURL:          "",
-		PrivateKeyHex:   "",
-		RouterHex:       "",
-		TokenInHex:      "",
-		TokenOutHex:     "",
-		HopsHex:         []string{},
-		NativeIn:        false,
-		NativeOut:       true,
-		MulticallHex:    multicall3.DefaultMulticall3Address.String(),
-		AmountIn:        "",
-		NativeSymbol:    "",
-		Interval:        200,
-		Timeout:         60,
-		DeadlineSeconds: 600,
-		PriceBuffer:     150,
-		LimitBuffer:     150,
-	})
+	c := testenv.MustLoad(t, testenv.Testnet, testenv.UnknownNetwork)
+	if c.Addresses.Protocol.Uniswap.V2.Router == "" {
+		t.Skip("testenv: no Uniswap V2 router configured for this network")
+	}
+
+	s := &RouterSwapSuite{
+		RPCURL:              c.RPCURL,
+		PrivateKeyHex:       c.ActorPrivateKeyHex,
+		RouterHex:           c.Addresses.Protocol.Uniswap.V2.Router,
+		MulticallHex:        c.Addresses.Standard.Multicall,
+		TokenInHex:          "",
+		TokenOutHex:         "",
+		HopsHex:             []string{},
+		NativeIn:            false,
+		NativeOut:           true,
+		AmountIn:            "",
+		RoundTrip:           false,
+		NativeSymbol:        c.Constant.NativeSymbol,
+		NativeDecimals:      c.Constant.NativeDecimals,
+		Timeout:             10 * time.Minute,
+		ReceiptPollInterval: c.Constant.ReceiptPollInterval,
+		ReceiptTimeout:      c.Constant.ReceiptTimeout,
+		DeadlineSeconds:     600,
+		PriceBuffer:         150,
+		LimitBuffer:         150,
+	}
+	if s.AmountIn == "" || (!s.NativeIn && s.TokenInHex == "") || (!s.NativeOut && s.TokenOutHex == "") {
+		t.Skip("RouterSwapSuite: AmountIn/TokenInHex/TokenOutHex not set")
+	}
+
+	suite.Run(t, s)
 }
 
 func (s *RouterSwapSuite) SetupSuite() {
-	if !s.Enable {
-		s.T().Skip("disabled")
-	}
-
-	s.ctx, s.cancel = context.WithTimeout(context.Background(), 10*time.Minute)
+	s.ctx, s.cancel = context.WithTimeout(s.T().Context(), s.Timeout)
 
 	s.client = rpc.NewClient(s.RPCURL, rpc.WithRetry(5, rpc.ExponentialBackoff(500*time.Millisecond, 10*time.Second)))
 	s.v2Router = NewRouter(s.client)
@@ -114,7 +121,7 @@ func (s *RouterSwapSuite) SetupSuite() {
 
 	s.Require().False(s.NativeIn && s.NativeOut, "NativeIn and NativeOut can't both be set -- that's not a swap")
 
-	s.wethAddr, err = s.v2Router.WETH(s.ctx, s.router, rpc.BlockTagLatest)
+	s.wethAddr, err = s.v2Router.WETH(s.ctx, nil, NewWETHRequest(s.router))
 	s.Require().NoError(err)
 
 	if s.NativeIn {
@@ -147,18 +154,18 @@ func (s *RouterSwapSuite) SetupSuite() {
 
 	path := append([]*types.Address{s.tokenIn}, s.hops...)
 	path = append(path, s.tokenOut)
-	amountsOut, err := s.v2Router.GetAmountsOut(s.ctx, NewGetAmountsOutParams(s.router, s.amount, path), rpc.BlockTagLatest)
+	amountsOut, err := s.v2Router.GetAmountsOut(s.ctx, nil, NewGetAmountsOutRequest(s.router, s.amount, path))
 	s.Require().NoError(err, "no route from tokenIn to tokenOut via this router")
 	s.Require().Len(amountsOut, len(path))
 }
 
 func (s *RouterSwapSuite) TearDownSuite() {
 	if s.totalFee != nil {
-		base := new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil)
+		base := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(s.NativeDecimals)), nil)
 		whole, frac := new(big.Int), new(big.Int)
 		whole.DivMod(s.totalFee, base, frac)
 
-		fracStr := strings.TrimRight(fmt.Sprintf("%018s", frac.String()), "0")
+		fracStr := strings.TrimRight(fmt.Sprintf("%0*s", s.NativeDecimals, frac.String()), "0")
 		decimal := whole.String()
 		if fracStr != "" {
 			decimal += "." + fracStr
@@ -234,24 +241,25 @@ func (s *RouterSwapSuite) swap(path []*types.Address, amountIn *big.Int, nativeI
 
 		s.T().Logf("swap %s -> %s: approve %s to spend %s, broadcast tx %s", tokenIn, tokenOut, s.router, amountIn, approveHash)
 
-		approveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, approveHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+		approveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, approveHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 		s.Require().NoError(err)
 		s.Require().True(approveReceipt.Status, "approve transaction reverted")
 		var allowance *big.Int
 		s.Require().Eventually(func() bool {
 			allowance, err = s.erc20.Allowance(s.ctx, nil, erc20.NewAllowanceRequest(tokenIn, s.from, s.router))
 			return err == nil && amountIn.Cmp(allowance) == 0
-		}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "allowance not visible after approve")
+		}, s.ReceiptTimeout, s.ReceiptPollInterval, "allowance not visible after approve")
 		s.T().Logf("swap %s -> %s: approve confirmed in block %d", tokenIn, tokenOut, approveReceipt.BlockNumber)
 	}
 
 	var amountOutMin *big.Int
-	var unsignedSwap core.Transaction
+	var swapTx core.Transaction
+	var swapHash *types.Hash
 	var lastErr error
 	attempt := 0
 	s.Require().Eventually(func() bool {
 		attempt++
-		amountsOut, err := s.v2Router.GetAmountsOut(s.ctx, NewGetAmountsOutParams(s.router, amountIn, path), rpc.BlockTagLatest)
+		amountsOut, err := s.v2Router.GetAmountsOut(s.ctx, nil, NewGetAmountsOutRequest(s.router, amountIn, path))
 		if err != nil {
 			lastErr = err
 			return false
@@ -264,42 +272,30 @@ func (s *RouterSwapSuite) swap(path []*types.Address, amountIn *big.Int, nativeI
 		builder := tx.NewDynamicFeeBuilder()
 		builder.PriceBuffer(s.PriceBuffer)
 		builder.LimitBuffer(s.LimitBuffer)
+		opts := bind.NewTransactOptions(s.signer, builder)
 
-		var u core.Transaction
+		var sent core.Transaction
+		var hash *types.Hash
 		switch {
 		case nativeIn:
-			u, err = s.v2Router.CreateSwapExactETHForTokens(s.ctx, builder, NewSwapExactETHForTokensParams(s.router, s.from, amountOutMin, path, s.from, deadline, amountIn))
+			sent, hash, err = s.v2Router.SwapExactETHForTokens(s.ctx, opts, NewSwapExactETHForTokensRequest(s.router, amountOutMin, path, s.from, deadline, amountIn))
 		case nativeOut:
-			u, err = s.v2Router.CreateSwapExactTokensForETH(s.ctx, builder, NewSwapExactTokensForETHParams(s.router, s.from, amountIn, amountOutMin, path, s.from, deadline))
+			sent, hash, err = s.v2Router.SwapExactTokensForETH(s.ctx, opts, NewSwapExactTokensForETHRequest(s.router, amountIn, amountOutMin, path, s.from, deadline))
 		default:
-			u, err = s.v2Router.CreateSwapExactTokensForTokens(s.ctx, builder, NewSwapExactTokensForTokensParams(s.router, s.from, amountIn, amountOutMin, path, s.from, deadline))
+			sent, hash, err = s.v2Router.SwapExactTokensForTokens(s.ctx, opts, NewSwapExactTokensForTokensRequest(s.router, amountIn, amountOutMin, path, s.from, deadline))
 		}
 		if err != nil {
 			lastErr = err
 			s.T().Logf("swap %s -> %s: attempt %d failed: %v", tokenIn, tokenOut, attempt, err)
 			return false
 		}
-		unsignedSwap = u
+		swapTx, swapHash = sent, hash
 		return true
-	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "swap not buildable: %v", lastErr)
-	s.Require().NoError(unsignedSwap.Sign(s.signer))
-	s.totalFee.Add(s.totalFee, unsignedSwap.MaxFee())
-	s.T().Logf("swap %s -> %s: swap tx built after %d attempt(s), amountOutMin=%s", tokenIn, tokenOut, attempt, amountOutMin)
+	}, s.ReceiptTimeout, s.ReceiptPollInterval, "swap not sendable: %v", lastErr)
+	s.totalFee.Add(s.totalFee, swapTx.MaxFee())
+	s.T().Logf("swap %s -> %s: swap sent after %d attempt(s), amountOutMin=%s, nonce %d, tx %s", tokenIn, tokenOut, attempt, amountOutMin, swapTx.AddressNonce(), swapHash)
 
-	var swapHash *types.Hash
-	var err error
-	switch {
-	case nativeIn:
-		swapHash, err = s.v2Router.SwapExactETHForTokens(s.ctx, unsignedSwap)
-	case nativeOut:
-		swapHash, err = s.v2Router.SwapExactTokensForETH(s.ctx, unsignedSwap)
-	default:
-		swapHash, err = s.v2Router.SwapExactTokensForTokens(s.ctx, unsignedSwap)
-	}
-	s.Require().NoError(err)
-	s.T().Logf("swap %s -> %s: broadcast swap, tx %s", tokenIn, tokenOut, swapHash)
-
-	swapReceipt, err := tx.WaitForReceipt(s.ctx, s.client, swapHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	swapReceipt, err := tx.WaitForReceipt(s.ctx, s.client, swapHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(swapReceipt.Status, "swap transaction reverted")
 	s.T().Logf("swap %s -> %s: swap confirmed in block %d", tokenIn, tokenOut, swapReceipt.BlockNumber)
@@ -350,24 +346,26 @@ func (s *RouterSwapSuite) swap(path []*types.Address, amountIn *big.Int, nativeI
 type RouterLifeCycleSuite struct {
 	suite.Suite
 
-	Enable          bool
-	RPCURL          string
-	PrivateKeyHex   string
-	RouterHex       string
-	MulticallHex    string
-	Interval        int
-	Timeout         int
-	DeadlineSeconds int
-	LimitBuffer     uint64
-	PriceBuffer     uint64
-	ByteCode        string
-	Constructor     *abi.Function
-	MintValue       string
-	LiquidityAmount string
-	SwapAmount      string
-	NativeValue     string
-	NativeSymbol    string
-	Salt            *types.Hash
+	RPCURL              string
+	PrivateKeyHex       string
+	RouterHex           string
+	MulticallHex        string
+	NicksFactoryHex     string
+	NativeSymbol        string
+	NativeDecimals      int
+	Timeout             time.Duration
+	ReceiptPollInterval time.Duration
+	ReceiptTimeout      time.Duration
+	DeadlineSeconds     int
+	LimitBuffer         uint64
+	PriceBuffer         uint64
+	ByteCode            string
+	Constructor         *abi.Function
+	MintValue           string
+	LiquidityAmount     string
+	SwapAmount          string
+	NativeValue         string
+	Salt                *types.Hash
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -380,6 +378,7 @@ type RouterLifeCycleSuite struct {
 	router    *types.Address
 	factory   *types.Address
 	multicall *types.Address
+	nicks     *types.Address
 	wethAddr  *types.Address
 	chainID   *big.Int
 	token0    *types.Address
@@ -403,35 +402,38 @@ type RouterLifeCycleSuite struct {
 	totalFee *big.Int
 }
 
-func TestRouterSuite(t *testing.T) {
+func TestRouterLifeCycleSuite(t *testing.T) {
+	c := testenv.MustLoad(t, testenv.Testnet, testenv.UnknownNetwork)
+	if c.Addresses.Protocol.Uniswap.V2.Router == "" {
+		t.Skip("testenv: no Uniswap V2 router configured for this network")
+	}
+
 	suite.Run(t, &RouterLifeCycleSuite{
-		Enable:          false,
-		RPCURL:          "",
-		RouterHex:       "",
-		PrivateKeyHex:   "",
-		MulticallHex:    multicall3.DefaultMulticall3Address.String(),
-		Interval:        200,
-		Timeout:         60,
-		DeadlineSeconds: 600,
-		LimitBuffer:     300,
-		PriceBuffer:     150,
-		ByteCode:        testenv.ERC20ByteCodeHex,
-		Constructor:     abi.NewFunction("constructor", abi.NewTypes(abi.String, abi.String, abi.Uint8), nil),
-		MintValue:       "1000000000000000000000000",
-		LiquidityAmount: "1000000000000000000000",
-		SwapAmount:      "1000000000000000000",
-		NativeValue:     "1000000000000000",
-		NativeSymbol:    "",
-		Salt:            core.Keccak256([]byte("go-evmkit")),
+		RPCURL:              c.RPCURL,
+		PrivateKeyHex:       c.ActorPrivateKeyHex,
+		RouterHex:           c.Addresses.Protocol.Uniswap.V2.Router,
+		MulticallHex:        c.Addresses.Standard.Multicall,
+		NicksFactoryHex:     c.Addresses.Standard.NicksFactory,
+		NativeSymbol:        c.Constant.NativeSymbol,
+		NativeDecimals:      c.Constant.NativeDecimals,
+		Timeout:             10 * time.Minute,
+		ReceiptPollInterval: c.Constant.ReceiptPollInterval,
+		ReceiptTimeout:      c.Constant.ReceiptTimeout,
+		DeadlineSeconds:     600,
+		LimitBuffer:         300,
+		PriceBuffer:         150,
+		ByteCode:            testenv.ERC20ByteCodeHex,
+		Constructor:         abi.NewFunction("constructor", abi.NewTypes(abi.String, abi.String, abi.Uint8), nil),
+		MintValue:           "1000000000000000000000000",
+		LiquidityAmount:     "1000000000000000000000",
+		SwapAmount:          "1000000000000000000",
+		NativeValue:         "1000000000000000",
+		Salt:                core.Keccak256([]byte("go-evmkit")),
 	})
 }
 
 func (s *RouterLifeCycleSuite) SetupSuite() {
-	if !s.Enable {
-		s.T().Skip("disabled")
-	}
-
-	s.ctx, s.cancel = context.WithTimeout(context.Background(), time.Duration(s.Timeout)*time.Minute)
+	s.ctx, s.cancel = context.WithTimeout(s.T().Context(), s.Timeout)
 
 	s.client = rpc.NewClient(s.RPCURL, rpc.WithRetry(5, rpc.ExponentialBackoff(500*time.Millisecond, 10*time.Second)))
 	s.deployer = deploy.NewNicksDeployer(s.client)
@@ -452,6 +454,9 @@ func (s *RouterLifeCycleSuite) SetupSuite() {
 	s.Require().NoError(err)
 
 	s.multicall, err = types.NewAddressFromHex(s.MulticallHex)
+	s.Require().NoError(err)
+
+	s.nicks, err = types.NewAddressFromHex(s.NicksFactoryHex)
 	s.Require().NoError(err)
 
 	mintValue, ok := new(big.Int).SetString(s.MintValue, 10)
@@ -476,10 +481,10 @@ func (s *RouterLifeCycleSuite) SetupSuite() {
 	s.Require().True(ok)
 	s.chainID = chainID
 
-	s.wethAddr, err = s.v2Router.WETH(s.ctx, s.router, rpc.BlockTagLatest)
+	s.wethAddr, err = s.v2Router.WETH(s.ctx, nil, NewWETHRequest(s.router))
 	s.Require().NoError(err)
 
-	s.factory, err = s.v2Router.Factory(s.ctx, s.router, rpc.BlockTagLatest)
+	s.factory, err = s.v2Router.Factory(s.ctx, nil, NewFactoryRequest(s.router))
 	s.Require().NoError(err)
 
 	s.T().Logf("SetupSuite: router %s -> factory=%s WETH=%s", s.router, s.factory, s.wethAddr)
@@ -507,15 +512,15 @@ func (s *RouterLifeCycleSuite) SetupSuite() {
 		builder.PriceBuffer(s.PriceBuffer)
 		builder.LimitBuffer(s.LimitBuffer)
 
-		deployTx, hash, err := s.deployer.Deploy(s.ctx, bind.NewTransactOptions(s.signer, builder), deploy.NewCreate2Request(deploy.DefaultNicksMethodFactory, deployment))
+		deployTx, hash, err := s.deployer.Deploy(s.ctx, bind.NewTransactOptions(s.signer, builder), deploy.NewCreate2Request(s.nicks, deployment))
 		s.Require().NoError(err)
 		s.totalFee.Add(s.totalFee, deployTx.MaxFee())
 
-		receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+		receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, s.ReceiptPollInterval, s.ReceiptTimeout)
 		s.Require().NoError(err)
 		s.Require().True(receipt.Status, "deploy transaction reverted")
 
-		token, err := s.deployer.DeployAddress(deploy.NewCreate2Request(deploy.DefaultNicksMethodFactory, deployment))
+		token, err := s.deployer.DeployAddress(deploy.NewCreate2Request(s.nicks, deployment))
 		s.Require().NoError(err)
 		tokens[i] = token
 
@@ -526,7 +531,7 @@ func (s *RouterLifeCycleSuite) SetupSuite() {
 			}
 			code, err := encoding.Hex.Decode(codeHex)
 			return err == nil && len(code) > 0
-		}, 10*time.Second, time.Duration(s.Interval)*time.Millisecond, "no code visible at deployed token %s", token)
+		}, 20*time.Second, s.ReceiptPollInterval, "no code visible at deployed token %s", token)
 
 		s.T().Logf("SetupSuite: deployed token %s %s (nonce %d, tx %s)", symbols[i], token, deployTx.AddressNonce(), hash)
 
@@ -544,7 +549,7 @@ func (s *RouterLifeCycleSuite) SetupSuite() {
 			}
 			unsignedMint = u
 			return true
-		}, 10*time.Second, time.Duration(s.Interval)*time.Millisecond, "mint gas estimate looked like a no-code call")
+		}, 20*time.Second, s.ReceiptPollInterval, "mint gas estimate looked like a no-code call")
 		s.Require().NoError(unsignedMint.Sign(s.signer))
 		s.totalFee.Add(s.totalFee, unsignedMint.MaxFee())
 
@@ -553,7 +558,7 @@ func (s *RouterLifeCycleSuite) SetupSuite() {
 		mintHash, err := tx.Broadcast(s.ctx, s.client, raw)
 		s.Require().NoError(err)
 
-		mintReceipt, err := tx.WaitForReceipt(s.ctx, s.client, mintHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+		mintReceipt, err := tx.WaitForReceipt(s.ctx, s.client, mintHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 		s.Require().NoError(err)
 		s.Require().True(mintReceipt.Status, "mint transaction reverted")
 
@@ -594,7 +599,7 @@ func (s *RouterLifeCycleSuite) TearDownSuite() {
 			burnHash, err := tx.Broadcast(s.ctx, s.client, raw)
 			s.Require().NoError(err)
 
-			burnReceipt, err := tx.WaitForReceipt(s.ctx, s.client, burnHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+			burnReceipt, err := tx.WaitForReceipt(s.ctx, s.client, burnHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 			s.Require().NoError(err)
 			s.Require().True(burnReceipt.Status, "burn transaction reverted")
 
@@ -603,17 +608,17 @@ func (s *RouterLifeCycleSuite) TearDownSuite() {
 	}
 
 	if s.totalFee != nil {
-		base := new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil)
+		base := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(s.NativeDecimals)), nil)
 		whole, frac := new(big.Int), new(big.Int)
 		whole.DivMod(s.totalFee, base, frac)
 
-		fracStr := strings.TrimRight(fmt.Sprintf("%018s", frac.String()), "0")
+		fracStr := strings.TrimRight(fmt.Sprintf("%0*s", s.NativeDecimals, frac.String()), "0")
 		decimal := whole.String()
 		if fracStr != "" {
 			decimal += "." + fracStr
 		}
 
-		s.T().Logf("RouterSuite total fee spent: %s %s", decimal, s.NativeSymbol)
+		s.T().Logf("RouterLifeCycleSuite total fee spent: %s %s", decimal, s.NativeSymbol)
 	}
 
 	if s.cancel != nil {
@@ -622,13 +627,13 @@ func (s *RouterLifeCycleSuite) TearDownSuite() {
 }
 
 func (s *RouterLifeCycleSuite) Test01ReadMethods() {
-	factory, err := s.v2Router.Factory(s.ctx, s.router, rpc.BlockTagLatest)
+	factory, err := s.v2Router.Factory(s.ctx, nil, NewFactoryRequest(s.router))
 	s.Require().NoError(err)
 	s.Require().False(factory.IsZero())
 	s.Require().True(factory.Equal(s.factory))
 	s.T().Logf("Test01ReadMethods: factory() = %s", factory)
 
-	w, err := s.v2Router.WETH(s.ctx, s.router, rpc.BlockTagLatest)
+	w, err := s.v2Router.WETH(s.ctx, nil, NewWETHRequest(s.router))
 	s.Require().NoError(err)
 	s.Require().False(w.IsZero())
 	s.Require().True(w.Equal(s.wethAddr))
@@ -648,21 +653,21 @@ func (s *RouterLifeCycleSuite) Test02AddLiquidity() {
 
 		s.T().Logf("Test02AddLiquidity: approve %s to spend %s of %s, broadcast tx %s", s.router, s.liquidityAmount, token, approveHash)
 
-		approveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, approveHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+		approveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, approveHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 		s.Require().NoError(err)
 		s.Require().True(approveReceipt.Status, "approve transaction reverted")
 		var allowance *big.Int
 		s.Require().Eventually(func() bool {
 			allowance, err = s.erc20.Allowance(s.ctx, nil, erc20.NewAllowanceRequest(token, s.from, s.router))
 			return err == nil && s.liquidityAmount.Cmp(allowance) == 0
-		}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "allowance not visible after approve")
+		}, s.ReceiptTimeout, s.ReceiptPollInterval, "allowance not visible after approve")
 		s.T().Logf("Test02AddLiquidity: approve of %s confirmed in block %d", token, approveReceipt.BlockNumber)
 	}
 
 	deadline := big.NewInt(time.Now().Add(time.Duration(s.DeadlineSeconds) * time.Second).Unix())
 	s.T().Logf("Test02AddLiquidity: deadline=%s", deadline)
 
-	predicted, err := s.v2Router.CallAddLiquidity(s.ctx, NewAddLiquidityParams(s.router, s.from, s.token0, s.token1, s.liquidityAmount, s.liquidityAmount, big.NewInt(0), big.NewInt(0), s.from, deadline), rpc.BlockTagLatest)
+	predicted, err := s.v2Router.CallAddLiquidity(s.ctx, bind.NewCallOptions().WithFrom(s.from), NewAddLiquidityRequest(s.router, s.token0, s.token1, s.liquidityAmount, s.liquidityAmount, big.NewInt(0), big.NewInt(0), s.from, deadline))
 	s.Require().NoError(err)
 	s.Require().Zero(s.liquidityAmount.Cmp(predicted.AmountA))
 	s.Require().Zero(s.liquidityAmount.Cmp(predicted.AmountB))
@@ -672,16 +677,12 @@ func (s *RouterLifeCycleSuite) Test02AddLiquidity() {
 	builder := tx.NewDynamicFeeBuilder()
 	builder.PriceBuffer(s.PriceBuffer)
 	builder.LimitBuffer(s.LimitBuffer)
-	unsigned, err := s.v2Router.CreateAddLiquidity(s.ctx, builder, NewAddLiquidityParams(s.router, s.from, s.token0, s.token1, s.liquidityAmount, s.liquidityAmount, big.NewInt(0), big.NewInt(0), s.from, deadline))
+	sentTx, hash, err := s.v2Router.AddLiquidity(s.ctx, bind.NewTransactOptions(s.signer, builder), NewAddLiquidityRequest(s.router, s.token0, s.token1, s.liquidityAmount, s.liquidityAmount, big.NewInt(0), big.NewInt(0), s.from, deadline))
 	s.Require().NoError(err)
-	s.Require().NoError(unsigned.Sign(s.signer))
-	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
-
-	hash, err := s.v2Router.AddLiquidity(s.ctx, unsigned)
-	s.Require().NoError(err)
+	s.totalFee.Add(s.totalFee, sentTx.MaxFee())
 	s.T().Logf("Test02AddLiquidity: broadcast addLiquidity tx %s", hash)
 
-	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(receipt.Status, "addLiquidity transaction reverted")
 	s.T().Logf("Test02AddLiquidity: addLiquidity confirmed in block %d", receipt.BlockNumber)
@@ -701,7 +702,7 @@ func (s *RouterLifeCycleSuite) Test02AddLiquidity() {
 	s.Require().Eventually(func() bool {
 		reserves, err = s.v2Pair.GetReserves(s.ctx, nil, NewGetReservesRequest(s.pair))
 		return err == nil && reserves.Reserve0.Sign() > 0 && reserves.Reserve1.Sign() > 0
-	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "reserves not visible after addLiquidity")
+	}, s.ReceiptTimeout, s.ReceiptPollInterval, "reserves not visible after addLiquidity")
 	s.Require().Zero(s.liquidityAmount.Cmp(reserves.Reserve0))
 	s.Require().Zero(s.liquidityAmount.Cmp(reserves.Reserve1))
 	s.T().Logf("Test02AddLiquidity: pair %s reserves reserve0=%s reserve1=%s", s.pair, reserves.Reserve0, reserves.Reserve1)
@@ -719,21 +720,21 @@ func (s *RouterLifeCycleSuite) Test03GetAmounts() {
 	s.Require().NoError(err)
 	s.T().Logf("Test03GetAmounts: pair %s reserves reserve0=%s reserve1=%s", s.pair, reserves.Reserve0, reserves.Reserve1)
 
-	amountsOut, err := s.v2Router.GetAmountsOut(s.ctx, NewGetAmountsOutParams(s.router, s.swapAmount, path), rpc.BlockTagLatest)
+	amountsOut, err := s.v2Router.GetAmountsOut(s.ctx, nil, NewGetAmountsOutRequest(s.router, s.swapAmount, path))
 	s.Require().NoError(err)
 	s.Require().Len(amountsOut, 2)
 	s.Require().Zero(s.swapAmount.Cmp(amountsOut[0]))
 	s.Require().True(amountsOut[1].Sign() > 0)
 	s.T().Logf("Test03GetAmounts: getAmountsOut(%s, [%s, %s]) = %v", s.swapAmount, s.token0, s.token1, amountsOut)
 
-	amountsIn, err := s.v2Router.GetAmountsIn(s.ctx, NewGetAmountsInParams(s.router, amountsOut[1], path), rpc.BlockTagLatest)
+	amountsIn, err := s.v2Router.GetAmountsIn(s.ctx, nil, NewGetAmountsInRequest(s.router, amountsOut[1], path))
 	s.Require().NoError(err)
 	s.Require().Len(amountsIn, 2)
 	s.Require().Zero(amountsOut[1].Cmp(amountsIn[1]))
 	s.Require().True(amountsIn[0].Sign() > 0)
 	s.T().Logf("Test03GetAmounts: getAmountsIn(%s, [%s, %s]) = %v", amountsOut[1], s.token0, s.token1, amountsIn)
 
-	quote, err := s.v2Router.Quote(s.ctx, NewQuoteParams(s.router, s.swapAmount, reserves.Reserve0, reserves.Reserve1), rpc.BlockTagLatest)
+	quote, err := s.v2Router.Quote(s.ctx, nil, NewQuoteRequest(s.router, s.swapAmount, reserves.Reserve0, reserves.Reserve1))
 	s.Require().NoError(err)
 	s.T().Logf("Test03GetAmounts: quote(%s, reserve0=%s, reserve1=%s) = %s (no fee, vs. amountsOut's fee-adjusted %s)", s.swapAmount, reserves.Reserve0, reserves.Reserve1, quote, amountsOut[1])
 }
@@ -752,17 +753,17 @@ func (s *RouterLifeCycleSuite) Test04SwapExactTokensForTokens() {
 
 	s.T().Logf("Test04SwapExactTokensForTokens: approve %s to spend %s of %s, broadcast tx %s", s.router, s.swapAmount, s.token0, approveHash)
 
-	approveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, approveHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	approveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, approveHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(approveReceipt.Status, "approve transaction reverted")
 	var allowance *big.Int
 	s.Require().Eventually(func() bool {
 		allowance, err = s.erc20.Allowance(s.ctx, nil, erc20.NewAllowanceRequest(s.token0, s.from, s.router))
 		return err == nil && s.swapAmount.Cmp(allowance) == 0
-	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "allowance not visible after approve")
+	}, s.ReceiptTimeout, s.ReceiptPollInterval, "allowance not visible after approve")
 	s.T().Logf("Test04SwapExactTokensForTokens: approve confirmed in block %d", approveReceipt.BlockNumber)
 
-	predicted, err := s.v2Router.CallSwapExactTokensForTokens(s.ctx, NewSwapExactTokensForTokensParams(s.router, s.from, s.swapAmount, big.NewInt(0), path, s.from, deadline), rpc.BlockTagLatest)
+	predicted, err := s.v2Router.CallSwapExactTokensForTokens(s.ctx, bind.NewCallOptions().WithFrom(s.from), NewSwapExactTokensForTokensRequest(s.router, s.swapAmount, big.NewInt(0), path, s.from, deadline))
 	s.Require().NoError(err)
 	s.Require().Len(predicted, 2)
 	s.T().Logf("Test04SwapExactTokensForTokens: CallSwapExactTokensForTokens predicted amounts=%v", predicted)
@@ -776,16 +777,12 @@ func (s *RouterLifeCycleSuite) Test04SwapExactTokensForTokens() {
 	builder = tx.NewDynamicFeeBuilder()
 	builder.PriceBuffer(s.PriceBuffer)
 	builder.LimitBuffer(s.LimitBuffer)
-	unsigned, err := s.v2Router.CreateSwapExactTokensForTokens(s.ctx, builder, NewSwapExactTokensForTokensParams(s.router, s.from, s.swapAmount, predicted[1], path, s.from, deadline))
+	sentTx, hash, err := s.v2Router.SwapExactTokensForTokens(s.ctx, bind.NewTransactOptions(s.signer, builder), NewSwapExactTokensForTokensRequest(s.router, s.swapAmount, predicted[1], path, s.from, deadline))
 	s.Require().NoError(err)
-	s.Require().NoError(unsigned.Sign(s.signer))
-	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
-
-	hash, err := s.v2Router.SwapExactTokensForTokens(s.ctx, unsigned)
-	s.Require().NoError(err)
+	s.totalFee.Add(s.totalFee, sentTx.MaxFee())
 	s.T().Logf("Test04SwapExactTokensForTokens: broadcast swapExactTokensForTokens tx %s", hash)
 
-	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(receipt.Status, "swapExactTokensForTokens transaction reverted")
 	s.T().Logf("Test04SwapExactTokensForTokens: swapExactTokensForTokens confirmed in block %d", receipt.BlockNumber)
@@ -815,7 +812,7 @@ func (s *RouterLifeCycleSuite) Test04SwapExactTokensForTokens() {
 		}
 		return new(big.Int).Sub(beforeIn, afterIn).Cmp(s.swapAmount) == 0 &&
 			new(big.Int).Sub(afterOut, beforeOut).Cmp(predicted[1]) == 0
-	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "token1 balance not visible after swap")
+	}, s.ReceiptTimeout, s.ReceiptPollInterval, "token1 balance not visible after swap")
 	s.T().Logf("Test04SwapExactTokensForTokens: balances after: token0=%s (%s -> %s) token1=%s (%s -> %s)",
 		afterIn, beforeIn, afterIn, afterOut, beforeOut, afterOut)
 }
@@ -835,19 +832,19 @@ func (s *RouterLifeCycleSuite) Test05RemoveLiquidity() {
 
 	s.T().Logf("Test05RemoveLiquidity: approve %s to spend %s of LP token %s, broadcast tx %s", s.router, liquidity, s.pair, approveHash)
 
-	approveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, approveHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	approveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, approveHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(approveReceipt.Status, "approve transaction reverted")
 	var allowance *big.Int
 	s.Require().Eventually(func() bool {
 		allowance, err = s.erc20.Allowance(s.ctx, nil, erc20.NewAllowanceRequest(s.pair, s.from, s.router))
 		return err == nil && liquidity.Cmp(allowance) == 0
-	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "allowance not visible after approve")
+	}, s.ReceiptTimeout, s.ReceiptPollInterval, "allowance not visible after approve")
 	s.T().Logf("Test05RemoveLiquidity: approve confirmed in block %d", approveReceipt.BlockNumber)
 
 	deadline := big.NewInt(time.Now().Add(time.Duration(s.DeadlineSeconds) * time.Second).Unix())
 
-	predicted, err := s.v2Router.CallRemoveLiquidity(s.ctx, NewRemoveLiquidityParams(s.router, s.from, s.token0, s.token1, liquidity, big.NewInt(0), big.NewInt(0), s.from, deadline), rpc.BlockTagLatest)
+	predicted, err := s.v2Router.CallRemoveLiquidity(s.ctx, bind.NewCallOptions().WithFrom(s.from), NewRemoveLiquidityRequest(s.router, s.token0, s.token1, liquidity, big.NewInt(0), big.NewInt(0), s.from, deadline))
 	s.Require().NoError(err)
 	s.Require().True(predicted.AmountA.Sign() > 0)
 	s.Require().True(predicted.AmountB.Sign() > 0)
@@ -862,16 +859,12 @@ func (s *RouterLifeCycleSuite) Test05RemoveLiquidity() {
 	builder = tx.NewDynamicFeeBuilder()
 	builder.PriceBuffer(s.PriceBuffer)
 	builder.LimitBuffer(s.LimitBuffer)
-	unsigned, err := s.v2Router.CreateRemoveLiquidity(s.ctx, builder, NewRemoveLiquidityParams(s.router, s.from, s.token0, s.token1, liquidity, predicted.AmountA, predicted.AmountB, s.from, deadline))
+	sentTx, hash, err := s.v2Router.RemoveLiquidity(s.ctx, bind.NewTransactOptions(s.signer, builder), NewRemoveLiquidityRequest(s.router, s.token0, s.token1, liquidity, predicted.AmountA, predicted.AmountB, s.from, deadline))
 	s.Require().NoError(err)
-	s.Require().NoError(unsigned.Sign(s.signer))
-	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
-
-	hash, err := s.v2Router.RemoveLiquidity(s.ctx, unsigned)
-	s.Require().NoError(err)
+	s.totalFee.Add(s.totalFee, sentTx.MaxFee())
 	s.T().Logf("Test05RemoveLiquidity: broadcast removeLiquidity tx %s", hash)
 
-	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(receipt.Status, "removeLiquidity transaction reverted")
 	s.T().Logf("Test05RemoveLiquidity: removeLiquidity confirmed in block %d", receipt.BlockNumber)
@@ -906,7 +899,7 @@ func (s *RouterLifeCycleSuite) Test05RemoveLiquidity() {
 		return new(big.Int).Sub(afterA, beforeA).Cmp(predicted.AmountA) == 0 &&
 			new(big.Int).Sub(afterB, beforeB).Cmp(predicted.AmountB) == 0 &&
 			remainingLiquidity.Sign() == 0
-	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "balances not visible after removeLiquidity")
+	}, s.ReceiptTimeout, s.ReceiptPollInterval, "balances not visible after removeLiquidity")
 	s.T().Logf("Test05RemoveLiquidity: balances after: token0=%s (%s -> %s) token1=%s (%s -> %s), remaining LP balance=%s",
 		afterA, beforeA, afterA, afterB, beforeB, afterB, remainingLiquidity)
 
@@ -927,19 +920,19 @@ func (s *RouterLifeCycleSuite) Test06AddLiquidityETH() {
 
 	s.T().Logf("Test06AddLiquidityETH: approve %s to spend %s of %s, broadcast tx %s", s.router, s.liquidityAmount, s.token0, approveHash)
 
-	approveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, approveHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	approveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, approveHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(approveReceipt.Status, "approve transaction reverted")
 	var allowance *big.Int
 	s.Require().Eventually(func() bool {
 		allowance, err = s.erc20.Allowance(s.ctx, nil, erc20.NewAllowanceRequest(s.token0, s.from, s.router))
 		return err == nil && s.liquidityAmount.Cmp(allowance) == 0
-	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "allowance not visible after approve")
+	}, s.ReceiptTimeout, s.ReceiptPollInterval, "allowance not visible after approve")
 	s.T().Logf("Test06AddLiquidityETH: approve confirmed in block %d", approveReceipt.BlockNumber)
 
 	deadline := big.NewInt(time.Now().Add(time.Duration(s.DeadlineSeconds) * time.Second).Unix())
 
-	predicted, err := s.v2Router.CallAddLiquidityETH(s.ctx, NewAddLiquidityETHParams(s.router, s.from, s.token0, s.liquidityAmount, big.NewInt(0), big.NewInt(0), s.from, deadline, s.nativeValue), rpc.BlockTagLatest)
+	predicted, err := s.v2Router.CallAddLiquidityETH(s.ctx, bind.NewCallOptions().WithFrom(s.from), NewAddLiquidityETHRequest(s.router, s.token0, s.liquidityAmount, big.NewInt(0), big.NewInt(0), s.from, deadline, s.nativeValue))
 	s.Require().NoError(err)
 	s.Require().Zero(s.liquidityAmount.Cmp(predicted.AmountToken))
 	s.Require().Zero(s.nativeValue.Cmp(predicted.AmountETH))
@@ -949,16 +942,12 @@ func (s *RouterLifeCycleSuite) Test06AddLiquidityETH() {
 	builder = tx.NewDynamicFeeBuilder()
 	builder.PriceBuffer(s.PriceBuffer)
 	builder.LimitBuffer(s.LimitBuffer)
-	unsigned, err := s.v2Router.CreateAddLiquidityETH(s.ctx, builder, NewAddLiquidityETHParams(s.router, s.from, s.token0, s.liquidityAmount, big.NewInt(0), big.NewInt(0), s.from, deadline, s.nativeValue))
+	sentTx, hash, err := s.v2Router.AddLiquidityETH(s.ctx, bind.NewTransactOptions(s.signer, builder), NewAddLiquidityETHRequest(s.router, s.token0, s.liquidityAmount, big.NewInt(0), big.NewInt(0), s.from, deadline, s.nativeValue))
 	s.Require().NoError(err)
-	s.Require().NoError(unsigned.Sign(s.signer))
-	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
-
-	hash, err := s.v2Router.AddLiquidityETH(s.ctx, unsigned)
-	s.Require().NoError(err)
+	s.totalFee.Add(s.totalFee, sentTx.MaxFee())
 	s.T().Logf("Test06AddLiquidityETH: broadcast addLiquidityETH tx %s", hash)
 
-	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(receipt.Status, "addLiquidityETH transaction reverted")
 	s.T().Logf("Test06AddLiquidityETH: addLiquidityETH confirmed in block %d", receipt.BlockNumber)
@@ -979,7 +968,7 @@ func (s *RouterLifeCycleSuite) Test06AddLiquidityETH() {
 	s.Require().Eventually(func() bool {
 		reserves, err = s.v2Pair.GetReserves(s.ctx, nil, NewGetReservesRequest(s.pairETH))
 		return err == nil && reserves.Reserve0.Sign() > 0 && reserves.Reserve1.Sign() > 0
-	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "reserves not visible after addLiquidityETH")
+	}, s.ReceiptTimeout, s.ReceiptPollInterval, "reserves not visible after addLiquidityETH")
 	s.T().Logf("Test06AddLiquidityETH: pair %s reserves reserve0=%s reserve1=%s", s.pairETH, reserves.Reserve0, reserves.Reserve1)
 
 	liquidityBalance, err := s.v2Pair.BalanceOf(s.ctx, nil, erc20.NewBalanceOfRequest(s.pairETH, s.from))
@@ -1003,7 +992,7 @@ func (s *RouterLifeCycleSuite) Test07SwapExactETHForTokens() {
 	amountIn := new(big.Int).Div(wethReserve, big.NewInt(20))
 	s.T().Logf("Test07SwapExactETHForTokens: path=[WETH=%s, %s] pairETH reserves reserve0=%s reserve1=%s, amountIn=%s deadline=%s", s.wethAddr, s.token0, reserves.Reserve0, reserves.Reserve1, amountIn, deadline)
 
-	predicted, err := s.v2Router.CallSwapExactETHForTokens(s.ctx, NewSwapExactETHForTokensParams(s.router, s.from, big.NewInt(0), path, s.from, deadline, amountIn), rpc.BlockTagLatest)
+	predicted, err := s.v2Router.CallSwapExactETHForTokens(s.ctx, bind.NewCallOptions().WithFrom(s.from), NewSwapExactETHForTokensRequest(s.router, big.NewInt(0), path, s.from, deadline, amountIn))
 	s.Require().NoError(err)
 	s.Require().Len(predicted, 2)
 	s.Require().Zero(amountIn.Cmp(predicted[0]))
@@ -1016,16 +1005,12 @@ func (s *RouterLifeCycleSuite) Test07SwapExactETHForTokens() {
 	builder := tx.NewDynamicFeeBuilder()
 	builder.PriceBuffer(s.PriceBuffer)
 	builder.LimitBuffer(s.LimitBuffer)
-	unsigned, err := s.v2Router.CreateSwapExactETHForTokens(s.ctx, builder, NewSwapExactETHForTokensParams(s.router, s.from, predicted[1], path, s.from, deadline, amountIn))
+	sentTx, hash, err := s.v2Router.SwapExactETHForTokens(s.ctx, bind.NewTransactOptions(s.signer, builder), NewSwapExactETHForTokensRequest(s.router, predicted[1], path, s.from, deadline, amountIn))
 	s.Require().NoError(err)
-	s.Require().NoError(unsigned.Sign(s.signer))
-	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
-
-	hash, err := s.v2Router.SwapExactETHForTokens(s.ctx, unsigned)
-	s.Require().NoError(err)
+	s.totalFee.Add(s.totalFee, sentTx.MaxFee())
 	s.T().Logf("Test07SwapExactETHForTokens: broadcast swapExactETHForTokens tx %s", hash)
 
-	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(receipt.Status, "swapExactETHForTokens transaction reverted")
 	s.T().Logf("Test07SwapExactETHForTokens: swapExactETHForTokens confirmed in block %d", receipt.BlockNumber)
@@ -1047,7 +1032,7 @@ func (s *RouterLifeCycleSuite) Test07SwapExactETHForTokens() {
 	s.Require().Eventually(func() bool {
 		after, err = s.erc20.BalanceOf(s.ctx, nil, erc20.NewBalanceOfRequest(s.token0, s.from))
 		return err == nil && new(big.Int).Sub(after, before).Cmp(predicted[1]) == 0
-	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "token0 balance not visible after swap")
+	}, s.ReceiptTimeout, s.ReceiptPollInterval, "token0 balance not visible after swap")
 	s.T().Logf("Test07SwapExactETHForTokens: token0 balance after: %s (%s -> %s)", after, before, after)
 }
 
@@ -1065,17 +1050,17 @@ func (s *RouterLifeCycleSuite) Test08SwapExactTokensForETH() {
 
 	s.T().Logf("Test08SwapExactTokensForETH: approve %s to spend %s of %s, broadcast tx %s", s.router, s.swapAmount, s.token0, approveHash)
 
-	approveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, approveHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	approveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, approveHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(approveReceipt.Status, "approve transaction reverted")
 	var allowance *big.Int
 	s.Require().Eventually(func() bool {
 		allowance, err = s.erc20.Allowance(s.ctx, nil, erc20.NewAllowanceRequest(s.token0, s.from, s.router))
 		return err == nil && s.swapAmount.Cmp(allowance) == 0
-	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "allowance not visible after approve")
+	}, s.ReceiptTimeout, s.ReceiptPollInterval, "allowance not visible after approve")
 	s.T().Logf("Test08SwapExactTokensForETH: approve confirmed in block %d", approveReceipt.BlockNumber)
 
-	predicted, err := s.v2Router.CallSwapExactTokensForETH(s.ctx, NewSwapExactTokensForETHParams(s.router, s.from, s.swapAmount, big.NewInt(0), path, s.from, deadline), rpc.BlockTagLatest)
+	predicted, err := s.v2Router.CallSwapExactTokensForETH(s.ctx, bind.NewCallOptions().WithFrom(s.from), NewSwapExactTokensForETHRequest(s.router, s.swapAmount, big.NewInt(0), path, s.from, deadline))
 	s.Require().NoError(err)
 	s.Require().Len(predicted, 2)
 	s.Require().Zero(s.swapAmount.Cmp(predicted[0]))
@@ -1090,16 +1075,12 @@ func (s *RouterLifeCycleSuite) Test08SwapExactTokensForETH() {
 	builder = tx.NewDynamicFeeBuilder()
 	builder.PriceBuffer(s.PriceBuffer)
 	builder.LimitBuffer(s.LimitBuffer)
-	unsigned, err := s.v2Router.CreateSwapExactTokensForETH(s.ctx, builder, NewSwapExactTokensForETHParams(s.router, s.from, s.swapAmount, predicted[1], path, s.from, deadline))
+	sentTx, hash, err := s.v2Router.SwapExactTokensForETH(s.ctx, bind.NewTransactOptions(s.signer, builder), NewSwapExactTokensForETHRequest(s.router, s.swapAmount, predicted[1], path, s.from, deadline))
 	s.Require().NoError(err)
-	s.Require().NoError(unsigned.Sign(s.signer))
-	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
-
-	hash, err := s.v2Router.SwapExactTokensForETH(s.ctx, unsigned)
-	s.Require().NoError(err)
+	s.totalFee.Add(s.totalFee, sentTx.MaxFee())
 	s.T().Logf("Test08SwapExactTokensForETH: broadcast swapExactTokensForETH tx %s", hash)
 
-	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(receipt.Status, "swapExactTokensForETH transaction reverted")
 	s.T().Logf("Test08SwapExactTokensForETH: swapExactTokensForETH confirmed in block %d", receipt.BlockNumber)
@@ -1129,7 +1110,7 @@ func (s *RouterLifeCycleSuite) Test09SwapETHForExactTokens() {
 	amountOut := s.swapAmount
 	deadline := big.NewInt(time.Now().Add(time.Duration(s.DeadlineSeconds) * time.Second).Unix())
 
-	amountsIn, err := s.v2Router.GetAmountsIn(s.ctx, NewGetAmountsInParams(s.router, amountOut, path), rpc.BlockTagLatest)
+	amountsIn, err := s.v2Router.GetAmountsIn(s.ctx, nil, NewGetAmountsInRequest(s.router, amountOut, path))
 	s.Require().NoError(err)
 	s.Require().Len(amountsIn, 2)
 	needed := amountsIn[0]
@@ -1137,7 +1118,7 @@ func (s *RouterLifeCycleSuite) Test09SwapETHForExactTokens() {
 	value := new(big.Int).Mul(needed, big.NewInt(2))
 	s.T().Logf("Test09SwapETHForExactTokens: path=[WETH=%s, %s] amountOut=%s needed=%s value(overpaid)=%s deadline=%s", s.wethAddr, s.token0, amountOut, needed, value, deadline)
 
-	predicted, err := s.v2Router.CallSwapETHForExactTokens(s.ctx, NewSwapETHForExactTokensParams(s.router, s.from, amountOut, path, s.from, deadline, value), rpc.BlockTagLatest)
+	predicted, err := s.v2Router.CallSwapETHForExactTokens(s.ctx, bind.NewCallOptions().WithFrom(s.from), NewSwapETHForExactTokensRequest(s.router, amountOut, path, s.from, deadline, value))
 	s.Require().NoError(err)
 	s.Require().Len(predicted, 2)
 	s.Require().True(predicted[0].Cmp(value) <= 0, "predicted amountIn %s exceeds the value sent %s", predicted[0], value)
@@ -1155,16 +1136,12 @@ func (s *RouterLifeCycleSuite) Test09SwapETHForExactTokens() {
 	builder := tx.NewDynamicFeeBuilder()
 	builder.PriceBuffer(s.PriceBuffer)
 	builder.LimitBuffer(s.LimitBuffer)
-	unsigned, err := s.v2Router.CreateSwapETHForExactTokens(s.ctx, builder, NewSwapETHForExactTokensParams(s.router, s.from, amountOut, path, s.from, deadline, value))
+	sentTx, hash, err := s.v2Router.SwapETHForExactTokens(s.ctx, bind.NewTransactOptions(s.signer, builder), NewSwapETHForExactTokensRequest(s.router, amountOut, path, s.from, deadline, value))
 	s.Require().NoError(err)
-	s.Require().NoError(unsigned.Sign(s.signer))
-	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
-
-	hash, err := s.v2Router.SwapETHForExactTokens(s.ctx, unsigned)
-	s.Require().NoError(err)
+	s.totalFee.Add(s.totalFee, sentTx.MaxFee())
 	s.T().Logf("Test09SwapETHForExactTokens: broadcast swapETHForExactTokens tx %s", hash)
 
-	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(receipt.Status, "swapETHForExactTokens transaction reverted")
 	s.T().Logf("Test09SwapETHForExactTokens: swapETHForExactTokens confirmed in block %d", receipt.BlockNumber)
@@ -1198,12 +1175,12 @@ func (s *RouterLifeCycleSuite) Test09SwapETHForExactTokens() {
 	s.Require().Eventually(func() bool {
 		tokenAfter, err = s.erc20.BalanceOf(s.ctx, nil, erc20.NewBalanceOfRequest(s.token0, s.from))
 		return err == nil && new(big.Int).Sub(tokenAfter, tokenBefore).Cmp(amountOut) == 0
-	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "token0 balance not visible after swap")
+	}, s.ReceiptTimeout, s.ReceiptPollInterval, "token0 balance not visible after swap")
 
 	spent := new(big.Int).Sub(nativeBefore, nativeAfter)
 	gasCost := new(big.Int).Sub(spent, actualIn)
 	s.Require().True(gasCost.Sign() >= 0, "spent %s should at least cover the wrapped amount %s", spent, actualIn)
-	s.Require().True(gasCost.Cmp(unsigned.MaxFee()) <= 0, "gas cost %s exceeds the tx's max fee %s -- the overpaid excess may not have been refunded", gasCost, unsigned.MaxFee())
+	s.Require().True(gasCost.Cmp(sentTx.MaxFee()) <= 0, "gas cost %s exceeds the tx's max fee %s -- the overpaid excess may not have been refunded", gasCost, sentTx.MaxFee())
 	s.T().Logf("Test09SwapETHForExactTokens: after: native=%s (spent %s = wrapped %s + gas %s, vs. value sent %s) token0=%s", nativeAfter, spent, actualIn, gasCost, value, tokenAfter)
 }
 
@@ -1214,9 +1191,10 @@ func (s *RouterLifeCycleSuite) Test10SwapExpired() {
 	builder := tx.NewDynamicFeeBuilder()
 	builder.PriceBuffer(s.PriceBuffer)
 	builder.LimitBuffer(s.LimitBuffer)
-	_, err := s.v2Router.CreateSwapExactTokensForTokens(s.ctx, builder, NewSwapExactTokensForTokensParams(s.router, s.from, s.swapAmount, big.NewInt(0), path, s.from, expired))
-	s.Require().Error(err)
+	revertTx, revertHash, err := s.v2Router.SwapExactTokensForTokens(s.ctx, bind.NewTransactOptions(s.signer, builder), NewSwapExactTokensForTokensRequest(s.router, s.swapAmount, big.NewInt(0), path, s.from, expired))
 	s.Require().ErrorIs(err, ErrExpired)
+	s.Require().Nil(revertTx)
+	s.Require().Nil(revertHash)
 	s.T().Logf("Test10SwapExpired: deadline=%s rejected as expected: %v", expired, err)
 }
 
@@ -1227,9 +1205,10 @@ func (s *RouterLifeCycleSuite) Test11SwapInvalidPath() {
 	builder := tx.NewDynamicFeeBuilder()
 	builder.PriceBuffer(s.PriceBuffer)
 	builder.LimitBuffer(s.LimitBuffer)
-	_, err := s.v2Router.CreateSwapExactETHForTokens(s.ctx, builder, NewSwapExactETHForTokensParams(s.router, s.from, big.NewInt(0), path, s.from, deadline, s.nativeValue))
-	s.Require().Error(err)
+	revertTx, revertHash, err := s.v2Router.SwapExactETHForTokens(s.ctx, bind.NewTransactOptions(s.signer, builder), NewSwapExactETHForTokensRequest(s.router, big.NewInt(0), path, s.from, deadline, s.nativeValue))
 	s.Require().ErrorIs(err, ErrInvalidPath)
+	s.Require().Nil(revertTx)
+	s.Require().Nil(revertHash)
 	s.T().Logf("Test11SwapInvalidPath: path=[%s, %s] rejected as expected: %v", path[0], path[1], err)
 }
 
@@ -1265,29 +1244,25 @@ func (s *RouterLifeCycleSuite) Test12SwapTokensForExactTokens() {
 		s.Require().NoError(err)
 		s.totalFee.Add(s.totalFee, approveTx.MaxFee())
 
-		approveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, approveHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+		approveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, approveHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 		s.Require().NoError(err)
 		s.Require().True(approveReceipt.Status, "approve transaction reverted")
 		var allowance *big.Int
 		s.Require().Eventually(func() bool {
 			allowance, err = s.erc20.Allowance(s.ctx, nil, erc20.NewAllowanceRequest(token, s.from, s.router))
 			return err == nil && amountDesired.Cmp(allowance) == 0
-		}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "allowance not visible after approve")
+		}, s.ReceiptTimeout, s.ReceiptPollInterval, "allowance not visible after approve")
 	}
 
 	addBuilder := tx.NewDynamicFeeBuilder()
 	addBuilder.PriceBuffer(s.PriceBuffer)
 	addBuilder.LimitBuffer(s.LimitBuffer)
-	unsignedAdd, err := s.v2Router.CreateAddLiquidity(s.ctx, addBuilder, NewAddLiquidityParams(s.router, s.from, s.token0, s.token1, amount0Desired, amount1Desired, big.NewInt(0), big.NewInt(0), s.from, deadline))
+	addTx, addHash, err := s.v2Router.AddLiquidity(s.ctx, bind.NewTransactOptions(s.signer, addBuilder), NewAddLiquidityRequest(s.router, s.token0, s.token1, amount0Desired, amount1Desired, big.NewInt(0), big.NewInt(0), s.from, deadline))
 	s.Require().NoError(err)
-	s.Require().NoError(unsignedAdd.Sign(s.signer))
-	s.totalFee.Add(s.totalFee, unsignedAdd.MaxFee())
-
-	addHash, err := s.v2Router.AddLiquidity(s.ctx, unsignedAdd)
-	s.Require().NoError(err)
+	s.totalFee.Add(s.totalFee, addTx.MaxFee())
 	s.T().Logf("Test12SwapTokensForExactTokens: re-added liquidity, broadcast tx %s", addHash)
 
-	addReceipt, err := tx.WaitForReceipt(s.ctx, s.client, addHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	addReceipt, err := tx.WaitForReceipt(s.ctx, s.client, addHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(addReceipt.Status, "addLiquidity transaction reverted")
 	s.T().Logf("Test12SwapTokensForExactTokens: re-add liquidity confirmed in block %d", addReceipt.BlockNumber)
@@ -1297,7 +1272,7 @@ func (s *RouterLifeCycleSuite) Test12SwapTokensForExactTokens() {
 	s.T().Logf("Test12SwapTokensForExactTokens: pair %s reserves reserve0=%s reserve1=%s", s.pair, reserves.Reserve0, reserves.Reserve1)
 
 	amountOut := s.swapAmount
-	amountsIn, err := s.v2Router.GetAmountsIn(s.ctx, NewGetAmountsInParams(s.router, amountOut, path), rpc.BlockTagLatest)
+	amountsIn, err := s.v2Router.GetAmountsIn(s.ctx, nil, NewGetAmountsInRequest(s.router, amountOut, path))
 	s.Require().NoError(err)
 	s.Require().Len(amountsIn, 2)
 	amountInMax := new(big.Int).Mul(amountsIn[0], big.NewInt(2))
@@ -1310,16 +1285,16 @@ func (s *RouterLifeCycleSuite) Test12SwapTokensForExactTokens() {
 	s.Require().NoError(err)
 	s.totalFee.Add(s.totalFee, approveTx.MaxFee())
 
-	approveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, approveHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	approveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, approveHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(approveReceipt.Status, "approve transaction reverted")
 	var allowance *big.Int
 	s.Require().Eventually(func() bool {
 		allowance, err = s.erc20.Allowance(s.ctx, nil, erc20.NewAllowanceRequest(s.token0, s.from, s.router))
 		return err == nil && amountInMax.Cmp(allowance) == 0
-	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "allowance not visible after approve")
+	}, s.ReceiptTimeout, s.ReceiptPollInterval, "allowance not visible after approve")
 
-	predicted, err := s.v2Router.CallSwapTokensForExactTokens(s.ctx, NewSwapTokensForExactTokensParams(s.router, s.from, amountOut, amountInMax, path, s.from, deadline), rpc.BlockTagLatest)
+	predicted, err := s.v2Router.CallSwapTokensForExactTokens(s.ctx, bind.NewCallOptions().WithFrom(s.from), NewSwapTokensForExactTokensRequest(s.router, amountOut, amountInMax, path, s.from, deadline))
 	s.Require().NoError(err)
 	s.Require().Len(predicted, 2)
 	s.Require().Zero(amountOut.Cmp(predicted[1]))
@@ -1333,16 +1308,12 @@ func (s *RouterLifeCycleSuite) Test12SwapTokensForExactTokens() {
 	swapBuilder := tx.NewDynamicFeeBuilder()
 	swapBuilder.PriceBuffer(s.PriceBuffer)
 	swapBuilder.LimitBuffer(s.LimitBuffer)
-	unsigned, err := s.v2Router.CreateSwapTokensForExactTokens(s.ctx, swapBuilder, NewSwapTokensForExactTokensParams(s.router, s.from, amountOut, amountInMax, path, s.from, deadline))
+	sentTx, hash, err := s.v2Router.SwapTokensForExactTokens(s.ctx, bind.NewTransactOptions(s.signer, swapBuilder), NewSwapTokensForExactTokensRequest(s.router, amountOut, amountInMax, path, s.from, deadline))
 	s.Require().NoError(err)
-	s.Require().NoError(unsigned.Sign(s.signer))
-	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
-
-	hash, err := s.v2Router.SwapTokensForExactTokens(s.ctx, unsigned)
-	s.Require().NoError(err)
+	s.totalFee.Add(s.totalFee, sentTx.MaxFee())
 	s.T().Logf("Test12SwapTokensForExactTokens: broadcast swapTokensForExactTokens tx %s", hash)
 
-	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(receipt.Status, "swapTokensForExactTokens transaction reverted")
 	s.T().Logf("Test12SwapTokensForExactTokens: swapTokensForExactTokens confirmed in block %d", receipt.BlockNumber)
@@ -1368,7 +1339,7 @@ func (s *RouterLifeCycleSuite) Test12SwapTokensForExactTokens() {
 		}
 		return new(big.Int).Sub(beforeIn, afterIn).Cmp(actualIn) == 0 &&
 			new(big.Int).Sub(afterOut, beforeOut).Cmp(amountOut) == 0
-	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "balances not visible after swap")
+	}, s.ReceiptTimeout, s.ReceiptPollInterval, "balances not visible after swap")
 
 	spentIn := new(big.Int).Sub(beforeIn, afterIn)
 	s.Require().Zero(actualIn.Cmp(spentIn))
@@ -1392,7 +1363,7 @@ func (s *RouterLifeCycleSuite) Test13SwapTokensForExactETH() {
 	amountOut := new(big.Int).Div(wethReserve, big.NewInt(20))
 	s.T().Logf("Test13SwapTokensForExactETH: path=[%s, WETH=%s] pairETH reserves reserve0=%s reserve1=%s, amountOut=%s", s.token0, s.wethAddr, reserves.Reserve0, reserves.Reserve1, amountOut)
 
-	amountsIn, err := s.v2Router.GetAmountsIn(s.ctx, NewGetAmountsInParams(s.router, amountOut, path), rpc.BlockTagLatest)
+	amountsIn, err := s.v2Router.GetAmountsIn(s.ctx, nil, NewGetAmountsInRequest(s.router, amountOut, path))
 	s.Require().NoError(err)
 	s.Require().Len(amountsIn, 2)
 	amountInMax := new(big.Int).Mul(amountsIn[0], big.NewInt(2))
@@ -1407,17 +1378,17 @@ func (s *RouterLifeCycleSuite) Test13SwapTokensForExactETH() {
 
 	s.T().Logf("Test13SwapTokensForExactETH: approve %s to spend %s of %s, broadcast tx %s", s.router, amountInMax, s.token0, approveHash)
 
-	approveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, approveHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	approveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, approveHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(approveReceipt.Status, "approve transaction reverted")
 	var allowance *big.Int
 	s.Require().Eventually(func() bool {
 		allowance, err = s.erc20.Allowance(s.ctx, nil, erc20.NewAllowanceRequest(s.token0, s.from, s.router))
 		return err == nil && amountInMax.Cmp(allowance) == 0
-	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "allowance not visible after approve")
+	}, s.ReceiptTimeout, s.ReceiptPollInterval, "allowance not visible after approve")
 	s.T().Logf("Test13SwapTokensForExactETH: approve confirmed in block %d", approveReceipt.BlockNumber)
 
-	predicted, err := s.v2Router.CallSwapTokensForExactETH(s.ctx, NewSwapTokensForExactETHParams(s.router, s.from, amountOut, amountInMax, path, s.from, deadline), rpc.BlockTagLatest)
+	predicted, err := s.v2Router.CallSwapTokensForExactETH(s.ctx, bind.NewCallOptions().WithFrom(s.from), NewSwapTokensForExactETHRequest(s.router, amountOut, amountInMax, path, s.from, deadline))
 	s.Require().NoError(err)
 	s.Require().Len(predicted, 2)
 	s.Require().Zero(amountOut.Cmp(predicted[1]))
@@ -1429,16 +1400,12 @@ func (s *RouterLifeCycleSuite) Test13SwapTokensForExactETH() {
 	swapBuilder := tx.NewDynamicFeeBuilder()
 	swapBuilder.PriceBuffer(s.PriceBuffer)
 	swapBuilder.LimitBuffer(s.LimitBuffer)
-	unsigned, err := s.v2Router.CreateSwapTokensForExactETH(s.ctx, swapBuilder, NewSwapTokensForExactETHParams(s.router, s.from, amountOut, amountInMax, path, s.from, deadline))
+	sentTx, hash, err := s.v2Router.SwapTokensForExactETH(s.ctx, bind.NewTransactOptions(s.signer, swapBuilder), NewSwapTokensForExactETHRequest(s.router, amountOut, amountInMax, path, s.from, deadline))
 	s.Require().NoError(err)
-	s.Require().NoError(unsigned.Sign(s.signer))
-	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
-
-	hash, err := s.v2Router.SwapTokensForExactETH(s.ctx, unsigned)
-	s.Require().NoError(err)
+	s.totalFee.Add(s.totalFee, sentTx.MaxFee())
 	s.T().Logf("Test13SwapTokensForExactETH: broadcast swapTokensForExactETH tx %s", hash)
 
-	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(receipt.Status, "swapTokensForExactETH transaction reverted")
 	s.T().Logf("Test13SwapTokensForExactETH: swapTokensForExactETH confirmed in block %d", receipt.BlockNumber)
@@ -1466,7 +1433,7 @@ func (s *RouterLifeCycleSuite) Test13SwapTokensForExactETH() {
 	s.Require().Eventually(func() bool {
 		tokenAfter, err = s.erc20.BalanceOf(s.ctx, nil, erc20.NewBalanceOfRequest(s.token0, s.from))
 		return err == nil && new(big.Int).Sub(tokenBefore, tokenAfter).Cmp(actualIn) == 0
-	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "token0 balance not visible after swap")
+	}, s.ReceiptTimeout, s.ReceiptPollInterval, "token0 balance not visible after swap")
 
 	spentIn := new(big.Int).Sub(tokenBefore, tokenAfter)
 	s.Require().Zero(actualIn.Cmp(spentIn))
@@ -1488,19 +1455,19 @@ func (s *RouterLifeCycleSuite) Test14RemoveLiquidityETH() {
 
 	s.T().Logf("Test14RemoveLiquidityETH: approve %s to spend %s of LP token %s, broadcast tx %s", s.router, liquidity, s.pairETH, approveHash)
 
-	approveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, approveHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	approveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, approveHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(approveReceipt.Status, "approve transaction reverted")
 	var allowance *big.Int
 	s.Require().Eventually(func() bool {
 		allowance, err = s.erc20.Allowance(s.ctx, nil, erc20.NewAllowanceRequest(s.pairETH, s.from, s.router))
 		return err == nil && liquidity.Cmp(allowance) == 0
-	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "allowance not visible after approve")
+	}, s.ReceiptTimeout, s.ReceiptPollInterval, "allowance not visible after approve")
 	s.T().Logf("Test14RemoveLiquidityETH: approve confirmed in block %d", approveReceipt.BlockNumber)
 
 	deadline := big.NewInt(time.Now().Add(time.Duration(s.DeadlineSeconds) * time.Second).Unix())
 
-	predicted, err := s.v2Router.CallRemoveLiquidityETH(s.ctx, NewRemoveLiquidityETHParams(s.router, s.from, s.token0, liquidity, big.NewInt(0), big.NewInt(0), s.from, deadline), rpc.BlockTagLatest)
+	predicted, err := s.v2Router.CallRemoveLiquidityETH(s.ctx, bind.NewCallOptions().WithFrom(s.from), NewRemoveLiquidityETHRequest(s.router, s.token0, liquidity, big.NewInt(0), big.NewInt(0), s.from, deadline))
 	s.Require().NoError(err)
 	s.Require().True(predicted.AmountToken.Sign() > 0)
 	s.Require().True(predicted.AmountETH.Sign() > 0)
@@ -1512,16 +1479,12 @@ func (s *RouterLifeCycleSuite) Test14RemoveLiquidityETH() {
 	removeBuilder := tx.NewDynamicFeeBuilder()
 	removeBuilder.PriceBuffer(s.PriceBuffer)
 	removeBuilder.LimitBuffer(s.LimitBuffer)
-	unsigned, err := s.v2Router.CreateRemoveLiquidityETH(s.ctx, removeBuilder, NewRemoveLiquidityETHParams(s.router, s.from, s.token0, liquidity, predicted.AmountToken, predicted.AmountETH, s.from, deadline))
+	sentTx, hash, err := s.v2Router.RemoveLiquidityETH(s.ctx, bind.NewTransactOptions(s.signer, removeBuilder), NewRemoveLiquidityETHRequest(s.router, s.token0, liquidity, predicted.AmountToken, predicted.AmountETH, s.from, deadline))
 	s.Require().NoError(err)
-	s.Require().NoError(unsigned.Sign(s.signer))
-	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
-
-	hash, err := s.v2Router.RemoveLiquidityETH(s.ctx, unsigned)
-	s.Require().NoError(err)
+	s.totalFee.Add(s.totalFee, sentTx.MaxFee())
 	s.T().Logf("Test14RemoveLiquidityETH: broadcast removeLiquidityETH tx %s", hash)
 
-	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(receipt.Status, "removeLiquidityETH transaction reverted")
 	s.T().Logf("Test14RemoveLiquidityETH: removeLiquidityETH confirmed in block %d", receipt.BlockNumber)
@@ -1548,7 +1511,7 @@ func (s *RouterLifeCycleSuite) Test14RemoveLiquidityETH() {
 			return false
 		}
 		return new(big.Int).Sub(tokenAfter, tokenBefore).Cmp(predicted.AmountToken) == 0 && remainingLiquidity.Sign() == 0
-	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "balances not visible after removeLiquidityETH")
+	}, s.ReceiptTimeout, s.ReceiptPollInterval, "balances not visible after removeLiquidityETH")
 	s.T().Logf("Test14RemoveLiquidityETH: token0 %s -> %s, remaining LP balance=%s", tokenBefore, tokenAfter, remainingLiquidity)
 }
 
@@ -1568,7 +1531,7 @@ func (s *RouterLifeCycleSuite) Test15RemoveLiquidityWithPermit() {
 	s.Require().NoError(err)
 	s.T().Logf("Test15RemoveLiquidityWithPermit: signed permit nonce=%s deadline=%s (no Approve transaction needed)", nonce, deadline)
 
-	predicted, err := s.v2Router.CallRemoveLiquidityWithPermit(s.ctx, NewRemoveLiquidityWithPermitParams(s.router, s.from, s.token0, s.token1, liquidity, big.NewInt(0), big.NewInt(0), s.from, deadline, false, sig), rpc.BlockTagLatest)
+	predicted, err := s.v2Router.CallRemoveLiquidityWithPermit(s.ctx, bind.NewCallOptions().WithFrom(s.from), NewRemoveLiquidityWithPermitRequest(s.router, s.token0, s.token1, liquidity, big.NewInt(0), big.NewInt(0), s.from, deadline, false, sig))
 	s.Require().NoError(err)
 	s.Require().True(predicted.AmountA.Sign() > 0)
 	s.Require().True(predicted.AmountB.Sign() > 0)
@@ -1582,16 +1545,12 @@ func (s *RouterLifeCycleSuite) Test15RemoveLiquidityWithPermit() {
 	builder := tx.NewDynamicFeeBuilder()
 	builder.PriceBuffer(s.PriceBuffer)
 	builder.LimitBuffer(s.LimitBuffer)
-	unsigned, err := s.v2Router.CreateRemoveLiquidityWithPermit(s.ctx, builder, NewRemoveLiquidityWithPermitParams(s.router, s.from, s.token0, s.token1, liquidity, predicted.AmountA, predicted.AmountB, s.from, deadline, false, sig))
+	sentTx, hash, err := s.v2Router.RemoveLiquidityWithPermit(s.ctx, bind.NewTransactOptions(s.signer, builder), NewRemoveLiquidityWithPermitRequest(s.router, s.token0, s.token1, liquidity, predicted.AmountA, predicted.AmountB, s.from, deadline, false, sig))
 	s.Require().NoError(err)
-	s.Require().NoError(unsigned.Sign(s.signer))
-	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
-
-	hash, err := s.v2Router.RemoveLiquidityWithPermit(s.ctx, unsigned)
-	s.Require().NoError(err)
+	s.totalFee.Add(s.totalFee, sentTx.MaxFee())
 	s.T().Logf("Test15RemoveLiquidityWithPermit: broadcast removeLiquidityWithPermit tx %s", hash)
 
-	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(receipt.Status, "removeLiquidityWithPermit transaction reverted")
 	s.T().Logf("Test15RemoveLiquidityWithPermit: removeLiquidityWithPermit confirmed in block %d", receipt.BlockNumber)
@@ -1624,7 +1583,7 @@ func (s *RouterLifeCycleSuite) Test15RemoveLiquidityWithPermit() {
 		return new(big.Int).Sub(afterA, beforeA).Cmp(predicted.AmountA) == 0 &&
 			new(big.Int).Sub(afterB, beforeB).Cmp(predicted.AmountB) == 0 &&
 			remainingLiquidity.Sign() == 0
-	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "balances not visible after removeLiquidityWithPermit")
+	}, s.ReceiptTimeout, s.ReceiptPollInterval, "balances not visible after removeLiquidityWithPermit")
 	s.Require().Zero(new(big.Int).Add(nonce, big.NewInt(1)).Cmp(nonceAfter), "permit nonce should have advanced by exactly 1")
 	s.T().Logf("Test15RemoveLiquidityWithPermit: balances after: token0=%s (%s -> %s) token1=%s (%s -> %s), nonce %s -> %s, remaining LP balance=%s",
 		afterA, beforeA, afterA, afterB, beforeB, afterB, nonce, nonceAfter, remainingLiquidity)
@@ -1638,29 +1597,25 @@ func (s *RouterLifeCycleSuite) Test16RemoveLiquidityETHWithPermit() {
 	s.Require().NoError(err)
 	s.totalFee.Add(s.totalFee, approveTx.MaxFee())
 
-	approveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, approveHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	approveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, approveHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(approveReceipt.Status, "approve transaction reverted")
 	var allowance *big.Int
 	s.Require().Eventually(func() bool {
 		allowance, err = s.erc20.Allowance(s.ctx, nil, erc20.NewAllowanceRequest(s.token0, s.from, s.router))
 		return err == nil && s.liquidityAmount.Cmp(allowance) == 0
-	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "allowance not visible after approve")
+	}, s.ReceiptTimeout, s.ReceiptPollInterval, "allowance not visible after approve")
 
 	addDeadline := big.NewInt(time.Now().Add(time.Duration(s.DeadlineSeconds) * time.Second).Unix())
 	addBuilder := tx.NewDynamicFeeBuilder()
 	addBuilder.PriceBuffer(s.PriceBuffer)
 	addBuilder.LimitBuffer(s.LimitBuffer)
-	unsignedAdd, err := s.v2Router.CreateAddLiquidityETH(s.ctx, addBuilder, NewAddLiquidityETHParams(s.router, s.from, s.token0, s.liquidityAmount, big.NewInt(0), big.NewInt(0), s.from, addDeadline, s.nativeValue))
+	addTx, addHash, err := s.v2Router.AddLiquidityETH(s.ctx, bind.NewTransactOptions(s.signer, addBuilder), NewAddLiquidityETHRequest(s.router, s.token0, s.liquidityAmount, big.NewInt(0), big.NewInt(0), s.from, addDeadline, s.nativeValue))
 	s.Require().NoError(err)
-	s.Require().NoError(unsignedAdd.Sign(s.signer))
-	s.totalFee.Add(s.totalFee, unsignedAdd.MaxFee())
-
-	addHash, err := s.v2Router.AddLiquidityETH(s.ctx, unsignedAdd)
-	s.Require().NoError(err)
+	s.totalFee.Add(s.totalFee, addTx.MaxFee())
 	s.T().Logf("Test16RemoveLiquidityETHWithPermit: re-added liquidity to pairETH=%s, broadcast tx %s", s.pairETH, addHash)
 
-	addReceipt, err := tx.WaitForReceipt(s.ctx, s.client, addHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	addReceipt, err := tx.WaitForReceipt(s.ctx, s.client, addHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(addReceipt.Status, "addLiquidityETH transaction reverted")
 	s.T().Logf("Test16RemoveLiquidityETHWithPermit: re-add liquidity confirmed in block %d", addReceipt.BlockNumber)
@@ -1669,7 +1624,7 @@ func (s *RouterLifeCycleSuite) Test16RemoveLiquidityETHWithPermit() {
 	s.Require().Eventually(func() bool {
 		liquidity, err = s.v2Pair.BalanceOf(s.ctx, nil, erc20.NewBalanceOfRequest(s.pairETH, s.from))
 		return err == nil && liquidity.Sign() > 0
-	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "LP balance not visible after re-adding liquidity")
+	}, s.ReceiptTimeout, s.ReceiptPollInterval, "LP balance not visible after re-adding liquidity")
 	s.T().Logf("Test16RemoveLiquidityETHWithPermit: pairETH=%s LP balance=%s", s.pairETH, liquidity)
 
 	nonce, err := s.v2Pair.Nonces(s.ctx, nil, erc2612.NewNoncesRequest(s.pairETH, s.from))
@@ -1682,7 +1637,7 @@ func (s *RouterLifeCycleSuite) Test16RemoveLiquidityETHWithPermit() {
 	s.Require().NoError(err)
 	s.T().Logf("Test16RemoveLiquidityETHWithPermit: signed permit nonce=%s deadline=%s (no Approve transaction needed)", nonce, deadline)
 
-	predicted, err := s.v2Router.CallRemoveLiquidityETHWithPermit(s.ctx, NewRemoveLiquidityETHWithPermitParams(s.router, s.from, s.token0, liquidity, big.NewInt(0), big.NewInt(0), s.from, deadline, false, sig), rpc.BlockTagLatest)
+	predicted, err := s.v2Router.CallRemoveLiquidityETHWithPermit(s.ctx, bind.NewCallOptions().WithFrom(s.from), NewRemoveLiquidityETHWithPermitRequest(s.router, s.token0, liquidity, big.NewInt(0), big.NewInt(0), s.from, deadline, false, sig))
 	s.Require().NoError(err)
 	s.Require().True(predicted.AmountToken.Sign() > 0)
 	s.Require().True(predicted.AmountETH.Sign() > 0)
@@ -1694,16 +1649,12 @@ func (s *RouterLifeCycleSuite) Test16RemoveLiquidityETHWithPermit() {
 	removeBuilder := tx.NewDynamicFeeBuilder()
 	removeBuilder.PriceBuffer(s.PriceBuffer)
 	removeBuilder.LimitBuffer(s.LimitBuffer)
-	unsigned, err := s.v2Router.CreateRemoveLiquidityETHWithPermit(s.ctx, removeBuilder, NewRemoveLiquidityETHWithPermitParams(s.router, s.from, s.token0, liquidity, predicted.AmountToken, predicted.AmountETH, s.from, deadline, false, sig))
+	sentTx, hash, err := s.v2Router.RemoveLiquidityETHWithPermit(s.ctx, bind.NewTransactOptions(s.signer, removeBuilder), NewRemoveLiquidityETHWithPermitRequest(s.router, s.token0, liquidity, predicted.AmountToken, predicted.AmountETH, s.from, deadline, false, sig))
 	s.Require().NoError(err)
-	s.Require().NoError(unsigned.Sign(s.signer))
-	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
-
-	hash, err := s.v2Router.RemoveLiquidityETHWithPermit(s.ctx, unsigned)
-	s.Require().NoError(err)
+	s.totalFee.Add(s.totalFee, sentTx.MaxFee())
 	s.T().Logf("Test16RemoveLiquidityETHWithPermit: broadcast removeLiquidityETHWithPermit tx %s", hash)
 
-	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(receipt.Status, "removeLiquidityETHWithPermit transaction reverted")
 	s.T().Logf("Test16RemoveLiquidityETHWithPermit: removeLiquidityETHWithPermit confirmed in block %d", receipt.BlockNumber)
@@ -1735,7 +1686,7 @@ func (s *RouterLifeCycleSuite) Test16RemoveLiquidityETHWithPermit() {
 		}
 		return new(big.Int).Sub(tokenAfter, tokenBefore).Cmp(predicted.AmountToken) == 0 && remainingLiquidity.Sign() == 0 &&
 			new(big.Int).Add(nonce, big.NewInt(1)).Cmp(nonceAfter) == 0
-	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "balances not visible after removeLiquidityETHWithPermit")
+	}, s.ReceiptTimeout, s.ReceiptPollInterval, "balances not visible after removeLiquidityETHWithPermit")
 	s.Require().Zero(new(big.Int).Add(nonce, big.NewInt(1)).Cmp(nonceAfter), "permit nonce should have advanced by exactly 1")
 	s.T().Logf("Test16RemoveLiquidityETHWithPermit: token0 %s -> %s, nonce %s -> %s, remaining LP balance=%s", tokenBefore, tokenAfter, nonce, nonceAfter, remainingLiquidity)
 }
@@ -1772,29 +1723,25 @@ func (s *RouterLifeCycleSuite) Test17SwapExactTokensForTokensSupportingFeeOnTran
 		s.Require().NoError(err)
 		s.totalFee.Add(s.totalFee, approveTx.MaxFee())
 
-		approveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, approveHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+		approveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, approveHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 		s.Require().NoError(err)
 		s.Require().True(approveReceipt.Status, "approve transaction reverted")
 		var allowance *big.Int
 		s.Require().Eventually(func() bool {
 			allowance, err = s.erc20.Allowance(s.ctx, nil, erc20.NewAllowanceRequest(token, s.from, s.router))
 			return err == nil && amountDesired.Cmp(allowance) == 0
-		}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "allowance not visible after approve")
+		}, s.ReceiptTimeout, s.ReceiptPollInterval, "allowance not visible after approve")
 	}
 
 	addBuilder := tx.NewDynamicFeeBuilder()
 	addBuilder.PriceBuffer(s.PriceBuffer)
 	addBuilder.LimitBuffer(s.LimitBuffer)
-	unsignedAdd, err := s.v2Router.CreateAddLiquidity(s.ctx, addBuilder, NewAddLiquidityParams(s.router, s.from, s.token0, s.token1, amount0Desired, amount1Desired, big.NewInt(0), big.NewInt(0), s.from, deadline))
+	addTx, addHash, err := s.v2Router.AddLiquidity(s.ctx, bind.NewTransactOptions(s.signer, addBuilder), NewAddLiquidityRequest(s.router, s.token0, s.token1, amount0Desired, amount1Desired, big.NewInt(0), big.NewInt(0), s.from, deadline))
 	s.Require().NoError(err)
-	s.Require().NoError(unsignedAdd.Sign(s.signer))
-	s.totalFee.Add(s.totalFee, unsignedAdd.MaxFee())
-
-	addHash, err := s.v2Router.AddLiquidity(s.ctx, unsignedAdd)
-	s.Require().NoError(err)
+	s.totalFee.Add(s.totalFee, addTx.MaxFee())
 	s.T().Logf("Test17SwapExactTokensForTokensSupportingFeeOnTransferTokens: re-added liquidity, broadcast tx %s", addHash)
 
-	addReceipt, err := tx.WaitForReceipt(s.ctx, s.client, addHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	addReceipt, err := tx.WaitForReceipt(s.ctx, s.client, addHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(addReceipt.Status, "addLiquidity transaction reverted")
 	s.T().Logf("Test17SwapExactTokensForTokensSupportingFeeOnTransferTokens: re-add liquidity confirmed in block %d", addReceipt.BlockNumber)
@@ -1810,9 +1757,9 @@ func (s *RouterLifeCycleSuite) Test17SwapExactTokensForTokensSupportingFeeOnTran
 			newToken0Reserve = newReserves.Reserve1
 		}
 		return newToken0Reserve.Cmp(wantToken0Reserve) >= 0
-	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "reserves not visible after re-adding liquidity")
+	}, s.ReceiptTimeout, s.ReceiptPollInterval, "reserves not visible after re-adding liquidity")
 
-	amountsOut, err := s.v2Router.GetAmountsOut(s.ctx, NewGetAmountsOutParams(s.router, s.swapAmount, path), rpc.BlockTagLatest)
+	amountsOut, err := s.v2Router.GetAmountsOut(s.ctx, nil, NewGetAmountsOutRequest(s.router, s.swapAmount, path))
 	s.Require().NoError(err)
 	s.Require().Len(amountsOut, 2)
 	s.T().Logf("Test17SwapExactTokensForTokensSupportingFeeOnTransferTokens: GetAmountsOut predicted amounts=%v", amountsOut)
@@ -1824,14 +1771,14 @@ func (s *RouterLifeCycleSuite) Test17SwapExactTokensForTokensSupportingFeeOnTran
 	s.Require().NoError(err)
 	s.totalFee.Add(s.totalFee, approveTx.MaxFee())
 
-	approveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, approveHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	approveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, approveHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(approveReceipt.Status, "approve transaction reverted")
 	var allowance *big.Int
 	s.Require().Eventually(func() bool {
 		allowance, err = s.erc20.Allowance(s.ctx, nil, erc20.NewAllowanceRequest(s.token0, s.from, s.router))
 		return err == nil && s.swapAmount.Cmp(allowance) == 0
-	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "allowance not visible after approve")
+	}, s.ReceiptTimeout, s.ReceiptPollInterval, "allowance not visible after approve")
 
 	beforeOut, err := s.erc20.BalanceOf(s.ctx, nil, erc20.NewBalanceOfRequest(s.token1, s.from))
 	s.Require().NoError(err)
@@ -1839,16 +1786,12 @@ func (s *RouterLifeCycleSuite) Test17SwapExactTokensForTokensSupportingFeeOnTran
 	swapBuilder := tx.NewDynamicFeeBuilder()
 	swapBuilder.PriceBuffer(s.PriceBuffer)
 	swapBuilder.LimitBuffer(s.LimitBuffer)
-	unsigned, err := s.v2Router.CreateSwapExactTokensForTokensSupportingFeeOnTransferTokens(s.ctx, swapBuilder, NewSwapExactTokensForTokensSupportingFeeOnTransferTokensParams(s.router, s.from, s.swapAmount, amountsOut[1], path, s.from, deadline))
+	sentTx, hash, err := s.v2Router.SwapExactTokensForTokensSupportingFeeOnTransferTokens(s.ctx, bind.NewTransactOptions(s.signer, swapBuilder), NewSwapExactTokensForTokensSupportingFeeOnTransferTokensRequest(s.router, s.swapAmount, amountsOut[1], path, s.from, deadline))
 	s.Require().NoError(err)
-	s.Require().NoError(unsigned.Sign(s.signer))
-	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
-
-	hash, err := s.v2Router.SwapExactTokensForTokensSupportingFeeOnTransferTokens(s.ctx, unsigned)
-	s.Require().NoError(err)
+	s.totalFee.Add(s.totalFee, sentTx.MaxFee())
 	s.T().Logf("Test17SwapExactTokensForTokensSupportingFeeOnTransferTokens: broadcast tx %s", hash)
 
-	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(receipt.Status, "swapExactTokensForTokensSupportingFeeOnTransferTokens transaction reverted")
 	s.T().Logf("Test17SwapExactTokensForTokensSupportingFeeOnTransferTokens: confirmed in block %d", receipt.BlockNumber)
@@ -1864,7 +1807,7 @@ func (s *RouterLifeCycleSuite) Test17SwapExactTokensForTokensSupportingFeeOnTran
 	s.Require().Eventually(func() bool {
 		afterOut, err = s.erc20.BalanceOf(s.ctx, nil, erc20.NewBalanceOfRequest(s.token1, s.from))
 		return err == nil && new(big.Int).Sub(afterOut, beforeOut).Cmp(amountsOut[1]) == 0
-	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "token1 balance not visible after swap")
+	}, s.ReceiptTimeout, s.ReceiptPollInterval, "token1 balance not visible after swap")
 	s.T().Logf("Test17SwapExactTokensForTokensSupportingFeeOnTransferTokens: token1 balance %s -> %s", beforeOut, afterOut)
 }
 
@@ -1894,29 +1837,25 @@ func (s *RouterLifeCycleSuite) Test18SwapExactETHForTokensSupportingFeeOnTransfe
 	s.Require().NoError(err)
 	s.totalFee.Add(s.totalFee, approveTx.MaxFee())
 
-	approveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, approveHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	approveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, approveHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(approveReceipt.Status, "approve transaction reverted")
 	var allowance *big.Int
 	s.Require().Eventually(func() bool {
 		allowance, err = s.erc20.Allowance(s.ctx, nil, erc20.NewAllowanceRequest(s.token0, s.from, s.router))
 		return err == nil && tokenDesired.Cmp(allowance) == 0
-	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "allowance not visible after approve")
+	}, s.ReceiptTimeout, s.ReceiptPollInterval, "allowance not visible after approve")
 
 	addDeadline := big.NewInt(time.Now().Add(time.Duration(s.DeadlineSeconds) * time.Second).Unix())
 	addBuilder := tx.NewDynamicFeeBuilder()
 	addBuilder.PriceBuffer(s.PriceBuffer)
 	addBuilder.LimitBuffer(s.LimitBuffer)
-	unsignedAdd, err := s.v2Router.CreateAddLiquidityETH(s.ctx, addBuilder, NewAddLiquidityETHParams(s.router, s.from, s.token0, tokenDesired, big.NewInt(0), big.NewInt(0), s.from, addDeadline, s.nativeValue))
+	addTx, addHash, err := s.v2Router.AddLiquidityETH(s.ctx, bind.NewTransactOptions(s.signer, addBuilder), NewAddLiquidityETHRequest(s.router, s.token0, tokenDesired, big.NewInt(0), big.NewInt(0), s.from, addDeadline, s.nativeValue))
 	s.Require().NoError(err)
-	s.Require().NoError(unsignedAdd.Sign(s.signer))
-	s.totalFee.Add(s.totalFee, unsignedAdd.MaxFee())
-
-	addHash, err := s.v2Router.AddLiquidityETH(s.ctx, unsignedAdd)
-	s.Require().NoError(err)
+	s.totalFee.Add(s.totalFee, addTx.MaxFee())
 	s.T().Logf("Test18SwapExactETHForTokensSupportingFeeOnTransferTokens: re-added liquidity to pairETH, broadcast tx %s", addHash)
 
-	addReceipt, err := tx.WaitForReceipt(s.ctx, s.client, addHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	addReceipt, err := tx.WaitForReceipt(s.ctx, s.client, addHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(addReceipt.Status, "addLiquidityETH transaction reverted")
 	s.T().Logf("Test18SwapExactETHForTokensSupportingFeeOnTransferTokens: re-add liquidity confirmed in block %d", addReceipt.BlockNumber)
@@ -1933,7 +1872,7 @@ func (s *RouterLifeCycleSuite) Test18SwapExactETHForTokensSupportingFeeOnTransfe
 			newWethReserve = reserves.Reserve0
 		}
 		return newWethReserve.Cmp(wantWethReserve) >= 0
-	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "reserves not visible after addLiquidityETH")
+	}, s.ReceiptTimeout, s.ReceiptPollInterval, "reserves not visible after addLiquidityETH")
 
 	newWethReserve := reserves.Reserve1
 	if pairToken0.Equal(s.wethAddr) {
@@ -1942,7 +1881,7 @@ func (s *RouterLifeCycleSuite) Test18SwapExactETHForTokensSupportingFeeOnTransfe
 	amountIn := new(big.Int).Div(newWethReserve, big.NewInt(20))
 	s.T().Logf("Test18SwapExactETHForTokensSupportingFeeOnTransferTokens: pairETH reserves reserve0=%s reserve1=%s, amountIn=%s", reserves.Reserve0, reserves.Reserve1, amountIn)
 
-	amountsOut, err := s.v2Router.GetAmountsOut(s.ctx, NewGetAmountsOutParams(s.router, amountIn, path), rpc.BlockTagLatest)
+	amountsOut, err := s.v2Router.GetAmountsOut(s.ctx, nil, NewGetAmountsOutRequest(s.router, amountIn, path))
 	s.Require().NoError(err)
 	s.Require().Len(amountsOut, 2)
 	s.T().Logf("Test18SwapExactETHForTokensSupportingFeeOnTransferTokens: GetAmountsOut predicted amounts=%v", amountsOut)
@@ -1953,16 +1892,12 @@ func (s *RouterLifeCycleSuite) Test18SwapExactETHForTokensSupportingFeeOnTransfe
 	swapBuilder := tx.NewDynamicFeeBuilder()
 	swapBuilder.PriceBuffer(s.PriceBuffer)
 	swapBuilder.LimitBuffer(s.LimitBuffer)
-	unsigned, err := s.v2Router.CreateSwapExactETHForTokensSupportingFeeOnTransferTokens(s.ctx, swapBuilder, NewSwapExactETHForTokensSupportingFeeOnTransferTokensParams(s.router, s.from, amountsOut[1], path, s.from, deadline, amountIn))
+	sentTx, hash, err := s.v2Router.SwapExactETHForTokensSupportingFeeOnTransferTokens(s.ctx, bind.NewTransactOptions(s.signer, swapBuilder), NewSwapExactETHForTokensSupportingFeeOnTransferTokensRequest(s.router, amountsOut[1], path, s.from, deadline, amountIn))
 	s.Require().NoError(err)
-	s.Require().NoError(unsigned.Sign(s.signer))
-	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
-
-	hash, err := s.v2Router.SwapExactETHForTokensSupportingFeeOnTransferTokens(s.ctx, unsigned)
-	s.Require().NoError(err)
+	s.totalFee.Add(s.totalFee, sentTx.MaxFee())
 	s.T().Logf("Test18SwapExactETHForTokensSupportingFeeOnTransferTokens: broadcast tx %s", hash)
 
-	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(receipt.Status, "swapExactETHForTokensSupportingFeeOnTransferTokens transaction reverted")
 	s.T().Logf("Test18SwapExactETHForTokensSupportingFeeOnTransferTokens: confirmed in block %d", receipt.BlockNumber)
@@ -1983,7 +1918,7 @@ func (s *RouterLifeCycleSuite) Test18SwapExactETHForTokensSupportingFeeOnTransfe
 	s.Require().Eventually(func() bool {
 		after, err = s.erc20.BalanceOf(s.ctx, nil, erc20.NewBalanceOfRequest(s.token0, s.from))
 		return err == nil && new(big.Int).Sub(after, before).Cmp(amountsOut[1]) == 0
-	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "token0 balance not visible after swap")
+	}, s.ReceiptTimeout, s.ReceiptPollInterval, "token0 balance not visible after swap")
 	s.T().Logf("Test18SwapExactETHForTokensSupportingFeeOnTransferTokens: token0 balance %s -> %s", before, after)
 }
 
@@ -2003,7 +1938,7 @@ func (s *RouterLifeCycleSuite) Test19SwapExactTokensForETHSupportingFeeOnTransfe
 	amountIn := new(big.Int).Div(tokenReserve, big.NewInt(20))
 	s.T().Logf("Test19SwapExactTokensForETHSupportingFeeOnTransferTokens: pairETH reserves reserve0=%s reserve1=%s, amountIn=%s", reserves.Reserve0, reserves.Reserve1, amountIn)
 
-	amountsOut, err := s.v2Router.GetAmountsOut(s.ctx, NewGetAmountsOutParams(s.router, amountIn, path), rpc.BlockTagLatest)
+	amountsOut, err := s.v2Router.GetAmountsOut(s.ctx, nil, NewGetAmountsOutRequest(s.router, amountIn, path))
 	s.Require().NoError(err)
 	s.Require().Len(amountsOut, 2)
 	s.T().Logf("Test19SwapExactTokensForETHSupportingFeeOnTransferTokens: GetAmountsOut predicted amounts=%v", amountsOut)
@@ -2015,14 +1950,14 @@ func (s *RouterLifeCycleSuite) Test19SwapExactTokensForETHSupportingFeeOnTransfe
 	s.Require().NoError(err)
 	s.totalFee.Add(s.totalFee, approveTx.MaxFee())
 
-	approveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, approveHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	approveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, approveHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(approveReceipt.Status, "approve transaction reverted")
 	var allowance *big.Int
 	s.Require().Eventually(func() bool {
 		allowance, err = s.erc20.Allowance(s.ctx, nil, erc20.NewAllowanceRequest(s.token0, s.from, s.router))
 		return err == nil && amountIn.Cmp(allowance) == 0
-	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "allowance not visible after approve")
+	}, s.ReceiptTimeout, s.ReceiptPollInterval, "allowance not visible after approve")
 
 	var nativeBeforeHex string
 	s.Require().NoError(s.client.Call(s.ctx, rpc.ETHGetBalance("balance", s.from.String(), rpc.BlockTagLatest, &nativeBeforeHex)))
@@ -2032,16 +1967,12 @@ func (s *RouterLifeCycleSuite) Test19SwapExactTokensForETHSupportingFeeOnTransfe
 	swapBuilder := tx.NewDynamicFeeBuilder()
 	swapBuilder.PriceBuffer(s.PriceBuffer)
 	swapBuilder.LimitBuffer(s.LimitBuffer)
-	unsigned, err := s.v2Router.CreateSwapExactTokensForETHSupportingFeeOnTransferTokens(s.ctx, swapBuilder, NewSwapExactTokensForETHSupportingFeeOnTransferTokensParams(s.router, s.from, amountIn, amountsOut[1], path, s.from, deadline))
+	sentTx, hash, err := s.v2Router.SwapExactTokensForETHSupportingFeeOnTransferTokens(s.ctx, bind.NewTransactOptions(s.signer, swapBuilder), NewSwapExactTokensForETHSupportingFeeOnTransferTokensRequest(s.router, amountIn, amountsOut[1], path, s.from, deadline))
 	s.Require().NoError(err)
-	s.Require().NoError(unsigned.Sign(s.signer))
-	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
-
-	hash, err := s.v2Router.SwapExactTokensForETHSupportingFeeOnTransferTokens(s.ctx, unsigned)
-	s.Require().NoError(err)
+	s.totalFee.Add(s.totalFee, sentTx.MaxFee())
 	s.T().Logf("Test19SwapExactTokensForETHSupportingFeeOnTransferTokens: broadcast tx %s", hash)
 
-	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(receipt.Status, "swapExactTokensForETHSupportingFeeOnTransferTokens transaction reverted")
 	s.T().Logf("Test19SwapExactTokensForETHSupportingFeeOnTransferTokens: confirmed in block %d", receipt.BlockNumber)
@@ -2079,18 +2010,18 @@ func (s *RouterLifeCycleSuite) Test20RemoveLiquidityETHSupportingFeeOnTransferTo
 	s.Require().NoError(err)
 	s.totalFee.Add(s.totalFee, approveTx.MaxFee())
 
-	approveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, approveHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	approveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, approveHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(approveReceipt.Status, "approve transaction reverted")
 	var allowance *big.Int
 	s.Require().Eventually(func() bool {
 		allowance, err = s.erc20.Allowance(s.ctx, nil, erc20.NewAllowanceRequest(s.pairETH, s.from, s.router))
 		return err == nil && liquidity.Cmp(allowance) == 0
-	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "allowance not visible after approve")
+	}, s.ReceiptTimeout, s.ReceiptPollInterval, "allowance not visible after approve")
 
 	deadline := big.NewInt(time.Now().Add(time.Duration(s.DeadlineSeconds) * time.Second).Unix())
 
-	predictedAmountETH, err := s.v2Router.CallRemoveLiquidityETHSupportingFeeOnTransferTokens(s.ctx, NewRemoveLiquidityETHSupportingFeeOnTransferTokensParams(s.router, s.from, s.token0, liquidity, big.NewInt(0), big.NewInt(0), s.from, deadline), rpc.BlockTagLatest)
+	predictedAmountETH, err := s.v2Router.CallRemoveLiquidityETHSupportingFeeOnTransferTokens(s.ctx, bind.NewCallOptions().WithFrom(s.from), NewRemoveLiquidityETHSupportingFeeOnTransferTokensRequest(s.router, s.token0, liquidity, big.NewInt(0), big.NewInt(0), s.from, deadline))
 	s.Require().NoError(err)
 	s.Require().True(predictedAmountETH.Sign() > 0)
 	s.T().Logf("Test20RemoveLiquidityETHSupportingFeeOnTransferTokens: CallRemoveLiquidityETHSupportingFeeOnTransferTokens predicted amountETH=%s", predictedAmountETH)
@@ -2101,16 +2032,12 @@ func (s *RouterLifeCycleSuite) Test20RemoveLiquidityETHSupportingFeeOnTransferTo
 	removeBuilder := tx.NewDynamicFeeBuilder()
 	removeBuilder.PriceBuffer(s.PriceBuffer)
 	removeBuilder.LimitBuffer(s.LimitBuffer)
-	unsigned, err := s.v2Router.CreateRemoveLiquidityETHSupportingFeeOnTransferTokens(s.ctx, removeBuilder, NewRemoveLiquidityETHSupportingFeeOnTransferTokensParams(s.router, s.from, s.token0, liquidity, big.NewInt(0), predictedAmountETH, s.from, deadline))
+	sentTx, hash, err := s.v2Router.RemoveLiquidityETHSupportingFeeOnTransferTokens(s.ctx, bind.NewTransactOptions(s.signer, removeBuilder), NewRemoveLiquidityETHSupportingFeeOnTransferTokensRequest(s.router, s.token0, liquidity, big.NewInt(0), predictedAmountETH, s.from, deadline))
 	s.Require().NoError(err)
-	s.Require().NoError(unsigned.Sign(s.signer))
-	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
-
-	hash, err := s.v2Router.RemoveLiquidityETHSupportingFeeOnTransferTokens(s.ctx, unsigned)
-	s.Require().NoError(err)
+	s.totalFee.Add(s.totalFee, sentTx.MaxFee())
 	s.T().Logf("Test20RemoveLiquidityETHSupportingFeeOnTransferTokens: broadcast tx %s", hash)
 
-	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(receipt.Status, "removeLiquidityETHSupportingFeeOnTransferTokens transaction reverted")
 	s.T().Logf("Test20RemoveLiquidityETHSupportingFeeOnTransferTokens: confirmed in block %d", receipt.BlockNumber)
@@ -2137,7 +2064,7 @@ func (s *RouterLifeCycleSuite) Test20RemoveLiquidityETHSupportingFeeOnTransferTo
 			return false
 		}
 		return tokenAfter.Cmp(tokenBefore) > 0 && remainingLiquidity.Sign() == 0
-	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "balances not visible after removeLiquidityETHSupportingFeeOnTransferTokens")
+	}, s.ReceiptTimeout, s.ReceiptPollInterval, "balances not visible after removeLiquidityETHSupportingFeeOnTransferTokens")
 	s.T().Logf("Test20RemoveLiquidityETHSupportingFeeOnTransferTokens: token0 %s -> %s, remaining LP balance=%s", tokenBefore, tokenAfter, remainingLiquidity)
 }
 
@@ -2164,29 +2091,25 @@ func (s *RouterLifeCycleSuite) Test21RemoveLiquidityETHWithPermitSupportingFeeOn
 	s.Require().NoError(err)
 	s.totalFee.Add(s.totalFee, approveTx.MaxFee())
 
-	approveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, approveHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	approveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, approveHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(approveReceipt.Status, "approve transaction reverted")
 	var tokenAllowance *big.Int
 	s.Require().Eventually(func() bool {
 		tokenAllowance, err = s.erc20.Allowance(s.ctx, nil, erc20.NewAllowanceRequest(s.token0, s.from, s.router))
 		return err == nil && tokenDesired.Cmp(tokenAllowance) == 0
-	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "allowance not visible after approve")
+	}, s.ReceiptTimeout, s.ReceiptPollInterval, "allowance not visible after approve")
 
 	addDeadline := big.NewInt(time.Now().Add(time.Duration(s.DeadlineSeconds) * time.Second).Unix())
 	addBuilder := tx.NewDynamicFeeBuilder()
 	addBuilder.PriceBuffer(s.PriceBuffer)
 	addBuilder.LimitBuffer(s.LimitBuffer)
-	unsignedAdd, err := s.v2Router.CreateAddLiquidityETH(s.ctx, addBuilder, NewAddLiquidityETHParams(s.router, s.from, s.token0, tokenDesired, big.NewInt(0), big.NewInt(0), s.from, addDeadline, s.nativeValue))
+	addTx, addHash, err := s.v2Router.AddLiquidityETH(s.ctx, bind.NewTransactOptions(s.signer, addBuilder), NewAddLiquidityETHRequest(s.router, s.token0, tokenDesired, big.NewInt(0), big.NewInt(0), s.from, addDeadline, s.nativeValue))
 	s.Require().NoError(err)
-	s.Require().NoError(unsignedAdd.Sign(s.signer))
-	s.totalFee.Add(s.totalFee, unsignedAdd.MaxFee())
-
-	addHash, err := s.v2Router.AddLiquidityETH(s.ctx, unsignedAdd)
-	s.Require().NoError(err)
+	s.totalFee.Add(s.totalFee, addTx.MaxFee())
 	s.T().Logf("Test21RemoveLiquidityETHWithPermitSupportingFeeOnTransferTokens: re-added liquidity to pairETH, broadcast tx %s", addHash)
 
-	addReceipt, err := tx.WaitForReceipt(s.ctx, s.client, addHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	addReceipt, err := tx.WaitForReceipt(s.ctx, s.client, addHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(addReceipt.Status, "addLiquidityETH transaction reverted")
 	s.T().Logf("Test21RemoveLiquidityETHWithPermitSupportingFeeOnTransferTokens: re-add liquidity confirmed in block %d", addReceipt.BlockNumber)
@@ -2195,7 +2118,7 @@ func (s *RouterLifeCycleSuite) Test21RemoveLiquidityETHWithPermitSupportingFeeOn
 	s.Require().Eventually(func() bool {
 		liquidity, err = s.v2Pair.BalanceOf(s.ctx, nil, erc20.NewBalanceOfRequest(s.pairETH, s.from))
 		return err == nil && liquidity.Sign() > 0
-	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "LP balance not visible after re-adding liquidity")
+	}, s.ReceiptTimeout, s.ReceiptPollInterval, "LP balance not visible after re-adding liquidity")
 	s.T().Logf("Test21RemoveLiquidityETHWithPermitSupportingFeeOnTransferTokens: pairETH=%s LP balance=%s", s.pairETH, liquidity)
 
 	nonce, err := s.v2Pair.Nonces(s.ctx, nil, erc2612.NewNoncesRequest(s.pairETH, s.from))
@@ -2208,7 +2131,7 @@ func (s *RouterLifeCycleSuite) Test21RemoveLiquidityETHWithPermitSupportingFeeOn
 	s.Require().NoError(err)
 	s.T().Logf("Test21RemoveLiquidityETHWithPermitSupportingFeeOnTransferTokens: signed permit nonce=%s deadline=%s (no Approve transaction needed)", nonce, deadline)
 
-	predictedAmountETH, err := s.v2Router.CallRemoveLiquidityETHWithPermitSupportingFeeOnTransferTokens(s.ctx, NewRemoveLiquidityETHWithPermitSupportingFeeOnTransferTokensParams(s.router, s.from, s.token0, liquidity, big.NewInt(0), big.NewInt(0), s.from, deadline, false, sig), rpc.BlockTagLatest)
+	predictedAmountETH, err := s.v2Router.CallRemoveLiquidityETHWithPermitSupportingFeeOnTransferTokens(s.ctx, bind.NewCallOptions().WithFrom(s.from), NewRemoveLiquidityETHWithPermitSupportingFeeOnTransferTokensRequest(s.router, s.token0, liquidity, big.NewInt(0), big.NewInt(0), s.from, deadline, false, sig))
 	s.Require().NoError(err)
 	s.Require().True(predictedAmountETH.Sign() > 0)
 	s.T().Logf("Test21RemoveLiquidityETHWithPermitSupportingFeeOnTransferTokens: CallRemoveLiquidityETHWithPermitSupportingFeeOnTransferTokens predicted amountETH=%s", predictedAmountETH)
@@ -2219,16 +2142,12 @@ func (s *RouterLifeCycleSuite) Test21RemoveLiquidityETHWithPermitSupportingFeeOn
 	removeBuilder := tx.NewDynamicFeeBuilder()
 	removeBuilder.PriceBuffer(s.PriceBuffer)
 	removeBuilder.LimitBuffer(s.LimitBuffer)
-	unsigned, err := s.v2Router.CreateRemoveLiquidityETHWithPermitSupportingFeeOnTransferTokens(s.ctx, removeBuilder, NewRemoveLiquidityETHWithPermitSupportingFeeOnTransferTokensParams(s.router, s.from, s.token0, liquidity, big.NewInt(0), predictedAmountETH, s.from, deadline, false, sig))
+	sentTx, hash, err := s.v2Router.RemoveLiquidityETHWithPermitSupportingFeeOnTransferTokens(s.ctx, bind.NewTransactOptions(s.signer, removeBuilder), NewRemoveLiquidityETHWithPermitSupportingFeeOnTransferTokensRequest(s.router, s.token0, liquidity, big.NewInt(0), predictedAmountETH, s.from, deadline, false, sig))
 	s.Require().NoError(err)
-	s.Require().NoError(unsigned.Sign(s.signer))
-	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
-
-	hash, err := s.v2Router.RemoveLiquidityETHWithPermitSupportingFeeOnTransferTokens(s.ctx, unsigned)
-	s.Require().NoError(err)
+	s.totalFee.Add(s.totalFee, sentTx.MaxFee())
 	s.T().Logf("Test21RemoveLiquidityETHWithPermitSupportingFeeOnTransferTokens: broadcast tx %s", hash)
 
-	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(receipt.Status, "removeLiquidityETHWithPermitSupportingFeeOnTransferTokens transaction reverted")
 	s.T().Logf("Test21RemoveLiquidityETHWithPermitSupportingFeeOnTransferTokens: confirmed in block %d", receipt.BlockNumber)
@@ -2260,20 +2179,20 @@ func (s *RouterLifeCycleSuite) Test21RemoveLiquidityETHWithPermitSupportingFeeOn
 		}
 		return tokenAfter.Cmp(tokenBefore) > 0 && remainingLiquidity.Sign() == 0 &&
 			new(big.Int).Add(nonce, big.NewInt(1)).Cmp(nonceAfter) == 0
-	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "balances not visible after removeLiquidityETHWithPermitSupportingFeeOnTransferTokens")
+	}, s.ReceiptTimeout, s.ReceiptPollInterval, "balances not visible after removeLiquidityETHWithPermitSupportingFeeOnTransferTokens")
 	s.Require().Zero(new(big.Int).Add(nonce, big.NewInt(1)).Cmp(nonceAfter), "permit nonce should have advanced by exactly 1")
 	s.T().Logf("Test21RemoveLiquidityETHWithPermitSupportingFeeOnTransferTokens: token0 %s -> %s, nonce %s -> %s, remaining LP balance=%s", tokenBefore, tokenAfter, nonce, nonceAfter, remainingLiquidity)
 }
 
 func (s *RouterLifeCycleSuite) Test22QuoteInsufficientAmount() {
-	_, err := s.v2Router.Quote(s.ctx, NewQuoteParams(s.router, big.NewInt(0), big.NewInt(1000), big.NewInt(1000)), rpc.BlockTagLatest)
+	_, err := s.v2Router.Quote(s.ctx, nil, NewQuoteRequest(s.router, big.NewInt(0), big.NewInt(1000), big.NewInt(1000)))
 	s.Require().Error(err)
 	s.Require().ErrorIs(err, ErrInsufficientAmount)
 	s.T().Logf("Test22QuoteInsufficientAmount: amountA=0 rejected as expected: %v", err)
 }
 
 func (s *RouterLifeCycleSuite) Test23QuoteInsufficientLiquidity() {
-	_, err := s.v2Router.Quote(s.ctx, NewQuoteParams(s.router, big.NewInt(1000), big.NewInt(0), big.NewInt(1000)), rpc.BlockTagLatest)
+	_, err := s.v2Router.Quote(s.ctx, nil, NewQuoteRequest(s.router, big.NewInt(1000), big.NewInt(0), big.NewInt(1000)))
 	s.Require().Error(err)
 	s.Require().ErrorIs(err, ErrInsufficientLiquidity)
 	s.T().Logf("Test23QuoteInsufficientLiquidity: reserveA=0 rejected as expected: %v", err)
@@ -2285,9 +2204,10 @@ func (s *RouterLifeCycleSuite) Test24AddLiquidityIdenticalAddresses() {
 	builder := tx.NewDynamicFeeBuilder()
 	builder.PriceBuffer(s.PriceBuffer)
 	builder.LimitBuffer(s.LimitBuffer)
-	_, err := s.v2Router.CreateAddLiquidity(s.ctx, builder, NewAddLiquidityParams(s.router, s.from, s.token0, s.token0, big.NewInt(1000), big.NewInt(1000), big.NewInt(0), big.NewInt(0), s.from, deadline))
-	s.Require().Error(err)
+	revertTx, revertHash, err := s.v2Router.AddLiquidity(s.ctx, bind.NewTransactOptions(s.signer, builder), NewAddLiquidityRequest(s.router, s.token0, s.token0, big.NewInt(1000), big.NewInt(1000), big.NewInt(0), big.NewInt(0), s.from, deadline))
 	s.Require().ErrorIs(err, ErrIdenticalAddresses)
+	s.Require().Nil(revertTx)
+	s.Require().Nil(revertHash)
 	s.T().Logf("Test24AddLiquidityIdenticalAddresses: tokenA==tokenB==%s rejected as expected: %v", s.token0, err)
 }
 
@@ -2302,23 +2222,24 @@ func (s *RouterLifeCycleSuite) Test25SwapInsufficientOutputAmount() {
 	s.Require().NoError(err)
 	s.totalFee.Add(s.totalFee, approveTx.MaxFee())
 
-	approveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, approveHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	approveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, approveHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(approveReceipt.Status, "approve transaction reverted")
 	var allowance *big.Int
 	s.Require().Eventually(func() bool {
 		allowance, err = s.erc20.Allowance(s.ctx, nil, erc20.NewAllowanceRequest(s.token0, s.from, s.router))
 		return err == nil && s.swapAmount.Cmp(allowance) == 0
-	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "allowance not visible after approve")
+	}, s.ReceiptTimeout, s.ReceiptPollInterval, "allowance not visible after approve")
 
 	absurdMin := new(big.Int).Exp(big.NewInt(10), big.NewInt(30), nil)
 
 	swapBuilder := tx.NewDynamicFeeBuilder()
 	swapBuilder.PriceBuffer(s.PriceBuffer)
 	swapBuilder.LimitBuffer(s.LimitBuffer)
-	_, err = s.v2Router.CreateSwapExactTokensForTokens(s.ctx, swapBuilder, NewSwapExactTokensForTokensParams(s.router, s.from, s.swapAmount, absurdMin, path, s.from, deadline))
-	s.Require().Error(err)
+	revertTx, revertHash, err := s.v2Router.SwapExactTokensForTokens(s.ctx, bind.NewTransactOptions(s.signer, swapBuilder), NewSwapExactTokensForTokensRequest(s.router, s.swapAmount, absurdMin, path, s.from, deadline))
 	s.Require().ErrorIs(err, ErrInsufficientOutputAmount)
+	s.Require().Nil(revertTx)
+	s.Require().Nil(revertHash)
 	s.T().Logf("Test25SwapInsufficientOutputAmount: amountOutMin=%s rejected as expected: %v", absurdMin, err)
 }
 
@@ -2326,7 +2247,7 @@ func (s *RouterLifeCycleSuite) Test26SwapExcessiveInputAmount() {
 	path := []*types.Address{s.token0, s.token1}
 	deadline := big.NewInt(time.Now().Add(time.Duration(s.DeadlineSeconds) * time.Second).Unix())
 
-	amountsIn, err := s.v2Router.GetAmountsIn(s.ctx, NewGetAmountsInParams(s.router, s.swapAmount, path), rpc.BlockTagLatest)
+	amountsIn, err := s.v2Router.GetAmountsIn(s.ctx, nil, NewGetAmountsInRequest(s.router, s.swapAmount, path))
 	s.Require().NoError(err)
 	s.Require().Len(amountsIn, 2)
 	tooLowMax := new(big.Int).Div(amountsIn[0], big.NewInt(2))
@@ -2335,9 +2256,10 @@ func (s *RouterLifeCycleSuite) Test26SwapExcessiveInputAmount() {
 	builder := tx.NewDynamicFeeBuilder()
 	builder.PriceBuffer(s.PriceBuffer)
 	builder.LimitBuffer(s.LimitBuffer)
-	_, err = s.v2Router.CreateSwapTokensForExactTokens(s.ctx, builder, NewSwapTokensForExactTokensParams(s.router, s.from, s.swapAmount, tooLowMax, path, s.from, deadline))
-	s.Require().Error(err)
+	revertTx, revertHash, err := s.v2Router.SwapTokensForExactTokens(s.ctx, bind.NewTransactOptions(s.signer, builder), NewSwapTokensForExactTokensRequest(s.router, s.swapAmount, tooLowMax, path, s.from, deadline))
 	s.Require().ErrorIs(err, ErrExcessiveInputAmount)
+	s.Require().Nil(revertTx)
+	s.Require().Nil(revertHash)
 	s.T().Logf("Test26SwapExcessiveInputAmount: rejected as expected: %v", err)
 }
 
@@ -2351,9 +2273,10 @@ func (s *RouterLifeCycleSuite) Test27AddLiquidityInsufficientBAmount() {
 	builder := tx.NewDynamicFeeBuilder()
 	builder.PriceBuffer(s.PriceBuffer)
 	builder.LimitBuffer(s.LimitBuffer)
-	_, err := s.v2Router.CreateAddLiquidity(s.ctx, builder, NewAddLiquidityParams(s.router, s.from, s.token0, s.token1, amountADesired, amountBDesired, big.NewInt(0), absurdBMin, s.from, deadline))
-	s.Require().Error(err)
+	revertTx, revertHash, err := s.v2Router.AddLiquidity(s.ctx, bind.NewTransactOptions(s.signer, builder), NewAddLiquidityRequest(s.router, s.token0, s.token1, amountADesired, amountBDesired, big.NewInt(0), absurdBMin, s.from, deadline))
 	s.Require().ErrorIs(err, ErrInsufficientBAmount)
+	s.Require().Nil(revertTx)
+	s.Require().Nil(revertHash)
 	s.T().Logf("Test27AddLiquidityInsufficientBAmount: amountBMin=%s rejected as expected: %v", absurdBMin, err)
 }
 
@@ -2366,9 +2289,10 @@ func (s *RouterLifeCycleSuite) Test28AddLiquidityInsufficientAAmount() {
 	builder := tx.NewDynamicFeeBuilder()
 	builder.PriceBuffer(s.PriceBuffer)
 	builder.LimitBuffer(s.LimitBuffer)
-	_, err := s.v2Router.CreateAddLiquidity(s.ctx, builder, NewAddLiquidityParams(s.router, s.from, s.token0, s.token1, amountADesired, amountBDesired, absurdAMin, big.NewInt(0), s.from, deadline))
-	s.Require().Error(err)
+	revertTx, revertHash, err := s.v2Router.AddLiquidity(s.ctx, bind.NewTransactOptions(s.signer, builder), NewAddLiquidityRequest(s.router, s.token0, s.token1, amountADesired, amountBDesired, absurdAMin, big.NewInt(0), s.from, deadline))
 	s.Require().ErrorIs(err, ErrInsufficientAAmount)
+	s.Require().Nil(revertTx)
+	s.Require().Nil(revertHash)
 	s.T().Logf("Test28AddLiquidityInsufficientAAmount: amountAMin=%s rejected as expected: %v", absurdAMin, err)
 }
 
@@ -2382,29 +2306,25 @@ func (s *RouterLifeCycleSuite) Test29MultihopSwap() {
 		s.Require().NoError(err)
 		s.totalFee.Add(s.totalFee, approveTx.MaxFee())
 
-		approveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, approveHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+		approveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, approveHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 		s.Require().NoError(err)
 		s.Require().True(approveReceipt.Status, "approve transaction reverted")
 		var allowance *big.Int
 		s.Require().Eventually(func() bool {
 			allowance, err = s.erc20.Allowance(s.ctx, nil, erc20.NewAllowanceRequest(token, s.from, s.router))
 			return err == nil && s.liquidityAmount.Cmp(allowance) == 0
-		}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "allowance not visible after approve")
+		}, s.ReceiptTimeout, s.ReceiptPollInterval, "allowance not visible after approve")
 	}
 
 	addBuilder := tx.NewDynamicFeeBuilder()
 	addBuilder.PriceBuffer(s.PriceBuffer)
 	addBuilder.LimitBuffer(s.LimitBuffer)
-	unsignedAdd, err := s.v2Router.CreateAddLiquidity(s.ctx, addBuilder, NewAddLiquidityParams(s.router, s.from, s.token1, s.token2, s.liquidityAmount, s.liquidityAmount, big.NewInt(0), big.NewInt(0), s.from, deadline))
+	addTx, addHash, err := s.v2Router.AddLiquidity(s.ctx, bind.NewTransactOptions(s.signer, addBuilder), NewAddLiquidityRequest(s.router, s.token1, s.token2, s.liquidityAmount, s.liquidityAmount, big.NewInt(0), big.NewInt(0), s.from, deadline))
 	s.Require().NoError(err)
-	s.Require().NoError(unsignedAdd.Sign(s.signer))
-	s.totalFee.Add(s.totalFee, unsignedAdd.MaxFee())
-
-	addHash, err := s.v2Router.AddLiquidity(s.ctx, unsignedAdd)
-	s.Require().NoError(err)
+	s.totalFee.Add(s.totalFee, addTx.MaxFee())
 	s.T().Logf("Test29MultihopSwap: created (token1, token2) pair, broadcast tx %s", addHash)
 
-	addReceipt, err := tx.WaitForReceipt(s.ctx, s.client, addHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	addReceipt, err := tx.WaitForReceipt(s.ctx, s.client, addHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(addReceipt.Status, "addLiquidity transaction reverted")
 	s.T().Logf("Test29MultihopSwap: (token1, token2) addLiquidity confirmed in block %d", addReceipt.BlockNumber)
@@ -2419,7 +2339,7 @@ func (s *RouterLifeCycleSuite) Test29MultihopSwap() {
 	s.Require().Eventually(func() bool {
 		pair12Reserves, err = s.v2Pair.GetReserves(s.ctx, nil, NewGetReservesRequest(s.pair12))
 		return err == nil && pair12Reserves.Reserve0.Sign() > 0 && pair12Reserves.Reserve1.Sign() > 0
-	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "reserves not visible after addLiquidity")
+	}, s.ReceiptTimeout, s.ReceiptPollInterval, "reserves not visible after addLiquidity")
 	s.T().Logf("Test29MultihopSwap: pair12 %s reserves reserve0=%s reserve1=%s", s.pair12, pair12Reserves.Reserve0, pair12Reserves.Reserve1)
 
 	path := []*types.Address{s.token0, s.token1, s.token2}
@@ -2431,16 +2351,16 @@ func (s *RouterLifeCycleSuite) Test29MultihopSwap() {
 	s.Require().NoError(err)
 	s.totalFee.Add(s.totalFee, approveTx.MaxFee())
 
-	approveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, approveHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	approveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, approveHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(approveReceipt.Status, "approve transaction reverted")
 	var swapAllowance *big.Int
 	s.Require().Eventually(func() bool {
 		swapAllowance, err = s.erc20.Allowance(s.ctx, nil, erc20.NewAllowanceRequest(s.token0, s.from, s.router))
 		return err == nil && s.swapAmount.Cmp(swapAllowance) == 0
-	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "allowance not visible after approve")
+	}, s.ReceiptTimeout, s.ReceiptPollInterval, "allowance not visible after approve")
 
-	predicted, err := s.v2Router.CallSwapExactTokensForTokens(s.ctx, NewSwapExactTokensForTokensParams(s.router, s.from, s.swapAmount, big.NewInt(0), path, s.from, deadline), rpc.BlockTagLatest)
+	predicted, err := s.v2Router.CallSwapExactTokensForTokens(s.ctx, bind.NewCallOptions().WithFrom(s.from), NewSwapExactTokensForTokensRequest(s.router, s.swapAmount, big.NewInt(0), path, s.from, deadline))
 	s.Require().NoError(err)
 	s.Require().Len(predicted, 3, "a 2-hop path should produce 3 amounts: in, intermediate, out")
 	s.T().Logf("Test29MultihopSwap: CallSwapExactTokensForTokens predicted amounts=%v (path=[%s, %s, %s])", predicted, path[0], path[1], path[2])
@@ -2451,16 +2371,12 @@ func (s *RouterLifeCycleSuite) Test29MultihopSwap() {
 	swapBuilder := tx.NewDynamicFeeBuilder()
 	swapBuilder.PriceBuffer(s.PriceBuffer)
 	swapBuilder.LimitBuffer(s.LimitBuffer)
-	unsigned, err := s.v2Router.CreateSwapExactTokensForTokens(s.ctx, swapBuilder, NewSwapExactTokensForTokensParams(s.router, s.from, s.swapAmount, predicted[2], path, s.from, deadline))
+	sentTx, hash, err := s.v2Router.SwapExactTokensForTokens(s.ctx, bind.NewTransactOptions(s.signer, swapBuilder), NewSwapExactTokensForTokensRequest(s.router, s.swapAmount, predicted[2], path, s.from, deadline))
 	s.Require().NoError(err)
-	s.Require().NoError(unsigned.Sign(s.signer))
-	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
-
-	hash, err := s.v2Router.SwapExactTokensForTokens(s.ctx, unsigned)
-	s.Require().NoError(err)
+	s.totalFee.Add(s.totalFee, sentTx.MaxFee())
 	s.T().Logf("Test29MultihopSwap: broadcast swapExactTokensForTokens tx %s", hash)
 
-	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(receipt.Status, "swapExactTokensForTokens transaction reverted")
 	s.T().Logf("Test29MultihopSwap: swapExactTokensForTokens confirmed in block %d", receipt.BlockNumber)
@@ -2503,6 +2419,6 @@ func (s *RouterLifeCycleSuite) Test29MultihopSwap() {
 	s.Require().Eventually(func() bool {
 		after, err = s.erc20.BalanceOf(s.ctx, nil, erc20.NewBalanceOfRequest(s.token2, s.from))
 		return err == nil && new(big.Int).Sub(after, before).Cmp(predicted[2]) == 0
-	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "token2 balance not visible after swap")
+	}, s.ReceiptTimeout, s.ReceiptPollInterval, "token2 balance not visible after swap")
 	s.T().Logf("Test29MultihopSwap: token2 balance %s -> %s", before, after)
 }

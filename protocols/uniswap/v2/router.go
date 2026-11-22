@@ -7,934 +7,961 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core"
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
-	"github.com/ninja-protocol-labs/go-evmkit/tx"
 	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
-// IRouter mirrors IUniswapV2Router02 (which embeds IUniswapV2Router01). No tx.Builder-taking
-// Create* constructors or eth_call-simulating Call* methods here -- see the concrete Router's
-// own CreateAddLiquidity/CallAddLiquidity etc.
+// IRouter mirrors IUniswapV2Router02 (which embeds IUniswapV2Router01).
 type IRouter interface {
-	Factory(ctx context.Context, contract *types.Address, block string) (*types.Address, error)
-	WETH(ctx context.Context, contract *types.Address, block string) (*types.Address, error)
+	Factory(ctx context.Context, opts *bind.CallOptions, req *FactoryRequest) (*types.Address, error)
+	WETH(ctx context.Context, opts *bind.CallOptions, req *WETHRequest) (*types.Address, error)
+	Quote(ctx context.Context, opts *bind.CallOptions, req *QuoteRequest) (*big.Int, error)
+	GetAmountOut(ctx context.Context, opts *bind.CallOptions, req *GetAmountOutRequest) (*big.Int, error)
+	GetAmountIn(ctx context.Context, opts *bind.CallOptions, req *GetAmountInRequest) (*big.Int, error)
+	GetAmountsOut(ctx context.Context, opts *bind.CallOptions, req *GetAmountsOutRequest) ([]*big.Int, error)
+	GetAmountsIn(ctx context.Context, opts *bind.CallOptions, req *GetAmountsInRequest) ([]*big.Int, error)
 
-	Quote(ctx context.Context, p *QuoteParams, block string) (*big.Int, error)
-	GetAmountOut(ctx context.Context, p *GetAmountOutParams, block string) (*big.Int, error)
-	GetAmountIn(ctx context.Context, p *GetAmountInParams, block string) (*big.Int, error)
-	GetAmountsOut(ctx context.Context, p *GetAmountsOutParams, block string) ([]*big.Int, error)
-	GetAmountsIn(ctx context.Context, p *GetAmountsInParams, block string) ([]*big.Int, error)
+	CallAddLiquidity(ctx context.Context, opts *bind.CallOptions, req *AddLiquidityRequest) (*AddLiquidityResult, error)
+	CallAddLiquidityETH(ctx context.Context, opts *bind.CallOptions, req *AddLiquidityETHRequest) (*AddLiquidityETHResult, error)
+	CallRemoveLiquidity(ctx context.Context, opts *bind.CallOptions, req *RemoveLiquidityRequest) (*RemoveLiquidityResult, error)
+	CallRemoveLiquidityETH(ctx context.Context, opts *bind.CallOptions, req *RemoveLiquidityETHRequest) (*RemoveLiquidityETHResult, error)
+	CallRemoveLiquidityWithPermit(ctx context.Context, opts *bind.CallOptions, req *RemoveLiquidityWithPermitRequest) (*RemoveLiquidityResult, error)
+	CallRemoveLiquidityETHWithPermit(ctx context.Context, opts *bind.CallOptions, req *RemoveLiquidityETHWithPermitRequest) (*RemoveLiquidityETHResult, error)
+	CallSwapExactTokensForTokens(ctx context.Context, opts *bind.CallOptions, req *SwapExactTokensForTokensRequest) ([]*big.Int, error)
+	CallSwapTokensForExactTokens(ctx context.Context, opts *bind.CallOptions, req *SwapTokensForExactTokensRequest) ([]*big.Int, error)
+	CallSwapExactETHForTokens(ctx context.Context, opts *bind.CallOptions, req *SwapExactETHForTokensRequest) ([]*big.Int, error)
+	CallSwapTokensForExactETH(ctx context.Context, opts *bind.CallOptions, req *SwapTokensForExactETHRequest) ([]*big.Int, error)
+	CallSwapExactTokensForETH(ctx context.Context, opts *bind.CallOptions, req *SwapExactTokensForETHRequest) ([]*big.Int, error)
+	CallSwapETHForExactTokens(ctx context.Context, opts *bind.CallOptions, req *SwapETHForExactTokensRequest) ([]*big.Int, error)
+	CallRemoveLiquidityETHSupportingFeeOnTransferTokens(ctx context.Context, opts *bind.CallOptions, req *RemoveLiquidityETHSupportingFeeOnTransferTokensRequest) (*big.Int, error)
+	CallRemoveLiquidityETHWithPermitSupportingFeeOnTransferTokens(ctx context.Context, opts *bind.CallOptions, req *RemoveLiquidityETHWithPermitSupportingFeeOnTransferTokensRequest) (*big.Int, error)
 
-	AddLiquidity(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	AddLiquidityETH(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	RemoveLiquidity(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	RemoveLiquidityETH(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	RemoveLiquidityWithPermit(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	RemoveLiquidityETHWithPermit(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	SwapExactTokensForTokens(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	SwapTokensForExactTokens(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	SwapExactETHForTokens(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	SwapTokensForExactETH(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	SwapExactTokensForETH(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	SwapETHForExactTokens(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	RemoveLiquidityETHSupportingFeeOnTransferTokens(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	RemoveLiquidityETHWithPermitSupportingFeeOnTransferTokens(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	SwapExactTokensForTokensSupportingFeeOnTransferTokens(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	SwapExactETHForTokensSupportingFeeOnTransferTokens(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	SwapExactTokensForETHSupportingFeeOnTransferTokens(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
+	AddLiquidity(ctx context.Context, opts *bind.TransactOptions, req *AddLiquidityRequest) (core.Transaction, *types.Hash, error)
+	AddLiquidityETH(ctx context.Context, opts *bind.TransactOptions, req *AddLiquidityETHRequest) (core.Transaction, *types.Hash, error)
+	RemoveLiquidity(ctx context.Context, opts *bind.TransactOptions, req *RemoveLiquidityRequest) (core.Transaction, *types.Hash, error)
+	RemoveLiquidityETH(ctx context.Context, opts *bind.TransactOptions, req *RemoveLiquidityETHRequest) (core.Transaction, *types.Hash, error)
+	RemoveLiquidityWithPermit(ctx context.Context, opts *bind.TransactOptions, req *RemoveLiquidityWithPermitRequest) (core.Transaction, *types.Hash, error)
+	RemoveLiquidityETHWithPermit(ctx context.Context, opts *bind.TransactOptions, req *RemoveLiquidityETHWithPermitRequest) (core.Transaction, *types.Hash, error)
+	SwapExactTokensForTokens(ctx context.Context, opts *bind.TransactOptions, req *SwapExactTokensForTokensRequest) (core.Transaction, *types.Hash, error)
+	SwapTokensForExactTokens(ctx context.Context, opts *bind.TransactOptions, req *SwapTokensForExactTokensRequest) (core.Transaction, *types.Hash, error)
+	SwapExactETHForTokens(ctx context.Context, opts *bind.TransactOptions, req *SwapExactETHForTokensRequest) (core.Transaction, *types.Hash, error)
+	SwapTokensForExactETH(ctx context.Context, opts *bind.TransactOptions, req *SwapTokensForExactETHRequest) (core.Transaction, *types.Hash, error)
+	SwapExactTokensForETH(ctx context.Context, opts *bind.TransactOptions, req *SwapExactTokensForETHRequest) (core.Transaction, *types.Hash, error)
+	SwapETHForExactTokens(ctx context.Context, opts *bind.TransactOptions, req *SwapETHForExactTokensRequest) (core.Transaction, *types.Hash, error)
+	RemoveLiquidityETHSupportingFeeOnTransferTokens(ctx context.Context, opts *bind.TransactOptions, req *RemoveLiquidityETHSupportingFeeOnTransferTokensRequest) (core.Transaction, *types.Hash, error)
+	RemoveLiquidityETHWithPermitSupportingFeeOnTransferTokens(ctx context.Context, opts *bind.TransactOptions, req *RemoveLiquidityETHWithPermitSupportingFeeOnTransferTokensRequest) (core.Transaction, *types.Hash, error)
+	SwapExactTokensForTokensSupportingFeeOnTransferTokens(ctx context.Context, opts *bind.TransactOptions, req *SwapExactTokensForTokensSupportingFeeOnTransferTokensRequest) (core.Transaction, *types.Hash, error)
+	SwapExactETHForTokensSupportingFeeOnTransferTokens(ctx context.Context, opts *bind.TransactOptions, req *SwapExactETHForTokensSupportingFeeOnTransferTokensRequest) (core.Transaction, *types.Hash, error)
+	SwapExactTokensForETHSupportingFeeOnTransferTokens(ctx context.Context, opts *bind.TransactOptions, req *SwapExactTokensForETHSupportingFeeOnTransferTokensRequest) (core.Transaction, *types.Hash, error)
 }
 
 var _ IRouter = (*Router)(nil)
 
-// Router calls any UniswapV2Router02 contract over a Client; it holds no contract address, so
-// one instance serves every deployment.
+// Router calls any UniswapV2Router02 contract over a Client; it holds no contract address, so one instance serves every deployment.
 type Router struct {
 	c rpc.Client
 }
 
-// NewRouter returns a Router calling routers via c.
-func NewRouter(c rpc.Client) *Router {
+// NewRouter returns a Router calling routers via cli.
+func NewRouter(cli rpc.Client) *Router {
 	return &Router{
-		c: c,
+		c: cli,
 	}
 }
 
-// Factory returns contract's UniswapV2Factory.
-func (r *Router) Factory(ctx context.Context, contract *types.Address, block string) (*types.Address, error) {
-	data, err := r.call(ctx, nil, contract, EncodeRouterFactory(), nil, block)
+// Factory returns req.Contract's UniswapV2Factory.
+func (r *Router) Factory(ctx context.Context, opts *bind.CallOptions, req *FactoryRequest) (*types.Address, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv2: factory: %w", err)
+	}
+
+	data, err := bind.Call(ctx, r.c, opts, req.Contract, EncodeRouterFactory())
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv2: factory: %w", r.wrapRevertError(err))
+	}
+
+	out, err := DecodeRouterFactory(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: factory: %w", err)
 	}
-	addr, err := DecodeRouterFactory(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: factory: %w", err)
-	}
-	return addr, nil
+
+	return out, nil
 }
 
-// WETH returns contract's wrapped native token.
-func (r *Router) WETH(ctx context.Context, contract *types.Address, block string) (*types.Address, error) {
-	data, err := r.call(ctx, nil, contract, EncodeWETH(), nil, block)
+// WETH returns req.Contract's wrapped native token.
+func (r *Router) WETH(ctx context.Context, opts *bind.CallOptions, req *WETHRequest) (*types.Address, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv2: weth: %w", err)
+	}
+
+	data, err := bind.Call(ctx, r.c, opts, req.Contract, EncodeWETH())
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv2: weth: %w", r.wrapRevertError(err))
+	}
+
+	out, err := DecodeWETH(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: weth: %w", err)
 	}
-	addr, err := DecodeWETH(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: weth: %w", err)
-	}
-	return addr, nil
+
+	return out, nil
 }
 
-// Quote returns the amount of the other asset equivalent to amountA, given reserveA/reserveB --
-// a direct ratio with no 0.3% fee applied (unlike GetAmountOut).
-func (r *Router) Quote(ctx context.Context, p *QuoteParams, block string) (*big.Int, error) {
-	calldata, err := EncodeQuote(p.AmountA, p.ReserveA, p.ReserveB)
+// Quote returns the amount of the other asset equivalent to req.AmountA at the given reserves, with no fee applied.
+func (r *Router) Quote(ctx context.Context, opts *bind.CallOptions, req *QuoteRequest) (*big.Int, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv2: quote: %w", err)
+	}
+
+	calldata, err := EncodeQuote(req.AmountA, req.ReserveA, req.ReserveB)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: quote: %w", err)
 	}
-	data, err := r.call(ctx, nil, p.Router, calldata, nil, block)
+
+	data, err := bind.Call(ctx, r.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv2: quote: %w", r.wrapRevertError(err))
+	}
+
+	out, err := DecodeQuote(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: quote: %w", err)
 	}
-	n, err := DecodeQuote(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: quote: %w", err)
-	}
-	return n, nil
+
+	return out, nil
 }
 
-// GetAmountOut returns the output amount of a single swap of amountIn, given reserveIn/reserveOut.
-func (r *Router) GetAmountOut(ctx context.Context, p *GetAmountOutParams, block string) (*big.Int, error) {
-	calldata, err := EncodeGetAmountOut(p.AmountIn, p.ReserveIn, p.ReserveOut)
+// GetAmountOut returns the output of a single swap of req.AmountIn at the given reserves, after the 0.3% fee.
+func (r *Router) GetAmountOut(ctx context.Context, opts *bind.CallOptions, req *GetAmountOutRequest) (*big.Int, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv2: getAmountOut: %w", err)
+	}
+
+	calldata, err := EncodeGetAmountOut(req.AmountIn, req.ReserveIn, req.ReserveOut)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: getAmountOut: %w", err)
 	}
-	data, err := r.call(ctx, nil, p.Router, calldata, nil, block)
+
+	data, err := bind.Call(ctx, r.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv2: getAmountOut: %w", r.wrapRevertError(err))
+	}
+
+	out, err := DecodeGetAmountOut(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: getAmountOut: %w", err)
 	}
-	n, err := DecodeGetAmountOut(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: getAmountOut: %w", err)
-	}
-	return n, nil
+
+	return out, nil
 }
 
-// GetAmountIn returns the input amount a single swap needs to produce amountOut, given
-// reserveIn/reserveOut.
-func (r *Router) GetAmountIn(ctx context.Context, p *GetAmountInParams, block string) (*big.Int, error) {
-	calldata, err := EncodeGetAmountIn(p.AmountOut, p.ReserveIn, p.ReserveOut)
+// GetAmountIn returns the input a single swap needs to produce req.AmountOut at the given reserves.
+func (r *Router) GetAmountIn(ctx context.Context, opts *bind.CallOptions, req *GetAmountInRequest) (*big.Int, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv2: getAmountIn: %w", err)
+	}
+
+	calldata, err := EncodeGetAmountIn(req.AmountOut, req.ReserveIn, req.ReserveOut)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: getAmountIn: %w", err)
 	}
-	data, err := r.call(ctx, nil, p.Router, calldata, nil, block)
+
+	data, err := bind.Call(ctx, r.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv2: getAmountIn: %w", r.wrapRevertError(err))
+	}
+
+	out, err := DecodeGetAmountIn(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: getAmountIn: %w", err)
 	}
-	n, err := DecodeGetAmountIn(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: getAmountIn: %w", err)
-	}
-	return n, nil
+
+	return out, nil
 }
 
-// GetAmountsOut returns the output amount of amountIn swapped along path, one hop at a time --
-// amounts[0] is amountIn itself, amounts[len(amounts)-1] is the final output.
-func (r *Router) GetAmountsOut(ctx context.Context, p *GetAmountsOutParams, block string) ([]*big.Int, error) {
-	calldata, err := EncodeGetAmountsOut(p.AmountIn, p.Path)
+// GetAmountsOut returns per-hop amounts for swapping req.AmountIn along req.Path; the last is the final output.
+func (r *Router) GetAmountsOut(ctx context.Context, opts *bind.CallOptions, req *GetAmountsOutRequest) ([]*big.Int, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv2: getAmountsOut: %w", err)
+	}
+
+	calldata, err := EncodeGetAmountsOut(req.AmountIn, req.Path)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: getAmountsOut: %w", err)
 	}
-	data, err := r.call(ctx, nil, p.Router, calldata, nil, block)
+
+	data, err := bind.Call(ctx, r.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv2: getAmountsOut: %w", r.wrapRevertError(err))
+	}
+
+	out, err := DecodeGetAmountsOut(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: getAmountsOut: %w", err)
 	}
-	amounts, err := DecodeGetAmountsOut(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: getAmountsOut: %w", err)
-	}
-	return amounts, nil
+
+	return out, nil
 }
 
-// GetAmountsIn returns the input amount path needs to produce amountOut at its far end, one hop
-// at a time -- amounts[0] is the required input, amounts[len(amounts)-1] is amountOut itself.
-func (r *Router) GetAmountsIn(ctx context.Context, p *GetAmountsInParams, block string) ([]*big.Int, error) {
-	calldata, err := EncodeGetAmountsIn(p.AmountOut, p.Path)
+// GetAmountsIn returns per-hop amounts needed to produce req.AmountOut at the end of req.Path; the first is the required input.
+func (r *Router) GetAmountsIn(ctx context.Context, opts *bind.CallOptions, req *GetAmountsInRequest) ([]*big.Int, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv2: getAmountsIn: %w", err)
+	}
+
+	calldata, err := EncodeGetAmountsIn(req.AmountOut, req.Path)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: getAmountsIn: %w", err)
 	}
-	data, err := r.call(ctx, nil, p.Router, calldata, nil, block)
+
+	data, err := bind.Call(ctx, r.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv2: getAmountsIn: %w", r.wrapRevertError(err))
+	}
+
+	out, err := DecodeGetAmountsIn(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: getAmountsIn: %w", err)
 	}
-	amounts, err := DecodeGetAmountsIn(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: getAmountsIn: %w", err)
-	}
-	return amounts, nil
+
+	return out, nil
 }
 
-// CallAddLiquidity simulates addLiquidity(...) via eth_call, returning the (amountA, amountB,
-// liquidity) it would add -- the actual amounts can differ from amountADesired/amountBDesired
-// depending on the pair's current reserve ratio.
-func (r *Router) CallAddLiquidity(ctx context.Context, p *AddLiquidityParams, block string) (*AddLiquidityResult, error) {
-	calldata, err := EncodeAddLiquidity(p.TokenA, p.TokenB, p.AmountADesired, p.AmountBDesired, p.AmountAMin, p.AmountBMin, p.To, p.Deadline)
+// CallAddLiquidity runs addLiquidity via eth_call as opts.From, returning its result or the revert.
+func (r *Router) CallAddLiquidity(ctx context.Context, opts *bind.CallOptions, req *AddLiquidityRequest) (*AddLiquidityResult, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv2: callAddLiquidity: %w", err)
+	}
+
+	calldata, err := EncodeAddLiquidity(req.TokenA, req.TokenB, req.AmountADesired, req.AmountBDesired, req.AmountAMin, req.AmountBMin, req.To, req.Deadline)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: callAddLiquidity: %w", err)
 	}
-	data, err := r.call(ctx, p.Sender, p.Router, calldata, nil, block)
+
+	data, err := bind.Call(ctx, r.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv2: callAddLiquidity: %w", r.wrapRevertError(err))
+	}
+
+	out, err := DecodeAddLiquidity(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: callAddLiquidity: %w", err)
 	}
-	result, err := DecodeAddLiquidity(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: callAddLiquidity: %w", err)
-	}
-	return result, nil
+
+	return out, nil
 }
 
-// CreateAddLiquidity builds an unsigned addLiquidity(...) transaction via b, sent by sender.
-func (r *Router) CreateAddLiquidity(ctx context.Context, b tx.Builder, p *AddLiquidityParams) (core.Transaction, error) {
-	calldata, err := EncodeAddLiquidity(p.TokenA, p.TokenB, p.AmountADesired, p.AmountBDesired, p.AmountAMin, p.AmountBMin, p.To, p.Deadline)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: createAddLiquidity: %w", err)
+// CallAddLiquidityETH runs addLiquidityETH via eth_call as opts.From with req.AmountETHDesired as msg.value, returning its result or the revert.
+func (r *Router) CallAddLiquidityETH(ctx context.Context, opts *bind.CallOptions, req *AddLiquidityETHRequest) (*AddLiquidityETHResult, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv2: callAddLiquidityETH: %w", err)
 	}
 
-	unsigned, err := b.Build(p.Sender, p.Router, nil, calldata).Pack(ctx, r.c)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: createAddLiquidity: %w", r.wrapRevertError(err))
+	if opts != nil && opts.Value != nil {
+		return nil, fmt.Errorf("uniswapv2: callAddLiquidityETH: %w: value must be nil", bind.ErrInvalidOptions)
 	}
-	return unsigned, nil
-}
 
-// AddLiquidity broadcasts an already-signed addLiquidity transaction.
-func (r *Router) AddLiquidity(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: addLiquidity: %w", err)
-	}
-	hash, err := tx.Broadcast(ctx, r.c, raw)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: addLiquidity: %w", err)
-	}
-	return hash, nil
-}
-
-// CallAddLiquidityETH simulates addLiquidityETH(...) via eth_call, returning the (amountToken,
-// amountETH, liquidity) it would add.
-func (r *Router) CallAddLiquidityETH(ctx context.Context, p *AddLiquidityETHParams, block string) (*AddLiquidityETHResult, error) {
-	calldata, err := EncodeAddLiquidityETH(p.Token, p.AmountTokenDesired, p.AmountTokenMin, p.AmountETHMin, p.To, p.Deadline)
+	calldata, err := EncodeAddLiquidityETH(req.Token, req.AmountTokenDesired, req.AmountTokenMin, req.AmountETHMin, req.To, req.Deadline)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: callAddLiquidityETH: %w", err)
 	}
-	data, err := r.call(ctx, p.Sender, p.Router, calldata, p.Value, block)
+
+	callOpts := bind.NewCallOptions()
+	if opts != nil {
+		*callOpts = *opts
+	}
+	callOpts.Value = req.AmountETHDesired
+
+	data, err := bind.Call(ctx, r.c, callOpts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv2: callAddLiquidityETH: %w", r.wrapRevertError(err))
+	}
+
+	out, err := DecodeAddLiquidityETH(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: callAddLiquidityETH: %w", err)
 	}
-	result, err := DecodeAddLiquidityETH(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: callAddLiquidityETH: %w", err)
-	}
-	return result, nil
+
+	return out, nil
 }
 
-// CreateAddLiquidityETH builds an unsigned addLiquidityETH(...) transaction via b, sent by
-// sender with value wei of native currency attached.
-func (r *Router) CreateAddLiquidityETH(ctx context.Context, b tx.Builder, p *AddLiquidityETHParams) (core.Transaction, error) {
-	calldata, err := EncodeAddLiquidityETH(p.Token, p.AmountTokenDesired, p.AmountTokenMin, p.AmountETHMin, p.To, p.Deadline)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: createAddLiquidityETH: %w", err)
+// CallRemoveLiquidity runs removeLiquidity via eth_call as opts.From, returning its result or the revert.
+func (r *Router) CallRemoveLiquidity(ctx context.Context, opts *bind.CallOptions, req *RemoveLiquidityRequest) (*RemoveLiquidityResult, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv2: callRemoveLiquidity: %w", err)
 	}
 
-	unsigned, err := b.Build(p.Sender, p.Router, p.Value, calldata).Pack(ctx, r.c)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: createAddLiquidityETH: %w", r.wrapRevertError(err))
-	}
-	return unsigned, nil
-}
-
-// AddLiquidityETH broadcasts an already-signed addLiquidityETH transaction.
-func (r *Router) AddLiquidityETH(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: addLiquidityETH: %w", err)
-	}
-	hash, err := tx.Broadcast(ctx, r.c, raw)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: addLiquidityETH: %w", err)
-	}
-	return hash, nil
-}
-
-// CallRemoveLiquidity simulates removeLiquidity(...) via eth_call, returning the (amountA,
-// amountB) it would withdraw.
-func (r *Router) CallRemoveLiquidity(ctx context.Context, p *RemoveLiquidityParams, block string) (*RemoveLiquidityResult, error) {
-	calldata, err := EncodeRemoveLiquidity(p.TokenA, p.TokenB, p.Liquidity, p.AmountAMin, p.AmountBMin, p.To, p.Deadline)
+	calldata, err := EncodeRemoveLiquidity(req.TokenA, req.TokenB, req.Liquidity, req.AmountAMin, req.AmountBMin, req.To, req.Deadline)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: callRemoveLiquidity: %w", err)
 	}
-	data, err := r.call(ctx, p.Sender, p.Router, calldata, nil, block)
+
+	data, err := bind.Call(ctx, r.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv2: callRemoveLiquidity: %w", r.wrapRevertError(err))
+	}
+
+	out, err := DecodeRemoveLiquidity(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: callRemoveLiquidity: %w", err)
 	}
-	result, err := DecodeRemoveLiquidity(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: callRemoveLiquidity: %w", err)
-	}
-	return result, nil
+
+	return out, nil
 }
 
-// CreateRemoveLiquidity builds an unsigned removeLiquidity(...) transaction via b, sent by
-// sender.
-func (r *Router) CreateRemoveLiquidity(ctx context.Context, b tx.Builder, p *RemoveLiquidityParams) (core.Transaction, error) {
-	calldata, err := EncodeRemoveLiquidity(p.TokenA, p.TokenB, p.Liquidity, p.AmountAMin, p.AmountBMin, p.To, p.Deadline)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: createRemoveLiquidity: %w", err)
+// CallRemoveLiquidityETH runs removeLiquidityETH via eth_call as opts.From, returning its result or the revert.
+func (r *Router) CallRemoveLiquidityETH(ctx context.Context, opts *bind.CallOptions, req *RemoveLiquidityETHRequest) (*RemoveLiquidityETHResult, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv2: callRemoveLiquidityETH: %w", err)
 	}
 
-	unsigned, err := b.Build(p.Sender, p.Router, nil, calldata).Pack(ctx, r.c)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: createRemoveLiquidity: %w", r.wrapRevertError(err))
-	}
-	return unsigned, nil
-}
-
-// RemoveLiquidity broadcasts an already-signed removeLiquidity transaction.
-func (r *Router) RemoveLiquidity(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: removeLiquidity: %w", err)
-	}
-	hash, err := tx.Broadcast(ctx, r.c, raw)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: removeLiquidity: %w", err)
-	}
-	return hash, nil
-}
-
-// CallRemoveLiquidityETH simulates removeLiquidityETH(...) via eth_call, returning the
-// (amountToken, amountETH) it would withdraw.
-func (r *Router) CallRemoveLiquidityETH(ctx context.Context, p *RemoveLiquidityETHParams, block string) (*RemoveLiquidityETHResult, error) {
-	calldata, err := EncodeRemoveLiquidityETH(p.Token, p.Liquidity, p.AmountTokenMin, p.AmountETHMin, p.To, p.Deadline)
+	calldata, err := EncodeRemoveLiquidityETH(req.Token, req.Liquidity, req.AmountTokenMin, req.AmountETHMin, req.To, req.Deadline)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: callRemoveLiquidityETH: %w", err)
 	}
-	data, err := r.call(ctx, p.Sender, p.Router, calldata, nil, block)
+
+	data, err := bind.Call(ctx, r.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv2: callRemoveLiquidityETH: %w", r.wrapRevertError(err))
+	}
+
+	out, err := DecodeRemoveLiquidityETH(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: callRemoveLiquidityETH: %w", err)
 	}
-	result, err := DecodeRemoveLiquidityETH(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: callRemoveLiquidityETH: %w", err)
-	}
-	return result, nil
+
+	return out, nil
 }
 
-// CreateRemoveLiquidityETH builds an unsigned removeLiquidityETH(...) transaction via b, sent
-// by sender.
-func (r *Router) CreateRemoveLiquidityETH(ctx context.Context, b tx.Builder, p *RemoveLiquidityETHParams) (core.Transaction, error) {
-	calldata, err := EncodeRemoveLiquidityETH(p.Token, p.Liquidity, p.AmountTokenMin, p.AmountETHMin, p.To, p.Deadline)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: createRemoveLiquidityETH: %w", err)
+// CallRemoveLiquidityWithPermit runs removeLiquidityWithPermit via eth_call as opts.From, returning its result or the revert.
+func (r *Router) CallRemoveLiquidityWithPermit(ctx context.Context, opts *bind.CallOptions, req *RemoveLiquidityWithPermitRequest) (*RemoveLiquidityResult, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv2: callRemoveLiquidityWithPermit: %w", err)
 	}
 
-	unsigned, err := b.Build(p.Sender, p.Router, nil, calldata).Pack(ctx, r.c)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: createRemoveLiquidityETH: %w", r.wrapRevertError(err))
-	}
-	return unsigned, nil
-}
-
-// RemoveLiquidityETH broadcasts an already-signed removeLiquidityETH transaction.
-func (r *Router) RemoveLiquidityETH(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: removeLiquidityETH: %w", err)
-	}
-	hash, err := tx.Broadcast(ctx, r.c, raw)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: removeLiquidityETH: %w", err)
-	}
-	return hash, nil
-}
-
-// CallRemoveLiquidityWithPermit simulates removeLiquidityWithPermit(...) via eth_call, returning
-// the (amountA, amountB) it would withdraw.
-func (r *Router) CallRemoveLiquidityWithPermit(ctx context.Context, p *RemoveLiquidityWithPermitParams, block string) (*RemoveLiquidityResult, error) {
-	calldata, err := EncodeRemoveLiquidityWithPermit(p.TokenA, p.TokenB, p.Liquidity, p.AmountAMin, p.AmountBMin, p.To, p.Deadline, p.ApproveMax, p.Sig)
+	calldata, err := EncodeRemoveLiquidityWithPermit(req.TokenA, req.TokenB, req.Liquidity, req.AmountAMin, req.AmountBMin, req.To, req.Deadline, req.ApproveMax, req.Sig)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: callRemoveLiquidityWithPermit: %w", err)
 	}
-	data, err := r.call(ctx, p.Sender, p.Router, calldata, nil, block)
+
+	data, err := bind.Call(ctx, r.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv2: callRemoveLiquidityWithPermit: %w", r.wrapRevertError(err))
+	}
+
+	out, err := DecodeRemoveLiquidityWithPermit(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: callRemoveLiquidityWithPermit: %w", err)
 	}
-	result, err := DecodeRemoveLiquidityWithPermit(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: callRemoveLiquidityWithPermit: %w", err)
-	}
-	return result, nil
+
+	return out, nil
 }
 
-// CreateRemoveLiquidityWithPermit builds an unsigned removeLiquidityWithPermit(...) transaction
-// via b, sent by sender.
-func (r *Router) CreateRemoveLiquidityWithPermit(ctx context.Context, b tx.Builder, p *RemoveLiquidityWithPermitParams) (core.Transaction, error) {
-	calldata, err := EncodeRemoveLiquidityWithPermit(p.TokenA, p.TokenB, p.Liquidity, p.AmountAMin, p.AmountBMin, p.To, p.Deadline, p.ApproveMax, p.Sig)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: createRemoveLiquidityWithPermit: %w", err)
+// CallRemoveLiquidityETHWithPermit runs removeLiquidityETHWithPermit via eth_call as opts.From, returning its result or the revert.
+func (r *Router) CallRemoveLiquidityETHWithPermit(ctx context.Context, opts *bind.CallOptions, req *RemoveLiquidityETHWithPermitRequest) (*RemoveLiquidityETHResult, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv2: callRemoveLiquidityETHWithPermit: %w", err)
 	}
 
-	unsigned, err := b.Build(p.Sender, p.Router, nil, calldata).Pack(ctx, r.c)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: createRemoveLiquidityWithPermit: %w", r.wrapRevertError(err))
-	}
-	return unsigned, nil
-}
-
-// RemoveLiquidityWithPermit broadcasts an already-signed removeLiquidityWithPermit transaction.
-func (r *Router) RemoveLiquidityWithPermit(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: removeLiquidityWithPermit: %w", err)
-	}
-	hash, err := tx.Broadcast(ctx, r.c, raw)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: removeLiquidityWithPermit: %w", err)
-	}
-	return hash, nil
-}
-
-// CallRemoveLiquidityETHWithPermit simulates removeLiquidityETHWithPermit(...) via eth_call,
-// returning the (amountToken, amountETH) it would withdraw.
-func (r *Router) CallRemoveLiquidityETHWithPermit(ctx context.Context, p *RemoveLiquidityETHWithPermitParams, block string) (*RemoveLiquidityETHResult, error) {
-	calldata, err := EncodeRemoveLiquidityETHWithPermit(p.Token, p.Liquidity, p.AmountTokenMin, p.AmountETHMin, p.To, p.Deadline, p.ApproveMax, p.Sig)
+	calldata, err := EncodeRemoveLiquidityETHWithPermit(req.Token, req.Liquidity, req.AmountTokenMin, req.AmountETHMin, req.To, req.Deadline, req.ApproveMax, req.Sig)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: callRemoveLiquidityETHWithPermit: %w", err)
 	}
-	data, err := r.call(ctx, p.Sender, p.Router, calldata, nil, block)
+
+	data, err := bind.Call(ctx, r.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv2: callRemoveLiquidityETHWithPermit: %w", r.wrapRevertError(err))
+	}
+
+	out, err := DecodeRemoveLiquidityETHWithPermit(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: callRemoveLiquidityETHWithPermit: %w", err)
 	}
-	result, err := DecodeRemoveLiquidityETHWithPermit(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: callRemoveLiquidityETHWithPermit: %w", err)
-	}
-	return result, nil
+
+	return out, nil
 }
 
-// CreateRemoveLiquidityETHWithPermit builds an unsigned removeLiquidityETHWithPermit(...)
-// transaction via b, sent by sender.
-func (r *Router) CreateRemoveLiquidityETHWithPermit(ctx context.Context, b tx.Builder, p *RemoveLiquidityETHWithPermitParams) (core.Transaction, error) {
-	calldata, err := EncodeRemoveLiquidityETHWithPermit(p.Token, p.Liquidity, p.AmountTokenMin, p.AmountETHMin, p.To, p.Deadline, p.ApproveMax, p.Sig)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: createRemoveLiquidityETHWithPermit: %w", err)
+// CallSwapExactTokensForTokens runs swapExactTokensForTokens via eth_call as opts.From, returning its result or the revert.
+func (r *Router) CallSwapExactTokensForTokens(ctx context.Context, opts *bind.CallOptions, req *SwapExactTokensForTokensRequest) ([]*big.Int, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv2: callSwapExactTokensForTokens: %w", err)
 	}
 
-	unsigned, err := b.Build(p.Sender, p.Router, nil, calldata).Pack(ctx, r.c)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: createRemoveLiquidityETHWithPermit: %w", r.wrapRevertError(err))
-	}
-	return unsigned, nil
-}
-
-// RemoveLiquidityETHWithPermit broadcasts an already-signed removeLiquidityETHWithPermit
-// transaction.
-func (r *Router) RemoveLiquidityETHWithPermit(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: removeLiquidityETHWithPermit: %w", err)
-	}
-	hash, err := tx.Broadcast(ctx, r.c, raw)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: removeLiquidityETHWithPermit: %w", err)
-	}
-	return hash, nil
-}
-
-// CallSwapExactTokensForTokens simulates swapExactTokensForTokens(...) via eth_call, returning
-// the amounts path-aligned with path -- equivalent to GetAmountsOut, but as an actual simulated
-// call instead of a pure computation.
-func (r *Router) CallSwapExactTokensForTokens(ctx context.Context, p *SwapExactTokensForTokensParams, block string) ([]*big.Int, error) {
-	calldata, err := EncodeSwapExactTokensForTokens(p.AmountIn, p.AmountOutMin, p.Path, p.To, p.Deadline)
+	calldata, err := EncodeSwapExactTokensForTokens(req.AmountIn, req.AmountOutMin, req.Path, req.To, req.Deadline)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: callSwapExactTokensForTokens: %w", err)
 	}
-	data, err := r.call(ctx, p.Sender, p.Router, calldata, nil, block)
+
+	data, err := bind.Call(ctx, r.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv2: callSwapExactTokensForTokens: %w", r.wrapRevertError(err))
+	}
+
+	out, err := DecodeSwapExactTokensForTokens(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: callSwapExactTokensForTokens: %w", err)
 	}
-	amounts, err := DecodeSwapExactTokensForTokens(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: callSwapExactTokensForTokens: %w", err)
-	}
-	return amounts, nil
+
+	return out, nil
 }
 
-// CreateSwapExactTokensForTokens builds an unsigned swapExactTokensForTokens(...) transaction
-// via b, sent by sender.
-func (r *Router) CreateSwapExactTokensForTokens(ctx context.Context, b tx.Builder, p *SwapExactTokensForTokensParams) (core.Transaction, error) {
-	calldata, err := EncodeSwapExactTokensForTokens(p.AmountIn, p.AmountOutMin, p.Path, p.To, p.Deadline)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: createSwapExactTokensForTokens: %w", err)
+// CallSwapTokensForExactTokens runs swapTokensForExactTokens via eth_call as opts.From, returning its result or the revert.
+func (r *Router) CallSwapTokensForExactTokens(ctx context.Context, opts *bind.CallOptions, req *SwapTokensForExactTokensRequest) ([]*big.Int, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv2: callSwapTokensForExactTokens: %w", err)
 	}
 
-	unsigned, err := b.Build(p.Sender, p.Router, nil, calldata).Pack(ctx, r.c)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: createSwapExactTokensForTokens: %w", r.wrapRevertError(err))
-	}
-	return unsigned, nil
-}
-
-// SwapExactTokensForTokens broadcasts an already-signed swapExactTokensForTokens transaction.
-func (r *Router) SwapExactTokensForTokens(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: swapExactTokensForTokens: %w", err)
-	}
-	hash, err := tx.Broadcast(ctx, r.c, raw)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: swapExactTokensForTokens: %w", err)
-	}
-	return hash, nil
-}
-
-// CallSwapTokensForExactTokens simulates swapTokensForExactTokens(...) via eth_call, returning
-// the amounts path-aligned with path.
-func (r *Router) CallSwapTokensForExactTokens(ctx context.Context, p *SwapTokensForExactTokensParams, block string) ([]*big.Int, error) {
-	calldata, err := EncodeSwapTokensForExactTokens(p.AmountOut, p.AmountInMax, p.Path, p.To, p.Deadline)
+	calldata, err := EncodeSwapTokensForExactTokens(req.AmountOut, req.AmountInMax, req.Path, req.To, req.Deadline)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: callSwapTokensForExactTokens: %w", err)
 	}
-	data, err := r.call(ctx, p.Sender, p.Router, calldata, nil, block)
+
+	data, err := bind.Call(ctx, r.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv2: callSwapTokensForExactTokens: %w", r.wrapRevertError(err))
+	}
+
+	out, err := DecodeSwapTokensForExactTokens(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: callSwapTokensForExactTokens: %w", err)
 	}
-	amounts, err := DecodeSwapTokensForExactTokens(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: callSwapTokensForExactTokens: %w", err)
-	}
-	return amounts, nil
+
+	return out, nil
 }
 
-// CreateSwapTokensForExactTokens builds an unsigned swapTokensForExactTokens(...) transaction
-// via b, sent by sender.
-func (r *Router) CreateSwapTokensForExactTokens(ctx context.Context, b tx.Builder, p *SwapTokensForExactTokensParams) (core.Transaction, error) {
-	calldata, err := EncodeSwapTokensForExactTokens(p.AmountOut, p.AmountInMax, p.Path, p.To, p.Deadline)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: createSwapTokensForExactTokens: %w", err)
+// CallSwapExactETHForTokens runs swapExactETHForTokens via eth_call as opts.From with req.AmountIn as msg.value, returning its result or the revert.
+func (r *Router) CallSwapExactETHForTokens(ctx context.Context, opts *bind.CallOptions, req *SwapExactETHForTokensRequest) ([]*big.Int, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv2: callSwapExactETHForTokens: %w", err)
 	}
 
-	unsigned, err := b.Build(p.Sender, p.Router, nil, calldata).Pack(ctx, r.c)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: createSwapTokensForExactTokens: %w", r.wrapRevertError(err))
+	if opts != nil && opts.Value != nil {
+		return nil, fmt.Errorf("uniswapv2: callSwapExactETHForTokens: %w: value must be nil", bind.ErrInvalidOptions)
 	}
-	return unsigned, nil
-}
 
-// SwapTokensForExactTokens broadcasts an already-signed swapTokensForExactTokens transaction.
-func (r *Router) SwapTokensForExactTokens(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: swapTokensForExactTokens: %w", err)
-	}
-	hash, err := tx.Broadcast(ctx, r.c, raw)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: swapTokensForExactTokens: %w", err)
-	}
-	return hash, nil
-}
-
-// CallSwapExactETHForTokens simulates swapExactETHForTokens(...) via eth_call with value wei of
-// native currency, returning the amounts path-aligned with path.
-func (r *Router) CallSwapExactETHForTokens(ctx context.Context, p *SwapExactETHForTokensParams, block string) ([]*big.Int, error) {
-	calldata, err := EncodeSwapExactETHForTokens(p.AmountOutMin, p.Path, p.To, p.Deadline)
+	calldata, err := EncodeSwapExactETHForTokens(req.AmountOutMin, req.Path, req.To, req.Deadline)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: callSwapExactETHForTokens: %w", err)
 	}
-	data, err := r.call(ctx, p.Sender, p.Router, calldata, p.Value, block)
+
+	callOpts := bind.NewCallOptions()
+	if opts != nil {
+		*callOpts = *opts
+	}
+	callOpts.Value = req.AmountIn
+
+	data, err := bind.Call(ctx, r.c, callOpts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv2: callSwapExactETHForTokens: %w", r.wrapRevertError(err))
+	}
+
+	out, err := DecodeSwapExactETHForTokens(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: callSwapExactETHForTokens: %w", err)
 	}
-	amounts, err := DecodeSwapExactETHForTokens(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: callSwapExactETHForTokens: %w", err)
-	}
-	return amounts, nil
+
+	return out, nil
 }
 
-// CreateSwapExactETHForTokens builds an unsigned swapExactETHForTokens(...) transaction via b,
-// sent by sender with value wei of native currency attached.
-func (r *Router) CreateSwapExactETHForTokens(ctx context.Context, b tx.Builder, p *SwapExactETHForTokensParams) (core.Transaction, error) {
-	calldata, err := EncodeSwapExactETHForTokens(p.AmountOutMin, p.Path, p.To, p.Deadline)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: createSwapExactETHForTokens: %w", err)
+// CallSwapTokensForExactETH runs swapTokensForExactETH via eth_call as opts.From, returning its result or the revert.
+func (r *Router) CallSwapTokensForExactETH(ctx context.Context, opts *bind.CallOptions, req *SwapTokensForExactETHRequest) ([]*big.Int, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv2: callSwapTokensForExactETH: %w", err)
 	}
 
-	unsigned, err := b.Build(p.Sender, p.Router, p.Value, calldata).Pack(ctx, r.c)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: createSwapExactETHForTokens: %w", r.wrapRevertError(err))
-	}
-	return unsigned, nil
-}
-
-// SwapExactETHForTokens broadcasts an already-signed swapExactETHForTokens transaction.
-func (r *Router) SwapExactETHForTokens(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: swapExactETHForTokens: %w", err)
-	}
-	hash, err := tx.Broadcast(ctx, r.c, raw)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: swapExactETHForTokens: %w", err)
-	}
-	return hash, nil
-}
-
-// CallSwapTokensForExactETH simulates swapTokensForExactETH(...) via eth_call, returning the
-// amounts path-aligned with path.
-func (r *Router) CallSwapTokensForExactETH(ctx context.Context, p *SwapTokensForExactETHParams, block string) ([]*big.Int, error) {
-	calldata, err := EncodeSwapTokensForExactETH(p.AmountOut, p.AmountInMax, p.Path, p.To, p.Deadline)
+	calldata, err := EncodeSwapTokensForExactETH(req.AmountOut, req.AmountInMax, req.Path, req.To, req.Deadline)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: callSwapTokensForExactETH: %w", err)
 	}
-	data, err := r.call(ctx, p.Sender, p.Router, calldata, nil, block)
+
+	data, err := bind.Call(ctx, r.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv2: callSwapTokensForExactETH: %w", r.wrapRevertError(err))
+	}
+
+	out, err := DecodeSwapTokensForExactETH(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: callSwapTokensForExactETH: %w", err)
 	}
-	amounts, err := DecodeSwapTokensForExactETH(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: callSwapTokensForExactETH: %w", err)
-	}
-	return amounts, nil
+
+	return out, nil
 }
 
-// CreateSwapTokensForExactETH builds an unsigned swapTokensForExactETH(...) transaction via b,
-// sent by sender.
-func (r *Router) CreateSwapTokensForExactETH(ctx context.Context, b tx.Builder, p *SwapTokensForExactETHParams) (core.Transaction, error) {
-	calldata, err := EncodeSwapTokensForExactETH(p.AmountOut, p.AmountInMax, p.Path, p.To, p.Deadline)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: createSwapTokensForExactETH: %w", err)
+// CallSwapExactTokensForETH runs swapExactTokensForETH via eth_call as opts.From, returning its result or the revert.
+func (r *Router) CallSwapExactTokensForETH(ctx context.Context, opts *bind.CallOptions, req *SwapExactTokensForETHRequest) ([]*big.Int, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv2: callSwapExactTokensForETH: %w", err)
 	}
 
-	unsigned, err := b.Build(p.Sender, p.Router, nil, calldata).Pack(ctx, r.c)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: createSwapTokensForExactETH: %w", r.wrapRevertError(err))
-	}
-	return unsigned, nil
-}
-
-// SwapTokensForExactETH broadcasts an already-signed swapTokensForExactETH transaction.
-func (r *Router) SwapTokensForExactETH(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: swapTokensForExactETH: %w", err)
-	}
-	hash, err := tx.Broadcast(ctx, r.c, raw)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: swapTokensForExactETH: %w", err)
-	}
-	return hash, nil
-}
-
-// CallSwapExactTokensForETH simulates swapExactTokensForETH(...) via eth_call, returning the
-// amounts path-aligned with path.
-func (r *Router) CallSwapExactTokensForETH(ctx context.Context, p *SwapExactTokensForETHParams, block string) ([]*big.Int, error) {
-	calldata, err := EncodeSwapExactTokensForETH(p.AmountIn, p.AmountOutMin, p.Path, p.To, p.Deadline)
+	calldata, err := EncodeSwapExactTokensForETH(req.AmountIn, req.AmountOutMin, req.Path, req.To, req.Deadline)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: callSwapExactTokensForETH: %w", err)
 	}
-	data, err := r.call(ctx, p.Sender, p.Router, calldata, nil, block)
+
+	data, err := bind.Call(ctx, r.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv2: callSwapExactTokensForETH: %w", r.wrapRevertError(err))
+	}
+
+	out, err := DecodeSwapExactTokensForETH(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: callSwapExactTokensForETH: %w", err)
 	}
-	amounts, err := DecodeSwapExactTokensForETH(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: callSwapExactTokensForETH: %w", err)
-	}
-	return amounts, nil
+
+	return out, nil
 }
 
-// CreateSwapExactTokensForETH builds an unsigned swapExactTokensForETH(...) transaction via b,
-// sent by sender.
-func (r *Router) CreateSwapExactTokensForETH(ctx context.Context, b tx.Builder, p *SwapExactTokensForETHParams) (core.Transaction, error) {
-	calldata, err := EncodeSwapExactTokensForETH(p.AmountIn, p.AmountOutMin, p.Path, p.To, p.Deadline)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: createSwapExactTokensForETH: %w", err)
+// CallSwapETHForExactTokens runs swapETHForExactTokens via eth_call as opts.From with req.AmountInMax as msg.value, returning its result or the revert.
+func (r *Router) CallSwapETHForExactTokens(ctx context.Context, opts *bind.CallOptions, req *SwapETHForExactTokensRequest) ([]*big.Int, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv2: callSwapETHForExactTokens: %w", err)
 	}
 
-	unsigned, err := b.Build(p.Sender, p.Router, nil, calldata).Pack(ctx, r.c)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: createSwapExactTokensForETH: %w", r.wrapRevertError(err))
+	if opts != nil && opts.Value != nil {
+		return nil, fmt.Errorf("uniswapv2: callSwapETHForExactTokens: %w: value must be nil", bind.ErrInvalidOptions)
 	}
-	return unsigned, nil
-}
 
-// SwapExactTokensForETH broadcasts an already-signed swapExactTokensForETH transaction.
-func (r *Router) SwapExactTokensForETH(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: swapExactTokensForETH: %w", err)
-	}
-	hash, err := tx.Broadcast(ctx, r.c, raw)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: swapExactTokensForETH: %w", err)
-	}
-	return hash, nil
-}
-
-// CallSwapETHForExactTokens simulates swapETHForExactTokens(...) via eth_call with value wei of
-// native currency (the max input), returning the amounts path-aligned with path.
-func (r *Router) CallSwapETHForExactTokens(ctx context.Context, p *SwapETHForExactTokensParams, block string) ([]*big.Int, error) {
-	calldata, err := EncodeSwapETHForExactTokens(p.AmountOut, p.Path, p.To, p.Deadline)
+	calldata, err := EncodeSwapETHForExactTokens(req.AmountOut, req.Path, req.To, req.Deadline)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: callSwapETHForExactTokens: %w", err)
 	}
-	data, err := r.call(ctx, p.Sender, p.Router, calldata, p.Value, block)
+
+	callOpts := bind.NewCallOptions()
+	if opts != nil {
+		*callOpts = *opts
+	}
+	callOpts.Value = req.AmountInMax
+
+	data, err := bind.Call(ctx, r.c, callOpts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv2: callSwapETHForExactTokens: %w", r.wrapRevertError(err))
+	}
+
+	out, err := DecodeSwapETHForExactTokens(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: callSwapETHForExactTokens: %w", err)
 	}
-	amounts, err := DecodeSwapETHForExactTokens(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: callSwapETHForExactTokens: %w", err)
-	}
-	return amounts, nil
+
+	return out, nil
 }
 
-// CreateSwapETHForExactTokens builds an unsigned swapETHForExactTokens(...) transaction via b,
-// sent by sender with value wei of native currency attached.
-func (r *Router) CreateSwapETHForExactTokens(ctx context.Context, b tx.Builder, p *SwapETHForExactTokensParams) (core.Transaction, error) {
-	calldata, err := EncodeSwapETHForExactTokens(p.AmountOut, p.Path, p.To, p.Deadline)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: createSwapETHForExactTokens: %w", err)
+// CallRemoveLiquidityETHSupportingFeeOnTransferTokens runs removeLiquidityETHSupportingFeeOnTransferTokens via eth_call as opts.From, returning its result or the revert.
+func (r *Router) CallRemoveLiquidityETHSupportingFeeOnTransferTokens(ctx context.Context, opts *bind.CallOptions, req *RemoveLiquidityETHSupportingFeeOnTransferTokensRequest) (*big.Int, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv2: callRemoveLiquidityETHSupportingFeeOnTransferTokens: %w", err)
 	}
 
-	unsigned, err := b.Build(p.Sender, p.Router, p.Value, calldata).Pack(ctx, r.c)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: createSwapETHForExactTokens: %w", r.wrapRevertError(err))
-	}
-	return unsigned, nil
-}
-
-// SwapETHForExactTokens broadcasts an already-signed swapETHForExactTokens transaction.
-func (r *Router) SwapETHForExactTokens(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: swapETHForExactTokens: %w", err)
-	}
-	hash, err := tx.Broadcast(ctx, r.c, raw)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: swapETHForExactTokens: %w", err)
-	}
-	return hash, nil
-}
-
-// CallRemoveLiquidityETHSupportingFeeOnTransferTokens simulates
-// removeLiquidityETHSupportingFeeOnTransferTokens(...) via eth_call, returning the amountETH it
-// would withdraw.
-func (r *Router) CallRemoveLiquidityETHSupportingFeeOnTransferTokens(ctx context.Context, p *RemoveLiquidityETHSupportingFeeOnTransferTokensParams, block string) (*big.Int, error) {
-	calldata, err := EncodeRemoveLiquidityETHSupportingFeeOnTransferTokens(p.Token, p.Liquidity, p.AmountTokenMin, p.AmountETHMin, p.To, p.Deadline)
+	calldata, err := EncodeRemoveLiquidityETHSupportingFeeOnTransferTokens(req.Token, req.Liquidity, req.AmountTokenMin, req.AmountETHMin, req.To, req.Deadline)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: callRemoveLiquidityETHSupportingFeeOnTransferTokens: %w", err)
 	}
-	data, err := r.call(ctx, p.Sender, p.Router, calldata, nil, block)
+
+	data, err := bind.Call(ctx, r.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv2: callRemoveLiquidityETHSupportingFeeOnTransferTokens: %w", r.wrapRevertError(err))
+	}
+
+	out, err := DecodeRemoveLiquidityETHSupportingFeeOnTransferTokens(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: callRemoveLiquidityETHSupportingFeeOnTransferTokens: %w", err)
 	}
-	amountETH, err := DecodeRemoveLiquidityETHSupportingFeeOnTransferTokens(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: callRemoveLiquidityETHSupportingFeeOnTransferTokens: %w", err)
-	}
-	return amountETH, nil
+
+	return out, nil
 }
 
-// CreateRemoveLiquidityETHSupportingFeeOnTransferTokens builds an unsigned
-// removeLiquidityETHSupportingFeeOnTransferTokens(...) transaction via b, sent by sender.
-func (r *Router) CreateRemoveLiquidityETHSupportingFeeOnTransferTokens(ctx context.Context, b tx.Builder, p *RemoveLiquidityETHSupportingFeeOnTransferTokensParams) (core.Transaction, error) {
-	calldata, err := EncodeRemoveLiquidityETHSupportingFeeOnTransferTokens(p.Token, p.Liquidity, p.AmountTokenMin, p.AmountETHMin, p.To, p.Deadline)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: createRemoveLiquidityETHSupportingFeeOnTransferTokens: %w", err)
+// CallRemoveLiquidityETHWithPermitSupportingFeeOnTransferTokens runs removeLiquidityETHWithPermitSupportingFeeOnTransferTokens via eth_call as opts.From, returning its result or the revert.
+func (r *Router) CallRemoveLiquidityETHWithPermitSupportingFeeOnTransferTokens(ctx context.Context, opts *bind.CallOptions, req *RemoveLiquidityETHWithPermitSupportingFeeOnTransferTokensRequest) (*big.Int, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv2: callRemoveLiquidityETHWithPermitSupportingFeeOnTransferTokens: %w", err)
 	}
 
-	unsigned, err := b.Build(p.Sender, p.Router, nil, calldata).Pack(ctx, r.c)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: createRemoveLiquidityETHSupportingFeeOnTransferTokens: %w", r.wrapRevertError(err))
-	}
-	return unsigned, nil
-}
-
-// RemoveLiquidityETHSupportingFeeOnTransferTokens broadcasts an already-signed
-// removeLiquidityETHSupportingFeeOnTransferTokens transaction.
-func (r *Router) RemoveLiquidityETHSupportingFeeOnTransferTokens(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: removeLiquidityETHSupportingFeeOnTransferTokens: %w", err)
-	}
-	hash, err := tx.Broadcast(ctx, r.c, raw)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: removeLiquidityETHSupportingFeeOnTransferTokens: %w", err)
-	}
-	return hash, nil
-}
-
-// CallRemoveLiquidityETHWithPermitSupportingFeeOnTransferTokens simulates
-// removeLiquidityETHWithPermitSupportingFeeOnTransferTokens(...) via eth_call, returning the
-// amountETH it would withdraw.
-func (r *Router) CallRemoveLiquidityETHWithPermitSupportingFeeOnTransferTokens(ctx context.Context, p *RemoveLiquidityETHWithPermitSupportingFeeOnTransferTokensParams, block string) (*big.Int, error) {
-	calldata, err := EncodeRemoveLiquidityETHWithPermitSupportingFeeOnTransferTokens(p.Token, p.Liquidity, p.AmountTokenMin, p.AmountETHMin, p.To, p.Deadline, p.ApproveMax, p.Sig)
+	calldata, err := EncodeRemoveLiquidityETHWithPermitSupportingFeeOnTransferTokens(req.Token, req.Liquidity, req.AmountTokenMin, req.AmountETHMin, req.To, req.Deadline, req.ApproveMax, req.Sig)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: callRemoveLiquidityETHWithPermitSupportingFeeOnTransferTokens: %w", err)
 	}
-	data, err := r.call(ctx, p.Sender, p.Router, calldata, nil, block)
+
+	data, err := bind.Call(ctx, r.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv2: callRemoveLiquidityETHWithPermitSupportingFeeOnTransferTokens: %w", r.wrapRevertError(err))
+	}
+
+	out, err := DecodeRemoveLiquidityETHWithPermitSupportingFeeOnTransferTokens(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: callRemoveLiquidityETHWithPermitSupportingFeeOnTransferTokens: %w", err)
 	}
-	amountETH, err := DecodeRemoveLiquidityETHWithPermitSupportingFeeOnTransferTokens(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: callRemoveLiquidityETHWithPermitSupportingFeeOnTransferTokens: %w", err)
-	}
-	return amountETH, nil
+
+	return out, nil
 }
 
-// CreateRemoveLiquidityETHWithPermitSupportingFeeOnTransferTokens builds an unsigned
-// removeLiquidityETHWithPermitSupportingFeeOnTransferTokens(...) transaction via b, sent by
-// sender.
-func (r *Router) CreateRemoveLiquidityETHWithPermitSupportingFeeOnTransferTokens(ctx context.Context, b tx.Builder, p *RemoveLiquidityETHWithPermitSupportingFeeOnTransferTokensParams) (core.Transaction, error) {
-	calldata, err := EncodeRemoveLiquidityETHWithPermitSupportingFeeOnTransferTokens(p.Token, p.Liquidity, p.AmountTokenMin, p.AmountETHMin, p.To, p.Deadline, p.ApproveMax, p.Sig)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: createRemoveLiquidityETHWithPermitSupportingFeeOnTransferTokens: %w", err)
+// AddLiquidity adds liquidity to the TokenA/TokenB pair, creating it if needed, signed by opts.Signer.
+func (r *Router) AddLiquidity(ctx context.Context, opts *bind.TransactOptions, req *AddLiquidityRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv2: addLiquidity: %w", err)
 	}
 
-	unsigned, err := b.Build(p.Sender, p.Router, nil, calldata).Pack(ctx, r.c)
+	calldata, err := EncodeAddLiquidity(req.TokenA, req.TokenB, req.AmountADesired, req.AmountBDesired, req.AmountAMin, req.AmountBMin, req.To, req.Deadline)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: createRemoveLiquidityETHWithPermitSupportingFeeOnTransferTokens: %w", r.wrapRevertError(err))
+		return nil, nil, fmt.Errorf("uniswapv2: addLiquidity: %w", err)
 	}
-	return unsigned, nil
+
+	signed, hash, err := bind.Transact(ctx, r.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv2: addLiquidity: %w", r.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
 }
 
-// RemoveLiquidityETHWithPermitSupportingFeeOnTransferTokens broadcasts an already-signed
-// removeLiquidityETHWithPermitSupportingFeeOnTransferTokens transaction.
-func (r *Router) RemoveLiquidityETHWithPermitSupportingFeeOnTransferTokens(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: removeLiquidityETHWithPermitSupportingFeeOnTransferTokens: %w", err)
+// AddLiquidityETH adds liquidity to the Token/WETH pair with req.AmountETHDesired attached as msg.value; unused ETH is refunded, signed by opts.Signer.
+func (r *Router) AddLiquidityETH(ctx context.Context, opts *bind.TransactOptions, req *AddLiquidityETHRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv2: addLiquidityETH: %w", err)
 	}
-	hash, err := tx.Broadcast(ctx, r.c, raw)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: removeLiquidityETHWithPermitSupportingFeeOnTransferTokens: %w", err)
+
+	if opts != nil && opts.Value != nil {
+		return nil, nil, fmt.Errorf("uniswapv2: addLiquidityETH: %w: value must be nil", bind.ErrInvalidOptions)
 	}
-	return hash, nil
+
+	calldata, err := EncodeAddLiquidityETH(req.Token, req.AmountTokenDesired, req.AmountTokenMin, req.AmountETHMin, req.To, req.Deadline)
+	if err != nil {
+		return nil, nil, fmt.Errorf("uniswapv2: addLiquidityETH: %w", err)
+	}
+
+	var txOpts *bind.TransactOptions
+	if opts != nil {
+		o := *opts
+		o.Value = req.AmountETHDesired
+		txOpts = &o
+	}
+
+	signed, hash, err := bind.Transact(ctx, r.c, txOpts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv2: addLiquidityETH: %w", r.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
 }
 
-// CreateSwapExactTokensForTokensSupportingFeeOnTransferTokens builds an unsigned
-// swapExactTokensForTokensSupportingFeeOnTransferTokens(...) transaction via b, sent by sender.
-func (r *Router) CreateSwapExactTokensForTokensSupportingFeeOnTransferTokens(ctx context.Context, b tx.Builder, p *SwapExactTokensForTokensSupportingFeeOnTransferTokensParams) (core.Transaction, error) {
-	calldata, err := EncodeSwapExactTokensForTokensSupportingFeeOnTransferTokens(p.AmountIn, p.AmountOutMin, p.Path, p.To, p.Deadline)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: createSwapExactTokensForTokensSupportingFeeOnTransferTokens: %w", err)
+// RemoveLiquidity burns req.Liquidity LP tokens of the TokenA/TokenB pair; the router must be approved for them, signed by opts.Signer.
+func (r *Router) RemoveLiquidity(ctx context.Context, opts *bind.TransactOptions, req *RemoveLiquidityRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv2: removeLiquidity: %w", err)
 	}
 
-	unsigned, err := b.Build(p.Sender, p.Router, nil, calldata).Pack(ctx, r.c)
+	calldata, err := EncodeRemoveLiquidity(req.TokenA, req.TokenB, req.Liquidity, req.AmountAMin, req.AmountBMin, req.To, req.Deadline)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: createSwapExactTokensForTokensSupportingFeeOnTransferTokens: %w", r.wrapRevertError(err))
+		return nil, nil, fmt.Errorf("uniswapv2: removeLiquidity: %w", err)
 	}
-	return unsigned, nil
+
+	signed, hash, err := bind.Transact(ctx, r.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv2: removeLiquidity: %w", r.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
 }
 
-// SwapExactTokensForTokensSupportingFeeOnTransferTokens broadcasts an already-signed
-// swapExactTokensForTokensSupportingFeeOnTransferTokens transaction.
-func (r *Router) SwapExactTokensForTokensSupportingFeeOnTransferTokens(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: swapExactTokensForTokensSupportingFeeOnTransferTokens: %w", err)
+// RemoveLiquidityETH burns req.Liquidity LP tokens of the Token/WETH pair, paying the WETH side out as ETH, signed by opts.Signer.
+func (r *Router) RemoveLiquidityETH(ctx context.Context, opts *bind.TransactOptions, req *RemoveLiquidityETHRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv2: removeLiquidityETH: %w", err)
 	}
-	hash, err := tx.Broadcast(ctx, r.c, raw)
+
+	calldata, err := EncodeRemoveLiquidityETH(req.Token, req.Liquidity, req.AmountTokenMin, req.AmountETHMin, req.To, req.Deadline)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: swapExactTokensForTokensSupportingFeeOnTransferTokens: %w", err)
+		return nil, nil, fmt.Errorf("uniswapv2: removeLiquidityETH: %w", err)
 	}
-	return hash, nil
+
+	signed, hash, err := bind.Transact(ctx, r.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv2: removeLiquidityETH: %w", r.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
 }
 
-// CreateSwapExactETHForTokensSupportingFeeOnTransferTokens builds an unsigned
-// swapExactETHForTokensSupportingFeeOnTransferTokens(...) transaction via b, sent by sender
-// with value wei of native currency attached.
-func (r *Router) CreateSwapExactETHForTokensSupportingFeeOnTransferTokens(ctx context.Context, b tx.Builder, p *SwapExactETHForTokensSupportingFeeOnTransferTokensParams) (core.Transaction, error) {
-	calldata, err := EncodeSwapExactETHForTokensSupportingFeeOnTransferTokens(p.AmountOutMin, p.Path, p.To, p.Deadline)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: createSwapExactETHForTokensSupportingFeeOnTransferTokens: %w", err)
+// RemoveLiquidityWithPermit is RemoveLiquidity with the LP approval given by req.Sig, an EIP-2612 permit signature, signed by opts.Signer.
+func (r *Router) RemoveLiquidityWithPermit(ctx context.Context, opts *bind.TransactOptions, req *RemoveLiquidityWithPermitRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv2: removeLiquidityWithPermit: %w", err)
 	}
 
-	unsigned, err := b.Build(p.Sender, p.Router, p.Value, calldata).Pack(ctx, r.c)
+	calldata, err := EncodeRemoveLiquidityWithPermit(req.TokenA, req.TokenB, req.Liquidity, req.AmountAMin, req.AmountBMin, req.To, req.Deadline, req.ApproveMax, req.Sig)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: createSwapExactETHForTokensSupportingFeeOnTransferTokens: %w", r.wrapRevertError(err))
+		return nil, nil, fmt.Errorf("uniswapv2: removeLiquidityWithPermit: %w", err)
 	}
-	return unsigned, nil
+
+	signed, hash, err := bind.Transact(ctx, r.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv2: removeLiquidityWithPermit: %w", r.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
 }
 
-// SwapExactETHForTokensSupportingFeeOnTransferTokens broadcasts an already-signed
-// swapExactETHForTokensSupportingFeeOnTransferTokens transaction.
-func (r *Router) SwapExactETHForTokensSupportingFeeOnTransferTokens(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: swapExactETHForTokensSupportingFeeOnTransferTokens: %w", err)
+// RemoveLiquidityETHWithPermit is RemoveLiquidityETH with the LP approval given by req.Sig, an EIP-2612 permit signature, signed by opts.Signer.
+func (r *Router) RemoveLiquidityETHWithPermit(ctx context.Context, opts *bind.TransactOptions, req *RemoveLiquidityETHWithPermitRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv2: removeLiquidityETHWithPermit: %w", err)
 	}
-	hash, err := tx.Broadcast(ctx, r.c, raw)
+
+	calldata, err := EncodeRemoveLiquidityETHWithPermit(req.Token, req.Liquidity, req.AmountTokenMin, req.AmountETHMin, req.To, req.Deadline, req.ApproveMax, req.Sig)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: swapExactETHForTokensSupportingFeeOnTransferTokens: %w", err)
+		return nil, nil, fmt.Errorf("uniswapv2: removeLiquidityETHWithPermit: %w", err)
 	}
-	return hash, nil
+
+	signed, hash, err := bind.Transact(ctx, r.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv2: removeLiquidityETHWithPermit: %w", r.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
 }
 
-// CreateSwapExactTokensForETHSupportingFeeOnTransferTokens builds an unsigned
-// swapExactTokensForETHSupportingFeeOnTransferTokens(...) transaction via b, sent by sender.
-func (r *Router) CreateSwapExactTokensForETHSupportingFeeOnTransferTokens(ctx context.Context, b tx.Builder, p *SwapExactTokensForETHSupportingFeeOnTransferTokensParams) (core.Transaction, error) {
-	calldata, err := EncodeSwapExactTokensForETHSupportingFeeOnTransferTokens(p.AmountIn, p.AmountOutMin, p.Path, p.To, p.Deadline)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: createSwapExactTokensForETHSupportingFeeOnTransferTokens: %w", err)
+// SwapExactTokensForTokens swaps exactly req.AmountIn of Path[0] for at least req.AmountOutMin of the last token, signed by opts.Signer.
+func (r *Router) SwapExactTokensForTokens(ctx context.Context, opts *bind.TransactOptions, req *SwapExactTokensForTokensRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv2: swapExactTokensForTokens: %w", err)
 	}
 
-	unsigned, err := b.Build(p.Sender, p.Router, nil, calldata).Pack(ctx, r.c)
+	calldata, err := EncodeSwapExactTokensForTokens(req.AmountIn, req.AmountOutMin, req.Path, req.To, req.Deadline)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: createSwapExactTokensForETHSupportingFeeOnTransferTokens: %w", r.wrapRevertError(err))
+		return nil, nil, fmt.Errorf("uniswapv2: swapExactTokensForTokens: %w", err)
 	}
-	return unsigned, nil
+
+	signed, hash, err := bind.Transact(ctx, r.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv2: swapExactTokensForTokens: %w", r.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
 }
 
-// SwapExactTokensForETHSupportingFeeOnTransferTokens broadcasts an already-signed
-// swapExactTokensForETHSupportingFeeOnTransferTokens transaction.
-func (r *Router) SwapExactTokensForETHSupportingFeeOnTransferTokens(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: swapExactTokensForETHSupportingFeeOnTransferTokens: %w", err)
+// SwapTokensForExactTokens swaps at most req.AmountInMax of Path[0] for exactly req.AmountOut of the last token, signed by opts.Signer.
+func (r *Router) SwapTokensForExactTokens(ctx context.Context, opts *bind.TransactOptions, req *SwapTokensForExactTokensRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv2: swapTokensForExactTokens: %w", err)
 	}
-	hash, err := tx.Broadcast(ctx, r.c, raw)
+
+	calldata, err := EncodeSwapTokensForExactTokens(req.AmountOut, req.AmountInMax, req.Path, req.To, req.Deadline)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: swapExactTokensForETHSupportingFeeOnTransferTokens: %w", err)
+		return nil, nil, fmt.Errorf("uniswapv2: swapTokensForExactTokens: %w", err)
 	}
-	return hash, nil
+
+	signed, hash, err := bind.Transact(ctx, r.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv2: swapTokensForExactTokens: %w", r.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
 }
 
-// call eth_calls contract with calldata (from msg.sender from, and msg.value value, if non-nil),
-// decoding a reverted require(cond, reason) to its sentinel.
-func (r *Router) call(ctx context.Context, from, contract *types.Address, calldata []byte, value *big.Int, block string) ([]byte, error) {
-	params := map[string]any{
-		"to":   contract.String(),
-		"data": encoding.Hex.EncodePrefixed(calldata),
-	}
-	if from != nil {
-		params["from"] = from.String()
-	}
-	if value != nil {
-		params["value"] = "0x" + value.Text(16)
+// SwapExactETHForTokens swaps exactly req.AmountIn of ETH, attached as msg.value, for at least req.AmountOutMin of the last token, signed by opts.Signer.
+func (r *Router) SwapExactETHForTokens(ctx context.Context, opts *bind.TransactOptions, req *SwapExactETHForTokensRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv2: swapExactETHForTokens: %w", err)
 	}
 
-	var raw string
-	if err := r.c.Call(ctx, rpc.ETHCall("call", params, block, &raw)); err != nil {
-		return nil, r.wrapRevertError(err)
+	if opts != nil && opts.Value != nil {
+		return nil, nil, fmt.Errorf("uniswapv2: swapExactETHForTokens: %w: value must be nil", bind.ErrInvalidOptions)
 	}
-	return encoding.Hex.Decode(raw)
+
+	calldata, err := EncodeSwapExactETHForTokens(req.AmountOutMin, req.Path, req.To, req.Deadline)
+	if err != nil {
+		return nil, nil, fmt.Errorf("uniswapv2: swapExactETHForTokens: %w", err)
+	}
+
+	var txOpts *bind.TransactOptions
+	if opts != nil {
+		o := *opts
+		o.Value = req.AmountIn
+		txOpts = &o
+	}
+
+	signed, hash, err := bind.Transact(ctx, r.c, txOpts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv2: swapExactETHForTokens: %w", r.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
+}
+
+// SwapTokensForExactETH swaps at most req.AmountInMax of Path[0] for exactly req.AmountOut of ETH, signed by opts.Signer.
+func (r *Router) SwapTokensForExactETH(ctx context.Context, opts *bind.TransactOptions, req *SwapTokensForExactETHRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv2: swapTokensForExactETH: %w", err)
+	}
+
+	calldata, err := EncodeSwapTokensForExactETH(req.AmountOut, req.AmountInMax, req.Path, req.To, req.Deadline)
+	if err != nil {
+		return nil, nil, fmt.Errorf("uniswapv2: swapTokensForExactETH: %w", err)
+	}
+
+	signed, hash, err := bind.Transact(ctx, r.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv2: swapTokensForExactETH: %w", r.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
+}
+
+// SwapExactTokensForETH swaps exactly req.AmountIn of Path[0] for at least req.AmountOutMin of ETH, signed by opts.Signer.
+func (r *Router) SwapExactTokensForETH(ctx context.Context, opts *bind.TransactOptions, req *SwapExactTokensForETHRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv2: swapExactTokensForETH: %w", err)
+	}
+
+	calldata, err := EncodeSwapExactTokensForETH(req.AmountIn, req.AmountOutMin, req.Path, req.To, req.Deadline)
+	if err != nil {
+		return nil, nil, fmt.Errorf("uniswapv2: swapExactTokensForETH: %w", err)
+	}
+
+	signed, hash, err := bind.Transact(ctx, r.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv2: swapExactTokensForETH: %w", r.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
+}
+
+// SwapETHForExactTokens swaps at most req.AmountInMax of ETH, attached as msg.value, for exactly req.AmountOut of the last token; unused ETH is refunded, signed by opts.Signer.
+func (r *Router) SwapETHForExactTokens(ctx context.Context, opts *bind.TransactOptions, req *SwapETHForExactTokensRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv2: swapETHForExactTokens: %w", err)
+	}
+
+	if opts != nil && opts.Value != nil {
+		return nil, nil, fmt.Errorf("uniswapv2: swapETHForExactTokens: %w: value must be nil", bind.ErrInvalidOptions)
+	}
+
+	calldata, err := EncodeSwapETHForExactTokens(req.AmountOut, req.Path, req.To, req.Deadline)
+	if err != nil {
+		return nil, nil, fmt.Errorf("uniswapv2: swapETHForExactTokens: %w", err)
+	}
+
+	var txOpts *bind.TransactOptions
+	if opts != nil {
+		o := *opts
+		o.Value = req.AmountInMax
+		txOpts = &o
+	}
+
+	signed, hash, err := bind.Transact(ctx, r.c, txOpts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv2: swapETHForExactTokens: %w", r.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
+}
+
+// RemoveLiquidityETHSupportingFeeOnTransferTokens is RemoveLiquidityETH for tokens that take a fee on transfer, signed by opts.Signer.
+func (r *Router) RemoveLiquidityETHSupportingFeeOnTransferTokens(ctx context.Context, opts *bind.TransactOptions, req *RemoveLiquidityETHSupportingFeeOnTransferTokensRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv2: removeLiquidityETHSupportingFeeOnTransferTokens: %w", err)
+	}
+
+	calldata, err := EncodeRemoveLiquidityETHSupportingFeeOnTransferTokens(req.Token, req.Liquidity, req.AmountTokenMin, req.AmountETHMin, req.To, req.Deadline)
+	if err != nil {
+		return nil, nil, fmt.Errorf("uniswapv2: removeLiquidityETHSupportingFeeOnTransferTokens: %w", err)
+	}
+
+	signed, hash, err := bind.Transact(ctx, r.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv2: removeLiquidityETHSupportingFeeOnTransferTokens: %w", r.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
+}
+
+// RemoveLiquidityETHWithPermitSupportingFeeOnTransferTokens is RemoveLiquidityETHWithPermit for tokens that take a fee on transfer, signed by opts.Signer.
+func (r *Router) RemoveLiquidityETHWithPermitSupportingFeeOnTransferTokens(ctx context.Context, opts *bind.TransactOptions, req *RemoveLiquidityETHWithPermitSupportingFeeOnTransferTokensRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv2: removeLiquidityETHWithPermitSupportingFeeOnTransferTokens: %w", err)
+	}
+
+	calldata, err := EncodeRemoveLiquidityETHWithPermitSupportingFeeOnTransferTokens(req.Token, req.Liquidity, req.AmountTokenMin, req.AmountETHMin, req.To, req.Deadline, req.ApproveMax, req.Sig)
+	if err != nil {
+		return nil, nil, fmt.Errorf("uniswapv2: removeLiquidityETHWithPermitSupportingFeeOnTransferTokens: %w", err)
+	}
+
+	signed, hash, err := bind.Transact(ctx, r.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv2: removeLiquidityETHWithPermitSupportingFeeOnTransferTokens: %w", r.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
+}
+
+// SwapExactTokensForTokensSupportingFeeOnTransferTokens is SwapExactTokensForTokens for tokens that take a fee on transfer, signed by opts.Signer.
+func (r *Router) SwapExactTokensForTokensSupportingFeeOnTransferTokens(ctx context.Context, opts *bind.TransactOptions, req *SwapExactTokensForTokensSupportingFeeOnTransferTokensRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv2: swapExactTokensForTokensSupportingFeeOnTransferTokens: %w", err)
+	}
+
+	calldata, err := EncodeSwapExactTokensForTokensSupportingFeeOnTransferTokens(req.AmountIn, req.AmountOutMin, req.Path, req.To, req.Deadline)
+	if err != nil {
+		return nil, nil, fmt.Errorf("uniswapv2: swapExactTokensForTokensSupportingFeeOnTransferTokens: %w", err)
+	}
+
+	signed, hash, err := bind.Transact(ctx, r.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv2: swapExactTokensForTokensSupportingFeeOnTransferTokens: %w", r.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
+}
+
+// SwapExactETHForTokensSupportingFeeOnTransferTokens is SwapExactETHForTokens for tokens that take a fee on transfer, signed by opts.Signer.
+func (r *Router) SwapExactETHForTokensSupportingFeeOnTransferTokens(ctx context.Context, opts *bind.TransactOptions, req *SwapExactETHForTokensSupportingFeeOnTransferTokensRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv2: swapExactETHForTokensSupportingFeeOnTransferTokens: %w", err)
+	}
+
+	if opts != nil && opts.Value != nil {
+		return nil, nil, fmt.Errorf("uniswapv2: swapExactETHForTokensSupportingFeeOnTransferTokens: %w: value must be nil", bind.ErrInvalidOptions)
+	}
+
+	calldata, err := EncodeSwapExactETHForTokensSupportingFeeOnTransferTokens(req.AmountOutMin, req.Path, req.To, req.Deadline)
+	if err != nil {
+		return nil, nil, fmt.Errorf("uniswapv2: swapExactETHForTokensSupportingFeeOnTransferTokens: %w", err)
+	}
+
+	var txOpts *bind.TransactOptions
+	if opts != nil {
+		o := *opts
+		o.Value = req.AmountIn
+		txOpts = &o
+	}
+
+	signed, hash, err := bind.Transact(ctx, r.c, txOpts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv2: swapExactETHForTokensSupportingFeeOnTransferTokens: %w", r.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
+}
+
+// SwapExactTokensForETHSupportingFeeOnTransferTokens is SwapExactTokensForETH for tokens that take a fee on transfer, signed by opts.Signer.
+func (r *Router) SwapExactTokensForETHSupportingFeeOnTransferTokens(ctx context.Context, opts *bind.TransactOptions, req *SwapExactTokensForETHSupportingFeeOnTransferTokensRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv2: swapExactTokensForETHSupportingFeeOnTransferTokens: %w", err)
+	}
+
+	calldata, err := EncodeSwapExactTokensForETHSupportingFeeOnTransferTokens(req.AmountIn, req.AmountOutMin, req.Path, req.To, req.Deadline)
+	if err != nil {
+		return nil, nil, fmt.Errorf("uniswapv2: swapExactTokensForETHSupportingFeeOnTransferTokens: %w", err)
+	}
+
+	signed, hash, err := bind.Transact(ctx, r.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv2: swapExactTokensForETHSupportingFeeOnTransferTokens: %w", r.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
 }
 
 // wrapRevertError maps a known UniswapV2Router/UniswapV2Library revert reason in err to its

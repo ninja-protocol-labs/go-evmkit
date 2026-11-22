@@ -1,96 +1,244 @@
 package v2
 
 import (
+	"fmt"
 	"math/big"
 
+	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 )
 
-// QuoteParams is Quote's argument list.
-type QuoteParams struct {
-	Router   *types.Address
+// WETHRequest is WETH()'s input on Contract.
+type WETHRequest struct {
+	Contract *types.Address
+}
+
+func NewWETHRequest(contract *types.Address) *WETHRequest {
+	return &WETHRequest{
+		Contract: contract,
+	}
+}
+
+func (r *WETHRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// QuoteRequest is quote(amountA, reserveA, reserveB)'s input on Contract.
+type QuoteRequest struct {
+	Contract *types.Address
 	AmountA  *big.Int
 	ReserveA *big.Int
 	ReserveB *big.Int
 }
 
-func NewQuoteParams(router *types.Address, amountA, reserveA, reserveB *big.Int) *QuoteParams {
-	return &QuoteParams{
-		Router:   router,
+func NewQuoteRequest(contract *types.Address, amountA, reserveA, reserveB *big.Int) *QuoteRequest {
+	return &QuoteRequest{
+		Contract: contract,
 		AmountA:  amountA,
 		ReserveA: reserveA,
 		ReserveB: reserveB,
 	}
 }
 
-// GetAmountOutParams is GetAmountOut's argument list.
-type GetAmountOutParams struct {
-	Router     *types.Address
+func (r *QuoteRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.AmountA == nil {
+		return fmt.Errorf("%w: amountA is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.ReserveA == nil {
+		return fmt.Errorf("%w: reserveA is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.ReserveB == nil {
+		return fmt.Errorf("%w: reserveB is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// GetAmountOutRequest is getAmountOut(amountIn, reserveIn, reserveOut)'s input on Contract.
+type GetAmountOutRequest struct {
+	Contract   *types.Address
 	AmountIn   *big.Int
 	ReserveIn  *big.Int
 	ReserveOut *big.Int
 }
 
-func NewGetAmountOutParams(router *types.Address, amountIn, reserveIn, reserveOut *big.Int) *GetAmountOutParams {
-	return &GetAmountOutParams{
-		Router:     router,
+func NewGetAmountOutRequest(contract *types.Address, amountIn, reserveIn, reserveOut *big.Int) *GetAmountOutRequest {
+	return &GetAmountOutRequest{
+		Contract:   contract,
 		AmountIn:   amountIn,
 		ReserveIn:  reserveIn,
 		ReserveOut: reserveOut,
 	}
 }
 
-// GetAmountInParams is GetAmountIn's argument list.
-type GetAmountInParams struct {
-	Router     *types.Address
+func (r *GetAmountOutRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.AmountIn == nil {
+		return fmt.Errorf("%w: amountIn is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.ReserveIn == nil {
+		return fmt.Errorf("%w: reserveIn is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.ReserveOut == nil {
+		return fmt.Errorf("%w: reserveOut is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// GetAmountInRequest is getAmountIn(amountOut, reserveIn, reserveOut)'s input on Contract.
+type GetAmountInRequest struct {
+	Contract   *types.Address
 	AmountOut  *big.Int
 	ReserveIn  *big.Int
 	ReserveOut *big.Int
 }
 
-func NewGetAmountInParams(router *types.Address, amountOut, reserveIn, reserveOut *big.Int) *GetAmountInParams {
-	return &GetAmountInParams{
-		Router:     router,
+func NewGetAmountInRequest(contract *types.Address, amountOut, reserveIn, reserveOut *big.Int) *GetAmountInRequest {
+	return &GetAmountInRequest{
+		Contract:   contract,
 		AmountOut:  amountOut,
 		ReserveIn:  reserveIn,
 		ReserveOut: reserveOut,
 	}
 }
 
-// GetAmountsOutParams is GetAmountsOut's argument list.
-type GetAmountsOutParams struct {
-	Router   *types.Address
+func (r *GetAmountInRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.AmountOut == nil {
+		return fmt.Errorf("%w: amountOut is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.ReserveIn == nil {
+		return fmt.Errorf("%w: reserveIn is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.ReserveOut == nil {
+		return fmt.Errorf("%w: reserveOut is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// GetAmountsOutRequest is getAmountsOut(amountIn, path)'s input on Contract.
+type GetAmountsOutRequest struct {
+	Contract *types.Address
 	AmountIn *big.Int
 	Path     []*types.Address
 }
 
-func NewGetAmountsOutParams(router *types.Address, amountIn *big.Int, path []*types.Address) *GetAmountsOutParams {
-	return &GetAmountsOutParams{
-		Router:   router,
+func NewGetAmountsOutRequest(contract *types.Address, amountIn *big.Int, path []*types.Address) *GetAmountsOutRequest {
+	return &GetAmountsOutRequest{
+		Contract: contract,
 		AmountIn: amountIn,
 		Path:     path,
 	}
 }
 
-// GetAmountsInParams is GetAmountsIn's argument list.
-type GetAmountsInParams struct {
-	Router    *types.Address
+func (r *GetAmountsOutRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.AmountIn == nil {
+		return fmt.Errorf("%w: amountIn is nil", bind.ErrInvalidRequest)
+	}
+
+	if len(r.Path) == 0 {
+		return fmt.Errorf("%w: path is empty", bind.ErrInvalidRequest)
+	}
+
+	for i, a := range r.Path {
+		if a == nil {
+			return fmt.Errorf("%w: path[%d] is nil", bind.ErrInvalidRequest, i)
+		}
+	}
+
+	return nil
+}
+
+// GetAmountsInRequest is getAmountsIn(amountOut, path)'s input on Contract.
+type GetAmountsInRequest struct {
+	Contract  *types.Address
 	AmountOut *big.Int
 	Path      []*types.Address
 }
 
-func NewGetAmountsInParams(router *types.Address, amountOut *big.Int, path []*types.Address) *GetAmountsInParams {
-	return &GetAmountsInParams{
-		Router:    router,
+func NewGetAmountsInRequest(contract *types.Address, amountOut *big.Int, path []*types.Address) *GetAmountsInRequest {
+	return &GetAmountsInRequest{
+		Contract:  contract,
 		AmountOut: amountOut,
 		Path:      path,
 	}
 }
 
-// AddLiquidityParams is CreateAddLiquidity's and CallAddLiquidity's argument list.
-type AddLiquidityParams struct {
-	Router         *types.Address
-	Sender         *types.Address
+func (r *GetAmountsInRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.AmountOut == nil {
+		return fmt.Errorf("%w: amountOut is nil", bind.ErrInvalidRequest)
+	}
+
+	if len(r.Path) == 0 {
+		return fmt.Errorf("%w: path is empty", bind.ErrInvalidRequest)
+	}
+
+	for i, a := range r.Path {
+		if a == nil {
+			return fmt.Errorf("%w: path[%d] is nil", bind.ErrInvalidRequest, i)
+		}
+	}
+
+	return nil
+}
+
+// AddLiquidityRequest is addLiquidity(tokenA, tokenB, amountADesired, amountBDesired, amountAMin, amountBMin, to, deadline)'s input on Contract.
+type AddLiquidityRequest struct {
+	Contract       *types.Address
 	TokenA         *types.Address
 	TokenB         *types.Address
 	AmountADesired *big.Int
@@ -101,10 +249,9 @@ type AddLiquidityParams struct {
 	Deadline       *big.Int
 }
 
-func NewAddLiquidityParams(router, sender, tokenA, tokenB *types.Address, amountADesired, amountBDesired, amountAMin, amountBMin *big.Int, to *types.Address, deadline *big.Int) *AddLiquidityParams {
-	return &AddLiquidityParams{
-		Router:         router,
-		Sender:         sender,
+func NewAddLiquidityRequest(contract, tokenA, tokenB *types.Address, amountADesired, amountBDesired, amountAMin, amountBMin *big.Int, to *types.Address, deadline *big.Int) *AddLiquidityRequest {
+	return &AddLiquidityRequest{
+		Contract:       contract,
 		TokenA:         tokenA,
 		TokenB:         tokenB,
 		AmountADesired: amountADesired,
@@ -116,37 +263,118 @@ func NewAddLiquidityParams(router, sender, tokenA, tokenB *types.Address, amount
 	}
 }
 
-// AddLiquidityETHParams is CreateAddLiquidityETH's and CallAddLiquidityETH's argument list.
-type AddLiquidityETHParams struct {
-	Router             *types.Address
-	Sender             *types.Address
+func (r *AddLiquidityRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.TokenA == nil {
+		return fmt.Errorf("%w: tokenA is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.TokenB == nil {
+		return fmt.Errorf("%w: tokenB is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.AmountADesired == nil {
+		return fmt.Errorf("%w: amountADesired is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.AmountBDesired == nil {
+		return fmt.Errorf("%w: amountBDesired is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.AmountAMin == nil {
+		return fmt.Errorf("%w: amountAMin is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.AmountBMin == nil {
+		return fmt.Errorf("%w: amountBMin is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.To == nil {
+		return fmt.Errorf("%w: to is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Deadline == nil {
+		return fmt.Errorf("%w: deadline is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// AddLiquidityETHRequest is addLiquidityETH(token, amountTokenDesired, amountTokenMin, amountETHMin, to, deadline)'s input on Contract; AmountETHDesired is sent as msg.value.
+type AddLiquidityETHRequest struct {
+	Contract           *types.Address
 	Token              *types.Address
 	AmountTokenDesired *big.Int
 	AmountTokenMin     *big.Int
 	AmountETHMin       *big.Int
 	To                 *types.Address
 	Deadline           *big.Int
-	Value              *big.Int
+	AmountETHDesired   *big.Int
 }
 
-func NewAddLiquidityETHParams(router, sender, token *types.Address, amountTokenDesired, amountTokenMin, amountETHMin *big.Int, to *types.Address, deadline, value *big.Int) *AddLiquidityETHParams {
-	return &AddLiquidityETHParams{
-		Router:             router,
-		Sender:             sender,
+func NewAddLiquidityETHRequest(contract, token *types.Address, amountTokenDesired, amountTokenMin, amountETHMin *big.Int, to *types.Address, deadline, amountETHDesired *big.Int) *AddLiquidityETHRequest {
+	return &AddLiquidityETHRequest{
+		Contract:           contract,
 		Token:              token,
 		AmountTokenDesired: amountTokenDesired,
 		AmountTokenMin:     amountTokenMin,
 		AmountETHMin:       amountETHMin,
 		To:                 to,
 		Deadline:           deadline,
-		Value:              value,
+		AmountETHDesired:   amountETHDesired,
 	}
 }
 
-// RemoveLiquidityParams is CreateRemoveLiquidity's and CallRemoveLiquidity's argument list.
-type RemoveLiquidityParams struct {
-	Router     *types.Address
-	Sender     *types.Address
+func (r *AddLiquidityETHRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Token == nil {
+		return fmt.Errorf("%w: token is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.AmountTokenDesired == nil {
+		return fmt.Errorf("%w: amountTokenDesired is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.AmountTokenMin == nil {
+		return fmt.Errorf("%w: amountTokenMin is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.AmountETHMin == nil {
+		return fmt.Errorf("%w: amountETHMin is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.To == nil {
+		return fmt.Errorf("%w: to is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Deadline == nil {
+		return fmt.Errorf("%w: deadline is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.AmountETHDesired == nil {
+		return fmt.Errorf("%w: amountETHDesired is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// RemoveLiquidityRequest is removeLiquidity(tokenA, tokenB, liquidity, amountAMin, amountBMin, to, deadline)'s input on Contract.
+type RemoveLiquidityRequest struct {
+	Contract   *types.Address
 	TokenA     *types.Address
 	TokenB     *types.Address
 	Liquidity  *big.Int
@@ -156,10 +384,9 @@ type RemoveLiquidityParams struct {
 	Deadline   *big.Int
 }
 
-func NewRemoveLiquidityParams(router, sender, tokenA, tokenB *types.Address, liquidity, amountAMin, amountBMin *big.Int, to *types.Address, deadline *big.Int) *RemoveLiquidityParams {
-	return &RemoveLiquidityParams{
-		Router:     router,
-		Sender:     sender,
+func NewRemoveLiquidityRequest(contract, tokenA, tokenB *types.Address, liquidity, amountAMin, amountBMin *big.Int, to *types.Address, deadline *big.Int) *RemoveLiquidityRequest {
+	return &RemoveLiquidityRequest{
+		Contract:   contract,
 		TokenA:     tokenA,
 		TokenB:     tokenB,
 		Liquidity:  liquidity,
@@ -170,11 +397,49 @@ func NewRemoveLiquidityParams(router, sender, tokenA, tokenB *types.Address, liq
 	}
 }
 
-// RemoveLiquidityETHParams is CreateRemoveLiquidityETH's and CallRemoveLiquidityETH's argument
-// list.
-type RemoveLiquidityETHParams struct {
-	Router         *types.Address
-	Sender         *types.Address
+func (r *RemoveLiquidityRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.TokenA == nil {
+		return fmt.Errorf("%w: tokenA is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.TokenB == nil {
+		return fmt.Errorf("%w: tokenB is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Liquidity == nil {
+		return fmt.Errorf("%w: liquidity is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.AmountAMin == nil {
+		return fmt.Errorf("%w: amountAMin is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.AmountBMin == nil {
+		return fmt.Errorf("%w: amountBMin is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.To == nil {
+		return fmt.Errorf("%w: to is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Deadline == nil {
+		return fmt.Errorf("%w: deadline is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// RemoveLiquidityETHRequest is removeLiquidityETH(token, liquidity, amountTokenMin, amountETHMin, to, deadline)'s input on Contract.
+type RemoveLiquidityETHRequest struct {
+	Contract       *types.Address
 	Token          *types.Address
 	Liquidity      *big.Int
 	AmountTokenMin *big.Int
@@ -183,10 +448,9 @@ type RemoveLiquidityETHParams struct {
 	Deadline       *big.Int
 }
 
-func NewRemoveLiquidityETHParams(router, sender, token *types.Address, liquidity, amountTokenMin, amountETHMin *big.Int, to *types.Address, deadline *big.Int) *RemoveLiquidityETHParams {
-	return &RemoveLiquidityETHParams{
-		Router:         router,
-		Sender:         sender,
+func NewRemoveLiquidityETHRequest(contract, token *types.Address, liquidity, amountTokenMin, amountETHMin *big.Int, to *types.Address, deadline *big.Int) *RemoveLiquidityETHRequest {
+	return &RemoveLiquidityETHRequest{
+		Contract:       contract,
 		Token:          token,
 		Liquidity:      liquidity,
 		AmountTokenMin: amountTokenMin,
@@ -196,11 +460,45 @@ func NewRemoveLiquidityETHParams(router, sender, token *types.Address, liquidity
 	}
 }
 
-// RemoveLiquidityWithPermitParams is CreateRemoveLiquidityWithPermit's and
-// CallRemoveLiquidityWithPermit's argument list.
-type RemoveLiquidityWithPermitParams struct {
-	Router     *types.Address
-	Sender     *types.Address
+func (r *RemoveLiquidityETHRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Token == nil {
+		return fmt.Errorf("%w: token is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Liquidity == nil {
+		return fmt.Errorf("%w: liquidity is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.AmountTokenMin == nil {
+		return fmt.Errorf("%w: amountTokenMin is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.AmountETHMin == nil {
+		return fmt.Errorf("%w: amountETHMin is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.To == nil {
+		return fmt.Errorf("%w: to is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Deadline == nil {
+		return fmt.Errorf("%w: deadline is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// RemoveLiquidityWithPermitRequest is removeLiquidityWithPermit(tokenA, tokenB, liquidity, amountAMin, amountBMin, to, deadline, approveMax, v, r, s)'s input on Contract.
+type RemoveLiquidityWithPermitRequest struct {
+	Contract   *types.Address
 	TokenA     *types.Address
 	TokenB     *types.Address
 	Liquidity  *big.Int
@@ -212,10 +510,9 @@ type RemoveLiquidityWithPermitParams struct {
 	Sig        *types.Signature
 }
 
-func NewRemoveLiquidityWithPermitParams(router, sender, tokenA, tokenB *types.Address, liquidity, amountAMin, amountBMin *big.Int, to *types.Address, deadline *big.Int, approveMax bool, sig *types.Signature) *RemoveLiquidityWithPermitParams {
-	return &RemoveLiquidityWithPermitParams{
-		Router:     router,
-		Sender:     sender,
+func NewRemoveLiquidityWithPermitRequest(contract, tokenA, tokenB *types.Address, liquidity, amountAMin, amountBMin *big.Int, to *types.Address, deadline *big.Int, approveMax bool, sig *types.Signature) *RemoveLiquidityWithPermitRequest {
+	return &RemoveLiquidityWithPermitRequest{
+		Contract:   contract,
 		TokenA:     tokenA,
 		TokenB:     tokenB,
 		Liquidity:  liquidity,
@@ -228,11 +525,53 @@ func NewRemoveLiquidityWithPermitParams(router, sender, tokenA, tokenB *types.Ad
 	}
 }
 
-// RemoveLiquidityETHWithPermitParams is CreateRemoveLiquidityETHWithPermit's and
-// CallRemoveLiquidityETHWithPermit's argument list.
-type RemoveLiquidityETHWithPermitParams struct {
-	Router         *types.Address
-	Sender         *types.Address
+func (r *RemoveLiquidityWithPermitRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.TokenA == nil {
+		return fmt.Errorf("%w: tokenA is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.TokenB == nil {
+		return fmt.Errorf("%w: tokenB is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Liquidity == nil {
+		return fmt.Errorf("%w: liquidity is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.AmountAMin == nil {
+		return fmt.Errorf("%w: amountAMin is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.AmountBMin == nil {
+		return fmt.Errorf("%w: amountBMin is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.To == nil {
+		return fmt.Errorf("%w: to is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Deadline == nil {
+		return fmt.Errorf("%w: deadline is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Sig == nil {
+		return fmt.Errorf("%w: sig is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// RemoveLiquidityETHWithPermitRequest is removeLiquidityETHWithPermit(token, liquidity, amountTokenMin, amountETHMin, to, deadline, approveMax, v, r, s)'s input on Contract.
+type RemoveLiquidityETHWithPermitRequest struct {
+	Contract       *types.Address
 	Token          *types.Address
 	Liquidity      *big.Int
 	AmountTokenMin *big.Int
@@ -243,10 +582,9 @@ type RemoveLiquidityETHWithPermitParams struct {
 	Sig            *types.Signature
 }
 
-func NewRemoveLiquidityETHWithPermitParams(router, sender, token *types.Address, liquidity, amountTokenMin, amountETHMin *big.Int, to *types.Address, deadline *big.Int, approveMax bool, sig *types.Signature) *RemoveLiquidityETHWithPermitParams {
-	return &RemoveLiquidityETHWithPermitParams{
-		Router:         router,
-		Sender:         sender,
+func NewRemoveLiquidityETHWithPermitRequest(contract, token *types.Address, liquidity, amountTokenMin, amountETHMin *big.Int, to *types.Address, deadline *big.Int, approveMax bool, sig *types.Signature) *RemoveLiquidityETHWithPermitRequest {
+	return &RemoveLiquidityETHWithPermitRequest{
+		Contract:       contract,
 		Token:          token,
 		Liquidity:      liquidity,
 		AmountTokenMin: amountTokenMin,
@@ -258,11 +596,49 @@ func NewRemoveLiquidityETHWithPermitParams(router, sender, token *types.Address,
 	}
 }
 
-// SwapExactTokensForTokensParams is CreateSwapExactTokensForTokens's and
-// CallSwapExactTokensForTokens's argument list.
-type SwapExactTokensForTokensParams struct {
-	Router       *types.Address
-	Sender       *types.Address
+func (r *RemoveLiquidityETHWithPermitRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Token == nil {
+		return fmt.Errorf("%w: token is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Liquidity == nil {
+		return fmt.Errorf("%w: liquidity is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.AmountTokenMin == nil {
+		return fmt.Errorf("%w: amountTokenMin is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.AmountETHMin == nil {
+		return fmt.Errorf("%w: amountETHMin is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.To == nil {
+		return fmt.Errorf("%w: to is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Deadline == nil {
+		return fmt.Errorf("%w: deadline is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Sig == nil {
+		return fmt.Errorf("%w: sig is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// SwapExactTokensForTokensRequest is swapExactTokensForTokens(amountIn, amountOutMin, path, to, deadline)'s input on Contract.
+type SwapExactTokensForTokensRequest struct {
+	Contract     *types.Address
 	AmountIn     *big.Int
 	AmountOutMin *big.Int
 	Path         []*types.Address
@@ -270,10 +646,9 @@ type SwapExactTokensForTokensParams struct {
 	Deadline     *big.Int
 }
 
-func NewSwapExactTokensForTokensParams(router, sender *types.Address, amountIn, amountOutMin *big.Int, path []*types.Address, to *types.Address, deadline *big.Int) *SwapExactTokensForTokensParams {
-	return &SwapExactTokensForTokensParams{
-		Router:       router,
-		Sender:       sender,
+func NewSwapExactTokensForTokensRequest(contract *types.Address, amountIn, amountOutMin *big.Int, path []*types.Address, to *types.Address, deadline *big.Int) *SwapExactTokensForTokensRequest {
+	return &SwapExactTokensForTokensRequest{
+		Contract:     contract,
 		AmountIn:     amountIn,
 		AmountOutMin: amountOutMin,
 		Path:         path,
@@ -282,11 +657,47 @@ func NewSwapExactTokensForTokensParams(router, sender *types.Address, amountIn, 
 	}
 }
 
-// SwapTokensForExactTokensParams is CreateSwapTokensForExactTokens's and
-// CallSwapTokensForExactTokens's argument list.
-type SwapTokensForExactTokensParams struct {
-	Router      *types.Address
-	Sender      *types.Address
+func (r *SwapExactTokensForTokensRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.AmountIn == nil {
+		return fmt.Errorf("%w: amountIn is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.AmountOutMin == nil {
+		return fmt.Errorf("%w: amountOutMin is nil", bind.ErrInvalidRequest)
+	}
+
+	if len(r.Path) == 0 {
+		return fmt.Errorf("%w: path is empty", bind.ErrInvalidRequest)
+	}
+
+	for i, a := range r.Path {
+		if a == nil {
+			return fmt.Errorf("%w: path[%d] is nil", bind.ErrInvalidRequest, i)
+		}
+	}
+
+	if r.To == nil {
+		return fmt.Errorf("%w: to is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Deadline == nil {
+		return fmt.Errorf("%w: deadline is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// SwapTokensForExactTokensRequest is swapTokensForExactTokens(amountOut, amountInMax, path, to, deadline)'s input on Contract.
+type SwapTokensForExactTokensRequest struct {
+	Contract    *types.Address
 	AmountOut   *big.Int
 	AmountInMax *big.Int
 	Path        []*types.Address
@@ -294,10 +705,9 @@ type SwapTokensForExactTokensParams struct {
 	Deadline    *big.Int
 }
 
-func NewSwapTokensForExactTokensParams(router, sender *types.Address, amountOut, amountInMax *big.Int, path []*types.Address, to *types.Address, deadline *big.Int) *SwapTokensForExactTokensParams {
-	return &SwapTokensForExactTokensParams{
-		Router:      router,
-		Sender:      sender,
+func NewSwapTokensForExactTokensRequest(contract *types.Address, amountOut, amountInMax *big.Int, path []*types.Address, to *types.Address, deadline *big.Int) *SwapTokensForExactTokensRequest {
+	return &SwapTokensForExactTokensRequest{
+		Contract:    contract,
 		AmountOut:   amountOut,
 		AmountInMax: amountInMax,
 		Path:        path,
@@ -306,35 +716,106 @@ func NewSwapTokensForExactTokensParams(router, sender *types.Address, amountOut,
 	}
 }
 
-// SwapExactETHForTokensParams is CreateSwapExactETHForTokens's and CallSwapExactETHForTokens's
-// argument list.
-type SwapExactETHForTokensParams struct {
-	Router       *types.Address
-	Sender       *types.Address
+func (r *SwapTokensForExactTokensRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.AmountOut == nil {
+		return fmt.Errorf("%w: amountOut is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.AmountInMax == nil {
+		return fmt.Errorf("%w: amountInMax is nil", bind.ErrInvalidRequest)
+	}
+
+	if len(r.Path) == 0 {
+		return fmt.Errorf("%w: path is empty", bind.ErrInvalidRequest)
+	}
+
+	for i, a := range r.Path {
+		if a == nil {
+			return fmt.Errorf("%w: path[%d] is nil", bind.ErrInvalidRequest, i)
+		}
+	}
+
+	if r.To == nil {
+		return fmt.Errorf("%w: to is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Deadline == nil {
+		return fmt.Errorf("%w: deadline is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// SwapExactETHForTokensRequest is swapExactETHForTokens(amountOutMin, path, to, deadline)'s input on Contract; AmountIn is sent as msg.value.
+type SwapExactETHForTokensRequest struct {
+	Contract     *types.Address
 	AmountOutMin *big.Int
 	Path         []*types.Address
 	To           *types.Address
 	Deadline     *big.Int
-	Value        *big.Int
+	AmountIn     *big.Int
 }
 
-func NewSwapExactETHForTokensParams(router, sender *types.Address, amountOutMin *big.Int, path []*types.Address, to *types.Address, deadline, value *big.Int) *SwapExactETHForTokensParams {
-	return &SwapExactETHForTokensParams{
-		Router:       router,
-		Sender:       sender,
+func NewSwapExactETHForTokensRequest(contract *types.Address, amountOutMin *big.Int, path []*types.Address, to *types.Address, deadline, amountIn *big.Int) *SwapExactETHForTokensRequest {
+	return &SwapExactETHForTokensRequest{
+		Contract:     contract,
 		AmountOutMin: amountOutMin,
 		Path:         path,
 		To:           to,
 		Deadline:     deadline,
-		Value:        value,
+		AmountIn:     amountIn,
 	}
 }
 
-// SwapTokensForExactETHParams is CreateSwapTokensForExactETH's and CallSwapTokensForExactETH's
-// argument list.
-type SwapTokensForExactETHParams struct {
-	Router      *types.Address
-	Sender      *types.Address
+func (r *SwapExactETHForTokensRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.AmountOutMin == nil {
+		return fmt.Errorf("%w: amountOutMin is nil", bind.ErrInvalidRequest)
+	}
+
+	if len(r.Path) == 0 {
+		return fmt.Errorf("%w: path is empty", bind.ErrInvalidRequest)
+	}
+
+	for i, a := range r.Path {
+		if a == nil {
+			return fmt.Errorf("%w: path[%d] is nil", bind.ErrInvalidRequest, i)
+		}
+	}
+
+	if r.To == nil {
+		return fmt.Errorf("%w: to is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Deadline == nil {
+		return fmt.Errorf("%w: deadline is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.AmountIn == nil {
+		return fmt.Errorf("%w: amountIn is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// SwapTokensForExactETHRequest is swapTokensForExactETH(amountOut, amountInMax, path, to, deadline)'s input on Contract.
+type SwapTokensForExactETHRequest struct {
+	Contract    *types.Address
 	AmountOut   *big.Int
 	AmountInMax *big.Int
 	Path        []*types.Address
@@ -342,10 +823,9 @@ type SwapTokensForExactETHParams struct {
 	Deadline    *big.Int
 }
 
-func NewSwapTokensForExactETHParams(router, sender *types.Address, amountOut, amountInMax *big.Int, path []*types.Address, to *types.Address, deadline *big.Int) *SwapTokensForExactETHParams {
-	return &SwapTokensForExactETHParams{
-		Router:      router,
-		Sender:      sender,
+func NewSwapTokensForExactETHRequest(contract *types.Address, amountOut, amountInMax *big.Int, path []*types.Address, to *types.Address, deadline *big.Int) *SwapTokensForExactETHRequest {
+	return &SwapTokensForExactETHRequest{
+		Contract:    contract,
 		AmountOut:   amountOut,
 		AmountInMax: amountInMax,
 		Path:        path,
@@ -354,11 +834,47 @@ func NewSwapTokensForExactETHParams(router, sender *types.Address, amountOut, am
 	}
 }
 
-// SwapExactTokensForETHParams is CreateSwapExactTokensForETH's and CallSwapExactTokensForETH's
-// argument list.
-type SwapExactTokensForETHParams struct {
-	Router       *types.Address
-	Sender       *types.Address
+func (r *SwapTokensForExactETHRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.AmountOut == nil {
+		return fmt.Errorf("%w: amountOut is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.AmountInMax == nil {
+		return fmt.Errorf("%w: amountInMax is nil", bind.ErrInvalidRequest)
+	}
+
+	if len(r.Path) == 0 {
+		return fmt.Errorf("%w: path is empty", bind.ErrInvalidRequest)
+	}
+
+	for i, a := range r.Path {
+		if a == nil {
+			return fmt.Errorf("%w: path[%d] is nil", bind.ErrInvalidRequest, i)
+		}
+	}
+
+	if r.To == nil {
+		return fmt.Errorf("%w: to is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Deadline == nil {
+		return fmt.Errorf("%w: deadline is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// SwapExactTokensForETHRequest is swapExactTokensForETH(amountIn, amountOutMin, path, to, deadline)'s input on Contract.
+type SwapExactTokensForETHRequest struct {
+	Contract     *types.Address
 	AmountIn     *big.Int
 	AmountOutMin *big.Int
 	Path         []*types.Address
@@ -366,10 +882,9 @@ type SwapExactTokensForETHParams struct {
 	Deadline     *big.Int
 }
 
-func NewSwapExactTokensForETHParams(router, sender *types.Address, amountIn, amountOutMin *big.Int, path []*types.Address, to *types.Address, deadline *big.Int) *SwapExactTokensForETHParams {
-	return &SwapExactTokensForETHParams{
-		Router:       router,
-		Sender:       sender,
+func NewSwapExactTokensForETHRequest(contract *types.Address, amountIn, amountOutMin *big.Int, path []*types.Address, to *types.Address, deadline *big.Int) *SwapExactTokensForETHRequest {
+	return &SwapExactTokensForETHRequest{
+		Contract:     contract,
 		AmountIn:     amountIn,
 		AmountOutMin: amountOutMin,
 		Path:         path,
@@ -378,36 +893,106 @@ func NewSwapExactTokensForETHParams(router, sender *types.Address, amountIn, amo
 	}
 }
 
-// SwapETHForExactTokensParams is CreateSwapETHForExactTokens's and CallSwapETHForExactTokens's
-// argument list.
-type SwapETHForExactTokensParams struct {
-	Router    *types.Address
-	Sender    *types.Address
-	AmountOut *big.Int
-	Path      []*types.Address
-	To        *types.Address
-	Deadline  *big.Int
-	Value     *big.Int
+func (r *SwapExactTokensForETHRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.AmountIn == nil {
+		return fmt.Errorf("%w: amountIn is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.AmountOutMin == nil {
+		return fmt.Errorf("%w: amountOutMin is nil", bind.ErrInvalidRequest)
+	}
+
+	if len(r.Path) == 0 {
+		return fmt.Errorf("%w: path is empty", bind.ErrInvalidRequest)
+	}
+
+	for i, a := range r.Path {
+		if a == nil {
+			return fmt.Errorf("%w: path[%d] is nil", bind.ErrInvalidRequest, i)
+		}
+	}
+
+	if r.To == nil {
+		return fmt.Errorf("%w: to is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Deadline == nil {
+		return fmt.Errorf("%w: deadline is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
 }
 
-func NewSwapETHForExactTokensParams(router, sender *types.Address, amountOut *big.Int, path []*types.Address, to *types.Address, deadline, value *big.Int) *SwapETHForExactTokensParams {
-	return &SwapETHForExactTokensParams{
-		Router:    router,
-		Sender:    sender,
-		AmountOut: amountOut,
-		Path:      path,
-		To:        to,
-		Deadline:  deadline,
-		Value:     value,
+// SwapETHForExactTokensRequest is swapETHForExactTokens(amountOut, path, to, deadline)'s input on Contract; AmountInMax is sent as msg.value.
+type SwapETHForExactTokensRequest struct {
+	Contract    *types.Address
+	AmountOut   *big.Int
+	Path        []*types.Address
+	To          *types.Address
+	Deadline    *big.Int
+	AmountInMax *big.Int
+}
+
+func NewSwapETHForExactTokensRequest(contract *types.Address, amountOut *big.Int, path []*types.Address, to *types.Address, deadline, amountInMax *big.Int) *SwapETHForExactTokensRequest {
+	return &SwapETHForExactTokensRequest{
+		Contract:    contract,
+		AmountOut:   amountOut,
+		Path:        path,
+		To:          to,
+		Deadline:    deadline,
+		AmountInMax: amountInMax,
 	}
 }
 
-// RemoveLiquidityETHSupportingFeeOnTransferTokensParams is
-// CreateRemoveLiquidityETHSupportingFeeOnTransferTokens's and
-// CallRemoveLiquidityETHSupportingFeeOnTransferTokens's argument list.
-type RemoveLiquidityETHSupportingFeeOnTransferTokensParams struct {
-	Router         *types.Address
-	Sender         *types.Address
+func (r *SwapETHForExactTokensRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.AmountOut == nil {
+		return fmt.Errorf("%w: amountOut is nil", bind.ErrInvalidRequest)
+	}
+
+	if len(r.Path) == 0 {
+		return fmt.Errorf("%w: path is empty", bind.ErrInvalidRequest)
+	}
+
+	for i, a := range r.Path {
+		if a == nil {
+			return fmt.Errorf("%w: path[%d] is nil", bind.ErrInvalidRequest, i)
+		}
+	}
+
+	if r.To == nil {
+		return fmt.Errorf("%w: to is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Deadline == nil {
+		return fmt.Errorf("%w: deadline is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.AmountInMax == nil {
+		return fmt.Errorf("%w: amountInMax is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// RemoveLiquidityETHSupportingFeeOnTransferTokensRequest is removeLiquidityETHSupportingFeeOnTransferTokens(token, liquidity, amountTokenMin, amountETHMin, to, deadline)'s input on Contract.
+type RemoveLiquidityETHSupportingFeeOnTransferTokensRequest struct {
+	Contract       *types.Address
 	Token          *types.Address
 	Liquidity      *big.Int
 	AmountTokenMin *big.Int
@@ -416,10 +1001,9 @@ type RemoveLiquidityETHSupportingFeeOnTransferTokensParams struct {
 	Deadline       *big.Int
 }
 
-func NewRemoveLiquidityETHSupportingFeeOnTransferTokensParams(router, sender, token *types.Address, liquidity, amountTokenMin, amountETHMin *big.Int, to *types.Address, deadline *big.Int) *RemoveLiquidityETHSupportingFeeOnTransferTokensParams {
-	return &RemoveLiquidityETHSupportingFeeOnTransferTokensParams{
-		Router:         router,
-		Sender:         sender,
+func NewRemoveLiquidityETHSupportingFeeOnTransferTokensRequest(contract, token *types.Address, liquidity, amountTokenMin, amountETHMin *big.Int, to *types.Address, deadline *big.Int) *RemoveLiquidityETHSupportingFeeOnTransferTokensRequest {
+	return &RemoveLiquidityETHSupportingFeeOnTransferTokensRequest{
+		Contract:       contract,
 		Token:          token,
 		Liquidity:      liquidity,
 		AmountTokenMin: amountTokenMin,
@@ -429,12 +1013,45 @@ func NewRemoveLiquidityETHSupportingFeeOnTransferTokensParams(router, sender, to
 	}
 }
 
-// RemoveLiquidityETHWithPermitSupportingFeeOnTransferTokensParams is
-// CreateRemoveLiquidityETHWithPermitSupportingFeeOnTransferTokens's and
-// CallRemoveLiquidityETHWithPermitSupportingFeeOnTransferTokens's argument list.
-type RemoveLiquidityETHWithPermitSupportingFeeOnTransferTokensParams struct {
-	Router         *types.Address
-	Sender         *types.Address
+func (r *RemoveLiquidityETHSupportingFeeOnTransferTokensRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Token == nil {
+		return fmt.Errorf("%w: token is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Liquidity == nil {
+		return fmt.Errorf("%w: liquidity is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.AmountTokenMin == nil {
+		return fmt.Errorf("%w: amountTokenMin is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.AmountETHMin == nil {
+		return fmt.Errorf("%w: amountETHMin is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.To == nil {
+		return fmt.Errorf("%w: to is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Deadline == nil {
+		return fmt.Errorf("%w: deadline is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// RemoveLiquidityETHWithPermitSupportingFeeOnTransferTokensRequest is removeLiquidityETHWithPermitSupportingFeeOnTransferTokens(token, liquidity, amountTokenMin, amountETHMin, to, deadline, approveMax, v, r, s)'s input on Contract.
+type RemoveLiquidityETHWithPermitSupportingFeeOnTransferTokensRequest struct {
+	Contract       *types.Address
 	Token          *types.Address
 	Liquidity      *big.Int
 	AmountTokenMin *big.Int
@@ -445,10 +1062,9 @@ type RemoveLiquidityETHWithPermitSupportingFeeOnTransferTokensParams struct {
 	Sig            *types.Signature
 }
 
-func NewRemoveLiquidityETHWithPermitSupportingFeeOnTransferTokensParams(router, sender, token *types.Address, liquidity, amountTokenMin, amountETHMin *big.Int, to *types.Address, deadline *big.Int, approveMax bool, sig *types.Signature) *RemoveLiquidityETHWithPermitSupportingFeeOnTransferTokensParams {
-	return &RemoveLiquidityETHWithPermitSupportingFeeOnTransferTokensParams{
-		Router:         router,
-		Sender:         sender,
+func NewRemoveLiquidityETHWithPermitSupportingFeeOnTransferTokensRequest(contract, token *types.Address, liquidity, amountTokenMin, amountETHMin *big.Int, to *types.Address, deadline *big.Int, approveMax bool, sig *types.Signature) *RemoveLiquidityETHWithPermitSupportingFeeOnTransferTokensRequest {
+	return &RemoveLiquidityETHWithPermitSupportingFeeOnTransferTokensRequest{
+		Contract:       contract,
 		Token:          token,
 		Liquidity:      liquidity,
 		AmountTokenMin: amountTokenMin,
@@ -460,11 +1076,49 @@ func NewRemoveLiquidityETHWithPermitSupportingFeeOnTransferTokensParams(router, 
 	}
 }
 
-// SwapExactTokensForTokensSupportingFeeOnTransferTokensParams is
-// CreateSwapExactTokensForTokensSupportingFeeOnTransferTokens's argument list.
-type SwapExactTokensForTokensSupportingFeeOnTransferTokensParams struct {
-	Router       *types.Address
-	Sender       *types.Address
+func (r *RemoveLiquidityETHWithPermitSupportingFeeOnTransferTokensRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Token == nil {
+		return fmt.Errorf("%w: token is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Liquidity == nil {
+		return fmt.Errorf("%w: liquidity is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.AmountTokenMin == nil {
+		return fmt.Errorf("%w: amountTokenMin is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.AmountETHMin == nil {
+		return fmt.Errorf("%w: amountETHMin is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.To == nil {
+		return fmt.Errorf("%w: to is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Deadline == nil {
+		return fmt.Errorf("%w: deadline is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Sig == nil {
+		return fmt.Errorf("%w: sig is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// SwapExactTokensForTokensSupportingFeeOnTransferTokensRequest is swapExactTokensForTokensSupportingFeeOnTransferTokens(amountIn, amountOutMin, path, to, deadline)'s input on Contract.
+type SwapExactTokensForTokensSupportingFeeOnTransferTokensRequest struct {
+	Contract     *types.Address
 	AmountIn     *big.Int
 	AmountOutMin *big.Int
 	Path         []*types.Address
@@ -472,10 +1126,9 @@ type SwapExactTokensForTokensSupportingFeeOnTransferTokensParams struct {
 	Deadline     *big.Int
 }
 
-func NewSwapExactTokensForTokensSupportingFeeOnTransferTokensParams(router, sender *types.Address, amountIn, amountOutMin *big.Int, path []*types.Address, to *types.Address, deadline *big.Int) *SwapExactTokensForTokensSupportingFeeOnTransferTokensParams {
-	return &SwapExactTokensForTokensSupportingFeeOnTransferTokensParams{
-		Router:       router,
-		Sender:       sender,
+func NewSwapExactTokensForTokensSupportingFeeOnTransferTokensRequest(contract *types.Address, amountIn, amountOutMin *big.Int, path []*types.Address, to *types.Address, deadline *big.Int) *SwapExactTokensForTokensSupportingFeeOnTransferTokensRequest {
+	return &SwapExactTokensForTokensSupportingFeeOnTransferTokensRequest{
+		Contract:     contract,
 		AmountIn:     amountIn,
 		AmountOutMin: amountOutMin,
 		Path:         path,
@@ -484,35 +1137,106 @@ func NewSwapExactTokensForTokensSupportingFeeOnTransferTokensParams(router, send
 	}
 }
 
-// SwapExactETHForTokensSupportingFeeOnTransferTokensParams is
-// CreateSwapExactETHForTokensSupportingFeeOnTransferTokens's argument list.
-type SwapExactETHForTokensSupportingFeeOnTransferTokensParams struct {
-	Router       *types.Address
-	Sender       *types.Address
+func (r *SwapExactTokensForTokensSupportingFeeOnTransferTokensRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.AmountIn == nil {
+		return fmt.Errorf("%w: amountIn is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.AmountOutMin == nil {
+		return fmt.Errorf("%w: amountOutMin is nil", bind.ErrInvalidRequest)
+	}
+
+	if len(r.Path) == 0 {
+		return fmt.Errorf("%w: path is empty", bind.ErrInvalidRequest)
+	}
+
+	for i, a := range r.Path {
+		if a == nil {
+			return fmt.Errorf("%w: path[%d] is nil", bind.ErrInvalidRequest, i)
+		}
+	}
+
+	if r.To == nil {
+		return fmt.Errorf("%w: to is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Deadline == nil {
+		return fmt.Errorf("%w: deadline is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// SwapExactETHForTokensSupportingFeeOnTransferTokensRequest is swapExactETHForTokensSupportingFeeOnTransferTokens(amountOutMin, path, to, deadline)'s input on Contract; AmountIn is sent as msg.value.
+type SwapExactETHForTokensSupportingFeeOnTransferTokensRequest struct {
+	Contract     *types.Address
 	AmountOutMin *big.Int
 	Path         []*types.Address
 	To           *types.Address
 	Deadline     *big.Int
-	Value        *big.Int
+	AmountIn     *big.Int
 }
 
-func NewSwapExactETHForTokensSupportingFeeOnTransferTokensParams(router, sender *types.Address, amountOutMin *big.Int, path []*types.Address, to *types.Address, deadline, value *big.Int) *SwapExactETHForTokensSupportingFeeOnTransferTokensParams {
-	return &SwapExactETHForTokensSupportingFeeOnTransferTokensParams{
-		Router:       router,
-		Sender:       sender,
+func NewSwapExactETHForTokensSupportingFeeOnTransferTokensRequest(contract *types.Address, amountOutMin *big.Int, path []*types.Address, to *types.Address, deadline, amountIn *big.Int) *SwapExactETHForTokensSupportingFeeOnTransferTokensRequest {
+	return &SwapExactETHForTokensSupportingFeeOnTransferTokensRequest{
+		Contract:     contract,
 		AmountOutMin: amountOutMin,
 		Path:         path,
 		To:           to,
 		Deadline:     deadline,
-		Value:        value,
+		AmountIn:     amountIn,
 	}
 }
 
-// SwapExactTokensForETHSupportingFeeOnTransferTokensParams is
-// CreateSwapExactTokensForETHSupportingFeeOnTransferTokens's argument list.
-type SwapExactTokensForETHSupportingFeeOnTransferTokensParams struct {
-	Router       *types.Address
-	Sender       *types.Address
+func (r *SwapExactETHForTokensSupportingFeeOnTransferTokensRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.AmountOutMin == nil {
+		return fmt.Errorf("%w: amountOutMin is nil", bind.ErrInvalidRequest)
+	}
+
+	if len(r.Path) == 0 {
+		return fmt.Errorf("%w: path is empty", bind.ErrInvalidRequest)
+	}
+
+	for i, a := range r.Path {
+		if a == nil {
+			return fmt.Errorf("%w: path[%d] is nil", bind.ErrInvalidRequest, i)
+		}
+	}
+
+	if r.To == nil {
+		return fmt.Errorf("%w: to is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Deadline == nil {
+		return fmt.Errorf("%w: deadline is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.AmountIn == nil {
+		return fmt.Errorf("%w: amountIn is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// SwapExactTokensForETHSupportingFeeOnTransferTokensRequest is swapExactTokensForETHSupportingFeeOnTransferTokens(amountIn, amountOutMin, path, to, deadline)'s input on Contract.
+type SwapExactTokensForETHSupportingFeeOnTransferTokensRequest struct {
+	Contract     *types.Address
 	AmountIn     *big.Int
 	AmountOutMin *big.Int
 	Path         []*types.Address
@@ -520,16 +1244,53 @@ type SwapExactTokensForETHSupportingFeeOnTransferTokensParams struct {
 	Deadline     *big.Int
 }
 
-func NewSwapExactTokensForETHSupportingFeeOnTransferTokensParams(router, sender *types.Address, amountIn, amountOutMin *big.Int, path []*types.Address, to *types.Address, deadline *big.Int) *SwapExactTokensForETHSupportingFeeOnTransferTokensParams {
-	return &SwapExactTokensForETHSupportingFeeOnTransferTokensParams{
-		Router:       router,
-		Sender:       sender,
+func NewSwapExactTokensForETHSupportingFeeOnTransferTokensRequest(contract *types.Address, amountIn, amountOutMin *big.Int, path []*types.Address, to *types.Address, deadline *big.Int) *SwapExactTokensForETHSupportingFeeOnTransferTokensRequest {
+	return &SwapExactTokensForETHSupportingFeeOnTransferTokensRequest{
+		Contract:     contract,
 		AmountIn:     amountIn,
 		AmountOutMin: amountOutMin,
 		Path:         path,
 		To:           to,
 		Deadline:     deadline,
 	}
+}
+
+func (r *SwapExactTokensForETHSupportingFeeOnTransferTokensRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.AmountIn == nil {
+		return fmt.Errorf("%w: amountIn is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.AmountOutMin == nil {
+		return fmt.Errorf("%w: amountOutMin is nil", bind.ErrInvalidRequest)
+	}
+
+	if len(r.Path) == 0 {
+		return fmt.Errorf("%w: path is empty", bind.ErrInvalidRequest)
+	}
+
+	for i, a := range r.Path {
+		if a == nil {
+			return fmt.Errorf("%w: path[%d] is nil", bind.ErrInvalidRequest, i)
+		}
+	}
+
+	if r.To == nil {
+		return fmt.Errorf("%w: to is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Deadline == nil {
+		return fmt.Errorf("%w: deadline is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
 }
 
 // AddLiquidityResult is addLiquidity()'s (amountA, amountB, liquidity) return value.

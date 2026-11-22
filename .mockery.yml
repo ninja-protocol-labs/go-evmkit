@@ -46,3 +46,4 @@ packages:
     interfaces:
       IFactory:
       IPair:
+      IRouter:
