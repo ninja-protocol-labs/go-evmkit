@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 	"github.com/ninja-protocol-labs/go-evmkit/standards/eip712"
 )
@@ -89,15 +90,76 @@ func TestPermitHashSensitiveToEachField(t *testing.T) {
 	require.NoError(t, err)
 
 	variants := []*Permit{
-		NewPermit(spender, spender, big.NewInt(100), big.NewInt(0), big.NewInt(9999999999)), // owner changed
-		NewPermit(owner, owner, big.NewInt(100), big.NewInt(0), big.NewInt(9999999999)),     // spender changed
-		NewPermit(owner, spender, big.NewInt(101), big.NewInt(0), big.NewInt(9999999999)),   // value changed
-		NewPermit(owner, spender, big.NewInt(100), big.NewInt(1), big.NewInt(9999999999)),   // nonce changed
-		NewPermit(owner, spender, big.NewInt(100), big.NewInt(0), big.NewInt(9999999998)),   // deadline changed
+		NewPermit(spender, spender, big.NewInt(100), big.NewInt(0), big.NewInt(9999999999)),
+		NewPermit(owner, owner, big.NewInt(100), big.NewInt(0), big.NewInt(9999999999)),
+		NewPermit(owner, spender, big.NewInt(101), big.NewInt(0), big.NewInt(9999999999)),
+		NewPermit(owner, spender, big.NewInt(100), big.NewInt(1), big.NewInt(9999999999)),
+		NewPermit(owner, spender, big.NewInt(100), big.NewInt(0), big.NewInt(9999999998)),
 	}
 	for i, v := range variants {
 		h, err := v.Hash(domain)
 		require.NoError(t, err)
 		require.NotEqual(t, baseHash.Bytes(), h.Bytes(), "variant %d", i)
+	}
+}
+
+func TestNewRequestsSetFields(t *testing.T) {
+	contract := types.MustNewAddressFromHex("0x4200000000000000000000000000000000000006")
+	owner := types.MustNewAddressFromHex("0x6667c8dc9fbfec411e7c1ee2b24de960149f930f")
+	spender := types.MustNewAddressFromHex("0xba12222222228d8ba445958a75a0704d566bf2c8")
+	key, err := types.NewPrivateKeyFromBig(big.NewInt(0xb1d))
+	require.NoError(t, err)
+	sig, err := NewPermit(owner, spender, big.NewInt(1), big.NewInt(0), big.NewInt(2)).Sign(eip712.NewDomain("Token", DefaultVersion, big.NewInt(1), contract, nil), key)
+	require.NoError(t, err)
+
+	require.Equal(t, &NoncesRequest{Contract: contract, Owner: owner}, NewNoncesRequest(contract, owner))
+	require.Equal(t, &DomainSeparatorRequest{Contract: contract}, NewDomainSeparatorRequest(contract))
+	require.Equal(t, &PermitRequest{Contract: contract, Owner: owner, Spender: spender, Amount: big.NewInt(1), Deadline: big.NewInt(2), Signature: sig}, NewPermitRequest(contract, owner, spender, big.NewInt(1), big.NewInt(2), sig))
+}
+
+func TestRequestsValidate(t *testing.T) {
+	contract := types.MustNewAddressFromHex("0x4200000000000000000000000000000000000006")
+	owner := types.MustNewAddressFromHex("0x6667c8dc9fbfec411e7c1ee2b24de960149f930f")
+	spender := types.MustNewAddressFromHex("0xba12222222228d8ba445958a75a0704d566bf2c8")
+	key, err := types.NewPrivateKeyFromBig(big.NewInt(0xb1d))
+	require.NoError(t, err)
+	sig, err := NewPermit(owner, spender, big.NewInt(1), big.NewInt(0), big.NewInt(2)).Sign(eip712.NewDomain("Token", DefaultVersion, big.NewInt(1), contract, nil), key)
+	require.NoError(t, err)
+	amount := big.NewInt(1)
+	deadline := big.NewInt(2)
+
+	for _, tc := range []struct {
+		name string
+		err  error
+		want string
+	}{
+		{"nonces nil", (*NoncesRequest)(nil).Validate(), "invalid request: request is nil"},
+		{"nonces empty", (&NoncesRequest{}).Validate(), "invalid request: contract is nil"},
+		{"nonces nil owner", NewNoncesRequest(contract, nil).Validate(), "invalid request: owner is nil"},
+		{"nonces valid", NewNoncesRequest(contract, owner).Validate(), ""},
+		{"domainSeparator nil", (*DomainSeparatorRequest)(nil).Validate(), "invalid request: request is nil"},
+		{"domainSeparator empty", (&DomainSeparatorRequest{}).Validate(), "invalid request: contract is nil"},
+		{"domainSeparator valid", NewDomainSeparatorRequest(contract).Validate(), ""},
+		{"permit nil", (*PermitRequest)(nil).Validate(), "invalid request: request is nil"},
+		{"permit empty", (&PermitRequest{}).Validate(), "invalid request: contract is nil"},
+		{"permit nil contract", NewPermitRequest(nil, owner, spender, amount, deadline, sig).Validate(), "invalid request: contract is nil"},
+		{"permit nil owner", NewPermitRequest(contract, nil, spender, amount, deadline, sig).Validate(), "invalid request: owner is nil"},
+		{"permit nil spender", NewPermitRequest(contract, owner, nil, amount, deadline, sig).Validate(), "invalid request: spender is nil"},
+		{"permit nil amount", NewPermitRequest(contract, owner, spender, nil, deadline, sig).Validate(), "invalid request: amount is nil"},
+		{"permit nil deadline", NewPermitRequest(contract, owner, spender, amount, nil, sig).Validate(), "invalid request: deadline is nil"},
+		{"permit nil signature", NewPermitRequest(contract, owner, spender, amount, deadline, nil).Validate(), "invalid request: signature is nil"},
+		{"permit only contract", NewPermitRequest(contract, nil, nil, nil, nil, nil).Validate(), "invalid request: owner is nil"},
+		{"permit zero amount and deadline", NewPermitRequest(contract, owner, spender, big.NewInt(0), big.NewInt(0), sig).Validate(), ""},
+		{"permit owner equals spender", NewPermitRequest(contract, owner, owner, amount, deadline, sig).Validate(), ""},
+		{"permit valid", NewPermitRequest(contract, owner, spender, amount, deadline, sig).Validate(), ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.want == "" {
+				require.NoError(t, tc.err)
+				return
+			}
+			require.ErrorIs(t, tc.err, bind.ErrInvalidRequest)
+			require.EqualError(t, tc.err, tc.want)
+		})
 	}
 }

@@ -1561,7 +1561,7 @@ func (s *RouterLifeCycleSuite) Test15RemoveLiquidityWithPermit() {
 	s.Require().True(liquidity.Sign() > 0, "no LP balance left to remove")
 	s.T().Logf("Test15RemoveLiquidityWithPermit: pair=%s LP balance=%s", s.pair, liquidity)
 
-	nonce, err := s.v2Pair.Nonces(s.ctx, s.pair, s.from, rpc.BlockTagLatest)
+	nonce, err := s.v2Pair.Nonces(s.ctx, nil, erc2612.NewNoncesRequest(s.pair, s.from))
 	s.Require().NoError(err)
 	deadline := big.NewInt(time.Now().Add(time.Duration(s.DeadlineSeconds) * time.Second).Unix())
 
@@ -1620,7 +1620,7 @@ func (s *RouterLifeCycleSuite) Test15RemoveLiquidityWithPermit() {
 		if err != nil {
 			return false
 		}
-		nonceAfter, err = s.v2Pair.Nonces(s.ctx, s.pair, s.from, rpc.BlockTagLatest)
+		nonceAfter, err = s.v2Pair.Nonces(s.ctx, nil, erc2612.NewNoncesRequest(s.pair, s.from))
 		if err != nil {
 			return false
 		}
@@ -1675,7 +1675,7 @@ func (s *RouterLifeCycleSuite) Test16RemoveLiquidityETHWithPermit() {
 	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "LP balance not visible after re-adding liquidity")
 	s.T().Logf("Test16RemoveLiquidityETHWithPermit: pairETH=%s LP balance=%s", s.pairETH, liquidity)
 
-	nonce, err := s.v2Pair.Nonces(s.ctx, s.pairETH, s.from, rpc.BlockTagLatest)
+	nonce, err := s.v2Pair.Nonces(s.ctx, nil, erc2612.NewNoncesRequest(s.pairETH, s.from))
 	s.Require().NoError(err)
 	deadline := big.NewInt(time.Now().Add(time.Duration(s.DeadlineSeconds) * time.Second).Unix())
 
@@ -1732,7 +1732,7 @@ func (s *RouterLifeCycleSuite) Test16RemoveLiquidityETHWithPermit() {
 		if err != nil {
 			return false
 		}
-		nonceAfter, err = s.v2Pair.Nonces(s.ctx, s.pairETH, s.from, rpc.BlockTagLatest)
+		nonceAfter, err = s.v2Pair.Nonces(s.ctx, nil, erc2612.NewNoncesRequest(s.pairETH, s.from))
 		if err != nil {
 			return false
 		}
@@ -2201,7 +2201,7 @@ func (s *RouterLifeCycleSuite) Test21RemoveLiquidityETHWithPermitSupportingFeeOn
 	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "LP balance not visible after re-adding liquidity")
 	s.T().Logf("Test21RemoveLiquidityETHWithPermitSupportingFeeOnTransferTokens: pairETH=%s LP balance=%s", s.pairETH, liquidity)
 
-	nonce, err := s.v2Pair.Nonces(s.ctx, s.pairETH, s.from, rpc.BlockTagLatest)
+	nonce, err := s.v2Pair.Nonces(s.ctx, nil, erc2612.NewNoncesRequest(s.pairETH, s.from))
 	s.Require().NoError(err)
 	deadline := big.NewInt(time.Now().Add(time.Duration(s.DeadlineSeconds) * time.Second).Unix())
 
@@ -2257,7 +2257,7 @@ func (s *RouterLifeCycleSuite) Test21RemoveLiquidityETHWithPermitSupportingFeeOn
 		if err != nil {
 			return false
 		}
-		nonceAfter, err = s.v2Pair.Nonces(s.ctx, s.pairETH, s.from, rpc.BlockTagLatest)
+		nonceAfter, err = s.v2Pair.Nonces(s.ctx, nil, erc2612.NewNoncesRequest(s.pairETH, s.from))
 		if err != nil {
 			return false
 		}

@@ -24,9 +24,9 @@ var (
 
 // ErrExpiredSignature, etc. mirror ERC20Permit's custom errors, for errors.Is.
 var (
-	ErrExpiredSignature = errors.New("erc2612: expired signature")
-	ErrInvalidSigner    = errors.New("erc2612: invalid signer")
-	ErrUnknown          = errors.New("erc2612: unknown revert")
+	ErrExpiredSignature = errors.New("expired signature")
+	ErrInvalidSigner    = errors.New("invalid signer")
+	ErrUnknown          = errors.New("unknown revert")
 )
 
 // EncodePermit returns the calldata for permit(owner, spender, value, deadline, v, r, s), where

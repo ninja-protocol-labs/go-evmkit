@@ -94,6 +94,7 @@ type Config struct {
 	RPCURL             string
 	ActorPrivateKeyHex string
 	Multicall          string
+	NicksFactory       string
 }
 
 // MustLoad returns n's config on nt with the API key and actor key filled in, panicking when
