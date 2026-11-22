@@ -22,7 +22,7 @@ func TestExtractTransfersSampleReceipt(t *testing.T) {
 	approvalForAllTopic, ok := approvalForAllEvent.Topic0()
 	require.True(t, ok)
 
-	approvedData, err := abi.Pack(abi.Types{abi.Bool}, true)
+	approvedData, err := abi.Pack(abi.NewTypes(abi.Bool), true)
 	require.NoError(t, err)
 
 	logs := []tx.Log{
@@ -72,7 +72,7 @@ func TestExtractApprovalsSampleReceipt(t *testing.T) {
 	approvalForAllTopic, ok := approvalForAllEvent.Topic0()
 	require.True(t, ok)
 
-	approvedData, err := abi.Pack(abi.Types{abi.Bool}, true)
+	approvedData, err := abi.Pack(abi.NewTypes(abi.Bool), true)
 	require.NoError(t, err)
 
 	logs := []tx.Log{
@@ -122,7 +122,7 @@ func TestExtractApprovalForAllSampleReceipt(t *testing.T) {
 	approvalForAllTopic, ok := approvalForAllEvent.Topic0()
 	require.True(t, ok)
 
-	approvedData, err := abi.Pack(abi.Types{abi.Bool}, true)
+	approvedData, err := abi.Pack(abi.NewTypes(abi.Bool), true)
 	require.NoError(t, err)
 
 	logs := []tx.Log{

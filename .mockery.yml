@@ -16,3 +16,6 @@ packages:
   github.com/ninja-protocol-labs/go-evmkit/standards/erc1155:
     config:
       all: true
+  github.com/ninja-protocol-labs/go-evmkit/rpc:
+    config:
+      all: true

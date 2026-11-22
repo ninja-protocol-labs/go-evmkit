@@ -37,7 +37,7 @@ func TestEncodeBalanceOfRejectsNilArgs(t *testing.T) {
 }
 
 func TestDecodeBalanceOf(t *testing.T) {
-	data, err := abi.Pack(abi.Types{abi.Uint256}, big.NewInt(42))
+	data, err := abi.Pack(abi.NewTypes(abi.Uint256), big.NewInt(42))
 	require.NoError(t, err)
 	n, err := DecodeBalanceOf(data)
 	require.NoError(t, err)
@@ -77,7 +77,7 @@ func TestEncodeBalanceOfBatchRejectsLengthMismatch(t *testing.T) {
 }
 
 func TestDecodeBalanceOfBatch(t *testing.T) {
-	data, err := abi.Pack(abi.Types{abi.Slice(abi.Uint256)}, []*big.Int{big.NewInt(100), big.NewInt(200)})
+	data, err := abi.Pack(abi.NewTypes(abi.Slice(abi.Uint256)), []*big.Int{big.NewInt(100), big.NewInt(200)})
 	require.NoError(t, err)
 
 	amounts, err := DecodeBalanceOfBatch(data)
@@ -88,7 +88,7 @@ func TestDecodeBalanceOfBatch(t *testing.T) {
 }
 
 func TestDecodeBalanceOfBatchEmpty(t *testing.T) {
-	data, err := abi.Pack(abi.Types{abi.Slice(abi.Uint256)}, []*big.Int{})
+	data, err := abi.Pack(abi.NewTypes(abi.Slice(abi.Uint256)), []*big.Int{})
 	require.NoError(t, err)
 
 	amounts, err := DecodeBalanceOfBatch(data)
@@ -104,7 +104,7 @@ func TestDecodeBalanceOfBatchRejectsGarbage(t *testing.T) {
 
 func TestDecodeIdBalances(t *testing.T) {
 	ids := []*big.Int{big.NewInt(1), big.NewInt(2), big.NewInt(3)}
-	data, err := abi.Pack(abi.Types{abi.Slice(abi.Uint256)}, []*big.Int{big.NewInt(10), big.NewInt(20), big.NewInt(30)})
+	data, err := abi.Pack(abi.NewTypes(abi.Slice(abi.Uint256)), []*big.Int{big.NewInt(10), big.NewInt(20), big.NewInt(30)})
 	require.NoError(t, err)
 
 	balances, err := DecodeIdBalances(ids, data)
@@ -117,7 +117,7 @@ func TestDecodeIdBalances(t *testing.T) {
 }
 
 func TestDecodeIdBalancesRejectsLengthMismatch(t *testing.T) {
-	data, err := abi.Pack(abi.Types{abi.Slice(abi.Uint256)}, []*big.Int{big.NewInt(10)})
+	data, err := abi.Pack(abi.NewTypes(abi.Slice(abi.Uint256)), []*big.Int{big.NewInt(10)})
 	require.NoError(t, err)
 
 	_, err = DecodeIdBalances([]*big.Int{big.NewInt(1), big.NewInt(2)}, data)
@@ -127,7 +127,7 @@ func TestDecodeIdBalancesRejectsLengthMismatch(t *testing.T) {
 func TestDecodeIdBalancePairs(t *testing.T) {
 	accounts := []*types.Address{testAddr1, testAddr2}
 	ids := []*big.Int{big.NewInt(1), big.NewInt(2)}
-	data, err := abi.Pack(abi.Types{abi.Slice(abi.Uint256)}, []*big.Int{big.NewInt(10), big.NewInt(20)})
+	data, err := abi.Pack(abi.NewTypes(abi.Slice(abi.Uint256)), []*big.Int{big.NewInt(10), big.NewInt(20)})
 	require.NoError(t, err)
 
 	pairs, err := DecodeIdBalancePairs(accounts, ids, data)
@@ -147,7 +147,7 @@ func TestDecodeIdBalancePairsRejectsAccountsIdsLengthMismatch(t *testing.T) {
 }
 
 func TestDecodeIdBalancePairsRejectsResultLengthMismatch(t *testing.T) {
-	data, err := abi.Pack(abi.Types{abi.Slice(abi.Uint256)}, []*big.Int{big.NewInt(10)})
+	data, err := abi.Pack(abi.NewTypes(abi.Slice(abi.Uint256)), []*big.Int{big.NewInt(10)})
 	require.NoError(t, err)
 
 	_, err = DecodeIdBalancePairs([]*types.Address{testAddr1, testAddr2}, []*big.Int{big.NewInt(1), big.NewInt(2)}, data)
@@ -173,7 +173,7 @@ func TestEncodeIsApprovedForAllRejectsNilArgs(t *testing.T) {
 }
 
 func TestDecodeIsApprovedForAll(t *testing.T) {
-	data, err := abi.Pack(abi.Types{abi.Bool}, true)
+	data, err := abi.Pack(abi.NewTypes(abi.Bool), true)
 	require.NoError(t, err)
 	ok, err := DecodeIsApprovedForAll(data)
 	require.NoError(t, err)
@@ -281,7 +281,7 @@ func TestEncodeURIRejectsNilId(t *testing.T) {
 }
 
 func TestDecodeURI(t *testing.T) {
-	data, err := abi.Pack(abi.Types{abi.String}, "ipfs://Qm.../{id}")
+	data, err := abi.Pack(abi.NewTypes(abi.String), "ipfs://Qm.../{id}")
 	require.NoError(t, err)
 	s, err := DecodeURI(data)
 	require.NoError(t, err)
@@ -378,11 +378,11 @@ func TestURIEventSignature(t *testing.T) {
 }
 
 func TestDecodeApprovalForAllWithBalance(t *testing.T) {
-	approvedData, _ := abi.Pack(abi.Types{abi.Bool}, true)
-	accountBalData, _ := abi.Pack(abi.Types{abi.Uint256}, big.NewInt(3))
-	operatorBalData, _ := abi.Pack(abi.Types{abi.Uint256}, big.NewInt(5))
+	approvedData, _ := abi.Pack(abi.NewTypes(abi.Bool), true)
+	accountBalData, _ := abi.Pack(abi.NewTypes(abi.Uint256), big.NewInt(3))
+	operatorBalData, _ := abi.Pack(abi.NewTypes(abi.Uint256), big.NewInt(5))
 
-	data, err := abi.Pack(abi.Types{abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))}, []any{
+	data, err := abi.Pack(abi.NewTypes(abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))), []any{
 		[]any{true, approvedData},
 		[]any{true, accountBalData},
 		[]any{true, operatorBalData},
@@ -401,9 +401,9 @@ func TestDecodeApprovalForAllWithBalance(t *testing.T) {
 }
 
 func TestDecodeApprovalForAllWithBalancePartialFailure(t *testing.T) {
-	approvedData, _ := abi.Pack(abi.Types{abi.Bool}, true)
+	approvedData, _ := abi.Pack(abi.NewTypes(abi.Bool), true)
 
-	data, err := abi.Pack(abi.Types{abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))}, []any{
+	data, err := abi.Pack(abi.NewTypes(abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))), []any{
 		[]any{true, approvedData},
 		[]any{false, []byte{}},
 		[]any{false, []byte{}},
@@ -418,7 +418,7 @@ func TestDecodeApprovalForAllWithBalancePartialFailure(t *testing.T) {
 }
 
 func TestDecodeApprovalForAllWithBalanceRejectsWrongResultCount(t *testing.T) {
-	data, err := abi.Pack(abi.Types{abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))}, []any{
+	data, err := abi.Pack(abi.NewTypes(abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))), []any{
 		[]any{true, []byte{}},
 		[]any{true, []byte{}},
 	})
@@ -450,10 +450,10 @@ func TestEncodeApprovalForAllWithBalanceMatchesManualAggregate3(t *testing.T) {
 
 func TestDecodeAccountIdBalances(t *testing.T) {
 	contracts := []*types.Address{testTokens, testAddr3}
-	bal1, _ := abi.Pack(abi.Types{abi.Uint256}, big.NewInt(3))
-	bal2, _ := abi.Pack(abi.Types{abi.Uint256}, big.NewInt(4))
+	bal1, _ := abi.Pack(abi.NewTypes(abi.Uint256), big.NewInt(3))
+	bal2, _ := abi.Pack(abi.NewTypes(abi.Uint256), big.NewInt(4))
 
-	data, err := abi.Pack(abi.Types{abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))}, []any{
+	data, err := abi.Pack(abi.NewTypes(abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))), []any{
 		[]any{true, bal1},
 		[]any{true, bal2},
 	})
@@ -472,9 +472,9 @@ func TestDecodeAccountIdBalances(t *testing.T) {
 }
 
 func TestDecodeAccountIdBalancesPartialFailure(t *testing.T) {
-	bal1, _ := abi.Pack(abi.Types{abi.Uint256}, big.NewInt(3))
+	bal1, _ := abi.Pack(abi.NewTypes(abi.Uint256), big.NewInt(3))
 
-	data, err := abi.Pack(abi.Types{abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))}, []any{
+	data, err := abi.Pack(abi.NewTypes(abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))), []any{
 		[]any{true, bal1},
 		[]any{false, []byte{}},
 	})
@@ -487,7 +487,7 @@ func TestDecodeAccountIdBalancesPartialFailure(t *testing.T) {
 }
 
 func TestDecodeAccountIdBalancesRejectsLengthMismatch(t *testing.T) {
-	data, err := abi.Pack(abi.Types{abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))}, []any{
+	data, err := abi.Pack(abi.NewTypes(abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))), []any{
 		[]any{true, []byte{}},
 	})
 	require.NoError(t, err)

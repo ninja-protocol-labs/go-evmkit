@@ -28,15 +28,15 @@ func FuzzSimpleDecodersDoNotPanic(f *testing.F) {
 	f.Add(make([]byte, 33))
 	f.Add(make([]byte, 64))
 
-	nameData, err := abi.Pack(abi.Types{abi.String}, "USD Coin")
+	nameData, err := abi.Pack(abi.NewTypes(abi.String), "USD Coin")
 	require.NoError(f, err)
 	f.Add(nameData)
 
-	uintData, err := abi.Pack(abi.Types{abi.Uint256}, big.NewInt(123456789))
+	uintData, err := abi.Pack(abi.NewTypes(abi.Uint256), big.NewInt(123456789))
 	require.NoError(f, err)
 	f.Add(uintData)
 
-	boolData, err := abi.Pack(abi.Types{abi.Bool}, true)
+	boolData, err := abi.Pack(abi.NewTypes(abi.Bool), true)
 	require.NoError(f, err)
 	f.Add(boolData)
 
@@ -91,7 +91,7 @@ func FuzzDecodeBalanceOfRoundTrip(f *testing.F) {
 		}
 		value := new(big.Int).SetBytes(raw)
 
-		data, err := abi.Pack(abi.Types{abi.Uint256}, value)
+		data, err := abi.Pack(abi.NewTypes(abi.Uint256), value)
 		require.NoError(t, err)
 
 		got, err := DecodeBalanceOf(data)
@@ -142,7 +142,7 @@ func FuzzExtractTransfersRoundTrip(f *testing.F) {
 		}
 		value := new(big.Int).SetBytes(valueRaw)
 
-		data, err := abi.Pack(abi.Types{abi.Uint256}, value)
+		data, err := abi.Pack(abi.NewTypes(abi.Uint256), value)
 		require.NoError(t, err)
 
 		t0, ok := transferEvent.Topic0()

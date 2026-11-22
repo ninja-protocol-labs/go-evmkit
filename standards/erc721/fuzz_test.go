@@ -27,19 +27,19 @@ func FuzzSimpleDecodersDoNotPanic(f *testing.F) {
 	f.Add(make([]byte, 33))
 	f.Add(make([]byte, 64))
 
-	nameData, err := abi.Pack(abi.Types{abi.String}, "Bored Ape Yacht Club")
+	nameData, err := abi.Pack(abi.NewTypes(abi.String), "Bored Ape Yacht Club")
 	require.NoError(f, err)
 	f.Add(nameData)
 
-	uintData, err := abi.Pack(abi.Types{abi.Uint256}, big.NewInt(123456789))
+	uintData, err := abi.Pack(abi.NewTypes(abi.Uint256), big.NewInt(123456789))
 	require.NoError(f, err)
 	f.Add(uintData)
 
-	boolData, err := abi.Pack(abi.Types{abi.Bool}, true)
+	boolData, err := abi.Pack(abi.NewTypes(abi.Bool), true)
 	require.NoError(f, err)
 	f.Add(boolData)
 
-	addrData, err := abi.Pack(abi.Types{abi.Address}, fuzzAddr1)
+	addrData, err := abi.Pack(abi.NewTypes(abi.Address), fuzzAddr1)
 	require.NoError(f, err)
 	f.Add(addrData)
 
@@ -66,7 +66,7 @@ func FuzzDecodeBalanceOfRoundTrip(f *testing.F) {
 		}
 		value := new(big.Int).SetBytes(raw)
 
-		data, err := abi.Pack(abi.Types{abi.Uint256}, value)
+		data, err := abi.Pack(abi.NewTypes(abi.Uint256), value)
 		require.NoError(t, err)
 
 		got, err := DecodeBalanceOf(data)
@@ -83,7 +83,7 @@ func FuzzDecodeOwnerOfRoundTrip(f *testing.F) {
 	f.Fuzz(func(t *testing.T, raw []byte) {
 		addr := types.NewAddressFromBytes(raw)
 
-		data, err := abi.Pack(abi.Types{abi.Address}, addr)
+		data, err := abi.Pack(abi.NewTypes(abi.Address), addr)
 		require.NoError(t, err)
 
 		got, err := DecodeOwnerOf(data)
@@ -228,7 +228,7 @@ func FuzzExtractApprovalForAllRoundTrip(f *testing.F) {
 		t0, ok := approvalForAllEvent.Topic0()
 		require.True(t, ok)
 
-		data, err := abi.Pack(abi.Types{abi.Bool}, approved)
+		data, err := abi.Pack(abi.NewTypes(abi.Bool), approved)
 		require.NoError(t, err)
 
 		logs := []tx.Log{

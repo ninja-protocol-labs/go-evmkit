@@ -69,23 +69,23 @@ func FuzzSimpleDecodersDoNotPanic(f *testing.F) {
 	f.Add(make([]byte, 64))
 	f.Add(make([]byte, 96))
 
-	uintData, err := abi.Pack(abi.Types{abi.Uint256}, big.NewInt(123456789))
+	uintData, err := abi.Pack(abi.NewTypes(abi.Uint256), big.NewInt(123456789))
 	require.NoError(f, err)
 	f.Add(uintData)
 
-	boolData, err := abi.Pack(abi.Types{abi.Bool}, true)
+	boolData, err := abi.Pack(abi.NewTypes(abi.Bool), true)
 	require.NoError(f, err)
 	f.Add(boolData)
 
-	addrData, err := abi.Pack(abi.Types{abi.Address}, fuzzAddr1)
+	addrData, err := abi.Pack(abi.NewTypes(abi.Address), fuzzAddr1)
 	require.NoError(f, err)
 	f.Add(addrData)
 
-	strData, err := abi.Pack(abi.Types{abi.String}, "ipfs://Qm.../{id}.json")
+	strData, err := abi.Pack(abi.NewTypes(abi.String), "ipfs://Qm.../{id}.json")
 	require.NoError(f, err)
 	f.Add(strData)
 
-	sliceData, err := abi.Pack(abi.Types{abi.Slice(abi.Uint256)}, []*big.Int{big.NewInt(1), big.NewInt(2)})
+	sliceData, err := abi.Pack(abi.NewTypes(abi.Slice(abi.Uint256)), []*big.Int{big.NewInt(1), big.NewInt(2)})
 	require.NoError(f, err)
 	f.Add(sliceData)
 
@@ -137,7 +137,7 @@ func FuzzDecodeBalanceOfRoundTrip(f *testing.F) {
 		}
 		value := new(big.Int).SetBytes(raw)
 
-		data, err := abi.Pack(abi.Types{abi.Uint256}, value)
+		data, err := abi.Pack(abi.NewTypes(abi.Uint256), value)
 		require.NoError(t, err)
 
 		got, err := DecodeBalanceOf(data)
@@ -153,7 +153,7 @@ func FuzzDecodeURIRoundTrip(f *testing.F) {
 	f.Add("https://example.com/metadata/0.json")
 
 	f.Fuzz(func(t *testing.T, s string) {
-		data, err := abi.Pack(abi.Types{abi.String}, s)
+		data, err := abi.Pack(abi.NewTypes(abi.String), s)
 		require.NoError(t, err)
 
 		got, err := DecodeURI(data)
@@ -205,7 +205,7 @@ func FuzzBalanceOfBatchRoundTrip(f *testing.F) {
 			require.Zero(t, ids[i].Cmp(gotIds[i].(*big.Int)))
 		}
 
-		retData, err := abi.Pack(abi.Types{abi.Slice(abi.Uint256)}, amounts)
+		retData, err := abi.Pack(abi.NewTypes(abi.Slice(abi.Uint256)), amounts)
 		require.NoError(t, err)
 
 		decoded, err := DecodeBalanceOfBatch(retData)
