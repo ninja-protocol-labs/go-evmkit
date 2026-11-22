@@ -868,31 +868,31 @@ func (s *RouterLifeCycleSuite) Test02CreateAndInitializePoolIfNecessary() {
 	s.Require().NoError(err)
 	s.Require().True(expectedTickSpacing.Sign() > 0, "fee tier %s isn't enabled on this Factory", s.Fee)
 
-	poolToken0, err := s.v3Pool.Token0(s.ctx, s.pool, rpc.BlockTagLatest)
+	poolToken0, err := s.v3Pool.Token0(s.ctx, nil, NewToken0Request(s.pool))
 	s.Require().NoError(err)
 	s.Require().True(poolToken0.Equal(s.tokenA))
-	poolToken1, err := s.v3Pool.Token1(s.ctx, s.pool, rpc.BlockTagLatest)
+	poolToken1, err := s.v3Pool.Token1(s.ctx, nil, NewToken1Request(s.pool))
 	s.Require().NoError(err)
 	s.Require().True(poolToken1.Equal(s.tokenB))
-	poolFee, err := s.v3Pool.Fee(s.ctx, s.pool, rpc.BlockTagLatest)
+	poolFee, err := s.v3Pool.Fee(s.ctx, nil, NewFeeRequest(s.pool))
 	s.Require().NoError(err)
 	s.Require().Zero(s.Fee.Cmp(poolFee))
-	poolTickSpacing, err := s.v3Pool.TickSpacing(s.ctx, s.pool, rpc.BlockTagLatest)
+	poolTickSpacing, err := s.v3Pool.TickSpacing(s.ctx, nil, NewTickSpacingRequest(s.pool))
 	s.Require().NoError(err)
 	s.Require().Zero(expectedTickSpacing.Cmp(poolTickSpacing), "pool's own tickSpacing must match what the Factory advertises for this fee tier")
-	poolFactory, err := s.v3Pool.Factory(s.ctx, s.pool, rpc.BlockTagLatest)
+	poolFactory, err := s.v3Pool.Factory(s.ctx, nil, NewFactoryRequest(s.pool))
 	s.Require().NoError(err)
 	s.Require().True(poolFactory.Equal(s.factory))
 	s.T().Logf("Test02CreateAndInitializePoolIfNecessary: pool confirms token0=%s token1=%s fee=%s tickSpacing=%s factory=%s", poolToken0, poolToken1, poolFee, poolTickSpacing, poolFactory)
 
-	slot0, err := s.v3Pool.Slot0(s.ctx, s.pool, rpc.BlockTagLatest)
+	slot0, err := s.v3Pool.Slot0(s.ctx, nil, NewSlot0Request(s.pool))
 	s.Require().NoError(err)
 	s.Require().Zero(sqrtPriceX96.Cmp(slot0.SqrtPriceX96))
 	s.Require().Zero(slot0.Tick.Sign())
 	s.Require().True(slot0.Unlocked)
 	s.T().Logf("Test02CreateAndInitializePoolIfNecessary: pool slot0 confirms sqrtPriceX96=%s tick=%s unlocked=%t", slot0.SqrtPriceX96, slot0.Tick, slot0.Unlocked)
 
-	liquidity, err := s.v3Pool.Liquidity(s.ctx, s.pool, rpc.BlockTagLatest)
+	liquidity, err := s.v3Pool.Liquidity(s.ctx, nil, NewLiquidityRequest(s.pool))
 	s.Require().NoError(err)
 	s.Require().Zero(liquidity.Sign(), "freshly initialized pool must have 0 active liquidity")
 	s.T().Logf("Test02CreateAndInitializePoolIfNecessary: pool liquidity() = %s", liquidity)
@@ -988,7 +988,7 @@ func (s *RouterLifeCycleSuite) Test03Mint() {
 
 	var liquidity *big.Int
 	s.Require().Eventually(func() bool {
-		liquidity, err = s.v3Pool.Liquidity(s.ctx, s.pool, rpc.BlockTagLatest)
+		liquidity, err = s.v3Pool.Liquidity(s.ctx, nil, NewLiquidityRequest(s.pool))
 		return err == nil && predictedLiquidity.Cmp(liquidity) == 0
 	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "pool's active liquidity not visible after mint")
 	s.T().Logf("Test03Mint: pool liquidity() = %s, matching the position's own liquidity since it's the pool's sole LP and the current tick sits inside its range", liquidity)
@@ -1037,9 +1037,9 @@ func (s *RouterLifeCycleSuite) Test04ExactInputSingle() {
 	s.Require().NoError(err)
 	s.T().Logf("Test04ExactInputSingle: balances before: token0=%s token1=%s", balance0Before, balance1Before)
 
-	slot0Before, err := s.v3Pool.Slot0(s.ctx, s.pool, rpc.BlockTagLatest)
+	slot0Before, err := s.v3Pool.Slot0(s.ctx, nil, NewSlot0Request(s.pool))
 	s.Require().NoError(err)
-	liquidityBefore, err := s.v3Pool.Liquidity(s.ctx, s.pool, rpc.BlockTagLatest)
+	liquidityBefore, err := s.v3Pool.Liquidity(s.ctx, nil, NewLiquidityRequest(s.pool))
 	s.Require().NoError(err)
 	s.T().Logf("Test04ExactInputSingle: pool before: sqrtPriceX96=%s tick=%s liquidity=%s", slot0Before.SqrtPriceX96, slot0Before.Tick, liquidityBefore)
 
@@ -1052,8 +1052,8 @@ func (s *RouterLifeCycleSuite) Test04ExactInputSingle() {
 		if !ok {
 			allowance, allowanceErr := s.erc20.Allowance(s.ctx, nil, erc20.NewAllowanceRequest(s.tokenA, s.from, s.router))
 			balance, balanceErr := s.erc20.BalanceOf(s.ctx, nil, erc20.NewBalanceOfRequest(s.tokenA, s.from))
-			slot0, slot0Err := s.v3Pool.Slot0(s.ctx, s.pool, rpc.BlockTagLatest)
-			liquidity, liquidityErr := s.v3Pool.Liquidity(s.ctx, s.pool, rpc.BlockTagLatest)
+			slot0, slot0Err := s.v3Pool.Slot0(s.ctx, nil, NewSlot0Request(s.pool))
+			liquidity, liquidityErr := s.v3Pool.Liquidity(s.ctx, nil, NewLiquidityRequest(s.pool))
 			s.T().Logf("Test04ExactInputSingle: retry diagnostics: callErr=%v amountOut=%v allowance=%v (err=%v) balance=%v (err=%v) slot0=%+v (err=%v) liquidity=%v (err=%v)", err, predictedAmountOut, allowance, allowanceErr, balance, balanceErr, slot0, slot0Err, liquidity, liquidityErr)
 		}
 		return ok
@@ -1091,11 +1091,11 @@ func (s *RouterLifeCycleSuite) Test04ExactInputSingle() {
 	var liquidityAfter *big.Int
 	var slot0After *Slot0
 	s.Require().Eventually(func() bool {
-		slot0After, err = s.v3Pool.Slot0(s.ctx, s.pool, rpc.BlockTagLatest)
+		slot0After, err = s.v3Pool.Slot0(s.ctx, nil, NewSlot0Request(s.pool))
 		if err != nil {
 			return false
 		}
-		liquidityAfter, err = s.v3Pool.Liquidity(s.ctx, s.pool, rpc.BlockTagLatest)
+		liquidityAfter, err = s.v3Pool.Liquidity(s.ctx, nil, NewLiquidityRequest(s.pool))
 		return err == nil && slot0Before.SqrtPriceX96.Cmp(slot0After.SqrtPriceX96) != 0
 	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "pool state not visible after swap")
 	s.Require().True(slot0After.SqrtPriceX96.Cmp(slot0Before.SqrtPriceX96) < 0, "selling token0 for token1 must push the price (token1 per token0) down")
@@ -1154,9 +1154,9 @@ func (s *RouterLifeCycleSuite) Test05ExactOutputSingle() {
 	s.Require().NoError(err)
 	s.T().Logf("Test05ExactOutputSingle: balances before: token0=%s token1=%s", balance0Before, balance1Before)
 
-	slot0Before, err := s.v3Pool.Slot0(s.ctx, s.pool, rpc.BlockTagLatest)
+	slot0Before, err := s.v3Pool.Slot0(s.ctx, nil, NewSlot0Request(s.pool))
 	s.Require().NoError(err)
-	liquidityBefore, err := s.v3Pool.Liquidity(s.ctx, s.pool, rpc.BlockTagLatest)
+	liquidityBefore, err := s.v3Pool.Liquidity(s.ctx, nil, NewLiquidityRequest(s.pool))
 	s.Require().NoError(err)
 	s.T().Logf("Test05ExactOutputSingle: pool before: sqrtPriceX96=%s tick=%s liquidity=%s", slot0Before.SqrtPriceX96, slot0Before.Tick, liquidityBefore)
 
@@ -1195,11 +1195,11 @@ func (s *RouterLifeCycleSuite) Test05ExactOutputSingle() {
 	var liquidityAfter *big.Int
 	var slot0After *Slot0
 	s.Require().Eventually(func() bool {
-		slot0After, err = s.v3Pool.Slot0(s.ctx, s.pool, rpc.BlockTagLatest)
+		slot0After, err = s.v3Pool.Slot0(s.ctx, nil, NewSlot0Request(s.pool))
 		if err != nil {
 			return false
 		}
-		liquidityAfter, err = s.v3Pool.Liquidity(s.ctx, s.pool, rpc.BlockTagLatest)
+		liquidityAfter, err = s.v3Pool.Liquidity(s.ctx, nil, NewLiquidityRequest(s.pool))
 		return err == nil && slot0Before.SqrtPriceX96.Cmp(slot0After.SqrtPriceX96) != 0
 	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "pool state not visible after swap")
 	s.Require().True(slot0After.SqrtPriceX96.Cmp(slot0Before.SqrtPriceX96) > 0, "buying token0 with token1 must push the price (token1 per token0) up")
@@ -1263,25 +1263,25 @@ func (s *RouterLifeCycleSuite) Test06CreateAndInitializePoolBC() {
 	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "Factory.getPool not yet reflecting the new pool")
 	s.T().Logf("Test06CreateAndInitializePoolBC: Factory.getPool(token0, token1, fee) = %s matches", registeredPool)
 
-	poolToken0, err := s.v3Pool.Token0(s.ctx, s.poolBC, rpc.BlockTagLatest)
+	poolToken0, err := s.v3Pool.Token0(s.ctx, nil, NewToken0Request(s.poolBC))
 	s.Require().NoError(err)
 	s.Require().True(poolToken0.Equal(s.tokenB))
-	poolToken1, err := s.v3Pool.Token1(s.ctx, s.poolBC, rpc.BlockTagLatest)
+	poolToken1, err := s.v3Pool.Token1(s.ctx, nil, NewToken1Request(s.poolBC))
 	s.Require().NoError(err)
 	s.Require().True(poolToken1.Equal(s.tokenC))
-	poolFee, err := s.v3Pool.Fee(s.ctx, s.poolBC, rpc.BlockTagLatest)
+	poolFee, err := s.v3Pool.Fee(s.ctx, nil, NewFeeRequest(s.poolBC))
 	s.Require().NoError(err)
 	s.Require().Zero(s.Fee.Cmp(poolFee))
 	s.T().Logf("Test06CreateAndInitializePoolBC: pool confirms token0=%s token1=%s fee=%s", poolToken0, poolToken1, poolFee)
 
-	slot0, err := s.v3Pool.Slot0(s.ctx, s.poolBC, rpc.BlockTagLatest)
+	slot0, err := s.v3Pool.Slot0(s.ctx, nil, NewSlot0Request(s.poolBC))
 	s.Require().NoError(err)
 	s.Require().Zero(sqrtPriceX96.Cmp(slot0.SqrtPriceX96))
 	s.Require().Zero(slot0.Tick.Sign())
 	s.Require().True(slot0.Unlocked)
 	s.T().Logf("Test06CreateAndInitializePoolBC: pool slot0 confirms sqrtPriceX96=%s tick=%s unlocked=%t", slot0.SqrtPriceX96, slot0.Tick, slot0.Unlocked)
 
-	liquidity, err := s.v3Pool.Liquidity(s.ctx, s.poolBC, rpc.BlockTagLatest)
+	liquidity, err := s.v3Pool.Liquidity(s.ctx, nil, NewLiquidityRequest(s.poolBC))
 	s.Require().NoError(err)
 	s.Require().Zero(liquidity.Sign(), "freshly initialized pool must have 0 active liquidity")
 	s.T().Logf("Test06CreateAndInitializePoolBC: pool liquidity() = %s", liquidity)
@@ -1377,7 +1377,7 @@ func (s *RouterLifeCycleSuite) Test07MintBC() {
 
 	var liquidity *big.Int
 	s.Require().Eventually(func() bool {
-		liquidity, err = s.v3Pool.Liquidity(s.ctx, s.poolBC, rpc.BlockTagLatest)
+		liquidity, err = s.v3Pool.Liquidity(s.ctx, nil, NewLiquidityRequest(s.poolBC))
 		return err == nil && predictedLiquidity.Cmp(liquidity) == 0
 	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "pool's active liquidity not visible after mint")
 	s.T().Logf("Test07MintBC: pool liquidity() = %s, matching the position's own liquidity since it's the pool's sole LP and the current tick sits inside its range", liquidity)
@@ -1438,9 +1438,9 @@ func (s *RouterLifeCycleSuite) Test08ExactInput() {
 	s.Require().NoError(err)
 	s.T().Logf("Test08ExactInput: balances before: tokenA=%s tokenB=%s tokenC=%s", balanceABefore, balanceBBefore, balanceCBefore)
 
-	slot0ABBefore, err := s.v3Pool.Slot0(s.ctx, s.pool, rpc.BlockTagLatest)
+	slot0ABBefore, err := s.v3Pool.Slot0(s.ctx, nil, NewSlot0Request(s.pool))
 	s.Require().NoError(err)
-	slot0BCBefore, err := s.v3Pool.Slot0(s.ctx, s.poolBC, rpc.BlockTagLatest)
+	slot0BCBefore, err := s.v3Pool.Slot0(s.ctx, nil, NewSlot0Request(s.poolBC))
 	s.Require().NoError(err)
 	s.T().Logf("Test08ExactInput: pools before: AB sqrtPriceX96=%s BC sqrtPriceX96=%s", slot0ABBefore.SqrtPriceX96, slot0BCBefore.SqrtPriceX96)
 
@@ -1475,7 +1475,7 @@ func (s *RouterLifeCycleSuite) Test08ExactInput() {
 	s.Require().NoError(err)
 	s.Require().Len(swaps, 2, "multihop exactInput over 2 pools must emit exactly 2 Swap events")
 
-	var hopAB, hopBC *Swap
+	var hopAB, hopBC *SwapEvent
 	for i := range swaps {
 		if swaps[i].Contract.Equal(s.pool) {
 			hopAB = &swaps[i]
@@ -1495,11 +1495,11 @@ func (s *RouterLifeCycleSuite) Test08ExactInput() {
 
 	var slot0ABAfter, slot0BCAfter *Slot0
 	s.Require().Eventually(func() bool {
-		slot0ABAfter, err = s.v3Pool.Slot0(s.ctx, s.pool, rpc.BlockTagLatest)
+		slot0ABAfter, err = s.v3Pool.Slot0(s.ctx, nil, NewSlot0Request(s.pool))
 		if err != nil {
 			return false
 		}
-		slot0BCAfter, err = s.v3Pool.Slot0(s.ctx, s.poolBC, rpc.BlockTagLatest)
+		slot0BCAfter, err = s.v3Pool.Slot0(s.ctx, nil, NewSlot0Request(s.poolBC))
 		return err == nil && slot0ABBefore.SqrtPriceX96.Cmp(slot0ABAfter.SqrtPriceX96) != 0 && slot0BCBefore.SqrtPriceX96.Cmp(slot0BCAfter.SqrtPriceX96) != 0
 	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "pool state not visible after swap")
 	s.Require().True(slot0ABAfter.SqrtPriceX96.Cmp(slot0ABBefore.SqrtPriceX96) < 0, "selling token0 for token1 in the A-B pool must push its price down")
@@ -1669,7 +1669,7 @@ func (s *RouterLifeCycleSuite) Test11ExactOutput() {
 	s.Require().NoError(err)
 	s.Require().Len(swaps, 2, "multihop exactOutput over 2 pools must emit exactly 2 Swap events")
 
-	var hopAB, hopBC *Swap
+	var hopAB, hopBC *SwapEvent
 	for i := range swaps {
 		if swaps[i].Contract.Equal(s.pool) {
 			hopAB = &swaps[i]
@@ -1875,7 +1875,7 @@ func (s *RouterLifeCycleSuite) Test15ExactOutputSinglePriceLimitPartialFill() {
 	requestedAmountOut := new(big.Int).Div(s.mintValue, big.NewInt(500))
 	approveCap := new(big.Int).Div(s.mintValue, big.NewInt(100))
 
-	slot0Before, err := s.v3Pool.Slot0(s.ctx, s.pool, rpc.BlockTagLatest)
+	slot0Before, err := s.v3Pool.Slot0(s.ctx, nil, NewSlot0Request(s.pool))
 	s.Require().NoError(err)
 	sqrtPriceLimitX96 := new(big.Int).Add(slot0Before.SqrtPriceX96, new(big.Int).Div(slot0Before.SqrtPriceX96, big.NewInt(10000)))
 	s.T().Logf("Test15ExactOutputSinglePriceLimitPartialFill: requestedAmountOut=%s sqrtPriceX96Before=%s sqrtPriceLimitX96=%s (a tight +0.01%% cap)", requestedAmountOut, slot0Before.SqrtPriceX96, sqrtPriceLimitX96)
@@ -2068,7 +2068,7 @@ func (s *RouterLifeCycleSuite) Test17CreateAndInitializePoolWETH() {
 	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "Factory.getPool not yet reflecting the new pool")
 	s.T().Logf("Test17CreateAndInitializePoolWETH: Factory.getPool(token0, token1, fee) = %s matches", registeredPool)
 
-	liquidity, err := s.v3Pool.Liquidity(s.ctx, s.poolWETH, rpc.BlockTagLatest)
+	liquidity, err := s.v3Pool.Liquidity(s.ctx, nil, NewLiquidityRequest(s.poolWETH))
 	s.Require().NoError(err)
 	s.Require().Zero(liquidity.Sign(), "freshly initialized pool must have 0 active liquidity")
 	s.T().Logf("Test17CreateAndInitializePoolWETH: pool liquidity() = %s", liquidity)
@@ -2139,7 +2139,7 @@ func (s *RouterLifeCycleSuite) Test18MintWETH() {
 
 	var liquidity *big.Int
 	s.Require().Eventually(func() bool {
-		liquidity, err = s.v3Pool.Liquidity(s.ctx, s.poolWETH, rpc.BlockTagLatest)
+		liquidity, err = s.v3Pool.Liquidity(s.ctx, nil, NewLiquidityRequest(s.poolWETH))
 		return err == nil && predictedLiquidity.Cmp(liquidity) == 0
 	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "pool's active liquidity not visible after mint")
 	s.T().Logf("Test18MintWETH: pool liquidity() = %s", liquidity)

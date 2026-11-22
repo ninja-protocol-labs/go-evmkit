@@ -52,3 +52,4 @@ packages:
       filename: "{{.InterfaceName | lower}}.go"
     interfaces:
       IFactory:
+      IPool:

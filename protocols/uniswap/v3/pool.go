@@ -7,65 +7,68 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core"
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
-	"github.com/ninja-protocol-labs/go-evmkit/tx"
 	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
 // IPoolImmutables mirrors IUniswapV3PoolImmutables.
 type IPoolImmutables interface {
-	Factory(ctx context.Context, contract *types.Address, block string) (*types.Address, error)
-	Token0(ctx context.Context, contract *types.Address, block string) (*types.Address, error)
-	Token1(ctx context.Context, contract *types.Address, block string) (*types.Address, error)
-	Fee(ctx context.Context, contract *types.Address, block string) (*big.Int, error)
-	TickSpacing(ctx context.Context, contract *types.Address, block string) (*big.Int, error)
-	MaxLiquidityPerTick(ctx context.Context, contract *types.Address, block string) (*big.Int, error)
+	Factory(ctx context.Context, opts *bind.CallOptions, req *FactoryRequest) (*types.Address, error)
+	Token0(ctx context.Context, opts *bind.CallOptions, req *Token0Request) (*types.Address, error)
+	Token1(ctx context.Context, opts *bind.CallOptions, req *Token1Request) (*types.Address, error)
+	Fee(ctx context.Context, opts *bind.CallOptions, req *FeeRequest) (*big.Int, error)
+	TickSpacing(ctx context.Context, opts *bind.CallOptions, req *TickSpacingRequest) (*big.Int, error)
+	MaxLiquidityPerTick(ctx context.Context, opts *bind.CallOptions, req *MaxLiquidityPerTickRequest) (*big.Int, error)
 }
 
 // IPoolState mirrors IUniswapV3PoolState.
 type IPoolState interface {
-	Slot0(ctx context.Context, contract *types.Address, block string) (*Slot0, error)
-	FeeGrowthGlobal0X128(ctx context.Context, contract *types.Address, block string) (*big.Int, error)
-	FeeGrowthGlobal1X128(ctx context.Context, contract *types.Address, block string) (*big.Int, error)
-	ProtocolFees(ctx context.Context, contract *types.Address, block string) (*ProtocolFees, error)
-	Liquidity(ctx context.Context, contract *types.Address, block string) (*big.Int, error)
-	Ticks(ctx context.Context, contract *types.Address, tick *big.Int, block string) (*TickInfo, error)
-	TickBitmap(ctx context.Context, contract *types.Address, wordPosition int16, block string) (*big.Int, error)
-	Positions(ctx context.Context, contract *types.Address, key [32]byte, block string) (*PositionInfo, error)
-	Observations(ctx context.Context, contract *types.Address, index *big.Int, block string) (*ObservationInfo, error)
+	Slot0(ctx context.Context, opts *bind.CallOptions, req *Slot0Request) (*Slot0, error)
+	FeeGrowthGlobal0X128(ctx context.Context, opts *bind.CallOptions, req *FeeGrowthGlobal0X128Request) (*big.Int, error)
+	FeeGrowthGlobal1X128(ctx context.Context, opts *bind.CallOptions, req *FeeGrowthGlobal1X128Request) (*big.Int, error)
+	ProtocolFees(ctx context.Context, opts *bind.CallOptions, req *ProtocolFeesRequest) (*ProtocolFees, error)
+	Liquidity(ctx context.Context, opts *bind.CallOptions, req *LiquidityRequest) (*big.Int, error)
+	Ticks(ctx context.Context, opts *bind.CallOptions, req *TicksRequest) (*TickInfo, error)
+	TickBitmap(ctx context.Context, opts *bind.CallOptions, req *TickBitmapRequest) (*big.Int, error)
+	Positions(ctx context.Context, opts *bind.CallOptions, req *PositionsRequest) (*PositionInfo, error)
+	Observations(ctx context.Context, opts *bind.CallOptions, req *ObservationsRequest) (*ObservationInfo, error)
 }
 
 // IPoolDerivedState mirrors IUniswapV3PoolDerivedState.
 type IPoolDerivedState interface {
-	Observe(ctx context.Context, contract *types.Address, secondsAgos []uint32, block string) (*ObserveResult, error)
-	SnapshotCumulativesInside(ctx context.Context, contract *types.Address, tickLower, tickUpper *big.Int, block string) (*SnapshotCumulativesInside, error)
+	Observe(ctx context.Context, opts *bind.CallOptions, req *ObserveRequest) (*ObserveResult, error)
+	SnapshotCumulativesInside(ctx context.Context, opts *bind.CallOptions, req *SnapshotCumulativesInsideRequest) (*SnapshotCumulativesInside, error)
 }
 
-// IPoolActions mirrors IUniswapV3PoolActions. No tx.Builder-taking Create* constructors here --
-// see CreateInitialize, CreateMint, CreateCollect, CreateBurn, CreateSwap, CreateFlash, and
-// CreateIncreaseObservationCardinalityNext.
+// IPoolActions mirrors IUniswapV3PoolActions.
 type IPoolActions interface {
-	Initialize(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	Mint(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	Collect(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	Burn(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	Swap(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	Flash(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	IncreaseObservationCardinalityNext(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
+	CallMint(ctx context.Context, opts *bind.CallOptions, req *PoolMintRequest) (amount0, amount1 *big.Int, err error)
+	CallCollect(ctx context.Context, opts *bind.CallOptions, req *PoolCollectRequest) (amount0, amount1 *big.Int, err error)
+	CallBurn(ctx context.Context, opts *bind.CallOptions, req *BurnRequest) (amount0, amount1 *big.Int, err error)
+	CallSwap(ctx context.Context, opts *bind.CallOptions, req *SwapRequest) (amount0, amount1 *big.Int, err error)
+
+	Initialize(ctx context.Context, opts *bind.TransactOptions, req *InitializeRequest) (core.Transaction, *types.Hash, error)
+	Mint(ctx context.Context, opts *bind.TransactOptions, req *PoolMintRequest) (core.Transaction, *types.Hash, error)
+	Collect(ctx context.Context, opts *bind.TransactOptions, req *PoolCollectRequest) (core.Transaction, *types.Hash, error)
+	Burn(ctx context.Context, opts *bind.TransactOptions, req *BurnRequest) (core.Transaction, *types.Hash, error)
+	Swap(ctx context.Context, opts *bind.TransactOptions, req *SwapRequest) (core.Transaction, *types.Hash, error)
+	Flash(ctx context.Context, opts *bind.TransactOptions, req *FlashRequest) (core.Transaction, *types.Hash, error)
+	IncreaseObservationCardinalityNext(ctx context.Context, opts *bind.TransactOptions, req *IncreaseObservationCardinalityNextRequest) (core.Transaction, *types.Hash, error)
 }
 
-// IPoolOwnerActions mirrors IUniswapV3PoolOwnerActions. No tx.Builder-taking Create*
-// constructors here -- see CreateSetFeeProtocol and CreateCollectProtocol.
+// IPoolOwnerActions mirrors IUniswapV3PoolOwnerActions.
 type IPoolOwnerActions interface {
-	SetFeeProtocol(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	CollectProtocol(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
+	CallCollectProtocol(ctx context.Context, opts *bind.CallOptions, req *CollectProtocolRequest) (amount0, amount1 *big.Int, err error)
+
+	SetFeeProtocol(ctx context.Context, opts *bind.TransactOptions, req *SetFeeProtocolRequest) (core.Transaction, *types.Hash, error)
+	CollectProtocol(ctx context.Context, opts *bind.TransactOptions, req *CollectProtocolRequest) (core.Transaction, *types.Hash, error)
 }
 
-// IPool mirrors IUniswapV3Pool, composed the same way the Solidity interface is: one small
-// interface per concern (immutables/state/derived state/actions/owner actions).
+// IPool mirrors IUniswapV3Pool, composed the same way the Solidity interface is.
 type IPool interface {
 	IPoolImmutables
 	IPoolState
@@ -76,650 +79,660 @@ type IPool interface {
 
 var _ IPool = (*Pool)(nil)
 
-// Pool calls any UniswapV3Pool contract over a Client; it holds no contract address, so one
-// instance serves every pool on every network.
+// Pool calls any UniswapV3Pool contract over a Client; it holds no contract address, so one instance serves every pool.
 type Pool struct {
 	c rpc.Client
 }
 
-// NewPool returns a Pool calling pools via c.
-func NewPool(c rpc.Client) *Pool {
+// NewPool returns a Pool calling pools via cli.
+func NewPool(cli rpc.Client) *Pool {
 	return &Pool{
-		c: c,
+		c: cli,
 	}
 }
 
-// Factory returns the UniswapV3Factory that deployed contract.
-func (pl *Pool) Factory(ctx context.Context, contract *types.Address, block string) (*types.Address, error) {
-	data, err := pl.call(ctx, nil, contract, EncodeFactory(), block)
+// Factory returns the UniswapV3Factory that deployed req.Contract.
+func (pl *Pool) Factory(ctx context.Context, opts *bind.CallOptions, req *FactoryRequest) (*types.Address, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv3: factory: %w", err)
+	}
+
+	data, err := bind.Call(ctx, pl.c, opts, req.Contract, EncodeFactory())
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv3: factory: %w", pl.wrapRevertError(err))
+	}
+
+	out, err := DecodeFactory(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: factory: %w", err)
 	}
-	addr, err := DecodeFactory(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: factory: %w", err)
-	}
-	return addr, nil
+
+	return out, nil
 }
 
-// Token0 returns contract's first token, sorted by address.
-func (pl *Pool) Token0(ctx context.Context, contract *types.Address, block string) (*types.Address, error) {
-	data, err := pl.call(ctx, nil, contract, EncodeToken0(), block)
+// Token0 returns req.Contract's token0 (the lower-sorted token).
+func (pl *Pool) Token0(ctx context.Context, opts *bind.CallOptions, req *Token0Request) (*types.Address, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv3: token0: %w", err)
+	}
+
+	data, err := bind.Call(ctx, pl.c, opts, req.Contract, EncodeToken0())
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv3: token0: %w", pl.wrapRevertError(err))
+	}
+
+	out, err := DecodeToken0(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: token0: %w", err)
 	}
-	addr, err := DecodeToken0(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: token0: %w", err)
-	}
-	return addr, nil
+
+	return out, nil
 }
 
-// Token1 returns contract's second token, sorted by address.
-func (pl *Pool) Token1(ctx context.Context, contract *types.Address, block string) (*types.Address, error) {
-	data, err := pl.call(ctx, nil, contract, EncodeToken1(), block)
+// Token1 returns req.Contract's token1 (the higher-sorted token).
+func (pl *Pool) Token1(ctx context.Context, opts *bind.CallOptions, req *Token1Request) (*types.Address, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv3: token1: %w", err)
+	}
+
+	data, err := bind.Call(ctx, pl.c, opts, req.Contract, EncodeToken1())
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv3: token1: %w", pl.wrapRevertError(err))
+	}
+
+	out, err := DecodeToken1(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: token1: %w", err)
 	}
-	addr, err := DecodeToken1(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: token1: %w", err)
-	}
-	return addr, nil
+
+	return out, nil
 }
 
-// Fee returns contract's swap fee, denominated in hundredths of a bip.
-func (pl *Pool) Fee(ctx context.Context, contract *types.Address, block string) (*big.Int, error) {
-	data, err := pl.call(ctx, nil, contract, EncodePoolFee(), block)
+// Fee returns req.Contract's fee in hundredths of a bip.
+func (pl *Pool) Fee(ctx context.Context, opts *bind.CallOptions, req *FeeRequest) (*big.Int, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv3: fee: %w", err)
+	}
+
+	data, err := bind.Call(ctx, pl.c, opts, req.Contract, EncodePoolFee())
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv3: fee: %w", pl.wrapRevertError(err))
+	}
+
+	out, err := DecodePoolFee(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: fee: %w", err)
 	}
-	n, err := DecodePoolFee(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: fee: %w", err)
-	}
-	return n, nil
+
+	return out, nil
 }
 
-// TickSpacing returns the minimum number of ticks between initialized ticks in contract.
-func (pl *Pool) TickSpacing(ctx context.Context, contract *types.Address, block string) (*big.Int, error) {
-	data, err := pl.call(ctx, nil, contract, EncodePoolTickSpacing(), block)
+// TickSpacing returns req.Contract's tick spacing.
+func (pl *Pool) TickSpacing(ctx context.Context, opts *bind.CallOptions, req *TickSpacingRequest) (*big.Int, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv3: tickSpacing: %w", err)
+	}
+
+	data, err := bind.Call(ctx, pl.c, opts, req.Contract, EncodePoolTickSpacing())
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv3: tickSpacing: %w", pl.wrapRevertError(err))
+	}
+
+	out, err := DecodePoolTickSpacing(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: tickSpacing: %w", err)
 	}
-	n, err := DecodePoolTickSpacing(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: tickSpacing: %w", err)
-	}
-	return n, nil
+
+	return out, nil
 }
 
-// MaxLiquidityPerTick returns the max amount of liquidity any single tick in contract can hold.
-func (pl *Pool) MaxLiquidityPerTick(ctx context.Context, contract *types.Address, block string) (*big.Int, error) {
-	data, err := pl.call(ctx, nil, contract, EncodeMaxLiquidityPerTick(), block)
+// MaxLiquidityPerTick returns the most liquidity any tick of req.Contract can hold.
+func (pl *Pool) MaxLiquidityPerTick(ctx context.Context, opts *bind.CallOptions, req *MaxLiquidityPerTickRequest) (*big.Int, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv3: maxLiquidityPerTick: %w", err)
+	}
+
+	data, err := bind.Call(ctx, pl.c, opts, req.Contract, EncodeMaxLiquidityPerTick())
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv3: maxLiquidityPerTick: %w", pl.wrapRevertError(err))
+	}
+
+	out, err := DecodeMaxLiquidityPerTick(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: maxLiquidityPerTick: %w", err)
 	}
-	n, err := DecodeMaxLiquidityPerTick(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: maxLiquidityPerTick: %w", err)
-	}
-	return n, nil
+
+	return out, nil
 }
 
-// Slot0 returns contract's packed 0th storage slot (current price, tick, observation state,
-// protocol fee, and reentrancy lock) in one call.
-func (pl *Pool) Slot0(ctx context.Context, contract *types.Address, block string) (*Slot0, error) {
-	data, err := pl.call(ctx, nil, contract, EncodeSlot0(), block)
+// Slot0 returns req.Contract's current price, tick and oracle/fee-protocol state.
+func (pl *Pool) Slot0(ctx context.Context, opts *bind.CallOptions, req *Slot0Request) (*Slot0, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv3: slot0: %w", err)
+	}
+
+	data, err := bind.Call(ctx, pl.c, opts, req.Contract, EncodeSlot0())
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv3: slot0: %w", pl.wrapRevertError(err))
+	}
+
+	out, err := DecodeSlot0(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: slot0: %w", err)
 	}
-	s, err := DecodeSlot0(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: slot0: %w", err)
-	}
-	return s, nil
+
+	return out, nil
 }
 
-// FeeGrowthGlobal0X128 returns the Q128.128 fees of token0 collected per unit of liquidity over
-// contract's entire lifetime.
-func (pl *Pool) FeeGrowthGlobal0X128(ctx context.Context, contract *types.Address, block string) (*big.Int, error) {
-	data, err := pl.call(ctx, nil, contract, EncodeFeeGrowthGlobal0X128(), block)
+// FeeGrowthGlobal0X128 returns req.Contract's all-time token0 fees per unit of liquidity, as Q128.
+func (pl *Pool) FeeGrowthGlobal0X128(ctx context.Context, opts *bind.CallOptions, req *FeeGrowthGlobal0X128Request) (*big.Int, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv3: feeGrowthGlobal0X128: %w", err)
+	}
+
+	data, err := bind.Call(ctx, pl.c, opts, req.Contract, EncodeFeeGrowthGlobal0X128())
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv3: feeGrowthGlobal0X128: %w", pl.wrapRevertError(err))
+	}
+
+	out, err := DecodeFeeGrowthGlobal0X128(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: feeGrowthGlobal0X128: %w", err)
 	}
-	n, err := DecodeFeeGrowthGlobal0X128(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: feeGrowthGlobal0X128: %w", err)
-	}
-	return n, nil
+
+	return out, nil
 }
 
-// FeeGrowthGlobal1X128 returns the Q128.128 fees of token1 collected per unit of liquidity over
-// contract's entire lifetime.
-func (pl *Pool) FeeGrowthGlobal1X128(ctx context.Context, contract *types.Address, block string) (*big.Int, error) {
-	data, err := pl.call(ctx, nil, contract, EncodeFeeGrowthGlobal1X128(), block)
+// FeeGrowthGlobal1X128 returns req.Contract's all-time token1 fees per unit of liquidity, as Q128.
+func (pl *Pool) FeeGrowthGlobal1X128(ctx context.Context, opts *bind.CallOptions, req *FeeGrowthGlobal1X128Request) (*big.Int, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv3: feeGrowthGlobal1X128: %w", err)
+	}
+
+	data, err := bind.Call(ctx, pl.c, opts, req.Contract, EncodeFeeGrowthGlobal1X128())
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv3: feeGrowthGlobal1X128: %w", pl.wrapRevertError(err))
+	}
+
+	out, err := DecodeFeeGrowthGlobal1X128(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: feeGrowthGlobal1X128: %w", err)
 	}
-	n, err := DecodeFeeGrowthGlobal1X128(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: feeGrowthGlobal1X128: %w", err)
-	}
-	return n, nil
+
+	return out, nil
 }
 
-// ProtocolFees returns the amounts of token0/token1 currently owed to the protocol.
-func (pl *Pool) ProtocolFees(ctx context.Context, contract *types.Address, block string) (*ProtocolFees, error) {
-	data, err := pl.call(ctx, nil, contract, EncodeProtocolFees(), block)
+// ProtocolFees returns req.Contract's uncollected protocol fees.
+func (pl *Pool) ProtocolFees(ctx context.Context, opts *bind.CallOptions, req *ProtocolFeesRequest) (*ProtocolFees, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv3: protocolFees: %w", err)
+	}
+
+	data, err := bind.Call(ctx, pl.c, opts, req.Contract, EncodeProtocolFees())
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv3: protocolFees: %w", pl.wrapRevertError(err))
+	}
+
+	out, err := DecodeProtocolFees(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: protocolFees: %w", err)
 	}
-	pf, err := DecodeProtocolFees(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: protocolFees: %w", err)
-	}
-	return pf, nil
+
+	return out, nil
 }
 
-// Liquidity returns contract's currently in-range liquidity -- unrelated to total liquidity
-// across every tick.
-func (pl *Pool) Liquidity(ctx context.Context, contract *types.Address, block string) (*big.Int, error) {
-	data, err := pl.call(ctx, nil, contract, EncodePoolLiquidity(), block)
+// Liquidity returns req.Contract's in-range liquidity.
+func (pl *Pool) Liquidity(ctx context.Context, opts *bind.CallOptions, req *LiquidityRequest) (*big.Int, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv3: liquidity: %w", err)
+	}
+
+	data, err := bind.Call(ctx, pl.c, opts, req.Contract, EncodePoolLiquidity())
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv3: liquidity: %w", pl.wrapRevertError(err))
+	}
+
+	out, err := DecodePoolLiquidity(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: liquidity: %w", err)
 	}
-	n, err := DecodePoolLiquidity(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: liquidity: %w", err)
-	}
-	return n, nil
+
+	return out, nil
 }
 
-// Ticks returns the state of tick in contract.
-func (pl *Pool) Ticks(ctx context.Context, contract *types.Address, tick *big.Int, block string) (*TickInfo, error) {
-	calldata, err := EncodeTicks(tick)
+// Ticks returns req.Contract's state for req.Tick.
+func (pl *Pool) Ticks(ctx context.Context, opts *bind.CallOptions, req *TicksRequest) (*TickInfo, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv3: ticks: %w", err)
+	}
+
+	calldata, err := EncodeTicks(req.Tick)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: ticks: %w", err)
 	}
-	data, err := pl.call(ctx, nil, contract, calldata, block)
+
+	data, err := bind.Call(ctx, pl.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv3: ticks: %w", pl.wrapRevertError(err))
+	}
+
+	out, err := DecodeTicks(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: ticks: %w", err)
 	}
-	ti, err := DecodeTicks(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: ticks: %w", err)
-	}
-	return ti, nil
+
+	return out, nil
 }
 
-// TickBitmap returns the 256 packed tick-initialized flags for wordPosition in contract.
-func (pl *Pool) TickBitmap(ctx context.Context, contract *types.Address, wordPosition int16, block string) (*big.Int, error) {
-	calldata, err := EncodeTickBitmap(wordPosition)
+// TickBitmap returns req.Contract's initialized-tick bitmap word at req.WordPosition.
+func (pl *Pool) TickBitmap(ctx context.Context, opts *bind.CallOptions, req *TickBitmapRequest) (*big.Int, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv3: tickBitmap: %w", err)
+	}
+
+	calldata, err := EncodeTickBitmap(req.WordPosition)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: tickBitmap: %w", err)
 	}
-	data, err := pl.call(ctx, nil, contract, calldata, block)
+
+	data, err := bind.Call(ctx, pl.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv3: tickBitmap: %w", pl.wrapRevertError(err))
+	}
+
+	out, err := DecodeTickBitmap(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: tickBitmap: %w", err)
 	}
-	n, err := DecodeTickBitmap(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: tickBitmap: %w", err)
-	}
-	return n, nil
+
+	return out, nil
 }
 
-// Positions returns the state of the position identified by key (hash of owner, tickLower,
-// tickUpper) in contract.
-func (pl *Pool) Positions(ctx context.Context, contract *types.Address, key [32]byte, block string) (*PositionInfo, error) {
-	calldata, err := EncodePositions(key)
+// Positions returns req.Contract's position for req.Key, keccak256(owner, tickLower, tickUpper).
+func (pl *Pool) Positions(ctx context.Context, opts *bind.CallOptions, req *PositionsRequest) (*PositionInfo, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv3: positions: %w", err)
+	}
+
+	calldata, err := EncodePositions(req.Key)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: positions: %w", err)
 	}
-	data, err := pl.call(ctx, nil, contract, calldata, block)
+
+	data, err := bind.Call(ctx, pl.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv3: positions: %w", pl.wrapRevertError(err))
+	}
+
+	out, err := DecodePositions(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: positions: %w", err)
 	}
-	pi, err := DecodePositions(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: positions: %w", err)
-	}
-	return pi, nil
+
+	return out, nil
 }
 
-// Observations returns the oracle observation at index in contract.
-func (pl *Pool) Observations(ctx context.Context, contract *types.Address, index *big.Int, block string) (*ObservationInfo, error) {
-	calldata, err := EncodePoolObservations(index)
+// Observations returns req.Contract's oracle observation at req.Index.
+func (pl *Pool) Observations(ctx context.Context, opts *bind.CallOptions, req *ObservationsRequest) (*ObservationInfo, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv3: observations: %w", err)
+	}
+
+	calldata, err := EncodePoolObservations(req.Index)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: observations: %w", err)
 	}
-	data, err := pl.call(ctx, nil, contract, calldata, block)
+
+	data, err := bind.Call(ctx, pl.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv3: observations: %w", pl.wrapRevertError(err))
+	}
+
+	out, err := DecodePoolObservations(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: observations: %w", err)
 	}
-	oi, err := DecodePoolObservations(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: observations: %w", err)
-	}
-	return oi, nil
+
+	return out, nil
 }
 
-// Observe returns contract's cumulative tick and liquidity as of each secondsAgos entry.
-func (pl *Pool) Observe(ctx context.Context, contract *types.Address, secondsAgos []uint32, block string) (*ObserveResult, error) {
-	calldata, err := EncodeObserve(secondsAgos)
+// Observe returns req.Contract's cumulative tick and seconds-per-liquidity as of each of req.SecondsAgos.
+func (pl *Pool) Observe(ctx context.Context, opts *bind.CallOptions, req *ObserveRequest) (*ObserveResult, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv3: observe: %w", err)
+	}
+
+	calldata, err := EncodeObserve(req.SecondsAgos)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: observe: %w", err)
 	}
-	data, err := pl.call(ctx, nil, contract, calldata, block)
+
+	data, err := bind.Call(ctx, pl.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv3: observe: %w", pl.wrapRevertError(err))
+	}
+
+	out, err := DecodeObserve(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: observe: %w", err)
 	}
-	or, err := DecodeObserve(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: observe: %w", err)
-	}
-	return or, nil
+
+	return out, nil
 }
 
-// SnapshotCumulativesInside returns a snapshot of the tick/seconds-per-liquidity accumulators
-// for the [tickLower, tickUpper] range in contract.
-func (pl *Pool) SnapshotCumulativesInside(ctx context.Context, contract *types.Address, tickLower, tickUpper *big.Int, block string) (*SnapshotCumulativesInside, error) {
-	calldata, err := EncodeSnapshotCumulativesInside(tickLower, tickUpper)
+// SnapshotCumulativesInside returns req.Contract's cumulatives inside [req.TickLower, req.TickUpper].
+func (pl *Pool) SnapshotCumulativesInside(ctx context.Context, opts *bind.CallOptions, req *SnapshotCumulativesInsideRequest) (*SnapshotCumulativesInside, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv3: snapshotCumulativesInside: %w", err)
+	}
+
+	calldata, err := EncodeSnapshotCumulativesInside(req.TickLower, req.TickUpper)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: snapshotCumulativesInside: %w", err)
 	}
-	data, err := pl.call(ctx, nil, contract, calldata, block)
+
+	data, err := bind.Call(ctx, pl.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv3: snapshotCumulativesInside: %w", pl.wrapRevertError(err))
+	}
+
+	out, err := DecodeSnapshotCumulativesInside(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: snapshotCumulativesInside: %w", err)
 	}
-	sci, err := DecodeSnapshotCumulativesInside(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: snapshotCumulativesInside: %w", err)
-	}
-	return sci, nil
+
+	return out, nil
 }
 
-// CreateInitialize builds an unsigned initialize(sqrtPriceX96) transaction via b, sent by sender.
-func (pl *Pool) CreateInitialize(ctx context.Context, b tx.Builder, p *InitializeParams) (core.Transaction, error) {
-	calldata, err := EncodeInitialize(p.SqrtPriceX96)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: createInitialize: %w", err)
+// CallMint runs mint via eth_call as opts.From, returning (amount0, amount1) or the revert.
+func (pl *Pool) CallMint(ctx context.Context, opts *bind.CallOptions, req *PoolMintRequest) (amount0, amount1 *big.Int, err error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: callMint: %w", err)
 	}
 
-	unsigned, err := b.Build(p.Sender, p.Pool, nil, calldata).Pack(ctx, pl.c)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: createInitialize: %w", pl.wrapRevertError(err))
-	}
-	return unsigned, nil
-}
-
-// Initialize broadcasts an already-signed initialize transaction.
-func (pl *Pool) Initialize(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: initialize: %w", err)
-	}
-	hash, err := tx.Broadcast(ctx, pl.c, raw)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: initialize: %w", err)
-	}
-	return hash, nil
-}
-
-// CreateMint builds an unsigned mint(recipient, tickLower, tickUpper, amount, data) transaction
-// via b, sent by sender -- which must be a contract implementing IUniswapV3MintCallback, since
-// the pool calls back into msg.sender mid-transaction to collect payment.
-func (pl *Pool) CreateMint(ctx context.Context, b tx.Builder, p *PoolMintParams) (core.Transaction, error) {
-	calldata, err := EncodeMint(p.Recipient, p.TickLower, p.TickUpper, p.Amount, p.CallbackData)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: createMint: %w", err)
-	}
-
-	unsigned, err := b.Build(p.Sender, p.Pool, nil, calldata).Pack(ctx, pl.c)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: createMint: %w", pl.wrapRevertError(err))
-	}
-	return unsigned, nil
-}
-
-// CallMint simulates mint(recipient, tickLower, tickUpper, amount, data) via eth_call, as
-// sender, returning the amounts of token0/token1 it would require -- without broadcasting
-// anything. sender must already be a contract implementing IUniswapV3MintCallback on-chain, or
-// the simulated callback is a no-op and the simulation reverts the same way a real EOA-sent
-// mint would.
-func (pl *Pool) CallMint(ctx context.Context, p *PoolMintParams, block string) (amount0, amount1 *big.Int, err error) {
-	calldata, err := EncodeMint(p.Recipient, p.TickLower, p.TickUpper, p.Amount, p.CallbackData)
+	calldata, err := EncodeMint(req.Recipient, req.TickLower, req.TickUpper, req.Amount, req.CallbackData)
 	if err != nil {
 		return nil, nil, fmt.Errorf("uniswapv3: callMint: %w", err)
 	}
-	data, err := pl.call(ctx, p.Sender, p.Pool, calldata, block)
+
+	data, err := bind.Call(ctx, pl.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, nil, fmt.Errorf("uniswapv3: callMint: %w", err)
+		return nil, nil, fmt.Errorf("uniswapv3: callMint: %w", pl.wrapRevertError(err))
 	}
+
 	amount0, amount1, err = DecodeMint(data)
 	if err != nil {
 		return nil, nil, fmt.Errorf("uniswapv3: callMint: %w", err)
 	}
+
 	return amount0, amount1, nil
 }
 
-// Mint broadcasts an already-signed mint transaction. The caller must be a contract implementing
-// IUniswapV3MintCallback, since the pool calls back into msg.sender mid-transaction to collect
-// payment -- a plain EOA-signed call reverts there.
-func (pl *Pool) Mint(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: mint: %w", err)
-	}
-	hash, err := tx.Broadcast(ctx, pl.c, raw)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: mint: %w", err)
-	}
-	return hash, nil
-}
-
-// CreateCollect builds an unsigned collect(recipient, tickLower, tickUpper, amount0Requested,
-// amount1Requested) transaction via b, sent by sender -- which must be the position's owner.
-func (pl *Pool) CreateCollect(ctx context.Context, b tx.Builder, p *PoolCollectParams) (core.Transaction, error) {
-	calldata, err := EncodeCollect(p.Recipient, p.TickLower, p.TickUpper, p.Amount0Requested, p.Amount1Requested)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: createCollect: %w", err)
+// CallCollect runs collect via eth_call as opts.From, returning (amount0, amount1) or the revert.
+func (pl *Pool) CallCollect(ctx context.Context, opts *bind.CallOptions, req *PoolCollectRequest) (amount0, amount1 *big.Int, err error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: callCollect: %w", err)
 	}
 
-	unsigned, err := b.Build(p.Sender, p.Pool, nil, calldata).Pack(ctx, pl.c)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: createCollect: %w", pl.wrapRevertError(err))
-	}
-	return unsigned, nil
-}
-
-// CallCollect simulates collect(recipient, tickLower, tickUpper, amount0Requested,
-// amount1Requested) via eth_call, as sender, returning the amounts of token0/token1 it would
-// collect -- without broadcasting anything.
-func (pl *Pool) CallCollect(ctx context.Context, p *PoolCollectParams, block string) (amount0, amount1 *big.Int, err error) {
-	calldata, err := EncodeCollect(p.Recipient, p.TickLower, p.TickUpper, p.Amount0Requested, p.Amount1Requested)
+	calldata, err := EncodeCollect(req.Recipient, req.TickLower, req.TickUpper, req.Amount0Requested, req.Amount1Requested)
 	if err != nil {
 		return nil, nil, fmt.Errorf("uniswapv3: callCollect: %w", err)
 	}
-	data, err := pl.call(ctx, p.Sender, p.Pool, calldata, block)
+
+	data, err := bind.Call(ctx, pl.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, nil, fmt.Errorf("uniswapv3: callCollect: %w", err)
+		return nil, nil, fmt.Errorf("uniswapv3: callCollect: %w", pl.wrapRevertError(err))
 	}
+
 	amount0, amount1, err = DecodeCollect(data)
 	if err != nil {
 		return nil, nil, fmt.Errorf("uniswapv3: callCollect: %w", err)
 	}
+
 	return amount0, amount1, nil
 }
 
-// Collect broadcasts an already-signed collect transaction.
-func (pl *Pool) Collect(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: collect: %w", err)
-	}
-	hash, err := tx.Broadcast(ctx, pl.c, raw)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: collect: %w", err)
-	}
-	return hash, nil
-}
-
-// CreateBurn builds an unsigned burn(tickLower, tickUpper, amount) transaction via b, sent by
-// sender -- which must be the position's owner.
-func (pl *Pool) CreateBurn(ctx context.Context, b tx.Builder, p *BurnParams) (core.Transaction, error) {
-	calldata, err := EncodeBurn(p.TickLower, p.TickUpper, p.Amount)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: createBurn: %w", err)
+// CallBurn runs burn via eth_call as opts.From, returning (amount0, amount1) or the revert.
+func (pl *Pool) CallBurn(ctx context.Context, opts *bind.CallOptions, req *BurnRequest) (amount0, amount1 *big.Int, err error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: callBurn: %w", err)
 	}
 
-	unsigned, err := b.Build(p.Sender, p.Pool, nil, calldata).Pack(ctx, pl.c)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: createBurn: %w", pl.wrapRevertError(err))
-	}
-	return unsigned, nil
-}
-
-// CallBurn simulates burn(tickLower, tickUpper, amount) via eth_call, as sender, returning the
-// amounts of token0/token1 it would credit to the position's tokensOwed -- without broadcasting
-// anything.
-func (pl *Pool) CallBurn(ctx context.Context, p *BurnParams, block string) (amount0, amount1 *big.Int, err error) {
-	calldata, err := EncodeBurn(p.TickLower, p.TickUpper, p.Amount)
+	calldata, err := EncodeBurn(req.TickLower, req.TickUpper, req.Amount)
 	if err != nil {
 		return nil, nil, fmt.Errorf("uniswapv3: callBurn: %w", err)
 	}
-	data, err := pl.call(ctx, p.Sender, p.Pool, calldata, block)
+
+	data, err := bind.Call(ctx, pl.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, nil, fmt.Errorf("uniswapv3: callBurn: %w", err)
+		return nil, nil, fmt.Errorf("uniswapv3: callBurn: %w", pl.wrapRevertError(err))
 	}
+
 	amount0, amount1, err = DecodeBurn(data)
 	if err != nil {
 		return nil, nil, fmt.Errorf("uniswapv3: callBurn: %w", err)
 	}
+
 	return amount0, amount1, nil
 }
 
-// Burn broadcasts an already-signed burn transaction.
-func (pl *Pool) Burn(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: burn: %w", err)
-	}
-	hash, err := tx.Broadcast(ctx, pl.c, raw)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: burn: %w", err)
-	}
-	return hash, nil
-}
-
-// CreateSwap builds an unsigned swap(recipient, zeroForOne, amountSpecified, sqrtPriceLimitX96,
-// data) transaction via b, sent by sender -- which must be a contract implementing
-// IUniswapV3SwapCallback, since the pool calls back into msg.sender mid-transaction to collect
-// payment.
-func (pl *Pool) CreateSwap(ctx context.Context, b tx.Builder, p *SwapParams) (core.Transaction, error) {
-	calldata, err := EncodeSwap(p.Recipient, p.ZeroForOne, p.AmountSpecified, p.SqrtPriceLimitX96, p.CallbackData)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: createSwap: %w", err)
+// CallSwap runs swap via eth_call as opts.From, returning (amount0, amount1) or the revert.
+func (pl *Pool) CallSwap(ctx context.Context, opts *bind.CallOptions, req *SwapRequest) (amount0, amount1 *big.Int, err error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: callSwap: %w", err)
 	}
 
-	unsigned, err := b.Build(p.Sender, p.Pool, nil, calldata).Pack(ctx, pl.c)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: createSwap: %w", pl.wrapRevertError(err))
-	}
-	return unsigned, nil
-}
-
-// CallSwap simulates swap(recipient, zeroForOne, amountSpecified, sqrtPriceLimitX96, data) via
-// eth_call, as sender, returning the pool's balance deltas for token0/token1 -- without
-// broadcasting anything. sender must already be a contract implementing IUniswapV3SwapCallback
-// on-chain, or the simulated callback is a no-op and the simulation reverts the same way a real
-// EOA-sent swap would.
-func (pl *Pool) CallSwap(ctx context.Context, p *SwapParams, block string) (amount0, amount1 *big.Int, err error) {
-	calldata, err := EncodeSwap(p.Recipient, p.ZeroForOne, p.AmountSpecified, p.SqrtPriceLimitX96, p.CallbackData)
+	calldata, err := EncodeSwap(req.Recipient, req.ZeroForOne, req.AmountSpecified, req.SqrtPriceLimitX96, req.CallbackData)
 	if err != nil {
 		return nil, nil, fmt.Errorf("uniswapv3: callSwap: %w", err)
 	}
-	data, err := pl.call(ctx, p.Sender, p.Pool, calldata, block)
+
+	data, err := bind.Call(ctx, pl.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, nil, fmt.Errorf("uniswapv3: callSwap: %w", err)
+		return nil, nil, fmt.Errorf("uniswapv3: callSwap: %w", pl.wrapRevertError(err))
 	}
+
 	amount0, amount1, err = DecodeSwap(data)
 	if err != nil {
 		return nil, nil, fmt.Errorf("uniswapv3: callSwap: %w", err)
 	}
+
 	return amount0, amount1, nil
 }
 
-// Swap broadcasts an already-signed swap transaction. The caller must be a contract implementing
-// IUniswapV3SwapCallback, since the pool calls back into msg.sender mid-transaction to collect
-// payment -- a plain EOA-signed call reverts there.
-func (pl *Pool) Swap(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: swap: %w", err)
-	}
-	hash, err := tx.Broadcast(ctx, pl.c, raw)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: swap: %w", err)
-	}
-	return hash, nil
-}
-
-// CreateFlash builds an unsigned flash(recipient, amount0, amount1, data) transaction via b,
-// sent by sender -- which must be a contract implementing IUniswapV3FlashCallback, since the
-// pool calls back into msg.sender mid-transaction to collect repayment.
-func (pl *Pool) CreateFlash(ctx context.Context, b tx.Builder, p *FlashParams) (core.Transaction, error) {
-	calldata, err := EncodeFlash(p.Recipient, p.Amount0, p.Amount1, p.CallbackData)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: createFlash: %w", err)
+// CallCollectProtocol runs collectProtocol via eth_call as opts.From, returning (amount0, amount1) or the revert.
+func (pl *Pool) CallCollectProtocol(ctx context.Context, opts *bind.CallOptions, req *CollectProtocolRequest) (amount0, amount1 *big.Int, err error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: callCollectProtocol: %w", err)
 	}
 
-	unsigned, err := b.Build(p.Sender, p.Pool, nil, calldata).Pack(ctx, pl.c)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: createFlash: %w", pl.wrapRevertError(err))
-	}
-	return unsigned, nil
-}
-
-// Flash broadcasts an already-signed flash transaction. The caller must be a contract
-// implementing IUniswapV3FlashCallback, since the pool calls back into msg.sender mid-transaction
-// to collect repayment -- a plain EOA-signed call reverts there.
-func (pl *Pool) Flash(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: flash: %w", err)
-	}
-	hash, err := tx.Broadcast(ctx, pl.c, raw)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: flash: %w", err)
-	}
-	return hash, nil
-}
-
-// CreateIncreaseObservationCardinalityNext builds an unsigned
-// increaseObservationCardinalityNext(observationCardinalityNext) transaction via b, sent by sender.
-func (pl *Pool) CreateIncreaseObservationCardinalityNext(ctx context.Context, b tx.Builder, p *IncreaseObservationCardinalityNextParams) (core.Transaction, error) {
-	calldata, err := EncodeIncreaseObservationCardinalityNext(p.ObservationCardinalityNext)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: createIncreaseObservationCardinalityNext: %w", err)
-	}
-
-	unsigned, err := b.Build(p.Sender, p.Pool, nil, calldata).Pack(ctx, pl.c)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: createIncreaseObservationCardinalityNext: %w", pl.wrapRevertError(err))
-	}
-	return unsigned, nil
-}
-
-// IncreaseObservationCardinalityNext broadcasts an already-signed
-// increaseObservationCardinalityNext transaction.
-func (pl *Pool) IncreaseObservationCardinalityNext(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: increaseObservationCardinalityNext: %w", err)
-	}
-	hash, err := tx.Broadcast(ctx, pl.c, raw)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: increaseObservationCardinalityNext: %w", err)
-	}
-	return hash, nil
-}
-
-// CreateSetFeeProtocol builds an unsigned setFeeProtocol(feeProtocol0, feeProtocol1) transaction
-// via b, sent by sender -- which must be contract's factory's owner, or the transaction reverts.
-func (pl *Pool) CreateSetFeeProtocol(ctx context.Context, b tx.Builder, p *SetFeeProtocolParams) (core.Transaction, error) {
-	calldata, err := EncodeSetFeeProtocol(p.FeeProtocol0, p.FeeProtocol1)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: createSetFeeProtocol: %w", err)
-	}
-
-	unsigned, err := b.Build(p.Sender, p.Pool, nil, calldata).Pack(ctx, pl.c)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: createSetFeeProtocol: %w", pl.wrapRevertError(err))
-	}
-	return unsigned, nil
-}
-
-// SetFeeProtocol broadcasts an already-signed setFeeProtocol transaction -- sender must be
-// contract's factory's owner, or the transaction reverts.
-func (pl *Pool) SetFeeProtocol(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: setFeeProtocol: %w", err)
-	}
-	hash, err := tx.Broadcast(ctx, pl.c, raw)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: setFeeProtocol: %w", err)
-	}
-	return hash, nil
-}
-
-// CreateCollectProtocol builds an unsigned collectProtocol(recipient, amount0Requested,
-// amount1Requested) transaction via b, sent by sender -- which must be contract's factory's
-// owner, or the transaction reverts.
-func (pl *Pool) CreateCollectProtocol(ctx context.Context, b tx.Builder, p *CollectProtocolParams) (core.Transaction, error) {
-	calldata, err := EncodeCollectProtocol(p.Recipient, p.Amount0Requested, p.Amount1Requested)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: createCollectProtocol: %w", err)
-	}
-
-	unsigned, err := b.Build(p.Sender, p.Pool, nil, calldata).Pack(ctx, pl.c)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: createCollectProtocol: %w", pl.wrapRevertError(err))
-	}
-	return unsigned, nil
-}
-
-// CallCollectProtocol simulates collectProtocol(recipient, amount0Requested, amount1Requested)
-// via eth_call, as sender, returning the protocol fee amounts it would collect -- without
-// broadcasting anything.
-func (pl *Pool) CallCollectProtocol(ctx context.Context, p *CollectProtocolParams, block string) (amount0, amount1 *big.Int, err error) {
-	calldata, err := EncodeCollectProtocol(p.Recipient, p.Amount0Requested, p.Amount1Requested)
+	calldata, err := EncodeCollectProtocol(req.Recipient, req.Amount0Requested, req.Amount1Requested)
 	if err != nil {
 		return nil, nil, fmt.Errorf("uniswapv3: callCollectProtocol: %w", err)
 	}
-	data, err := pl.call(ctx, p.Sender, p.Pool, calldata, block)
+
+	data, err := bind.Call(ctx, pl.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, nil, fmt.Errorf("uniswapv3: callCollectProtocol: %w", err)
+		return nil, nil, fmt.Errorf("uniswapv3: callCollectProtocol: %w", pl.wrapRevertError(err))
 	}
+
 	amount0, amount1, err = DecodeCollectProtocol(data)
 	if err != nil {
 		return nil, nil, fmt.Errorf("uniswapv3: callCollectProtocol: %w", err)
 	}
+
 	return amount0, amount1, nil
 }
 
-// CollectProtocol broadcasts an already-signed collectProtocol transaction -- sender must be
-// contract's factory's owner, or the transaction reverts.
-func (pl *Pool) CollectProtocol(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: collectProtocol: %w", err)
+// Initialize sets req.Contract's starting price; it can be called once, by anyone, signed by opts.Signer.
+func (pl *Pool) Initialize(ctx context.Context, opts *bind.TransactOptions, req *InitializeRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: initialize: %w", err)
 	}
-	hash, err := tx.Broadcast(ctx, pl.c, raw)
+
+	calldata, err := EncodeInitialize(req.SqrtPriceX96)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: collectProtocol: %w", err)
+		return nil, nil, fmt.Errorf("uniswapv3: initialize: %w", err)
 	}
-	return hash, nil
+
+	signed, hash, err := bind.Transact(ctx, pl.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv3: initialize: %w", pl.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
 }
 
-// call eth_calls contract with calldata (from msg.sender from, if non-nil), decoding a reverted
-// require(cond, reason) to its sentinel.
-func (pl *Pool) call(ctx context.Context, from, contract *types.Address, calldata []byte, block string) ([]byte, error) {
-	params := map[string]any{
-		"to":   contract.String(),
-		"data": encoding.Hex.EncodePrefixed(calldata),
-	}
-	if from != nil {
-		params["from"] = from.String()
+// Mint adds req.Amount liquidity for req.Recipient; the sender must pay through uniswapV3MintCallback, signed by opts.Signer.
+func (pl *Pool) Mint(ctx context.Context, opts *bind.TransactOptions, req *PoolMintRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: mint: %w", err)
 	}
 
-	var raw string
-	if err := pl.c.Call(ctx, rpc.ETHCall("call", params, block, &raw)); err != nil {
-		return nil, pl.wrapRevertError(err)
+	calldata, err := EncodeMint(req.Recipient, req.TickLower, req.TickUpper, req.Amount, req.CallbackData)
+	if err != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: mint: %w", err)
 	}
-	return encoding.Hex.Decode(raw)
+
+	signed, hash, err := bind.Transact(ctx, pl.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv3: mint: %w", pl.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
+}
+
+// Collect collects tokens owed to the sender's position, up to the requested amounts, signed by opts.Signer.
+func (pl *Pool) Collect(ctx context.Context, opts *bind.TransactOptions, req *PoolCollectRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: collect: %w", err)
+	}
+
+	calldata, err := EncodeCollect(req.Recipient, req.TickLower, req.TickUpper, req.Amount0Requested, req.Amount1Requested)
+	if err != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: collect: %w", err)
+	}
+
+	signed, hash, err := bind.Transact(ctx, pl.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv3: collect: %w", pl.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
+}
+
+// Burn removes req.Amount liquidity from the sender's position, crediting it as tokens owed, signed by opts.Signer.
+func (pl *Pool) Burn(ctx context.Context, opts *bind.TransactOptions, req *BurnRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: burn: %w", err)
+	}
+
+	calldata, err := EncodeBurn(req.TickLower, req.TickUpper, req.Amount)
+	if err != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: burn: %w", err)
+	}
+
+	signed, hash, err := bind.Transact(ctx, pl.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv3: burn: %w", pl.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
+}
+
+// Swap swaps on req.Contract; the sender must pay through uniswapV3SwapCallback, signed by opts.Signer.
+func (pl *Pool) Swap(ctx context.Context, opts *bind.TransactOptions, req *SwapRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: swap: %w", err)
+	}
+
+	calldata, err := EncodeSwap(req.Recipient, req.ZeroForOne, req.AmountSpecified, req.SqrtPriceLimitX96, req.CallbackData)
+	if err != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: swap: %w", err)
+	}
+
+	signed, hash, err := bind.Transact(ctx, pl.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv3: swap: %w", pl.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
+}
+
+// Flash lends tokens to req.Recipient; the sender must repay plus fee through uniswapV3FlashCallback, signed by opts.Signer.
+func (pl *Pool) Flash(ctx context.Context, opts *bind.TransactOptions, req *FlashRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: flash: %w", err)
+	}
+
+	calldata, err := EncodeFlash(req.Recipient, req.Amount0, req.Amount1, req.CallbackData)
+	if err != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: flash: %w", err)
+	}
+
+	signed, hash, err := bind.Transact(ctx, pl.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv3: flash: %w", pl.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
+}
+
+// IncreaseObservationCardinalityNext grows req.Contract's oracle buffer to at least req.ObservationCardinalityNext, signed by opts.Signer.
+func (pl *Pool) IncreaseObservationCardinalityNext(ctx context.Context, opts *bind.TransactOptions, req *IncreaseObservationCardinalityNextRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: increaseObservationCardinalityNext: %w", err)
+	}
+
+	calldata, err := EncodeIncreaseObservationCardinalityNext(req.ObservationCardinalityNext)
+	if err != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: increaseObservationCardinalityNext: %w", err)
+	}
+
+	signed, hash, err := bind.Transact(ctx, pl.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv3: increaseObservationCardinalityNext: %w", pl.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
+}
+
+// SetFeeProtocol sets req.Contract's protocol fee share; only the factory owner may call it, signed by opts.Signer.
+func (pl *Pool) SetFeeProtocol(ctx context.Context, opts *bind.TransactOptions, req *SetFeeProtocolRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: setFeeProtocol: %w", err)
+	}
+
+	calldata, err := EncodeSetFeeProtocol(req.FeeProtocol0, req.FeeProtocol1)
+	if err != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: setFeeProtocol: %w", err)
+	}
+
+	signed, hash, err := bind.Transact(ctx, pl.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv3: setFeeProtocol: %w", pl.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
+}
+
+// CollectProtocol collects req.Contract's protocol fees; only the factory owner may call it, signed by opts.Signer.
+func (pl *Pool) CollectProtocol(ctx context.Context, opts *bind.TransactOptions, req *CollectProtocolRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: collectProtocol: %w", err)
+	}
+
+	calldata, err := EncodeCollectProtocol(req.Recipient, req.Amount0Requested, req.Amount1Requested)
+	if err != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: collectProtocol: %w", err)
+	}
+
+	signed, hash, err := bind.Transact(ctx, pl.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv3: collectProtocol: %w", pl.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
 }
 
 // wrapRevertError maps a known UniswapV3Pool require(cond, reason) string in err to its
