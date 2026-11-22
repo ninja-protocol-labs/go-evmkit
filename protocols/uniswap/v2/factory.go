@@ -7,236 +7,232 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core"
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
-	"github.com/ninja-protocol-labs/go-evmkit/tx"
 	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
-// IFactory mirrors IUniswapV2Factory. No tx.Builder-taking Create* constructors here -- see
-// CreateCreatePair, CreateSetFeeTo, and CreateSetFeeToSetter.
+// IFactory mirrors IUniswapV2Factory.
 type IFactory interface {
-	FeeTo(ctx context.Context, contract *types.Address, block string) (*types.Address, error)
-	FeeToSetter(ctx context.Context, contract *types.Address, block string) (*types.Address, error)
-	GetPair(ctx context.Context, p *GetPairParams, block string) (*types.Address, error)
-	AllPairs(ctx context.Context, p *AllPairsParams, block string) (*types.Address, error)
-	AllPairsLength(ctx context.Context, contract *types.Address, block string) (*big.Int, error)
+	FeeTo(ctx context.Context, opts *bind.CallOptions, req *FeeToRequest) (*types.Address, error)
+	FeeToSetter(ctx context.Context, opts *bind.CallOptions, req *FeeToSetterRequest) (*types.Address, error)
+	GetPair(ctx context.Context, opts *bind.CallOptions, req *GetPairRequest) (*types.Address, error)
+	AllPairs(ctx context.Context, opts *bind.CallOptions, req *AllPairsRequest) (*types.Address, error)
+	AllPairsLength(ctx context.Context, opts *bind.CallOptions, req *AllPairsLengthRequest) (*big.Int, error)
+	CallCreatePair(ctx context.Context, opts *bind.CallOptions, req *CreatePairRequest) (*types.Address, error)
 
-	CreatePair(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	SetFeeTo(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	SetFeeToSetter(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
+	CreatePair(ctx context.Context, opts *bind.TransactOptions, req *CreatePairRequest) (core.Transaction, *types.Hash, error)
+	SetFeeTo(ctx context.Context, opts *bind.TransactOptions, req *SetFeeToRequest) (core.Transaction, *types.Hash, error)
+	SetFeeToSetter(ctx context.Context, opts *bind.TransactOptions, req *SetFeeToSetterRequest) (core.Transaction, *types.Hash, error)
 }
 
 var _ IFactory = (*Factory)(nil)
 
-// Factory calls any UniswapV2Factory contract over a Client; it holds no contract
-// address, so one instance serves every network's deployment.
+// Factory calls any UniswapV2Factory deployment over a Client.
 type Factory struct {
 	c rpc.Client
 }
 
-// NewFactory returns a Factory calling factories via c.
-func NewFactory(c rpc.Client) *Factory {
+// NewFactory returns a Factory calling factories via cli.
+func NewFactory(cli rpc.Client) *Factory {
 	return &Factory{
-		c: c,
+		c: cli,
 	}
 }
 
-// FeeTo returns contract's current protocol fee recipient (zero address if the fee switch is off).
-func (f *Factory) FeeTo(ctx context.Context, factory *types.Address, block string) (*types.Address, error) {
-	data, err := f.call(ctx, nil, factory, EncodeFeeTo(), block)
+// FeeTo returns req.Contract's protocol fee recipient (zero when the fee switch is off).
+func (f *Factory) FeeTo(ctx context.Context, opts *bind.CallOptions, req *FeeToRequest) (*types.Address, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv2: feeTo: %w", err)
+	}
+
+	calldata := EncodeFeeTo()
+
+	data, err := bind.Call(ctx, f.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv2: feeTo: %w", f.wrapRevertError(err))
+	}
+
+	out, err := DecodeFeeTo(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: feeTo: %w", err)
 	}
-	addr, err := DecodeFeeTo(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: feeTo: %w", err)
-	}
-	return addr, nil
+
+	return out, nil
 }
 
-// FeeToSetter returns contract's current governance address, the only account allowed to call
-// SetFeeTo/SetFeeToSetter.
-func (f *Factory) FeeToSetter(ctx context.Context, factory *types.Address, block string) (*types.Address, error) {
-	data, err := f.call(ctx, nil, factory, EncodeFeeToSetter(), block)
+// FeeToSetter returns req.Contract's governance address, the only account allowed to call SetFeeTo/SetFeeToSetter.
+func (f *Factory) FeeToSetter(ctx context.Context, opts *bind.CallOptions, req *FeeToSetterRequest) (*types.Address, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv2: feeToSetter: %w", err)
+	}
+
+	calldata := EncodeFeeToSetter()
+
+	data, err := bind.Call(ctx, f.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv2: feeToSetter: %w", f.wrapRevertError(err))
+	}
+
+	out, err := DecodeFeeToSetter(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: feeToSetter: %w", err)
 	}
-	addr, err := DecodeFeeToSetter(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: feeToSetter: %w", err)
-	}
-	return addr, nil
+
+	return out, nil
 }
 
-// GetPair returns the pair deployed for (tokenA, tokenB), or the zero address if none exists yet.
-func (f *Factory) GetPair(ctx context.Context, p *GetPairParams, block string) (*types.Address, error) {
-	calldata, err := EncodeGetPair(p.TokenA, p.TokenB)
+// GetPair returns the pair for (req.TokenA, req.TokenB), or the zero address if none exists yet.
+func (f *Factory) GetPair(ctx context.Context, opts *bind.CallOptions, req *GetPairRequest) (*types.Address, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv2: getPair: %w", err)
+	}
+
+	calldata, err := EncodeGetPair(req.TokenA, req.TokenB)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: getPair: %w", err)
 	}
-	data, err := f.call(ctx, nil, p.Factory, calldata, block)
+
+	data, err := bind.Call(ctx, f.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv2: getPair: %w", f.wrapRevertError(err))
+	}
+
+	out, err := DecodeGetPair(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: getPair: %w", err)
 	}
-	addr, err := DecodeGetPair(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: getPair: %w", err)
-	}
-	return addr, nil
+
+	return out, nil
 }
 
-// AllPairs returns the pair at index in contract's allPairs array.
-func (f *Factory) AllPairs(ctx context.Context, p *AllPairsParams, block string) (*types.Address, error) {
-	calldata, err := EncodeAllPairs(p.Index)
+// AllPairs returns the pair at req.Index in req.Contract's allPairs array.
+func (f *Factory) AllPairs(ctx context.Context, opts *bind.CallOptions, req *AllPairsRequest) (*types.Address, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv2: allPairs: %w", err)
+	}
+
+	calldata, err := EncodeAllPairs(req.Index)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: allPairs: %w", err)
 	}
-	data, err := f.call(ctx, nil, p.Factory, calldata, block)
+
+	data, err := bind.Call(ctx, f.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv2: allPairs: %w", f.wrapRevertError(err))
+	}
+
+	out, err := DecodeAllPairs(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: allPairs: %w", err)
 	}
-	addr, err := DecodeAllPairs(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: allPairs: %w", err)
-	}
-	return addr, nil
+
+	return out, nil
 }
 
-// AllPairsLength returns how many pairs contract has ever created.
-func (f *Factory) AllPairsLength(ctx context.Context, factory *types.Address, block string) (*big.Int, error) {
-	data, err := f.call(ctx, nil, factory, EncodeAllPairsLength(), block)
+// AllPairsLength returns how many pairs req.Contract has created.
+func (f *Factory) AllPairsLength(ctx context.Context, opts *bind.CallOptions, req *AllPairsLengthRequest) (*big.Int, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv2: allPairsLength: %w", err)
+	}
+
+	calldata := EncodeAllPairsLength()
+
+	data, err := bind.Call(ctx, f.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv2: allPairsLength: %w", f.wrapRevertError(err))
+	}
+
+	out, err := DecodeAllPairsLength(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: allPairsLength: %w", err)
 	}
-	n, err := DecodeAllPairsLength(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: allPairsLength: %w", err)
-	}
-	return n, nil
+
+	return out, nil
 }
 
-// CreateCreatePair builds an unsigned createPair(tokenA, tokenB) transaction via b, sent by sender.
-func (f *Factory) CreateCreatePair(ctx context.Context, b tx.Builder, p *CreatePairParams) (core.Transaction, error) {
-	calldata, err := EncodeCreatePair(p.TokenA, p.TokenB)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: createCreatePair: %w", err)
+// CallCreatePair runs createPair(tokenA, tokenB) via eth_call as opts.From, returning the pair it would create or the revert.
+func (f *Factory) CallCreatePair(ctx context.Context, opts *bind.CallOptions, req *CreatePairRequest) (*types.Address, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv2: callCreatePair: %w", err)
 	}
 
-	unsigned, err := b.Build(p.Sender, p.Factory, nil, calldata).Pack(ctx, f.c)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: createCreatePair: %w", f.wrapRevertError(err))
-	}
-	return unsigned, nil
-}
-
-// CallCreatePair simulates createPair(tokenA, tokenB) via eth_call, as sender, returning the
-// pair address it would create -- without broadcasting anything.
-func (f *Factory) CallCreatePair(ctx context.Context, p *CreatePairParams, block string) (*types.Address, error) {
-	calldata, err := EncodeCreatePair(p.TokenA, p.TokenB)
+	calldata, err := EncodeCreatePair(req.TokenA, req.TokenB)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: callCreatePair: %w", err)
 	}
-	data, err := f.call(ctx, p.Sender, p.Factory, calldata, block)
+
+	data, err := bind.Call(ctx, f.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv2: callCreatePair: %w", f.wrapRevertError(err))
+	}
+
+	out, err := DecodeCreatePair(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: callCreatePair: %w", err)
 	}
-	addr, err := DecodeCreatePair(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: callCreatePair: %w", err)
-	}
-	return addr, nil
+
+	return out, nil
 }
 
-// CreatePair broadcasts an already-signed createPair transaction. The new pair's address comes
-// back via the PairCreated event (ExtractPairCreated), not a return value -- a mined
-// transaction's return value isn't retrievable.
-func (f *Factory) CreatePair(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: createPair: %w", err)
+// CreatePair sends createPair(tokenA, tokenB) on req.Contract, signed by opts.Signer; the new pair comes back via ExtractPairCreated.
+func (f *Factory) CreatePair(ctx context.Context, opts *bind.TransactOptions, req *CreatePairRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv2: createPair: %w", err)
 	}
-	hash, err := tx.Broadcast(ctx, f.c, raw)
+
+	calldata, err := EncodeCreatePair(req.TokenA, req.TokenB)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: createPair: %w", err)
+		return nil, nil, fmt.Errorf("uniswapv2: createPair: %w", err)
 	}
-	return hash, nil
+
+	signed, hash, err := bind.Transact(ctx, f.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv2: createPair: %w", f.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
 }
 
-// CreateSetFeeTo builds an unsigned setFeeTo(feeTo) transaction via b, sent by sender -- which
-// must be contract's current feeToSetter, or the transaction reverts with ErrForbidden.
-func (f *Factory) CreateSetFeeTo(ctx context.Context, b tx.Builder, p *SetFeeToParams) (core.Transaction, error) {
-	calldata, err := EncodeSetFeeTo(p.FeeTo)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: createSetFeeTo: %w", err)
+// SetFeeTo sends setFeeTo(feeTo) on req.Contract, signed by opts.Signer, which must be the feeToSetter or it reverts with ErrForbidden.
+func (f *Factory) SetFeeTo(ctx context.Context, opts *bind.TransactOptions, req *SetFeeToRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv2: setFeeTo: %w", err)
 	}
 
-	unsigned, err := b.Build(p.Sender, p.Factory, nil, calldata).Pack(ctx, f.c)
+	calldata, err := EncodeSetFeeTo(req.FeeTo)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: createSetFeeTo: %w", f.wrapRevertError(err))
+		return nil, nil, fmt.Errorf("uniswapv2: setFeeTo: %w", err)
 	}
-	return unsigned, nil
+
+	signed, hash, err := bind.Transact(ctx, f.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv2: setFeeTo: %w", f.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
 }
 
-// SetFeeTo broadcasts an already-signed setFeeTo transaction.
-func (f *Factory) SetFeeTo(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: setFeeTo: %w", err)
-	}
-	hash, err := tx.Broadcast(ctx, f.c, raw)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: setFeeTo: %w", err)
-	}
-	return hash, nil
-}
-
-// CreateSetFeeToSetter builds an unsigned setFeeToSetter(feeToSetter) transaction via b, sent by
-// sender -- which must be contract's current feeToSetter, or the transaction reverts with
-// ErrForbidden.
-func (f *Factory) CreateSetFeeToSetter(ctx context.Context, b tx.Builder, p *SetFeeToSetterParams) (core.Transaction, error) {
-	calldata, err := EncodeSetFeeToSetter(p.FeeToSetter)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: createSetFeeToSetter: %w", err)
+// SetFeeToSetter sends setFeeToSetter(feeToSetter) on req.Contract, signed by opts.Signer, which must be the feeToSetter or it reverts with ErrForbidden.
+func (f *Factory) SetFeeToSetter(ctx context.Context, opts *bind.TransactOptions, req *SetFeeToSetterRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv2: setFeeToSetter: %w", err)
 	}
 
-	unsigned, err := b.Build(p.Sender, p.Factory, nil, calldata).Pack(ctx, f.c)
+	calldata, err := EncodeSetFeeToSetter(req.FeeToSetter)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: createSetFeeToSetter: %w", f.wrapRevertError(err))
-	}
-	return unsigned, nil
-}
-
-// SetFeeToSetter broadcasts an already-signed setFeeToSetter transaction.
-func (f *Factory) SetFeeToSetter(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: setFeeToSetter: %w", err)
-	}
-	hash, err := tx.Broadcast(ctx, f.c, raw)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: setFeeToSetter: %w", err)
-	}
-	return hash, nil
-}
-
-// call eth_calls contract with calldata, decoding a reverted require(cond, reason) to its sentinel.
-func (f *Factory) call(ctx context.Context, from, factory *types.Address, calldata []byte, block string) ([]byte, error) {
-	params := map[string]any{
-		"to":   factory.String(),
-		"data": encoding.Hex.EncodePrefixed(calldata),
-	}
-	if from != nil {
-		params["from"] = from.String()
+		return nil, nil, fmt.Errorf("uniswapv2: setFeeToSetter: %w", err)
 	}
 
-	var raw string
-	if err := f.c.Call(ctx, rpc.ETHCall("call", params, block, &raw)); err != nil {
-		return nil, f.wrapRevertError(err)
+	signed, hash, err := bind.Transact(ctx, f.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv2: setFeeToSetter: %w", f.wrapRevertError(err))
 	}
-	return encoding.Hex.Decode(raw)
+
+	return signed, hash, nil
 }
 
 // wrapRevertError maps a known UniswapV2Factory require(cond, reason) string in err to its sentinel.

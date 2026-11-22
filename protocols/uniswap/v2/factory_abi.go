@@ -40,11 +40,11 @@ const (
 
 // ErrIdenticalAddresses, etc. mirror UniswapV2Factory's revert reasons, for errors.Is.
 var (
-	ErrIdenticalAddresses = errors.New("uniswapv2: identical addresses")
-	ErrZeroAddress        = errors.New("uniswapv2: zero address")
-	ErrPairExists         = errors.New("uniswapv2: pair exists")
-	ErrForbidden          = errors.New("uniswapv2: forbidden")
-	ErrUnknown            = errors.New("uniswapv2: unknown revert")
+	ErrIdenticalAddresses = errors.New("identical addresses")
+	ErrZeroAddress        = errors.New("zero address")
+	ErrPairExists         = errors.New("pair exists")
+	ErrForbidden          = errors.New("forbidden")
+	ErrUnknown            = errors.New("unknown revert")
 )
 
 // EncodeFeeTo returns the calldata for feeTo().

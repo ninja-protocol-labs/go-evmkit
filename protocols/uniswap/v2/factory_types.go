@@ -1,100 +1,252 @@
 package v2
 
 import (
+	"fmt"
 	"math/big"
 
+	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 )
 
-// GetPairParams is GetPair's argument list.
-type GetPairParams struct {
-	Factory *types.Address
-	TokenA  *types.Address
-	TokenB  *types.Address
+// FeeToRequest is feeTo()'s input on Contract.
+type FeeToRequest struct {
+	Contract *types.Address
 }
 
-func NewGetPairParams(factory, tokenA, tokenB *types.Address) *GetPairParams {
-	return &GetPairParams{
-		Factory: factory,
-		TokenA:  tokenA,
-		TokenB:  tokenB,
+func NewFeeToRequest(contract *types.Address) *FeeToRequest {
+	return &FeeToRequest{
+		Contract: contract,
 	}
 }
 
-// AllPairsParams is AllPairs's argument list.
-type AllPairsParams struct {
-	Factory *types.Address
-	Index   *big.Int
+func (r *FeeToRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
 }
 
-func NewAllPairsParams(factory *types.Address, index *big.Int) *AllPairsParams {
-	return &AllPairsParams{
-		Factory: factory,
-		Index:   index,
+// FeeToSetterRequest is feeToSetter()'s input on Contract.
+type FeeToSetterRequest struct {
+	Contract *types.Address
+}
+
+func NewFeeToSetterRequest(contract *types.Address) *FeeToSetterRequest {
+	return &FeeToSetterRequest{
+		Contract: contract,
 	}
 }
 
-// CreatePairParams is CreateCreatePair's and CallCreatePair's argument list.
-type CreatePairParams struct {
-	Factory *types.Address
-	Sender  *types.Address
-	TokenA  *types.Address
-	TokenB  *types.Address
+func (r *FeeToSetterRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
 }
 
-func NewCreatePairParams(factory, sender, tokenA, tokenB *types.Address) *CreatePairParams {
-	return &CreatePairParams{
-		Factory: factory,
-		Sender:  sender,
-		TokenA:  tokenA,
-		TokenB:  tokenB,
+// GetPairRequest is getPair(tokenA, tokenB)'s input on Contract.
+type GetPairRequest struct {
+	Contract *types.Address
+	TokenA   *types.Address
+	TokenB   *types.Address
+}
+
+func NewGetPairRequest(contract *types.Address, tokenA *types.Address, tokenB *types.Address) *GetPairRequest {
+	return &GetPairRequest{
+		Contract: contract,
+		TokenA:   tokenA,
+		TokenB:   tokenB,
 	}
 }
 
-// SetFeeToParams is CreateSetFeeTo's argument list.
-type SetFeeToParams struct {
-	Factory *types.Address
-	Sender  *types.Address
-	FeeTo   *types.Address
+func (r *GetPairRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.TokenA == nil {
+		return fmt.Errorf("%w: tokenA is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.TokenB == nil {
+		return fmt.Errorf("%w: tokenB is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
 }
 
-func NewSetFeeToParams(factory, sender, feeTo *types.Address) *SetFeeToParams {
-	return &SetFeeToParams{
-		Factory: factory,
-		Sender:  sender,
-		FeeTo:   feeTo,
+// AllPairsRequest is allPairs(index)'s input on Contract.
+type AllPairsRequest struct {
+	Contract *types.Address
+	Index    *big.Int
+}
+
+func NewAllPairsRequest(contract *types.Address, index *big.Int) *AllPairsRequest {
+	return &AllPairsRequest{
+		Contract: contract,
+		Index:    index,
 	}
 }
 
-// SetFeeToSetterParams is CreateSetFeeToSetter's argument list.
-type SetFeeToSetterParams struct {
-	Factory     *types.Address
-	Sender      *types.Address
+func (r *AllPairsRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Index == nil {
+		return fmt.Errorf("%w: index is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// AllPairsLengthRequest is allPairsLength()'s input on Contract.
+type AllPairsLengthRequest struct {
+	Contract *types.Address
+}
+
+func NewAllPairsLengthRequest(contract *types.Address) *AllPairsLengthRequest {
+	return &AllPairsLengthRequest{
+		Contract: contract,
+	}
+}
+
+func (r *AllPairsLengthRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// CreatePairRequest is createPair(tokenA, tokenB)'s input on Contract.
+type CreatePairRequest struct {
+	Contract *types.Address
+	TokenA   *types.Address
+	TokenB   *types.Address
+}
+
+func NewCreatePairRequest(contract *types.Address, tokenA *types.Address, tokenB *types.Address) *CreatePairRequest {
+	return &CreatePairRequest{
+		Contract: contract,
+		TokenA:   tokenA,
+		TokenB:   tokenB,
+	}
+}
+
+func (r *CreatePairRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.TokenA == nil {
+		return fmt.Errorf("%w: tokenA is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.TokenB == nil {
+		return fmt.Errorf("%w: tokenB is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// SetFeeToRequest is setFeeTo(feeTo)'s input on Contract.
+type SetFeeToRequest struct {
+	Contract *types.Address
+	FeeTo    *types.Address
+}
+
+func NewSetFeeToRequest(contract *types.Address, feeTo *types.Address) *SetFeeToRequest {
+	return &SetFeeToRequest{
+		Contract: contract,
+		FeeTo:    feeTo,
+	}
+}
+
+func (r *SetFeeToRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.FeeTo == nil {
+		return fmt.Errorf("%w: feeTo is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// SetFeeToSetterRequest is setFeeToSetter(feeToSetter)'s input on Contract.
+type SetFeeToSetterRequest struct {
+	Contract    *types.Address
 	FeeToSetter *types.Address
 }
 
-func NewSetFeeToSetterParams(factory, sender, feeToSetter *types.Address) *SetFeeToSetterParams {
-	return &SetFeeToSetterParams{
-		Factory:     factory,
-		Sender:      sender,
+func NewSetFeeToSetterRequest(contract *types.Address, feeToSetter *types.Address) *SetFeeToSetterRequest {
+	return &SetFeeToSetterRequest{
+		Contract:    contract,
 		FeeToSetter: feeToSetter,
 	}
 }
 
-// PairCreated mirrors IUniswapV2Factory's PairCreated event: a new Pair was deployed for
-// (Token0, Token1) via createPair, now reachable at Pair; AllPairsLength is allPairs.length
-// right after the push, i.e. this pair's 1-indexed position.
-type PairCreated struct {
-	Factory        *types.Address
+func (r *SetFeeToSetterRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.FeeToSetter == nil {
+		return fmt.Errorf("%w: feeToSetter is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// PairCreatedEvent mirrors IUniswapV2Factory's PairCreated event; AllPairsLength is allPairs.length
+// right after the push, i.e. the pair's 1-indexed position.
+type PairCreatedEvent struct {
+	Contract       *types.Address
 	Token0         *types.Address
 	Token1         *types.Address
 	Pair           *types.Address
 	AllPairsLength *big.Int
 }
 
-func NewPairCreated(factory, token0, token1, pair *types.Address, allPairsLength *big.Int) *PairCreated {
-	return &PairCreated{
-		Factory:        factory,
+func NewPairCreatedEvent(contract, token0, token1, pair *types.Address, allPairsLength *big.Int) *PairCreatedEvent {
+	return &PairCreatedEvent{
+		Contract:       contract,
 		Token0:         token0,
 		Token1:         token1,
 		Pair:           pair,
