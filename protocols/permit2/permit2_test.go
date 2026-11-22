@@ -74,7 +74,7 @@ type Permit2Suite struct {
 
 func TestPermit2Suite(t *testing.T) {
 	c := testenv.MustLoad(t, testenv.Testnet, testenv.UnknownNetwork)
-	if c.Permit2 == "" {
+	if c.Addresses.Standard.Permit2 == "" {
 		t.Skip("testenv: no Permit2 configured for this network")
 	}
 
@@ -82,15 +82,15 @@ func TestPermit2Suite(t *testing.T) {
 		RPCURL:               c.RPCURL,
 		PrivateKeyHex:        c.ActorPrivateKeyHex,
 		SpenderPrivateKeyHex: "",
-		Permit2Hex:           c.Permit2,
-		MulticallHex:         c.Multicall,
-		NicksFactoryHex:      c.NicksFactory,
-		ChainID:              c.ChainID,
-		NativeSymbol:         c.NativeSymbol,
-		NativeDecimals:       c.NativeDecimals,
+		Permit2Hex:           c.Addresses.Standard.Permit2,
+		MulticallHex:         c.Addresses.Standard.Multicall,
+		NicksFactoryHex:      c.Addresses.Standard.NicksFactory,
+		ChainID:              c.Constant.ChainID,
+		NativeSymbol:         c.Constant.NativeSymbol,
+		NativeDecimals:       c.Constant.NativeDecimals,
 		Timeout:              10 * time.Minute,
-		ReceiptPollInterval:  c.ReceiptPollInterval,
-		ReceiptTimeout:       c.ReceiptTimeout,
+		ReceiptPollInterval:  c.Constant.ReceiptPollInterval,
+		ReceiptTimeout:       c.Constant.ReceiptTimeout,
 		ByteCode:             testenv.ERC20ByteCodeHex,
 		Constructor:          abi.NewFunction("constructor", abi.NewTypes(abi.String, abi.String, abi.Uint8), nil),
 		Args:                 []any{"evmkit permit2 test ERC20", "EVKP2", uint8(18)},

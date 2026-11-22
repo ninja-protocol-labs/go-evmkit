@@ -54,20 +54,20 @@ type WETHSuite struct {
 
 func TestWETHSuite(t *testing.T) {
 	c := testenv.MustLoad(t, testenv.Testnet, testenv.UnknownNetwork)
-	if c.WETH == "" {
+	if c.Addresses.Standard.WETH == "" {
 		t.Skip("testenv: no WETH configured for this network")
 	}
 
 	suite.Run(t, &WETHSuite{
 		RPCURL:               c.RPCURL,
 		PrivateKeyHex:        c.ActorPrivateKeyHex,
-		MulticallHex:         c.Multicall,
-		WETHHex:              c.WETH,
-		NativeSymbol:         c.NativeSymbol,
-		NativeDecimals:       c.NativeDecimals,
+		MulticallHex:         c.Addresses.Standard.Multicall,
+		WETHHex:              c.Addresses.Standard.WETH,
+		NativeSymbol:         c.Constant.NativeSymbol,
+		NativeDecimals:       c.Constant.NativeDecimals,
 		Timeout:              10 * time.Minute,
-		ReceiptPollInterval:  c.ReceiptPollInterval,
-		ReceiptTimeout:       c.ReceiptTimeout,
+		ReceiptPollInterval:  c.Constant.ReceiptPollInterval,
+		ReceiptTimeout:       c.Constant.ReceiptTimeout,
 		SpenderPrivateKeyHex: "",
 		Amount:               big.NewInt(1_000_000_000_000),
 	})
