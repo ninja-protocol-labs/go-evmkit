@@ -17,20 +17,6 @@ var (
 	cryptopunks = types.MustNewAddressFromHex("0xb47e3cd837ddf8e4c57f05d70ab865de6e193bbb")
 )
 
-func encodeResultsData(t *testing.T, successes []bool, datas [][]byte) []byte {
-	t.Helper()
-	require.Len(t, datas, len(successes))
-
-	resultT := abi.Tuple(abi.Bool, abi.Bytes)
-	elems := make([]any, len(successes))
-	for i := range successes {
-		elems[i] = []any{successes[i], datas[i]}
-	}
-	data, err := abi.Pack(abi.Types{abi.Slice(resultT)}, elems)
-	require.NoError(t, err)
-	return data
-}
-
 func TestEncodeNoArgFunctions(t *testing.T) {
 	require.Equal(t, []byte{0x06, 0xfd, 0xde, 0x03}, EncodeName())
 	require.Equal(t, []byte{0x95, 0xd8, 0x9b, 0x41}, EncodeSymbol())
@@ -357,10 +343,11 @@ func TestDecodeMetadataAllSuccess(t *testing.T) {
 	nameData, _ := abi.Pack(abi.Types{abi.String}, "Bored Ape Yacht Club")
 	symbolData, _ := abi.Pack(abi.Types{abi.String}, "BAYC")
 
-	data := encodeResultsData(t,
-		[]bool{true, true},
-		[][]byte{nameData, symbolData},
-	)
+	data, err := abi.Pack(abi.Types{abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))}, []any{
+		[]any{true, nameData},
+		[]any{true, symbolData},
+	})
+	require.NoError(t, err)
 
 	m, err := DecodeMetadata(data)
 	require.NoError(t, err)
@@ -371,10 +358,11 @@ func TestDecodeMetadataAllSuccess(t *testing.T) {
 func TestDecodeMetadataPartialFailure(t *testing.T) {
 	nameData, _ := abi.Pack(abi.Types{abi.String}, "Bored Ape Yacht Club")
 
-	data := encodeResultsData(t,
-		[]bool{true, false},
-		[][]byte{nameData, nil},
-	)
+	data, err := abi.Pack(abi.Types{abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))}, []any{
+		[]any{true, nameData},
+		[]any{false, []byte{}},
+	})
+	require.NoError(t, err)
 
 	m, err := DecodeMetadata(data)
 	require.NoError(t, err)
@@ -383,8 +371,11 @@ func TestDecodeMetadataPartialFailure(t *testing.T) {
 }
 
 func TestDecodeMetadataRejectsWrongResultCount(t *testing.T) {
-	data := encodeResultsData(t, []bool{true}, [][]byte{{}})
-	_, err := DecodeMetadata(data)
+	data, err := abi.Pack(abi.Types{abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))}, []any{
+		[]any{true, []byte{}},
+	})
+	require.NoError(t, err)
+	_, err = DecodeMetadata(data)
 	require.Error(t, err)
 }
 
@@ -406,10 +397,13 @@ func TestDecodeMetadataWithTokenID(t *testing.T) {
 	uriData, _ := abi.Pack(abi.Types{abi.String}, "ipfs://1234")
 	ownerData, _ := abi.Pack(abi.Types{abi.Address}, testAddr1)
 
-	data := encodeResultsData(t,
-		[]bool{true, true, true, true},
-		[][]byte{nameData, symbolData, uriData, ownerData},
-	)
+	data, err := abi.Pack(abi.Types{abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))}, []any{
+		[]any{true, nameData},
+		[]any{true, symbolData},
+		[]any{true, uriData},
+		[]any{true, ownerData},
+	})
+	require.NoError(t, err)
 
 	tokenId := big.NewInt(1234)
 	mt, err := DecodeMetadataWithTokenID(tokenId, data)
@@ -426,10 +420,13 @@ func TestDecodeMetadataWithTokenIDFailedOwner(t *testing.T) {
 	symbolData, _ := abi.Pack(abi.Types{abi.String}, "BAYC")
 	uriData, _ := abi.Pack(abi.Types{abi.String}, "ipfs://1234")
 
-	data := encodeResultsData(t,
-		[]bool{true, true, true, false},
-		[][]byte{nameData, symbolData, uriData, nil},
-	)
+	data, err := abi.Pack(abi.Types{abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))}, []any{
+		[]any{true, nameData},
+		[]any{true, symbolData},
+		[]any{true, uriData},
+		[]any{false, []byte{}},
+	})
+	require.NoError(t, err)
 
 	mt, err := DecodeMetadataWithTokenID(big.NewInt(1234), data)
 	require.NoError(t, err)
@@ -437,8 +434,11 @@ func TestDecodeMetadataWithTokenIDFailedOwner(t *testing.T) {
 }
 
 func TestDecodeMetadataWithTokenIDRejectsWrongResultCount(t *testing.T) {
-	data := encodeResultsData(t, []bool{true}, [][]byte{{}})
-	_, err := DecodeMetadataWithTokenID(big.NewInt(1234), data)
+	data, err := abi.Pack(abi.Types{abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))}, []any{
+		[]any{true, []byte{}},
+	})
+	require.NoError(t, err)
+	_, err = DecodeMetadataWithTokenID(big.NewInt(1234), data)
 	require.Error(t, err)
 }
 
@@ -466,10 +466,11 @@ func TestDecodeAllowanceWithTokenID(t *testing.T) {
 	ownerData, _ := abi.Pack(abi.Types{abi.Address}, testAddr1)
 	approvedData, _ := abi.Pack(abi.Types{abi.Address}, testAddr2)
 
-	data := encodeResultsData(t,
-		[]bool{true, true},
-		[][]byte{ownerData, approvedData},
-	)
+	data, err := abi.Pack(abi.Types{abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))}, []any{
+		[]any{true, ownerData},
+		[]any{true, approvedData},
+	})
+	require.NoError(t, err)
 
 	tokenId := big.NewInt(1234)
 	awt, err := DecodeAllowanceWithTokenID(tokenId, data)
@@ -482,10 +483,11 @@ func TestDecodeAllowanceWithTokenID(t *testing.T) {
 func TestDecodeAllowanceWithTokenIDFailedOperator(t *testing.T) {
 	ownerData, _ := abi.Pack(abi.Types{abi.Address}, testAddr1)
 
-	data := encodeResultsData(t,
-		[]bool{true, false},
-		[][]byte{ownerData, nil},
-	)
+	data, err := abi.Pack(abi.Types{abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))}, []any{
+		[]any{true, ownerData},
+		[]any{false, []byte{}},
+	})
+	require.NoError(t, err)
 
 	awt, err := DecodeAllowanceWithTokenID(big.NewInt(1234), data)
 	require.NoError(t, err)
@@ -494,8 +496,11 @@ func TestDecodeAllowanceWithTokenIDFailedOperator(t *testing.T) {
 }
 
 func TestDecodeAllowanceWithTokenIDRejectsWrongResultCount(t *testing.T) {
-	data := encodeResultsData(t, []bool{true}, [][]byte{{}})
-	_, err := DecodeAllowanceWithTokenID(big.NewInt(1234), data)
+	data, err := abi.Pack(abi.Types{abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))}, []any{
+		[]any{true, []byte{}},
+	})
+	require.NoError(t, err)
+	_, err = DecodeAllowanceWithTokenID(big.NewInt(1234), data)
 	require.Error(t, err)
 }
 
@@ -522,10 +527,12 @@ func TestDecodeApprovalForAllWithBalance(t *testing.T) {
 	ownerBalData, _ := abi.Pack(abi.Types{abi.Uint256}, big.NewInt(3))
 	operatorBalData, _ := abi.Pack(abi.Types{abi.Uint256}, big.NewInt(5))
 
-	data := encodeResultsData(t,
-		[]bool{true, true, true},
-		[][]byte{approvedData, ownerBalData, operatorBalData},
-	)
+	data, err := abi.Pack(abi.Types{abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))}, []any{
+		[]any{true, approvedData},
+		[]any{true, ownerBalData},
+		[]any{true, operatorBalData},
+	})
+	require.NoError(t, err)
 
 	afawb, err := DecodeApprovalForAllWithBalance(testAddr1, testAddr2, data)
 	require.NoError(t, err)
@@ -537,8 +544,12 @@ func TestDecodeApprovalForAllWithBalance(t *testing.T) {
 }
 
 func TestDecodeApprovalForAllWithBalanceRejectsWrongResultCount(t *testing.T) {
-	data := encodeResultsData(t, []bool{true, true}, [][]byte{{}, {}})
-	_, err := DecodeApprovalForAllWithBalance(testAddr1, testAddr2, data)
+	data, err := abi.Pack(abi.Types{abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))}, []any{
+		[]any{true, []byte{}},
+		[]any{true, []byte{}},
+	})
+	require.NoError(t, err)
+	_, err = DecodeApprovalForAllWithBalance(testAddr1, testAddr2, data)
 	require.Error(t, err)
 }
 
@@ -567,7 +578,11 @@ func TestDecodeTokenOwners(t *testing.T) {
 	owner1, _ := abi.Pack(abi.Types{abi.Address}, testAddr1)
 	owner2, _ := abi.Pack(abi.Types{abi.Address}, testAddr2)
 
-	data := encodeResultsData(t, []bool{true, false}, [][]byte{owner1, owner2})
+	data, err := abi.Pack(abi.Types{abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))}, []any{
+		[]any{true, owner1},
+		[]any{false, owner2},
+	})
+	require.NoError(t, err)
 
 	tos, err := DecodeTokenOwners(bayc, tokenIds, data)
 	require.NoError(t, err)
@@ -580,8 +595,11 @@ func TestDecodeTokenOwners(t *testing.T) {
 }
 
 func TestDecodeTokenOwnersRejectsLengthMismatch(t *testing.T) {
-	data := encodeResultsData(t, []bool{true}, [][]byte{{}})
-	_, err := DecodeTokenOwners(bayc, []*big.Int{big.NewInt(1), big.NewInt(2)}, data)
+	data, err := abi.Pack(abi.Types{abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))}, []any{
+		[]any{true, []byte{}},
+	})
+	require.NoError(t, err)
+	_, err = DecodeTokenOwners(bayc, []*big.Int{big.NewInt(1), big.NewInt(2)}, data)
 	require.Error(t, err)
 }
 
@@ -608,7 +626,11 @@ func TestDecodeTokenOperators(t *testing.T) {
 	op1, _ := abi.Pack(abi.Types{abi.Address}, testAddr1)
 	op2, _ := abi.Pack(abi.Types{abi.Address}, testAddr2)
 
-	data := encodeResultsData(t, []bool{true, false}, [][]byte{op1, op2})
+	data, err := abi.Pack(abi.Types{abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))}, []any{
+		[]any{true, op1},
+		[]any{false, op2},
+	})
+	require.NoError(t, err)
 
 	tops, err := DecodeTokenOperators(bayc, tokenIds, data)
 	require.NoError(t, err)
@@ -621,8 +643,11 @@ func TestDecodeTokenOperators(t *testing.T) {
 }
 
 func TestDecodeTokenOperatorsRejectsLengthMismatch(t *testing.T) {
-	data := encodeResultsData(t, []bool{true}, [][]byte{{}})
-	_, err := DecodeTokenOperators(bayc, []*big.Int{big.NewInt(1), big.NewInt(2)}, data)
+	data, err := abi.Pack(abi.Types{abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))}, []any{
+		[]any{true, []byte{}},
+	})
+	require.NoError(t, err)
+	_, err = DecodeTokenOperators(bayc, []*big.Int{big.NewInt(1), big.NewInt(2)}, data)
 	require.Error(t, err)
 }
 
@@ -649,7 +674,11 @@ func TestDecodeAddressBalances(t *testing.T) {
 	bal1, _ := abi.Pack(abi.Types{abi.Uint256}, big.NewInt(3))
 	bal2, _ := abi.Pack(abi.Types{abi.Uint256}, big.NewInt(4))
 
-	data := encodeResultsData(t, []bool{true, true}, [][]byte{bal1, bal2})
+	data, err := abi.Pack(abi.Types{abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))}, []any{
+		[]any{true, bal1},
+		[]any{true, bal2},
+	})
+	require.NoError(t, err)
 
 	ab, err := DecodeAddressBalances(testAddr1, contracts, data)
 	require.NoError(t, err)
@@ -662,8 +691,11 @@ func TestDecodeAddressBalances(t *testing.T) {
 }
 
 func TestDecodeAddressBalancesRejectsLengthMismatch(t *testing.T) {
-	data := encodeResultsData(t, []bool{true}, [][]byte{{}})
-	_, err := DecodeAddressBalances(testAddr1, []*types.Address{bayc, cryptopunks}, data)
+	data, err := abi.Pack(abi.Types{abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))}, []any{
+		[]any{true, []byte{}},
+	})
+	require.NoError(t, err)
+	_, err = DecodeAddressBalances(testAddr1, []*types.Address{bayc, cryptopunks}, data)
 	require.Error(t, err)
 }
 
@@ -688,7 +720,11 @@ func TestDecodeTokenBalances(t *testing.T) {
 	bal1, _ := abi.Pack(abi.Types{abi.Uint256}, big.NewInt(1))
 	bal2, _ := abi.Pack(abi.Types{abi.Uint256}, big.NewInt(2))
 
-	data := encodeResultsData(t, []bool{true, false}, [][]byte{bal1, bal2})
+	data, err := abi.Pack(abi.Types{abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))}, []any{
+		[]any{true, bal1},
+		[]any{false, bal2},
+	})
+	require.NoError(t, err)
 
 	tb, err := DecodeTokenBalances(bayc, addrs, data)
 	require.NoError(t, err)
@@ -701,8 +737,11 @@ func TestDecodeTokenBalances(t *testing.T) {
 }
 
 func TestDecodeTokenBalancesRejectsLengthMismatch(t *testing.T) {
-	data := encodeResultsData(t, []bool{true}, [][]byte{{}})
-	_, err := DecodeTokenBalances(bayc, []*types.Address{testAddr1, testAddr2}, data)
+	data, err := abi.Pack(abi.Types{abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))}, []any{
+		[]any{true, []byte{}},
+	})
+	require.NoError(t, err)
+	_, err = DecodeTokenBalances(bayc, []*types.Address{testAddr1, testAddr2}, data)
 	require.Error(t, err)
 }
 
@@ -741,7 +780,12 @@ func TestDecodeOwnerPairs(t *testing.T) {
 	owner2, _ := abi.Pack(abi.Types{abi.Address}, testAddr2)
 	owner3, _ := abi.Pack(abi.Types{abi.Address}, testAddr2)
 
-	data := encodeResultsData(t, []bool{true, true, true}, [][]byte{owner1, owner2, owner3})
+	data, err := abi.Pack(abi.Types{abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))}, []any{
+		[]any{true, owner1},
+		[]any{true, owner2},
+		[]any{true, owner3},
+	})
+	require.NoError(t, err)
 
 	pairs, err := DecodeOwnerPairs(contracts, tokenIds, data)
 	require.NoError(t, err)

@@ -16,6 +16,7 @@ import (
 	"github.com/ninja-protocol-labs/go-evmkit/protocols/weth"
 	"github.com/ninja-protocol-labs/go-evmkit/standards/deploy"
 	"github.com/ninja-protocol-labs/go-evmkit/standards/erc20"
+	"github.com/ninja-protocol-labs/go-evmkit/standards/erc721"
 	"github.com/ninja-protocol-labs/go-evmkit/standards/multicall3"
 	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 	"github.com/stretchr/testify/suite"
@@ -990,7 +991,7 @@ func (s *RouterLifeCycleSuite) Test03Mint() {
 	s.Require().Zero(tickUpper.Cmp(position.TickUpper))
 	s.T().Logf("Test03Mint: positions(%s) confirms token0=%s token1=%s fee=%s tickLower=%s tickUpper=%s liquidity=%s", s.tokenId, position.Token0, position.Token1, position.Fee, position.TickLower, position.TickUpper, position.Liquidity)
 
-	owner, err := s.v3Nfpm.OwnerOf(s.ctx, s.nfpm, s.tokenId, rpc.BlockTagLatest)
+	owner, err := s.v3Nfpm.OwnerOf(s.ctx, nil, erc721.NewOwnerOfRequest(s.nfpm, s.tokenId))
 	s.Require().NoError(err)
 	s.Require().True(owner.Equal(s.from))
 	s.T().Logf("Test03Mint: ownerOf(%s) = %s", s.tokenId, owner)
@@ -1379,7 +1380,7 @@ func (s *RouterLifeCycleSuite) Test07MintBC() {
 	s.Require().Zero(tickUpper.Cmp(position.TickUpper))
 	s.T().Logf("Test07MintBC: positions(%s) confirms token0=%s token1=%s fee=%s tickLower=%s tickUpper=%s liquidity=%s", tokenIdBC, position.Token0, position.Token1, position.Fee, position.TickLower, position.TickUpper, position.Liquidity)
 
-	owner, err := s.v3Nfpm.OwnerOf(s.ctx, s.nfpm, tokenIdBC, rpc.BlockTagLatest)
+	owner, err := s.v3Nfpm.OwnerOf(s.ctx, nil, erc721.NewOwnerOfRequest(s.nfpm, tokenIdBC))
 	s.Require().NoError(err)
 	s.Require().True(owner.Equal(s.from))
 	s.T().Logf("Test07MintBC: ownerOf(%s) = %s", tokenIdBC, owner)

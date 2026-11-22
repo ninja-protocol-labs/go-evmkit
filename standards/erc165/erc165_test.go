@@ -48,7 +48,7 @@ func (s *ERC165Suite) SetupSuite() {
 		s.T().Skip("disabled")
 	}
 
-	s.ctx, s.cancel = context.WithTimeout(context.Background(), 60*time.Second)
+	s.ctx, s.cancel = context.WithTimeout(s.T().Context(), 60*time.Second)
 
 	s.client = rpc.NewClient(s.RPCURL)
 

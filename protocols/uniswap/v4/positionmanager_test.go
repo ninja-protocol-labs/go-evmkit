@@ -513,7 +513,7 @@ func (s *PositionManagerSuite) Test05ERC721Permit() {
 	s.Require().NoError(err)
 	s.Require().True(receipt.Status, "permit transaction reverted")
 
-	approved, err := s.positionManager.GetApproved(s.ctx, s.positionManagerContract, s.tokenID, rpc.BlockTagLatest)
+	approved, err := s.positionManager.GetApproved(s.ctx, nil, erc721.NewGetApprovedRequest(s.positionManagerContract, s.tokenID))
 	s.Require().NoError(err)
 	s.Require().True(approved.Equal(spender))
 

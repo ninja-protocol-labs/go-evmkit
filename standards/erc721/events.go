@@ -10,8 +10,8 @@ import (
 )
 
 // ExtractTransfers pulls every Transfer-shaped log out of logs, from any contract; filter by Contract afterward.
-func ExtractTransfers(logs []tx.Log) ([]Transfer, error) {
-	var transfers []Transfer
+func ExtractTransfers(logs []tx.Log) ([]TransferEvent, error) {
+	var transfers []TransferEvent
 	for i, log := range logs {
 		if len(log.Topics) == 0 || log.Topics[0] == nil {
 			continue
@@ -42,14 +42,14 @@ func ExtractTransfers(logs []tx.Log) ([]Transfer, error) {
 		if !ok {
 			return nil, fmt.Errorf("erc721: extractTransfers: logs[%d]: unexpected decoded type for tokenId: %T", i, vals[2])
 		}
-		transfers = append(transfers, *NewTransfer(log.Address, from, to, tokenId))
+		transfers = append(transfers, *NewTransferEvent(log.Address, from, to, tokenId))
 	}
 	return transfers, nil
 }
 
 // ExtractApprovals pulls every Approval-shaped log out of logs; see ExtractTransfers.
-func ExtractApprovals(logs []tx.Log) ([]Approval, error) {
-	var approvals []Approval
+func ExtractApprovals(logs []tx.Log) ([]ApprovalEvent, error) {
+	var approvals []ApprovalEvent
 	for i, log := range logs {
 		if len(log.Topics) == 0 || log.Topics[0] == nil {
 			continue
@@ -80,14 +80,14 @@ func ExtractApprovals(logs []tx.Log) ([]Approval, error) {
 		if !ok {
 			return nil, fmt.Errorf("erc721: extractApprovals: logs[%d]: unexpected decoded type for tokenId: %T", i, vals[2])
 		}
-		approvals = append(approvals, *NewApproval(log.Address, owner, approved, tokenId))
+		approvals = append(approvals, *NewApprovalEvent(log.Address, owner, approved, tokenId))
 	}
 	return approvals, nil
 }
 
 // ExtractApprovalForAll pulls every ApprovalForAll-shaped log out of logs; see ExtractTransfers.
-func ExtractApprovalForAll(logs []tx.Log) ([]ApprovalForAll, error) {
-	var approvals []ApprovalForAll
+func ExtractApprovalForAll(logs []tx.Log) ([]ApprovalForAllEvent, error) {
+	var approvals []ApprovalForAllEvent
 	for i, log := range logs {
 		if len(log.Topics) == 0 || log.Topics[0] == nil {
 			continue
@@ -118,7 +118,7 @@ func ExtractApprovalForAll(logs []tx.Log) ([]ApprovalForAll, error) {
 		if !ok {
 			return nil, fmt.Errorf("erc721: extractApprovalForAll: logs[%d]: unexpected decoded type for approved: %T", i, vals[2])
 		}
-		approvals = append(approvals, *NewApprovalForAll(log.Address, owner, operator, approved))
+		approvals = append(approvals, *NewApprovalForAllEvent(log.Address, owner, operator, approved))
 	}
 	return approvals, nil
 }

@@ -270,7 +270,7 @@ func FuzzBalancePairsRequestValidate(f *testing.F) {
 			want = "invalid request: tokens and accounts differ in length"
 		case tokenLen == 0:
 			want = "invalid request: tokens is empty"
-		case nilToken < tokenLen:
+		case nilToken < tokenLen && nilToken <= nilAccount:
 			want = fmt.Sprintf("invalid request: tokens[%d] is nil", nilToken)
 		case nilAccount < accountLen:
 			want = fmt.Sprintf("invalid request: accounts[%d] is nil", nilAccount)

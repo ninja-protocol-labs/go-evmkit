@@ -14,15 +14,7 @@ import (
 
 var bayc = types.MustNewAddressFromHex("0xbc4ca0eda7647a8ab7c2061c2e118a18a936f13d")
 
-func uint256Topic(n *big.Int) *types.Hash {
-	b := make([]byte, 32)
-	n.FillBytes(b)
-	return types.NewHashFromBytes(b)
-}
-
-func sampleReceiptLogs(t *testing.T) []tx.Log {
-	t.Helper()
-
+func TestExtractTransfersSampleReceipt(t *testing.T) {
 	transferTopic, ok := transferEvent.Topic0()
 	require.True(t, ok)
 	approvalTopic, ok := approvalEvent.Topic0()
@@ -33,14 +25,14 @@ func sampleReceiptLogs(t *testing.T) []tx.Log {
 	approvedData, err := abi.Pack(abi.Types{abi.Bool}, true)
 	require.NoError(t, err)
 
-	return []tx.Log{
+	logs := []tx.Log{
 		{
 			Address: bayc,
 			Topics: []*types.Hash{
 				types.NewHashFromBytes(transferTopic[:]),
 				types.NewHashFromBytes(testAddr1.Bytes()),
 				types.NewHashFromBytes(testAddr2.Bytes()),
-				uint256Topic(big.NewInt(1234)),
+				types.NewHashFromBytes(big.NewInt(1234).FillBytes(make([]byte, 32))),
 			},
 		},
 		{
@@ -49,7 +41,7 @@ func sampleReceiptLogs(t *testing.T) []tx.Log {
 				types.NewHashFromBytes(approvalTopic[:]),
 				types.NewHashFromBytes(testAddr2.Bytes()),
 				types.NewHashFromBytes(testAddr1.Bytes()),
-				uint256Topic(big.NewInt(1234)),
+				types.NewHashFromBytes(big.NewInt(1234).FillBytes(make([]byte, 32))),
 			},
 		},
 		{
@@ -62,10 +54,8 @@ func sampleReceiptLogs(t *testing.T) []tx.Log {
 			Data: approvedData,
 		},
 	}
-}
 
-func TestExtractTransfersSampleReceipt(t *testing.T) {
-	transfers, err := ExtractTransfers(sampleReceiptLogs(t))
+	transfers, err := ExtractTransfers(logs)
 	require.NoError(t, err)
 	require.Len(t, transfers, 1)
 	require.True(t, transfers[0].Contract.Equal(bayc))
@@ -75,7 +65,47 @@ func TestExtractTransfersSampleReceipt(t *testing.T) {
 }
 
 func TestExtractApprovalsSampleReceipt(t *testing.T) {
-	approvals, err := ExtractApprovals(sampleReceiptLogs(t))
+	transferTopic, ok := transferEvent.Topic0()
+	require.True(t, ok)
+	approvalTopic, ok := approvalEvent.Topic0()
+	require.True(t, ok)
+	approvalForAllTopic, ok := approvalForAllEvent.Topic0()
+	require.True(t, ok)
+
+	approvedData, err := abi.Pack(abi.Types{abi.Bool}, true)
+	require.NoError(t, err)
+
+	logs := []tx.Log{
+		{
+			Address: bayc,
+			Topics: []*types.Hash{
+				types.NewHashFromBytes(transferTopic[:]),
+				types.NewHashFromBytes(testAddr1.Bytes()),
+				types.NewHashFromBytes(testAddr2.Bytes()),
+				types.NewHashFromBytes(big.NewInt(1234).FillBytes(make([]byte, 32))),
+			},
+		},
+		{
+			Address: bayc,
+			Topics: []*types.Hash{
+				types.NewHashFromBytes(approvalTopic[:]),
+				types.NewHashFromBytes(testAddr2.Bytes()),
+				types.NewHashFromBytes(testAddr1.Bytes()),
+				types.NewHashFromBytes(big.NewInt(1234).FillBytes(make([]byte, 32))),
+			},
+		},
+		{
+			Address: bayc,
+			Topics: []*types.Hash{
+				types.NewHashFromBytes(approvalForAllTopic[:]),
+				types.NewHashFromBytes(testAddr1.Bytes()),
+				types.NewHashFromBytes(testAddr2.Bytes()),
+			},
+			Data: approvedData,
+		},
+	}
+
+	approvals, err := ExtractApprovals(logs)
 	require.NoError(t, err)
 	require.Len(t, approvals, 1)
 	require.True(t, approvals[0].Contract.Equal(bayc))
@@ -85,7 +115,47 @@ func TestExtractApprovalsSampleReceipt(t *testing.T) {
 }
 
 func TestExtractApprovalForAllSampleReceipt(t *testing.T) {
-	approvals, err := ExtractApprovalForAll(sampleReceiptLogs(t))
+	transferTopic, ok := transferEvent.Topic0()
+	require.True(t, ok)
+	approvalTopic, ok := approvalEvent.Topic0()
+	require.True(t, ok)
+	approvalForAllTopic, ok := approvalForAllEvent.Topic0()
+	require.True(t, ok)
+
+	approvedData, err := abi.Pack(abi.Types{abi.Bool}, true)
+	require.NoError(t, err)
+
+	logs := []tx.Log{
+		{
+			Address: bayc,
+			Topics: []*types.Hash{
+				types.NewHashFromBytes(transferTopic[:]),
+				types.NewHashFromBytes(testAddr1.Bytes()),
+				types.NewHashFromBytes(testAddr2.Bytes()),
+				types.NewHashFromBytes(big.NewInt(1234).FillBytes(make([]byte, 32))),
+			},
+		},
+		{
+			Address: bayc,
+			Topics: []*types.Hash{
+				types.NewHashFromBytes(approvalTopic[:]),
+				types.NewHashFromBytes(testAddr2.Bytes()),
+				types.NewHashFromBytes(testAddr1.Bytes()),
+				types.NewHashFromBytes(big.NewInt(1234).FillBytes(make([]byte, 32))),
+			},
+		},
+		{
+			Address: bayc,
+			Topics: []*types.Hash{
+				types.NewHashFromBytes(approvalForAllTopic[:]),
+				types.NewHashFromBytes(testAddr1.Bytes()),
+				types.NewHashFromBytes(testAddr2.Bytes()),
+			},
+			Data: approvedData,
+		},
+	}
+
+	approvals, err := ExtractApprovalForAll(logs)
 	require.NoError(t, err)
 	require.Len(t, approvals, 1)
 	require.True(t, approvals[0].Contract.Equal(bayc))
