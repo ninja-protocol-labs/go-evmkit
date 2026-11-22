@@ -1,14 +1,21 @@
 package v2
 
 import (
+	"context"
 	"math/big"
 	"testing"
 
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/ninja-protocol-labs/go-evmkit/bind"
+	"github.com/ninja-protocol-labs/go-evmkit/core"
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
+	"github.com/ninja-protocol-labs/go-evmkit/rpc"
+	"github.com/ninja-protocol-labs/go-evmkit/rpc/mocks"
 	"github.com/ninja-protocol-labs/go-evmkit/tx"
+	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
 // go test -run '^$' -fuzz '^FuzzDecodeGetReservesRoundTrip$' -fuzztime=10s ./protocols/uniswap/v2
@@ -176,5 +183,119 @@ func FuzzExtractEventsDoNotPanic(f *testing.F) {
 		_, _ = ExtractBurn(logs)
 		_, _ = ExtractSwap(logs)
 		_, _ = ExtractSync(logs)
+	})
+}
+
+// go test -run '^$' -fuzz '^FuzzPairSwapThroughClient$' -fuzztime=10s ./protocols/uniswap/v2
+func FuzzPairSwapThroughClient(f *testing.F) {
+	f.Add([]byte{}, []byte{}, []byte{}, []byte{}, []byte{}, uint64(0), true)
+	f.Add([]byte{0x01}, []byte{0x00}, []byte{0x5f}, []byte{0x02}, []byte{0xca, 0xfe}, uint64(42), false)
+	f.Add(make([]byte, 20), make([]byte, 32), make([]byte, 32), make([]byte, 20), make([]byte, 100), ^uint64(0)-1, true)
+
+	key, err := types.NewPrivateKeyFromBig(big.NewInt(0xb1d))
+	require.NoError(f, err)
+	signer := core.PubkeyToAddress(key.PublicKey())
+
+	f.Fuzz(func(t *testing.T, pairRaw, amount0Raw, amount1Raw, toRaw, swapData []byte, nonce uint64, dynamic bool) {
+		if len(amount0Raw) > 32 {
+			amount0Raw = amount0Raw[len(amount0Raw)-32:]
+		}
+		if len(amount1Raw) > 32 {
+			amount1Raw = amount1Raw[len(amount1Raw)-32:]
+		}
+		pair := types.NewAddressFromBytes(pairRaw)
+		amount0Out := new(big.Int).SetBytes(amount0Raw)
+		amount1Out := new(big.Int).SetBytes(amount1Raw)
+		to := types.NewAddressFromBytes(toRaw)
+
+		var builder tx.Builder
+		if dynamic {
+			builder = tx.NewDynamicFeeBuilder()
+		} else {
+			builder = tx.NewLegacyBuilder()
+		}
+		builder.ChainID(big.NewInt(1))
+		builder.Nonce(nonce)
+		builder.Limit(3_000_000)
+		builder.Price(big.NewInt(30_000_000_000), big.NewInt(1_000_000_000))
+
+		var raw []byte
+		c := mocks.NewClient(t)
+		c.EXPECT().Call(mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, e rpc.Element) error {
+			raw, err = encoding.Hex.Decode(e.Params.([]any)[0].(string))
+			require.NoError(t, err)
+			*e.Result.(*string) = core.Keccak256(raw).String()
+			return nil
+		}).Once()
+
+		signed, hash, err := NewPair(c).Swap(t.Context(), bind.NewTransactOptions(key, builder), NewSwapRequest(pair, amount0Out, amount1Out, to, swapData))
+		require.NoError(t, err)
+		require.True(t, hash.Equal(core.Keccak256(raw)))
+		require.Equal(t, nonce, signed.AddressNonce())
+
+		decoded, err := core.DecodeTransaction(raw)
+		require.NoError(t, err)
+		from, err := decoded.Sender()
+		require.NoError(t, err)
+		require.True(t, from.Equal(signer))
+
+		var gotTo *types.Address
+		var gotData []byte
+		switch v := decoded.(type) {
+		case *core.DynamicFeeTx:
+			require.True(t, dynamic)
+			gotTo, gotData = v.To, v.Data
+		case *core.LegacyTx:
+			require.False(t, dynamic)
+			gotTo, gotData = v.To, v.Data
+		default:
+			t.Fatalf("unexpected tx type %T", decoded)
+		}
+		require.True(t, gotTo.Equal(pair))
+
+		vals, err := swapFn.DecodeCall(gotData)
+		require.NoError(t, err)
+		require.Zero(t, amount0Out.Cmp(vals[0].(*big.Int)))
+		require.Zero(t, amount1Out.Cmp(vals[1].(*big.Int)))
+		require.True(t, to.Equal(vals[2].(*types.Address)))
+		require.Equal(t, len(swapData), len(vals[3].([]byte)))
+		if len(swapData) > 0 {
+			require.Equal(t, swapData, vals[3].([]byte))
+		}
+	})
+}
+
+// go test -run '^$' -fuzz '^FuzzPairReadsSurviveArbitraryResult$' -fuzztime=10s ./protocols/uniswap/v2
+func FuzzPairReadsSurviveArbitraryResult(f *testing.F) {
+	f.Add([]byte{})
+	f.Add(make([]byte, 31))
+	f.Add(make([]byte, 32))
+	f.Add(make([]byte, 64))
+	f.Add(make([]byte, 96))
+
+	pair := types.MustNewAddressFromHex("0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc")
+	a := types.MustNewAddressFromHex("0x6667c8dc9fbfec411e7c1ee2b24de960149f930f")
+
+	f.Fuzz(func(t *testing.T, result []byte) {
+		c := mocks.NewClient(t)
+		c.EXPECT().Call(mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, e rpc.Element) error {
+			*e.Result.(*string) = encoding.Hex.EncodePrefixed(result)
+			return nil
+		}).Times(6)
+		p := NewPair(c)
+
+		reserves, err := p.GetReserves(t.Context(), nil, NewGetReservesRequest(pair))
+		require.True(t, (err == nil) != (reserves == nil))
+		token0, err := p.Token0(t.Context(), nil, NewToken0Request(pair))
+		require.True(t, (err == nil) != (token0 == nil))
+		kLast, err := p.KLast(t.Context(), nil, NewKLastRequest(pair))
+		require.True(t, (err == nil) != (kLast == nil))
+		typehash, err := p.PermitTypehash(t.Context(), nil, NewPermitTypehashRequest(pair))
+		require.True(t, (err == nil) != (typehash == nil))
+		liquidity, err := p.CallMint(t.Context(), nil, NewMintRequest(pair, a))
+		require.True(t, (err == nil) != (liquidity == nil))
+		amount0, amount1, err := p.CallBurn(t.Context(), nil, NewBurnRequest(pair, a))
+		require.True(t, (err == nil) != (amount0 == nil))
+		require.True(t, (err == nil) != (amount1 == nil))
 	})
 }

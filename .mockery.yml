@@ -45,3 +45,4 @@ packages:
       filename: "{{.InterfaceName | lower}}.go"
     interfaces:
       IFactory:
+      IPair:

@@ -49,9 +49,7 @@ func (f *Factory) FeeTo(ctx context.Context, opts *bind.CallOptions, req *FeeToR
 		return nil, fmt.Errorf("uniswapv2: feeTo: %w", err)
 	}
 
-	calldata := EncodeFeeTo()
-
-	data, err := bind.Call(ctx, f.c, opts, req.Contract, calldata)
+	data, err := bind.Call(ctx, f.c, opts, req.Contract, EncodeFeeTo())
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: feeTo: %w", f.wrapRevertError(err))
 	}
@@ -70,9 +68,7 @@ func (f *Factory) FeeToSetter(ctx context.Context, opts *bind.CallOptions, req *
 		return nil, fmt.Errorf("uniswapv2: feeToSetter: %w", err)
 	}
 
-	calldata := EncodeFeeToSetter()
-
-	data, err := bind.Call(ctx, f.c, opts, req.Contract, calldata)
+	data, err := bind.Call(ctx, f.c, opts, req.Contract, EncodeFeeToSetter())
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: feeToSetter: %w", f.wrapRevertError(err))
 	}
@@ -139,9 +135,7 @@ func (f *Factory) AllPairsLength(ctx context.Context, opts *bind.CallOptions, re
 		return nil, fmt.Errorf("uniswapv2: allPairsLength: %w", err)
 	}
 
-	calldata := EncodeAllPairsLength()
-
-	data, err := bind.Call(ctx, f.c, opts, req.Contract, calldata)
+	data, err := bind.Call(ctx, f.c, opts, req.Contract, EncodeAllPairsLength())
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv2: allPairsLength: %w", f.wrapRevertError(err))
 	}
