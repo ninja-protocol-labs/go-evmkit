@@ -447,8 +447,8 @@ func TestClientMethodsWrapValidateError(t *testing.T) {
 	e := New(mocks.NewClient(t))
 	ctx := t.Context()
 
-	_, err := e.Name(ctx, nil, nil)
-	require.EqualError(t, err, "erc721: name: "+(*NameRequest)(nil).Validate().Error())
+	_, err := e.Name(ctx, nil, &NameRequest{})
+	require.EqualError(t, err, "erc721: name: "+(&NameRequest{}).Validate().Error())
 	_, err = e.Symbol(ctx, nil, &SymbolRequest{})
 	require.EqualError(t, err, "erc721: symbol: "+(&SymbolRequest{}).Validate().Error())
 	_, err = e.TokenURI(ctx, nil, NewTokenURIRequest(contract, nil))

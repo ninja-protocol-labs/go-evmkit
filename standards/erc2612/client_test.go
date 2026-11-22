@@ -119,9 +119,9 @@ func TestClientMethodsRejectInvalidRequestWithoutRPC(t *testing.T) {
 	require.EqualError(t, err, "erc2612: nonces: "+NewNoncesRequest(contract, nil).Validate().Error())
 	require.Nil(t, n)
 
-	h, err := e.DomainSeparator(t.Context(), nil, nil)
+	h, err := e.DomainSeparator(t.Context(), nil, &DomainSeparatorRequest{})
 	require.ErrorIs(t, err, bind.ErrInvalidRequest)
-	require.EqualError(t, err, "erc2612: domainSeparator: "+(*DomainSeparatorRequest)(nil).Validate().Error())
+	require.EqualError(t, err, "erc2612: domainSeparator: "+(&DomainSeparatorRequest{}).Validate().Error())
 	require.Nil(t, h)
 
 	signed, hash, err := e.Permit(t.Context(), nil, NewPermitRequest(contract, contract, contract, big.NewInt(1), big.NewInt(1), nil))
