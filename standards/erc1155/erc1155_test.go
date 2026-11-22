@@ -18,6 +18,7 @@ import (
 	"github.com/ninja-protocol-labs/go-evmkit/core"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
+	"github.com/ninja-protocol-labs/go-evmkit/standards/erc165"
 	"github.com/ninja-protocol-labs/go-evmkit/tx"
 )
 
@@ -257,7 +258,7 @@ func (s *ERC1155Suite) TearDownSuite() {
 
 func (s *ERC1155Suite) TestReadMethods() {
 	for _, contract := range s.contracts {
-		supports, err := s.erc1155.SupportsInterface(s.ctx, contract, interfaceIDERC1155, rpc.BlockTagLatest)
+		supports, err := s.erc1155.SupportsInterface(s.ctx, nil, erc165.NewSupportsInterfaceRequest(contract, interfaceIDERC1155))
 		s.Require().NoError(err)
 		s.Require().True(supports)
 

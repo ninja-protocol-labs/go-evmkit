@@ -11,11 +11,10 @@ import (
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
 )
 
-// Well-known ERC-165 interface IDs used by the live tests below.
 var (
 	interfaceIDERC165  = [4]byte{0x01, 0xff, 0xc9, 0xa7}
 	interfaceIDERC721  = [4]byte{0x80, 0xac, 0x58, 0xcd}
-	interfaceIDInvalid = [4]byte{0xff, 0xff, 0xff, 0xff} // reserved "unsupported" sentinel, must always be false
+	interfaceIDInvalid = [4]byte{0xff, 0xff, 0xff, 0xff}
 )
 
 type ERC165Suite struct {
@@ -69,26 +68,26 @@ func (s *ERC165Suite) TearDownSuite() {
 	}
 }
 
-func (s *ERC165Suite) TestSupportsInterfaceERC165() {
-	ok, err := s.erc165.SupportsInterface(s.ctx, s.contract, interfaceIDERC165, rpc.BlockTagLatest)
+func (s *ERC165Suite) Test01SupportsInterfaceERC165() {
+	ok, err := s.erc165.SupportsInterface(s.ctx, nil, NewSupportsInterfaceRequest(s.contract, interfaceIDERC165))
 	s.Require().NoError(err)
 	s.Require().True(ok)
 }
 
-func (s *ERC165Suite) TestSupportsInterfaceERC721() {
-	ok, err := s.erc165.SupportsInterface(s.ctx, s.contract, interfaceIDERC721, rpc.BlockTagLatest)
+func (s *ERC165Suite) Test02SupportsInterfaceERC721() {
+	ok, err := s.erc165.SupportsInterface(s.ctx, nil, NewSupportsInterfaceRequest(s.contract, interfaceIDERC721))
 	s.Require().NoError(err)
 	s.Require().True(ok)
 }
 
-func (s *ERC165Suite) TestSupportsInterfaceUnsupported() {
-	ok, err := s.erc165.SupportsInterface(s.ctx, s.contract, interfaceIDInvalid, rpc.BlockTagLatest)
+func (s *ERC165Suite) Test03SupportsInterfaceUnsupported() {
+	ok, err := s.erc165.SupportsInterface(s.ctx, nil, NewSupportsInterfaceRequest(s.contract, interfaceIDInvalid))
 	s.Require().NoError(err)
 	s.Require().False(ok)
 }
 
-func (s *ERC165Suite) TestSupportsInterfaceNotImplemented() {
-	ok, err := s.erc165.SupportsInterface(s.ctx, s.nonERC165Contract, interfaceIDERC165, rpc.BlockTagLatest)
+func (s *ERC165Suite) Test04SupportsInterfaceNotImplemented() {
+	ok, err := s.erc165.SupportsInterface(s.ctx, nil, NewSupportsInterfaceRequest(s.nonERC165Contract, interfaceIDERC165))
 	s.Require().Error(err)
 	s.Require().False(ok)
 	s.Require().ErrorIs(err, ErrNotImplementedERC165)

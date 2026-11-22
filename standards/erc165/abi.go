@@ -10,10 +10,9 @@ import (
 // Function signatures from IERC165, for encoding calls and decoding results.
 var supportsInterfaceFn = abi.NewFunction("supportsInterface", abi.NewTypes(abi.Bytes4), abi.NewTypes(abi.Bool))
 
-// ErrNotImplementedERC165 means contract either reverted the
-// supportsInterface call or returned data that doesn't decode as a bool —
-// both signs it doesn't correctly implement ERC-165, checkable with errors.Is.
-var ErrNotImplementedERC165 = errors.New("erc165: contract does not implement ERC-165")
+// ErrNotImplementedERC165 means the contract reverted supportsInterface or
+// returned data that doesn't decode as a bool.
+var ErrNotImplementedERC165 = errors.New("contract does not implement ERC-165")
 
 // EncodeSupportsInterface returns the calldata for supportsInterface(interfaceId).
 func EncodeSupportsInterface(interfaceId [4]byte) ([]byte, error) {
