@@ -1,11 +1,13 @@
 package erc20
 
 import (
+	"fmt"
 	"math/big"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 	"github.com/ninja-protocol-labs/go-evmkit/tx"
@@ -169,5 +171,117 @@ func FuzzExtractTransfersRoundTrip(f *testing.F) {
 		approvals, err := ExtractApprovals(logs)
 		require.NoError(t, err)
 		require.Empty(t, approvals)
+	})
+}
+
+// go test -run '^$' -fuzz '^FuzzTransferFromRequestValidate$' -fuzztime=10s ./standards/erc20
+func FuzzTransferFromRequestValidate(f *testing.F) {
+	f.Add(uint8(0), []byte{})
+	f.Add(uint8(0x0f), []byte{0x01})
+	f.Add(uint8(0x1f), []byte{0xff, 0xff})
+	f.Add(uint8(0x07), []byte{})
+	f.Add(uint8(0x10), []byte{0x00})
+
+	f.Fuzz(func(t *testing.T, mask uint8, amountRaw []byte) {
+		if len(amountRaw) > 32 {
+			amountRaw = amountRaw[:32]
+		}
+
+		var req *TransferFromRequest
+		if mask&0x10 == 0 {
+			req = &TransferFromRequest{}
+			if mask&0x01 != 0 {
+				req.Contract = fuzzToken1
+			}
+			if mask&0x02 != 0 {
+				req.From = fuzzAddr1
+			}
+			if mask&0x04 != 0 {
+				req.To = fuzzAddr2
+			}
+			if mask&0x08 != 0 {
+				req.Amount = new(big.Int).SetBytes(amountRaw)
+			}
+		}
+
+		want := ""
+		switch {
+		case req == nil:
+			want = "invalid request: request is nil"
+		case req.Contract == nil:
+			want = "invalid request: contract is nil"
+		case req.From == nil:
+			want = "invalid request: from is nil"
+		case req.To == nil:
+			want = "invalid request: to is nil"
+		case req.Amount == nil:
+			want = "invalid request: amount is nil"
+		}
+
+		err := req.Validate()
+		if want == "" {
+			require.NoError(t, err)
+			return
+		}
+		require.ErrorIs(t, err, bind.ErrInvalidRequest)
+		require.EqualError(t, err, want)
+	})
+}
+
+// go test -run '^$' -fuzz '^FuzzBalancePairsRequestValidate$' -fuzztime=10s ./standards/erc20
+func FuzzBalancePairsRequestValidate(f *testing.F) {
+	f.Add(true, uint8(0), uint8(0), uint8(0), uint8(0))
+	f.Add(true, uint8(2), uint8(2), uint8(9), uint8(9))
+	f.Add(true, uint8(3), uint8(2), uint8(9), uint8(9))
+	f.Add(true, uint8(3), uint8(3), uint8(1), uint8(9))
+	f.Add(true, uint8(3), uint8(3), uint8(9), uint8(0))
+	f.Add(false, uint8(1), uint8(1), uint8(9), uint8(9))
+
+	f.Fuzz(func(t *testing.T, withMulticall bool, tokenLen, accountLen, nilToken, nilAccount uint8) {
+		tokenLen %= 8
+		accountLen %= 8
+
+		tokens := make([]*types.Address, tokenLen)
+		for i := range tokens {
+			tokens[i] = fuzzToken1
+			if uint8(i) == nilToken {
+				tokens[i] = nil
+			}
+		}
+		accounts := make([]*types.Address, accountLen)
+		for i := range accounts {
+			accounts[i] = fuzzAddr1
+			if uint8(i) == nilAccount {
+				accounts[i] = nil
+			}
+		}
+
+		var multicall *types.Address
+		if withMulticall {
+			multicall = fuzzToken2
+		}
+		req := NewBalancePairsRequest(multicall, tokens, accounts, nilToken%2 == 0)
+
+		want := ""
+		switch {
+		case multicall == nil:
+			want = "invalid request: multicall is nil"
+		case tokenLen != accountLen:
+			want = "invalid request: tokens and accounts differ in length"
+		case tokenLen == 0:
+			want = "invalid request: tokens is empty"
+		case nilToken < tokenLen:
+			want = fmt.Sprintf("invalid request: tokens[%d] is nil", nilToken)
+		case nilAccount < accountLen:
+			want = fmt.Sprintf("invalid request: accounts[%d] is nil", nilAccount)
+		}
+
+		err := req.Validate()
+		if want == "" {
+			require.NoError(t, err)
+			return
+		}
+		require.ErrorIs(t, err, bind.ErrInvalidRequest)
+		require.EqualError(t, err, want)
 	})
 }
