@@ -26,13 +26,13 @@ func TestEncodeNoArgFunctions(t *testing.T) {
 }
 
 func TestDecodeNameSymbol(t *testing.T) {
-	data, err := abi.Pack(abi.Types{abi.String}, "USD Coin")
+	data, err := abi.Pack(abi.NewTypes(abi.String), "USD Coin")
 	require.NoError(t, err)
 	s, err := DecodeName(data)
 	require.NoError(t, err)
 	require.Equal(t, "USD Coin", s)
 
-	data, err = abi.Pack(abi.Types{abi.String}, "USDC")
+	data, err = abi.Pack(abi.NewTypes(abi.String), "USDC")
 	require.NoError(t, err)
 	s, err = DecodeSymbol(data)
 	require.NoError(t, err)
@@ -40,7 +40,7 @@ func TestDecodeNameSymbol(t *testing.T) {
 }
 
 func TestDecodeDecimals(t *testing.T) {
-	data, err := abi.Pack(abi.Types{abi.Uint8}, uint8(6))
+	data, err := abi.Pack(abi.NewTypes(abi.Uint8), uint8(6))
 	require.NoError(t, err)
 	d, err := DecodeDecimals(data)
 	require.NoError(t, err)
@@ -48,7 +48,7 @@ func TestDecodeDecimals(t *testing.T) {
 }
 
 func TestDecodeTotalSupply(t *testing.T) {
-	data, err := abi.Pack(abi.Types{abi.Uint256}, big.NewInt(1_000_000))
+	data, err := abi.Pack(abi.NewTypes(abi.Uint256), big.NewInt(1_000_000))
 	require.NoError(t, err)
 	n, err := DecodeTotalSupply(data)
 	require.NoError(t, err)
@@ -83,7 +83,7 @@ func TestEncodeBalanceOfRejectsNilAddress(t *testing.T) {
 }
 
 func TestDecodeBalanceOf(t *testing.T) {
-	data, err := abi.Pack(abi.Types{abi.Uint256}, big.NewInt(42))
+	data, err := abi.Pack(abi.NewTypes(abi.Uint256), big.NewInt(42))
 	require.NoError(t, err)
 	n, err := DecodeBalanceOf(data)
 	require.NoError(t, err)
@@ -108,7 +108,7 @@ func TestEncodeTransferDecodeTransfer(t *testing.T) {
 	require.True(t, vals[0].(*types.Address).Equal(testAddr1))
 	require.Zero(t, big.NewInt(100).Cmp(vals[1].(*big.Int)))
 
-	retData, err := abi.Pack(abi.Types{abi.Bool}, true)
+	retData, err := abi.Pack(abi.NewTypes(abi.Bool), true)
 	require.NoError(t, err)
 	ok, err := DecodeTransfer(retData)
 	require.NoError(t, err)
@@ -123,7 +123,7 @@ func TestEncodeApproveDecodeApprove(t *testing.T) {
 	require.True(t, vals[0].(*types.Address).Equal(testAddr2))
 	require.Zero(t, big.NewInt(5).Cmp(vals[1].(*big.Int)))
 
-	retData, err := abi.Pack(abi.Types{abi.Bool}, false)
+	retData, err := abi.Pack(abi.NewTypes(abi.Bool), false)
 	require.NoError(t, err)
 	ok, err := DecodeApprove(retData)
 	require.NoError(t, err)
@@ -139,7 +139,7 @@ func TestEncodeTransferFromDecodeTransferFrom(t *testing.T) {
 	require.True(t, vals[1].(*types.Address).Equal(testAddr2))
 	require.Zero(t, big.NewInt(9).Cmp(vals[2].(*big.Int)))
 
-	retData, err := abi.Pack(abi.Types{abi.Bool}, true)
+	retData, err := abi.Pack(abi.NewTypes(abi.Bool), true)
 	require.NoError(t, err)
 	ok, err := DecodeTransferFrom(retData)
 	require.NoError(t, err)
@@ -147,12 +147,12 @@ func TestEncodeTransferFromDecodeTransferFrom(t *testing.T) {
 }
 
 func TestDecodeMetadataAllSuccess(t *testing.T) {
-	nameData, _ := abi.Pack(abi.Types{abi.String}, "USD Coin")
-	symbolData, _ := abi.Pack(abi.Types{abi.String}, "USDC")
-	decimalsData, _ := abi.Pack(abi.Types{abi.Uint8}, uint8(6))
-	totalSupplyData, _ := abi.Pack(abi.Types{abi.Uint256}, big.NewInt(1000))
+	nameData, _ := abi.Pack(abi.NewTypes(abi.String), "USD Coin")
+	symbolData, _ := abi.Pack(abi.NewTypes(abi.String), "USDC")
+	decimalsData, _ := abi.Pack(abi.NewTypes(abi.Uint8), uint8(6))
+	totalSupplyData, _ := abi.Pack(abi.NewTypes(abi.Uint256), big.NewInt(1000))
 
-	data, err := abi.Pack(abi.Types{abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))}, []any{
+	data, err := abi.Pack(abi.NewTypes(abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))), []any{
 		[]any{true, nameData},
 		[]any{true, symbolData},
 		[]any{true, decimalsData},
@@ -169,10 +169,10 @@ func TestDecodeMetadataAllSuccess(t *testing.T) {
 }
 
 func TestDecodeMetadataPartialFailure(t *testing.T) {
-	nameData, _ := abi.Pack(abi.Types{abi.String}, "USD Coin")
-	totalSupplyData, _ := abi.Pack(abi.Types{abi.Uint256}, big.NewInt(1000))
+	nameData, _ := abi.Pack(abi.NewTypes(abi.String), "USD Coin")
+	totalSupplyData, _ := abi.Pack(abi.NewTypes(abi.Uint256), big.NewInt(1000))
 
-	data, err := abi.Pack(abi.Types{abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))}, []any{
+	data, err := abi.Pack(abi.NewTypes(abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))), []any{
 		[]any{true, nameData},
 		[]any{false, []byte{}},
 		[]any{false, []byte{}},
@@ -189,7 +189,7 @@ func TestDecodeMetadataPartialFailure(t *testing.T) {
 }
 
 func TestDecodeMetadataRejectsWrongResultCount(t *testing.T) {
-	data, err := abi.Pack(abi.Types{abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))}, []any{
+	data, err := abi.Pack(abi.NewTypes(abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))), []any{
 		[]any{true, []byte{}},
 	})
 	require.NoError(t, err)
@@ -198,13 +198,13 @@ func TestDecodeMetadataRejectsWrongResultCount(t *testing.T) {
 }
 
 func TestDecodeMetadataWithBalance(t *testing.T) {
-	nameData, _ := abi.Pack(abi.Types{abi.String}, "USD Coin")
-	symbolData, _ := abi.Pack(abi.Types{abi.String}, "USDC")
-	decimalsData, _ := abi.Pack(abi.Types{abi.Uint8}, uint8(6))
-	totalSupplyData, _ := abi.Pack(abi.Types{abi.Uint256}, big.NewInt(1000))
-	balData, _ := abi.Pack(abi.Types{abi.Uint256}, big.NewInt(42))
+	nameData, _ := abi.Pack(abi.NewTypes(abi.String), "USD Coin")
+	symbolData, _ := abi.Pack(abi.NewTypes(abi.String), "USDC")
+	decimalsData, _ := abi.Pack(abi.NewTypes(abi.Uint8), uint8(6))
+	totalSupplyData, _ := abi.Pack(abi.NewTypes(abi.Uint256), big.NewInt(1000))
+	balData, _ := abi.Pack(abi.NewTypes(abi.Uint256), big.NewInt(42))
 
-	data, err := abi.Pack(abi.Types{abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))}, []any{
+	data, err := abi.Pack(abi.NewTypes(abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))), []any{
 		[]any{true, nameData},
 		[]any{true, symbolData},
 		[]any{true, decimalsData},
@@ -220,12 +220,12 @@ func TestDecodeMetadataWithBalance(t *testing.T) {
 }
 
 func TestDecodeMetadataWithBalanceFailedBalance(t *testing.T) {
-	nameData, _ := abi.Pack(abi.Types{abi.String}, "USD Coin")
-	symbolData, _ := abi.Pack(abi.Types{abi.String}, "USDC")
-	decimalsData, _ := abi.Pack(abi.Types{abi.Uint8}, uint8(6))
-	totalSupplyData, _ := abi.Pack(abi.Types{abi.Uint256}, big.NewInt(1000))
+	nameData, _ := abi.Pack(abi.NewTypes(abi.String), "USD Coin")
+	symbolData, _ := abi.Pack(abi.NewTypes(abi.String), "USDC")
+	decimalsData, _ := abi.Pack(abi.NewTypes(abi.Uint8), uint8(6))
+	totalSupplyData, _ := abi.Pack(abi.NewTypes(abi.Uint256), big.NewInt(1000))
 
-	data, err := abi.Pack(abi.Types{abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))}, []any{
+	data, err := abi.Pack(abi.NewTypes(abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))), []any{
 		[]any{true, nameData},
 		[]any{true, symbolData},
 		[]any{true, decimalsData},
@@ -240,11 +240,11 @@ func TestDecodeMetadataWithBalanceFailedBalance(t *testing.T) {
 }
 
 func TestDecodeAllowanceWithBalance(t *testing.T) {
-	allowanceData, _ := abi.Pack(abi.Types{abi.Uint256}, big.NewInt(5))
-	ownerBalData, _ := abi.Pack(abi.Types{abi.Uint256}, big.NewInt(10))
-	spenderBalData, _ := abi.Pack(abi.Types{abi.Uint256}, big.NewInt(20))
+	allowanceData, _ := abi.Pack(abi.NewTypes(abi.Uint256), big.NewInt(5))
+	ownerBalData, _ := abi.Pack(abi.NewTypes(abi.Uint256), big.NewInt(10))
+	spenderBalData, _ := abi.Pack(abi.NewTypes(abi.Uint256), big.NewInt(20))
 
-	data, err := abi.Pack(abi.Types{abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))}, []any{
+	data, err := abi.Pack(abi.NewTypes(abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))), []any{
 		[]any{true, allowanceData},
 		[]any{true, ownerBalData},
 		[]any{true, spenderBalData},
@@ -259,7 +259,7 @@ func TestDecodeAllowanceWithBalance(t *testing.T) {
 }
 
 func TestDecodeAllowanceWithBalanceRejectsWrongResultCount(t *testing.T) {
-	data, err := abi.Pack(abi.Types{abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))}, []any{
+	data, err := abi.Pack(abi.NewTypes(abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))), []any{
 		[]any{true, []byte{}},
 		[]any{true, []byte{}},
 	})
@@ -270,10 +270,10 @@ func TestDecodeAllowanceWithBalanceRejectsWrongResultCount(t *testing.T) {
 
 func TestDecodeTokenBalances(t *testing.T) {
 	addrs := []*types.Address{testAddr1, testAddr2}
-	bal1, _ := abi.Pack(abi.Types{abi.Uint256}, big.NewInt(1))
-	bal2, _ := abi.Pack(abi.Types{abi.Uint256}, big.NewInt(2))
+	bal1, _ := abi.Pack(abi.NewTypes(abi.Uint256), big.NewInt(1))
+	bal2, _ := abi.Pack(abi.NewTypes(abi.Uint256), big.NewInt(2))
 
-	data, err := abi.Pack(abi.Types{abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))}, []any{
+	data, err := abi.Pack(abi.NewTypes(abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))), []any{
 		[]any{true, bal1},
 		[]any{false, bal2},
 	})
@@ -290,7 +290,7 @@ func TestDecodeTokenBalances(t *testing.T) {
 }
 
 func TestDecodeTokenBalancesRejectsLengthMismatch(t *testing.T) {
-	data, err := abi.Pack(abi.Types{abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))}, []any{
+	data, err := abi.Pack(abi.NewTypes(abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))), []any{
 		[]any{true, []byte{}},
 	})
 	require.NoError(t, err)
@@ -300,10 +300,10 @@ func TestDecodeTokenBalancesRejectsLengthMismatch(t *testing.T) {
 
 func TestDecodeAddressBalances(t *testing.T) {
 	toks := []*types.Address{testToken, testToken2}
-	bal1, _ := abi.Pack(abi.Types{abi.Uint256}, big.NewInt(3))
-	bal2, _ := abi.Pack(abi.Types{abi.Uint256}, big.NewInt(4))
+	bal1, _ := abi.Pack(abi.NewTypes(abi.Uint256), big.NewInt(3))
+	bal2, _ := abi.Pack(abi.NewTypes(abi.Uint256), big.NewInt(4))
 
-	data, err := abi.Pack(abi.Types{abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))}, []any{
+	data, err := abi.Pack(abi.NewTypes(abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))), []any{
 		[]any{true, bal1},
 		[]any{true, bal2},
 	})
@@ -332,11 +332,11 @@ func TestDecodeBalancePairsRejectsLengthMismatch(t *testing.T) {
 func TestDecodeBalancePairs(t *testing.T) {
 	toks := []*types.Address{testToken, testToken, testToken2}
 	addrs := []*types.Address{testAddr1, testAddr2, testAddr2}
-	bal1, _ := abi.Pack(abi.Types{abi.Uint256}, big.NewInt(1))
-	bal2, _ := abi.Pack(abi.Types{abi.Uint256}, big.NewInt(2))
-	bal3, _ := abi.Pack(abi.Types{abi.Uint256}, big.NewInt(3))
+	bal1, _ := abi.Pack(abi.NewTypes(abi.Uint256), big.NewInt(1))
+	bal2, _ := abi.Pack(abi.NewTypes(abi.Uint256), big.NewInt(2))
+	bal3, _ := abi.Pack(abi.NewTypes(abi.Uint256), big.NewInt(3))
 
-	data, err := abi.Pack(abi.Types{abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))}, []any{
+	data, err := abi.Pack(abi.NewTypes(abi.Slice(abi.Tuple(abi.Bool, abi.Bytes))), []any{
 		[]any{true, bal1},
 		[]any{true, bal2},
 		[]any{true, bal3},

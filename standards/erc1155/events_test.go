@@ -22,14 +22,14 @@ func TestExtractTransfersSampleReceipt(t *testing.T) {
 	uriTopic, ok := uriEvent.Topic0()
 	require.True(t, ok)
 
-	transferSingleData, err := abi.Pack(abi.Types{abi.Uint256, abi.Uint256}, big.NewInt(42), big.NewInt(7))
+	transferSingleData, err := abi.Pack(abi.NewTypes(abi.Uint256, abi.Uint256), big.NewInt(42), big.NewInt(7))
 	require.NoError(t, err)
-	transferBatchData, err := abi.Pack(abi.Types{abi.Slice(abi.Uint256), abi.Slice(abi.Uint256)},
+	transferBatchData, err := abi.Pack(abi.NewTypes(abi.Slice(abi.Uint256), abi.Slice(abi.Uint256)),
 		[]*big.Int{big.NewInt(1), big.NewInt(2)}, []*big.Int{big.NewInt(10), big.NewInt(20)})
 	require.NoError(t, err)
-	approvedData, err := abi.Pack(abi.Types{abi.Bool}, true)
+	approvedData, err := abi.Pack(abi.NewTypes(abi.Bool), true)
 	require.NoError(t, err)
-	uriData, err := abi.Pack(abi.Types{abi.String}, "ipfs://1234")
+	uriData, err := abi.Pack(abi.NewTypes(abi.String), "ipfs://1234")
 	require.NoError(t, err)
 
 	logs := []tx.Log{
@@ -93,14 +93,14 @@ func TestExtractTransferBatchesSampleReceipt(t *testing.T) {
 	uriTopic, ok := uriEvent.Topic0()
 	require.True(t, ok)
 
-	transferSingleData, err := abi.Pack(abi.Types{abi.Uint256, abi.Uint256}, big.NewInt(42), big.NewInt(7))
+	transferSingleData, err := abi.Pack(abi.NewTypes(abi.Uint256, abi.Uint256), big.NewInt(42), big.NewInt(7))
 	require.NoError(t, err)
-	transferBatchData, err := abi.Pack(abi.Types{abi.Slice(abi.Uint256), abi.Slice(abi.Uint256)},
+	transferBatchData, err := abi.Pack(abi.NewTypes(abi.Slice(abi.Uint256), abi.Slice(abi.Uint256)),
 		[]*big.Int{big.NewInt(1), big.NewInt(2)}, []*big.Int{big.NewInt(10), big.NewInt(20)})
 	require.NoError(t, err)
-	approvedData, err := abi.Pack(abi.Types{abi.Bool}, true)
+	approvedData, err := abi.Pack(abi.NewTypes(abi.Bool), true)
 	require.NoError(t, err)
-	uriData, err := abi.Pack(abi.Types{abi.String}, "ipfs://1234")
+	uriData, err := abi.Pack(abi.NewTypes(abi.String), "ipfs://1234")
 	require.NoError(t, err)
 
 	logs := []tx.Log{
@@ -168,14 +168,14 @@ func TestExtractApprovalForAllSampleReceipt(t *testing.T) {
 	uriTopic, ok := uriEvent.Topic0()
 	require.True(t, ok)
 
-	transferSingleData, err := abi.Pack(abi.Types{abi.Uint256, abi.Uint256}, big.NewInt(42), big.NewInt(7))
+	transferSingleData, err := abi.Pack(abi.NewTypes(abi.Uint256, abi.Uint256), big.NewInt(42), big.NewInt(7))
 	require.NoError(t, err)
-	transferBatchData, err := abi.Pack(abi.Types{abi.Slice(abi.Uint256), abi.Slice(abi.Uint256)},
+	transferBatchData, err := abi.Pack(abi.NewTypes(abi.Slice(abi.Uint256), abi.Slice(abi.Uint256)),
 		[]*big.Int{big.NewInt(1), big.NewInt(2)}, []*big.Int{big.NewInt(10), big.NewInt(20)})
 	require.NoError(t, err)
-	approvedData, err := abi.Pack(abi.Types{abi.Bool}, true)
+	approvedData, err := abi.Pack(abi.NewTypes(abi.Bool), true)
 	require.NoError(t, err)
-	uriData, err := abi.Pack(abi.Types{abi.String}, "ipfs://1234")
+	uriData, err := abi.Pack(abi.NewTypes(abi.String), "ipfs://1234")
 	require.NoError(t, err)
 
 	logs := []tx.Log{
@@ -237,14 +237,14 @@ func TestExtractURISampleReceipt(t *testing.T) {
 	uriTopic, ok := uriEvent.Topic0()
 	require.True(t, ok)
 
-	transferSingleData, err := abi.Pack(abi.Types{abi.Uint256, abi.Uint256}, big.NewInt(42), big.NewInt(7))
+	transferSingleData, err := abi.Pack(abi.NewTypes(abi.Uint256, abi.Uint256), big.NewInt(42), big.NewInt(7))
 	require.NoError(t, err)
-	transferBatchData, err := abi.Pack(abi.Types{abi.Slice(abi.Uint256), abi.Slice(abi.Uint256)},
+	transferBatchData, err := abi.Pack(abi.NewTypes(abi.Slice(abi.Uint256), abi.Slice(abi.Uint256)),
 		[]*big.Int{big.NewInt(1), big.NewInt(2)}, []*big.Int{big.NewInt(10), big.NewInt(20)})
 	require.NoError(t, err)
-	approvedData, err := abi.Pack(abi.Types{abi.Bool}, true)
+	approvedData, err := abi.Pack(abi.NewTypes(abi.Bool), true)
 	require.NoError(t, err)
-	uriData, err := abi.Pack(abi.Types{abi.String}, "ipfs://1234")
+	uriData, err := abi.Pack(abi.NewTypes(abi.String), "ipfs://1234")
 	require.NoError(t, err)
 
 	logs := []tx.Log{

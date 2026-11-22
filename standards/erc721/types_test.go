@@ -8,7 +8,7 @@ import (
 
 	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
-	"github.com/ninja-protocol-labs/go-evmkit/rpc"
+	"github.com/ninja-protocol-labs/go-evmkit/rpc/mocks"
 )
 
 func TestNewTransferEvent(t *testing.T) {
@@ -444,7 +444,7 @@ func TestNewRequestsSetFields(t *testing.T) {
 func TestClientMethodsWrapValidateError(t *testing.T) {
 	multicall := types.MustNewAddressFromHex("0xca11bde05977b3631167028862be2a173976ca11")
 	contract := types.MustNewAddressFromHex("0xbc4ca0eda7647a8ab7c2061c2e118a18a936f13d")
-	e := New(rpc.NewClient("http://127.0.0.1:0"))
+	e := New(mocks.NewClient(t))
 	ctx := t.Context()
 
 	_, err := e.Name(ctx, nil, nil)

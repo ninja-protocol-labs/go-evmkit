@@ -9,7 +9,7 @@ import (
 	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
-	"github.com/ninja-protocol-labs/go-evmkit/rpc"
+	"github.com/ninja-protocol-labs/go-evmkit/rpc/mocks"
 )
 
 func TestNewTransferEvent(t *testing.T) {
@@ -240,7 +240,7 @@ func TestReadsRejectInvalidRequest(t *testing.T) {
 	contract := types.MustNewAddressFromHex("0x4200000000000000000000000000000000000006")
 	owner := types.MustNewAddressFromHex("0x6667c8dc9fbfec411e7c1ee2b24de960149f930f")
 	value := big.NewInt(1)
-	e := New(rpc.NewClient("http://127.0.0.1:0"))
+	e := New(mocks.NewClient(t))
 
 	for _, tc := range []struct {
 		req  *TotalSupplyRequest
@@ -374,7 +374,7 @@ func TestWritesRejectInvalidRequest(t *testing.T) {
 	contract := types.MustNewAddressFromHex("0x4200000000000000000000000000000000000006")
 	owner := types.MustNewAddressFromHex("0x6667c8dc9fbfec411e7c1ee2b24de960149f930f")
 	value := big.NewInt(1)
-	e := New(rpc.NewClient("http://127.0.0.1:0"))
+	e := New(mocks.NewClient(t))
 
 	for _, tc := range []struct {
 		req  *TransferRequest
@@ -451,7 +451,7 @@ func TestBatcherRejectsInvalidRequest(t *testing.T) {
 	multicall := types.MustNewAddressFromHex("0xca11bde05977b3631167028862be2a173976ca11")
 	token := types.MustNewAddressFromHex("0x4200000000000000000000000000000000000006")
 	owner := types.MustNewAddressFromHex("0x6667c8dc9fbfec411e7c1ee2b24de960149f930f")
-	e := New(rpc.NewClient("http://127.0.0.1:0"))
+	e := New(mocks.NewClient(t))
 
 	for _, tc := range []struct {
 		req  *MetadataRequest
@@ -923,70 +923,157 @@ func TestValidateDoesNotMutateRequest(t *testing.T) {
 func TestClientMethodsWrapValidateError(t *testing.T) {
 	multicall := types.MustNewAddressFromHex("0xca11bde05977b3631167028862be2a173976ca11")
 	contract := types.MustNewAddressFromHex("0x4200000000000000000000000000000000000006")
-	e := New(rpc.NewClient("http://127.0.0.1:0"))
+	e := New(mocks.NewClient(t))
 
 	for _, tc := range []struct {
 		method string
 		call   func() error
 		inner  error
 	}{
-		{"totalSupply", func() error { _, err := e.TotalSupply(t.Context(), nil, &TotalSupplyRequest{}); return err }, (&TotalSupplyRequest{}).Validate()},
-		{"balanceOf", func() error { _, err := e.BalanceOf(t.Context(), nil, NewBalanceOfRequest(contract, nil)); return err }, NewBalanceOfRequest(contract, nil).Validate()},
-		{"allowance", func() error {
-			_, err := e.Allowance(t.Context(), nil, NewAllowanceRequest(contract, contract, nil))
-			return err
-		}, NewAllowanceRequest(contract, contract, nil).Validate()},
-		{"name", func() error { _, err := e.Name(t.Context(), nil, nil); return err }, (*NameRequest)(nil).Validate()},
-		{"symbol", func() error { _, err := e.Symbol(t.Context(), nil, nil); return err }, (*SymbolRequest)(nil).Validate()},
-		{"decimals", func() error { _, err := e.Decimals(t.Context(), nil, nil); return err }, (*DecimalsRequest)(nil).Validate()},
-		{"callTransfer", func() error {
-			_, err := e.CallTransfer(t.Context(), nil, NewTransferRequest(contract, contract, nil))
-			return err
-		}, NewTransferRequest(contract, contract, nil).Validate()},
-		{"callApprove", func() error {
-			_, err := e.CallApprove(t.Context(), nil, NewApproveRequest(contract, nil, big.NewInt(1)))
-			return err
-		}, NewApproveRequest(contract, nil, big.NewInt(1)).Validate()},
-		{"callTransferFrom", func() error {
-			_, err := e.CallTransferFrom(t.Context(), nil, NewTransferFromRequest(contract, nil, contract, big.NewInt(1)))
-			return err
-		}, NewTransferFromRequest(contract, nil, contract, big.NewInt(1)).Validate()},
-		{"transfer", func() error {
-			_, _, err := e.Transfer(t.Context(), nil, NewTransferRequest(nil, contract, big.NewInt(1)))
-			return err
-		}, NewTransferRequest(nil, contract, big.NewInt(1)).Validate()},
-		{"approve", func() error {
-			_, _, err := e.Approve(t.Context(), nil, NewApproveRequest(contract, contract, nil))
-			return err
-		}, NewApproveRequest(contract, contract, nil).Validate()},
-		{"transferFrom", func() error {
-			_, _, err := e.TransferFrom(t.Context(), nil, NewTransferFromRequest(contract, contract, nil, big.NewInt(1)))
-			return err
-		}, NewTransferFromRequest(contract, contract, nil, big.NewInt(1)).Validate()},
-		{"metadata", func() error {
-			_, err := e.Metadata(t.Context(), nil, NewMetadataRequest(multicall, nil, false))
-			return err
-		}, NewMetadataRequest(multicall, nil, false).Validate()},
-		{"metadataWithBalance", func() error {
-			_, err := e.MetadataWithBalance(t.Context(), nil, NewMetadataWithBalanceRequest(multicall, contract, nil, false))
-			return err
-		}, NewMetadataWithBalanceRequest(multicall, contract, nil, false).Validate()},
-		{"allowanceWithBalance", func() error {
-			_, err := e.AllowanceWithBalance(t.Context(), nil, NewAllowanceWithBalanceRequest(nil, contract, contract, contract, false))
-			return err
-		}, NewAllowanceWithBalanceRequest(nil, contract, contract, contract, false).Validate()},
-		{"tokenBalances", func() error {
-			_, err := e.TokenBalances(t.Context(), nil, NewTokenBalancesRequest(multicall, contract, nil, false))
-			return err
-		}, NewTokenBalancesRequest(multicall, contract, nil, false).Validate()},
-		{"addressBalances", func() error {
-			_, err := e.AddressBalances(t.Context(), nil, NewAddressBalancesRequest(multicall, contract, []*types.Address{nil}, false))
-			return err
-		}, NewAddressBalancesRequest(multicall, contract, []*types.Address{nil}, false).Validate()},
-		{"balancePairs", func() error {
-			_, err := e.BalancePairs(t.Context(), nil, NewBalancePairsRequest(multicall, []*types.Address{contract}, nil, false))
-			return err
-		}, NewBalancePairsRequest(multicall, []*types.Address{contract}, nil, false).Validate()},
+		{
+			"totalSupply",
+			func() error {
+				_, err := e.TotalSupply(t.Context(), nil, &TotalSupplyRequest{})
+				return err
+			},
+			(&TotalSupplyRequest{}).Validate(),
+		},
+		{
+			"balanceOf",
+			func() error {
+				_, err := e.BalanceOf(t.Context(), nil, NewBalanceOfRequest(contract, nil))
+				return err
+			},
+			NewBalanceOfRequest(contract, nil).Validate(),
+		},
+		{
+			"allowance",
+			func() error {
+				_, err := e.Allowance(t.Context(), nil, NewAllowanceRequest(contract, contract, nil))
+				return err
+			},
+			NewAllowanceRequest(contract, contract, nil).Validate(),
+		},
+		{
+			"name",
+			func() error {
+				_, err := e.Name(t.Context(), nil, nil)
+				return err
+			},
+			(*NameRequest)(nil).Validate(),
+		},
+		{
+			"symbol",
+			func() error {
+				_, err := e.Symbol(t.Context(), nil, nil)
+				return err
+			},
+			(*SymbolRequest)(nil).Validate(),
+		},
+		{
+			"decimals",
+			func() error {
+				_, err := e.Decimals(t.Context(), nil, nil)
+				return err
+			},
+			(*DecimalsRequest)(nil).Validate(),
+		},
+		{
+			"callTransfer",
+			func() error {
+				_, err := e.CallTransfer(t.Context(), nil, NewTransferRequest(contract, contract, nil))
+				return err
+			},
+			NewTransferRequest(contract, contract, nil).Validate(),
+		},
+		{
+			"callApprove",
+			func() error {
+				_, err := e.CallApprove(t.Context(), nil, NewApproveRequest(contract, nil, big.NewInt(1)))
+				return err
+			},
+			NewApproveRequest(contract, nil, big.NewInt(1)).Validate(),
+		},
+		{
+			"callTransferFrom",
+			func() error {
+				_, err := e.CallTransferFrom(t.Context(), nil, NewTransferFromRequest(contract, nil, contract, big.NewInt(1)))
+				return err
+			},
+			NewTransferFromRequest(contract, nil, contract, big.NewInt(1)).Validate(),
+		},
+		{
+			"transfer",
+			func() error {
+				_, _, err := e.Transfer(t.Context(), nil, NewTransferRequest(nil, contract, big.NewInt(1)))
+				return err
+			},
+			NewTransferRequest(nil, contract, big.NewInt(1)).Validate(),
+		},
+		{
+			"approve",
+			func() error {
+				_, _, err := e.Approve(t.Context(), nil, NewApproveRequest(contract, contract, nil))
+				return err
+			},
+			NewApproveRequest(contract, contract, nil).Validate(),
+		},
+		{
+			"transferFrom",
+			func() error {
+				_, _, err := e.TransferFrom(t.Context(), nil, NewTransferFromRequest(contract, contract, nil, big.NewInt(1)))
+				return err
+			},
+			NewTransferFromRequest(contract, contract, nil, big.NewInt(1)).Validate(),
+		},
+		{
+			"metadata",
+			func() error {
+				_, err := e.Metadata(t.Context(), nil, NewMetadataRequest(multicall, nil, false))
+				return err
+			},
+			NewMetadataRequest(multicall, nil, false).Validate(),
+		},
+		{
+			"metadataWithBalance",
+			func() error {
+				_, err := e.MetadataWithBalance(t.Context(), nil, NewMetadataWithBalanceRequest(multicall, contract, nil, false))
+				return err
+			},
+			NewMetadataWithBalanceRequest(multicall, contract, nil, false).Validate(),
+		},
+		{
+			"allowanceWithBalance",
+			func() error {
+				_, err := e.AllowanceWithBalance(t.Context(), nil, NewAllowanceWithBalanceRequest(nil, contract, contract, contract, false))
+				return err
+			},
+			NewAllowanceWithBalanceRequest(nil, contract, contract, contract, false).Validate(),
+		},
+		{
+			"tokenBalances",
+			func() error {
+				_, err := e.TokenBalances(t.Context(), nil, NewTokenBalancesRequest(multicall, contract, nil, false))
+				return err
+			},
+			NewTokenBalancesRequest(multicall, contract, nil, false).Validate(),
+		},
+		{
+			"addressBalances",
+			func() error {
+				_, err := e.AddressBalances(t.Context(), nil, NewAddressBalancesRequest(multicall, contract, []*types.Address{nil}, false))
+				return err
+			},
+			NewAddressBalancesRequest(multicall, contract, []*types.Address{nil}, false).Validate(),
+		},
+		{
+			"balancePairs",
+			func() error {
+				_, err := e.BalancePairs(t.Context(), nil, NewBalancePairsRequest(multicall, []*types.Address{contract}, nil, false))
+				return err
+			},
+			NewBalancePairsRequest(multicall, []*types.Address{contract}, nil, false).Validate(),
+		},
 	} {
 		t.Run(tc.method, func(t *testing.T) {
 			require.Error(t, tc.inner)
