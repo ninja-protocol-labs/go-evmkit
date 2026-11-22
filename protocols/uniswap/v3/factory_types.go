@@ -1,98 +1,228 @@
 package v3
 
 import (
+	"fmt"
 	"math/big"
 
+	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 )
 
-// GetPoolParams is GetPool's argument list.
-type GetPoolParams struct {
-	Factory *types.Address
-	TokenA  *types.Address
-	TokenB  *types.Address
-	Fee     *big.Int
+// OwnerRequest is owner()'s input on Contract.
+type OwnerRequest struct {
+	Contract *types.Address
 }
 
-func NewGetPoolParams(factory, tokenA, tokenB *types.Address, fee *big.Int) *GetPoolParams {
-	return &GetPoolParams{
-		Factory: factory,
-		TokenA:  tokenA,
-		TokenB:  tokenB,
-		Fee:     fee,
+func NewOwnerRequest(contract *types.Address) *OwnerRequest {
+	return &OwnerRequest{
+		Contract: contract,
 	}
 }
 
-// CreatePoolParams is CreateCreatePool's and CallCreatePool's argument list.
-type CreatePoolParams struct {
-	Factory *types.Address
-	Sender  *types.Address
-	TokenA  *types.Address
-	TokenB  *types.Address
-	Fee     *big.Int
+func (r *OwnerRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
 }
 
-func NewCreatePoolParams(factory, sender, tokenA, tokenB *types.Address, fee *big.Int) *CreatePoolParams {
-	return &CreatePoolParams{
-		Factory: factory,
-		Sender:  sender,
-		TokenA:  tokenA,
-		TokenB:  tokenB,
-		Fee:     fee,
+// FeeAmountTickSpacingRequest is feeAmountTickSpacing(fee)'s input on Contract.
+type FeeAmountTickSpacingRequest struct {
+	Contract *types.Address
+	Fee      *big.Int
+}
+
+func NewFeeAmountTickSpacingRequest(contract *types.Address, fee *big.Int) *FeeAmountTickSpacingRequest {
+	return &FeeAmountTickSpacingRequest{
+		Contract: contract,
+		Fee:      fee,
 	}
 }
 
-// SetOwnerParams is CreateSetOwner's argument list.
-type SetOwnerParams struct {
-	Factory *types.Address
-	Sender  *types.Address
-	Owner   *types.Address
+func (r *FeeAmountTickSpacingRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Fee == nil {
+		return fmt.Errorf("%w: fee is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
 }
 
-func NewSetOwnerParams(factory, sender, owner *types.Address) *SetOwnerParams {
-	return &SetOwnerParams{
-		Factory: factory,
-		Sender:  sender,
-		Owner:   owner,
+// GetPoolRequest is getPool(tokenA, tokenB, fee)'s input on Contract.
+type GetPoolRequest struct {
+	Contract *types.Address
+	TokenA   *types.Address
+	TokenB   *types.Address
+	Fee      *big.Int
+}
+
+func NewGetPoolRequest(contract, tokenA, tokenB *types.Address, fee *big.Int) *GetPoolRequest {
+	return &GetPoolRequest{
+		Contract: contract,
+		TokenA:   tokenA,
+		TokenB:   tokenB,
+		Fee:      fee,
 	}
 }
 
-// EnableFeeAmountParams is CreateEnableFeeAmount's argument list.
-type EnableFeeAmountParams struct {
-	Factory     *types.Address
-	Sender      *types.Address
+func (r *GetPoolRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.TokenA == nil {
+		return fmt.Errorf("%w: tokenA is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.TokenB == nil {
+		return fmt.Errorf("%w: tokenB is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Fee == nil {
+		return fmt.Errorf("%w: fee is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// CreatePoolRequest is createPool(tokenA, tokenB, fee)'s input on Contract.
+type CreatePoolRequest struct {
+	Contract *types.Address
+	TokenA   *types.Address
+	TokenB   *types.Address
+	Fee      *big.Int
+}
+
+func NewCreatePoolRequest(contract, tokenA, tokenB *types.Address, fee *big.Int) *CreatePoolRequest {
+	return &CreatePoolRequest{
+		Contract: contract,
+		TokenA:   tokenA,
+		TokenB:   tokenB,
+		Fee:      fee,
+	}
+}
+
+func (r *CreatePoolRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.TokenA == nil {
+		return fmt.Errorf("%w: tokenA is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.TokenB == nil {
+		return fmt.Errorf("%w: tokenB is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Fee == nil {
+		return fmt.Errorf("%w: fee is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// SetOwnerRequest is setOwner(_owner)'s input on Contract.
+type SetOwnerRequest struct {
+	Contract *types.Address
+	Owner    *types.Address
+}
+
+func NewSetOwnerRequest(contract, owner *types.Address) *SetOwnerRequest {
+	return &SetOwnerRequest{
+		Contract: contract,
+		Owner:    owner,
+	}
+}
+
+func (r *SetOwnerRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Owner == nil {
+		return fmt.Errorf("%w: owner is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// EnableFeeAmountRequest is enableFeeAmount(fee, tickSpacing)'s input on Contract.
+type EnableFeeAmountRequest struct {
+	Contract    *types.Address
 	Fee         *big.Int
 	TickSpacing *big.Int
 }
 
-func NewEnableFeeAmountParams(factory, sender *types.Address, fee, tickSpacing *big.Int) *EnableFeeAmountParams {
-	return &EnableFeeAmountParams{
-		Factory:     factory,
-		Sender:      sender,
+func NewEnableFeeAmountRequest(contract *types.Address, fee, tickSpacing *big.Int) *EnableFeeAmountRequest {
+	return &EnableFeeAmountRequest{
+		Contract:    contract,
 		Fee:         fee,
 		TickSpacing: tickSpacing,
 	}
 }
 
-// OwnerChanged mirrors IUniswapV3Factory's OwnerChanged event: Contract's owner moved
-// from OldOwner to NewOwner via setOwner.
-type OwnerChanged struct {
+func (r *EnableFeeAmountRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Fee == nil {
+		return fmt.Errorf("%w: fee is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.TickSpacing == nil {
+		return fmt.Errorf("%w: tickSpacing is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
+}
+
+// OwnerChangedEvent mirrors IUniswapV3Factory's OwnerChanged event: Contract's owner moved from OldOwner to NewOwner via setOwner.
+type OwnerChangedEvent struct {
 	Contract *types.Address
 	OldOwner *types.Address
 	NewOwner *types.Address
 }
 
-func NewOwnerChanged(contract, oldOwner, newOwner *types.Address) *OwnerChanged {
-	return &OwnerChanged{
+func NewOwnerChangedEvent(contract, oldOwner, newOwner *types.Address) *OwnerChangedEvent {
+	return &OwnerChangedEvent{
 		Contract: contract,
 		OldOwner: oldOwner,
 		NewOwner: newOwner,
 	}
 }
 
-// PoolCreated mirrors IUniswapV3Factory's PoolCreated event: a new pool was deployed for
-// (Token0, Token1, Fee) via createPool, now reachable at Pool.
-type PoolCreated struct {
+// PoolCreatedEvent mirrors IUniswapV3Factory's PoolCreated event: a pool for (Token0, Token1, Fee) was deployed at Pool.
+type PoolCreatedEvent struct {
 	Contract    *types.Address
 	Token0      *types.Address
 	Token1      *types.Address
@@ -101,8 +231,8 @@ type PoolCreated struct {
 	Pool        *types.Address
 }
 
-func NewPoolCreated(contract, token0, token1 *types.Address, fee, tickSpacing *big.Int, pool *types.Address) *PoolCreated {
-	return &PoolCreated{
+func NewPoolCreatedEvent(contract, token0, token1 *types.Address, fee, tickSpacing *big.Int, pool *types.Address) *PoolCreatedEvent {
+	return &PoolCreatedEvent{
 		Contract:    contract,
 		Token0:      token0,
 		Token1:      token1,
@@ -112,16 +242,15 @@ func NewPoolCreated(contract, token0, token1 *types.Address, fee, tickSpacing *b
 	}
 }
 
-// FeeAmountEnabled mirrors IUniswapV3Factory's FeeAmountEnabled event: Fee became a valid
-// fee tier for createPool, with TickSpacing enforced for every pool created at that fee.
-type FeeAmountEnabled struct {
+// FeeAmountEnabledEvent mirrors IUniswapV3Factory's FeeAmountEnabled event: Fee became a valid tier with TickSpacing.
+type FeeAmountEnabledEvent struct {
 	Contract    *types.Address
 	Fee         *big.Int
 	TickSpacing *big.Int
 }
 
-func NewFeeAmountEnabled(contract *types.Address, fee, tickSpacing *big.Int) *FeeAmountEnabled {
-	return &FeeAmountEnabled{
+func NewFeeAmountEnabledEvent(contract *types.Address, fee, tickSpacing *big.Int) *FeeAmountEnabledEvent {
+	return &FeeAmountEnabledEvent{
 		Contract:    contract,
 		Fee:         fee,
 		TickSpacing: tickSpacing,

@@ -3,6 +3,7 @@ package v3
 import (
 	"context"
 	"fmt"
+	"github.com/ninja-protocol-labs/go-evmkit/internal/testenv"
 	"math/big"
 	"strings"
 	"sync"
@@ -71,7 +72,7 @@ func TestPoolSuite(t *testing.T) {
 		Fee:           big.NewInt(FeeMedium),
 		Interval:      1500,
 		Timeout:       60,
-		ByteCode:      erc20ByteCodeHex,
+		ByteCode:      testenv.ERC20ByteCodeHex,
 		Constructor:   abi.NewFunction("constructor", abi.Types{abi.String, abi.String, abi.Uint8}, nil),
 		Salt:          core.Keccak256([]byte("go-evmkit")),
 	})
@@ -171,15 +172,11 @@ func (s *PoolSuite) SetupSuite() {
 
 	createBuilder := tx.NewDynamicFeeBuilder()
 	createBuilder.PriceBuffer(150)
-	unsignedCreate, err := s.v3Factory.CreateCreatePool(s.ctx, createBuilder, NewCreatePoolParams(s.factory, s.from, s.tokenA, s.tokenB, s.Fee))
+	createTx, createHash, err := s.v3Factory.CreatePool(s.ctx, bind.NewTransactOptions(s.signer, createBuilder), NewCreatePoolRequest(s.factory, s.tokenA, s.tokenB, s.Fee))
 	s.Require().NoError(err)
-	s.Require().NoError(unsignedCreate.Sign(s.signer))
 	s.mu.Lock()
-	s.totalFee.Add(s.totalFee, unsignedCreate.MaxFee())
+	s.totalFee.Add(s.totalFee, createTx.MaxFee())
 	s.mu.Unlock()
-
-	createHash, err := s.v3Factory.CreatePool(s.ctx, unsignedCreate)
-	s.Require().NoError(err)
 	s.T().Logf("SetupSuite: broadcast createPool, tx %s", createHash)
 
 	createReceipt, err := tx.WaitForReceipt(s.ctx, s.client, createHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
@@ -488,7 +485,7 @@ func (s *PoolSuite) Test09BurnTickUpperTooHigh() {
 }
 
 func (s *PoolSuite) Test10SetFeeProtocolForbidden() {
-	_, err := s.v3Factory.Owner(s.ctx, s.factory, rpc.BlockTagLatest)
+	_, err := s.v3Factory.Owner(s.ctx, nil, NewOwnerRequest(s.factory))
 	s.Require().NoError(err)
 
 	_, err = s.v3Pool.CreateSetFeeProtocol(s.ctx, tx.NewDynamicFeeBuilder(), NewSetFeeProtocolParams(s.pool, s.from, 4, 10))

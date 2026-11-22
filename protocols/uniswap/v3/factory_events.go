@@ -11,8 +11,8 @@ import (
 
 // ExtractOwnerChanged pulls every OwnerChanged-shaped log out of logs, from any factory;
 // filter by Contract afterward.
-func ExtractOwnerChanged(logs []tx.Log) ([]OwnerChanged, error) {
-	var changed []OwnerChanged
+func ExtractOwnerChanged(logs []tx.Log) ([]OwnerChangedEvent, error) {
+	var changed []OwnerChangedEvent
 	for i, log := range logs {
 		if len(log.Topics) == 0 || log.Topics[0] == nil {
 			continue
@@ -39,15 +39,15 @@ func ExtractOwnerChanged(logs []tx.Log) ([]OwnerChanged, error) {
 		if !ok {
 			return nil, fmt.Errorf("uniswapv3: extractOwnerChanged: logs[%d]: unexpected decoded type for newOwner: %T", i, vals[1])
 		}
-		changed = append(changed, *NewOwnerChanged(log.Address, oldOwner, newOwner))
+		changed = append(changed, *NewOwnerChangedEvent(log.Address, oldOwner, newOwner))
 	}
 	return changed, nil
 }
 
 // ExtractPoolCreated pulls every PoolCreated-shaped log out of logs, from any factory;
 // filter by Contract afterward.
-func ExtractPoolCreated(logs []tx.Log) ([]PoolCreated, error) {
-	var created []PoolCreated
+func ExtractPoolCreated(logs []tx.Log) ([]PoolCreatedEvent, error) {
+	var created []PoolCreatedEvent
 	for i, log := range logs {
 		if len(log.Topics) == 0 || log.Topics[0] == nil {
 			continue
@@ -86,15 +86,15 @@ func ExtractPoolCreated(logs []tx.Log) ([]PoolCreated, error) {
 		if !ok {
 			return nil, fmt.Errorf("uniswapv3: extractPoolCreated: logs[%d]: unexpected decoded type for pool: %T", i, vals[4])
 		}
-		created = append(created, *NewPoolCreated(log.Address, token0, token1, fee, tickSpacing, pool))
+		created = append(created, *NewPoolCreatedEvent(log.Address, token0, token1, fee, tickSpacing, pool))
 	}
 	return created, nil
 }
 
 // ExtractFeeAmountEnabled pulls every FeeAmountEnabled-shaped log out of logs, from any
 // factory; filter by Contract afterward.
-func ExtractFeeAmountEnabled(logs []tx.Log) ([]FeeAmountEnabled, error) {
-	var enabled []FeeAmountEnabled
+func ExtractFeeAmountEnabled(logs []tx.Log) ([]FeeAmountEnabledEvent, error) {
+	var enabled []FeeAmountEnabledEvent
 	for i, log := range logs {
 		if len(log.Topics) == 0 || log.Topics[0] == nil {
 			continue
@@ -121,7 +121,7 @@ func ExtractFeeAmountEnabled(logs []tx.Log) ([]FeeAmountEnabled, error) {
 		if !ok {
 			return nil, fmt.Errorf("uniswapv3: extractFeeAmountEnabled: logs[%d]: unexpected decoded type for tickSpacing: %T", i, vals[1])
 		}
-		enabled = append(enabled, *NewFeeAmountEnabled(log.Address, fee, tickSpacing))
+		enabled = append(enabled, *NewFeeAmountEnabledEvent(log.Address, fee, tickSpacing))
 	}
 	return enabled, nil
 }

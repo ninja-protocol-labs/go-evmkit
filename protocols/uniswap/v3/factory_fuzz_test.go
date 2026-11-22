@@ -1,13 +1,21 @@
 package v3
 
 import (
+	"context"
 	"math/big"
 	"testing"
 
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/ninja-protocol-labs/go-evmkit/bind"
+	"github.com/ninja-protocol-labs/go-evmkit/core"
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
+	"github.com/ninja-protocol-labs/go-evmkit/rpc"
+	"github.com/ninja-protocol-labs/go-evmkit/rpc/mocks"
+	"github.com/ninja-protocol-labs/go-evmkit/tx"
+	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
 // go test -run '^$' -fuzz '^FuzzEncodeGetPoolRoundTrip$' -fuzztime=10s ./protocols/uniswap/v3
@@ -171,5 +179,103 @@ func FuzzSimpleDecodersDoNotPanic(f *testing.F) {
 		_, _ = DecodeFeeAmountTickSpacing(data)
 		_, _ = DecodeGetPool(data)
 		_, _ = DecodeCreatePool(data)
+	})
+}
+
+// go test -run '^$' -fuzz '^FuzzFactoryCreatePoolThroughClient$' -fuzztime=10s ./protocols/uniswap/v3
+func FuzzFactoryCreatePoolThroughClient(f *testing.F) {
+	f.Add([]byte{}, []byte{}, []byte{}, uint32(0), uint64(0), true)
+	f.Add([]byte{0x01}, []byte{0x02}, []byte{0x03}, uint32(3000), uint64(42), false)
+	f.Add(make([]byte, 20), make([]byte, 20), make([]byte, 20), uint32(1<<24-1), ^uint64(0)-1, true)
+
+	key, err := types.NewPrivateKeyFromBig(big.NewInt(0xb1d))
+	require.NoError(f, err)
+	signer := core.PubkeyToAddress(key.PublicKey())
+
+	f.Fuzz(func(t *testing.T, factoryRaw, tokenARaw, tokenBRaw []byte, feeRaw uint32, nonce uint64, dynamic bool) {
+		factory := types.NewAddressFromBytes(factoryRaw)
+		tokenA := types.NewAddressFromBytes(tokenARaw)
+		tokenB := types.NewAddressFromBytes(tokenBRaw)
+		fee := big.NewInt(int64(feeRaw % (1 << 24)))
+
+		var builder tx.Builder
+		if dynamic {
+			builder = tx.NewDynamicFeeBuilder()
+		} else {
+			builder = tx.NewLegacyBuilder()
+		}
+		builder.ChainID(big.NewInt(1))
+		builder.Nonce(nonce)
+		builder.Limit(6_000_000)
+		builder.Price(big.NewInt(30_000_000_000), big.NewInt(1_000_000_000))
+
+		var raw []byte
+		c := mocks.NewClient(t)
+		c.EXPECT().Call(mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, e rpc.Element) error {
+			raw, err = encoding.Hex.Decode(e.Params.([]any)[0].(string))
+			require.NoError(t, err)
+			*e.Result.(*string) = core.Keccak256(raw).String()
+			return nil
+		}).Once()
+
+		signed, hash, err := NewFactory(c).CreatePool(t.Context(), bind.NewTransactOptions(key, builder), NewCreatePoolRequest(factory, tokenA, tokenB, fee))
+		require.NoError(t, err)
+		require.True(t, hash.Equal(core.Keccak256(raw)))
+		require.Equal(t, nonce, signed.AddressNonce())
+
+		decoded, err := core.DecodeTransaction(raw)
+		require.NoError(t, err)
+		from, err := decoded.Sender()
+		require.NoError(t, err)
+		require.True(t, from.Equal(signer))
+
+		var gotTo *types.Address
+		var gotData []byte
+		switch v := decoded.(type) {
+		case *core.DynamicFeeTx:
+			require.True(t, dynamic)
+			gotTo, gotData = v.To, v.Data
+		case *core.LegacyTx:
+			require.False(t, dynamic)
+			gotTo, gotData = v.To, v.Data
+		default:
+			t.Fatalf("unexpected tx type %T", decoded)
+		}
+		require.True(t, gotTo.Equal(factory))
+
+		vals, err := createPoolFn.DecodeCall(gotData)
+		require.NoError(t, err)
+		require.True(t, tokenA.Equal(vals[0].(*types.Address)))
+		require.True(t, tokenB.Equal(vals[1].(*types.Address)))
+		require.Zero(t, fee.Cmp(vals[2].(*big.Int)))
+	})
+}
+
+// go test -run '^$' -fuzz '^FuzzFactoryReadsSurviveArbitraryResult$' -fuzztime=10s ./protocols/uniswap/v3
+func FuzzFactoryReadsSurviveArbitraryResult(f *testing.F) {
+	f.Add([]byte{})
+	f.Add(make([]byte, 31))
+	f.Add(make([]byte, 32))
+	f.Add(append(make([]byte, 29), 0x80, 0x00, 0x00))
+
+	factory := types.MustNewAddressFromHex("0x1F98431c8aD98523631AE4a59f267346ea31F984")
+	a := types.MustNewAddressFromHex("0x6667c8dc9fbfec411e7c1ee2b24de960149f930f")
+
+	f.Fuzz(func(t *testing.T, result []byte) {
+		c := mocks.NewClient(t)
+		c.EXPECT().Call(mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, e rpc.Element) error {
+			*e.Result.(*string) = encoding.Hex.EncodePrefixed(result)
+			return nil
+		}).Times(4)
+		fac := NewFactory(c)
+
+		owner, err := fac.Owner(t.Context(), nil, NewOwnerRequest(factory))
+		require.True(t, (err == nil) != (owner == nil))
+		tickSpacing, err := fac.FeeAmountTickSpacing(t.Context(), nil, NewFeeAmountTickSpacingRequest(factory, big.NewInt(3000)))
+		require.True(t, (err == nil) != (tickSpacing == nil))
+		pool, err := fac.GetPool(t.Context(), nil, NewGetPoolRequest(factory, a, a, big.NewInt(3000)))
+		require.True(t, (err == nil) != (pool == nil))
+		created, err := fac.CallCreatePool(t.Context(), nil, NewCreatePoolRequest(factory, a, a, big.NewInt(3000)))
+		require.True(t, (err == nil) != (created == nil))
 	})
 }

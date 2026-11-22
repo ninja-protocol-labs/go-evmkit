@@ -121,12 +121,20 @@ type ProtocolAddressBook struct {
 }
 
 type UniswapAddressBook struct {
-	V2 UniswapV2Config
+	V2 UniswapV2AddressBook
+	V3 UniswapV3AddressBook
 }
 
-type UniswapV2Config struct {
+type UniswapV2AddressBook struct {
 	Factory string
 	Router  string
+}
+
+type UniswapV3AddressBook struct {
+	Factory string
+	Router  string
+	Quoter  string
+	NFPM    string
 }
 
 // MustLoad returns n's config on nt with the API key and actor key filled in.

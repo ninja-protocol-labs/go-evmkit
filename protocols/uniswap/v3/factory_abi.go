@@ -50,7 +50,7 @@ var (
 
 // ErrReverted mirrors any UniswapV3Factory revert -- its requires carry no reason string, so
 // there's nothing to distinguish one failed precondition from another.
-var ErrReverted = errors.New("uniswapv3: reverted")
+var ErrReverted = errors.New("reverted")
 
 // EncodeOwner returns the calldata for owner().
 func EncodeOwner() []byte {
