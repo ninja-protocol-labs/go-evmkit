@@ -7,58 +7,58 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core"
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
-	"github.com/ninja-protocol-labs/go-evmkit/tx"
 	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
-// IRouterImmutables mirrors PeripheryImmutableState, the only state SwapRouter itself holds.
+// IRouterImmutables mirrors PeripheryImmutableState, the only state SwapRouter02 itself holds.
 type IRouterImmutables interface {
-	Factory(ctx context.Context, contract *types.Address, block string) (*types.Address, error)
-	WETH9(ctx context.Context, contract *types.Address, block string) (*types.Address, error)
+	Factory(ctx context.Context, opts *bind.CallOptions, req *FactoryRequest) (*types.Address, error)
+	WETH9(ctx context.Context, opts *bind.CallOptions, req *WETH9Request) (*types.Address, error)
 }
 
-// IRouterSwap mirrors ISwapRouter. No tx.Builder-taking Create* constructors here -- see
-// CreateExactInputSingle, CreateExactInput, CreateExactOutputSingle, and CreateExactOutput.
+// IRouterSwap mirrors IV3SwapRouter (SwapRouter02: no deadline in the params; use Multicall with a Deadline).
 type IRouterSwap interface {
-	ExactInputSingle(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	ExactInput(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	ExactOutputSingle(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	ExactOutput(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
+	CallExactInputSingle(ctx context.Context, opts *bind.CallOptions, req *ExactInputSingleRequest) (*big.Int, error)
+	CallExactInput(ctx context.Context, opts *bind.CallOptions, req *ExactInputRequest) (*big.Int, error)
+	CallExactOutputSingle(ctx context.Context, opts *bind.CallOptions, req *ExactOutputSingleRequest) (*big.Int, error)
+	CallExactOutput(ctx context.Context, opts *bind.CallOptions, req *ExactOutputRequest) (*big.Int, error)
+
+	ExactInputSingle(ctx context.Context, opts *bind.TransactOptions, req *ExactInputSingleRequest) (core.Transaction, *types.Hash, error)
+	ExactInput(ctx context.Context, opts *bind.TransactOptions, req *ExactInputRequest) (core.Transaction, *types.Hash, error)
+	ExactOutputSingle(ctx context.Context, opts *bind.TransactOptions, req *ExactOutputSingleRequest) (core.Transaction, *types.Hash, error)
+	ExactOutput(ctx context.Context, opts *bind.TransactOptions, req *ExactOutputRequest) (core.Transaction, *types.Hash, error)
 }
 
-// IRouterPayments mirrors PeripheryPaymentsWithFee (and the PeripheryPayments it extends). No
-// tx.Builder-taking Create* constructors here -- see CreateUnwrapWETH9, CreateUnwrapWETH9WithFee,
-// CreateSweepToken, CreateSweepTokenWithFee, and CreateRefundETH.
+// IRouterPayments mirrors IPeripheryPaymentsWithFee.
 type IRouterPayments interface {
-	UnwrapWETH9(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	UnwrapWETH9WithFee(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	SweepToken(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	SweepTokenWithFee(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	RefundETH(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
+	UnwrapWETH9(ctx context.Context, opts *bind.TransactOptions, req *RouterUnwrapWETH9Request) (core.Transaction, *types.Hash, error)
+	UnwrapWETH9WithFee(ctx context.Context, opts *bind.TransactOptions, req *RouterUnwrapWETH9WithFeeRequest) (core.Transaction, *types.Hash, error)
+	SweepToken(ctx context.Context, opts *bind.TransactOptions, req *RouterSweepTokenRequest) (core.Transaction, *types.Hash, error)
+	SweepTokenWithFee(ctx context.Context, opts *bind.TransactOptions, req *RouterSweepTokenWithFeeRequest) (core.Transaction, *types.Hash, error)
+	RefundETH(ctx context.Context, opts *bind.TransactOptions, req *RouterRefundETHRequest) (core.Transaction, *types.Hash, error)
 }
 
-// IRouterMulticall mirrors Multicall. No tx.Builder-taking Create* constructor here -- see
-// CreateMulticall.
+// IRouterMulticall mirrors MulticallExtended.
 type IRouterMulticall interface {
-	Multicall(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
+	CallMulticall(ctx context.Context, opts *bind.CallOptions, req *RouterMulticallRequest) ([][]byte, error)
+
+	Multicall(ctx context.Context, opts *bind.TransactOptions, req *RouterMulticallRequest) (core.Transaction, *types.Hash, error)
 }
 
-// IRouterSelfPermit mirrors SelfPermit. No tx.Builder-taking Create* constructors here -- see
-// CreateSelfPermit, CreateSelfPermitIfNecessary, CreateSelfPermitAllowed, and
-// CreateSelfPermitAllowedIfNecessary.
+// IRouterSelfPermit mirrors ISelfPermit.
 type IRouterSelfPermit interface {
-	SelfPermit(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	SelfPermitIfNecessary(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	SelfPermitAllowed(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	SelfPermitAllowedIfNecessary(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
+	SelfPermit(ctx context.Context, opts *bind.TransactOptions, req *SelfPermitRequest) (core.Transaction, *types.Hash, error)
+	SelfPermitIfNecessary(ctx context.Context, opts *bind.TransactOptions, req *SelfPermitIfNecessaryRequest) (core.Transaction, *types.Hash, error)
+	SelfPermitAllowed(ctx context.Context, opts *bind.TransactOptions, req *SelfPermitAllowedRequest) (core.Transaction, *types.Hash, error)
+	SelfPermitAllowedIfNecessary(ctx context.Context, opts *bind.TransactOptions, req *SelfPermitAllowedIfNecessaryRequest) (core.Transaction, *types.Hash, error)
 }
 
-// IRouter mirrors SwapRouter, composed the same way its Solidity base contracts are: one small
-// interface per concern (immutables/swap/payments/multicall/self-permit).
+// IRouter mirrors SwapRouter02's V3 surface.
 type IRouter interface {
 	IRouterImmutables
 	IRouterSwap
@@ -69,692 +69,590 @@ type IRouter interface {
 
 var _ IRouter = (*Router)(nil)
 
-// Router calls any SwapRouter contract over a Client; it holds no contract address, so one
-// instance serves every router on every network.
+// Router calls any SwapRouter02 contract over a Client; it holds no contract address, so one instance serves every deployment.
 type Router struct {
 	c rpc.Client
 }
 
-// NewRouter returns a Router calling routers via c.
-func NewRouter(c rpc.Client) *Router {
+// NewRouter returns a Router calling routers via cli.
+func NewRouter(cli rpc.Client) *Router {
 	return &Router{
-		c: c,
+		c: cli,
 	}
 }
 
-// Factory returns the UniswapV3Factory contract's address.
-func (r *Router) Factory(ctx context.Context, contract *types.Address, block string) (*types.Address, error) {
-	data, err := r.call(ctx, nil, contract, nil, EncodeRouterFactory(), block)
+// Factory returns the UniswapV3Factory req.Contract routes through.
+func (r *Router) Factory(ctx context.Context, opts *bind.CallOptions, req *FactoryRequest) (*types.Address, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv3: factory: %w", err)
+	}
+
+	data, err := bind.Call(ctx, r.c, opts, req.Contract, EncodeRouterFactory())
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv3: factory: %w", r.wrapRevertError(err))
+	}
+
+	out, err := DecodeRouterFactory(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: factory: %w", err)
 	}
-	addr, err := DecodeRouterFactory(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: factory: %w", err)
-	}
-	return addr, nil
+
+	return out, nil
 }
 
-// WETH9 returns the WETH9 contract's address.
-func (r *Router) WETH9(ctx context.Context, contract *types.Address, block string) (*types.Address, error) {
-	data, err := r.call(ctx, nil, contract, nil, EncodeRouterWETH9(), block)
+// WETH9 returns req.Contract's wrapped native token.
+func (r *Router) WETH9(ctx context.Context, opts *bind.CallOptions, req *WETH9Request) (*types.Address, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv3: weth9: %w", err)
+	}
+
+	data, err := bind.Call(ctx, r.c, opts, req.Contract, EncodeRouterWETH9())
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv3: weth9: %w", r.wrapRevertError(err))
+	}
+
+	out, err := DecodeRouterWETH9(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: weth9: %w", err)
 	}
-	addr, err := DecodeRouterWETH9(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: weth9: %w", err)
-	}
-	return addr, nil
+
+	return out, nil
 }
 
-// CreateExactInputSingle builds an unsigned exactInputSingle(params) transaction via b, sent by
-// sender with value wei attached (value may be nil for a non-ETH-input swap).
-func (r *Router) CreateExactInputSingle(
-	ctx context.Context,
-	b tx.Builder,
-	contract, sender *types.Address,
-	value *big.Int,
-	params *ExactInputSingleParams,
-) (core.Transaction, error) {
-	calldata, err := EncodeExactInputSingle(
-		params.TokenIn,
-		params.TokenOut,
-		params.Fee,
-		params.Recipient,
-		params.AmountIn,
-		params.AmountOutMinimum,
-		params.SqrtPriceLimitX96,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: createExactInputSingle: %w", err)
+// CallExactInputSingle runs exactInputSingle via eth_call as opts.From with req.NativeAmount as msg.value, returning its result or the revert.
+func (r *Router) CallExactInputSingle(ctx context.Context, opts *bind.CallOptions, req *ExactInputSingleRequest) (*big.Int, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv3: callExactInputSingle: %w", err)
 	}
 
-	unsigned, err := b.Build(sender, contract, value, calldata).Pack(ctx, r.c)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: createExactInputSingle: %w", r.wrapRevertError(err))
+	if opts != nil && opts.Value != nil {
+		return nil, fmt.Errorf("uniswapv3: callExactInputSingle: %w: value must be nil", bind.ErrInvalidOptions)
 	}
-	return unsigned, nil
-}
 
-// CallExactInputSingle simulates exactInputSingle(params) via eth_call, as sender with value wei
-// attached, returning the amount of tokenOut it would receive -- without broadcasting anything.
-func (r *Router) CallExactInputSingle(
-	ctx context.Context,
-	contract, sender *types.Address,
-	value *big.Int,
-	params *ExactInputSingleParams,
-	block string,
-) (amountOut *big.Int, err error) {
-	calldata, err := EncodeExactInputSingle(
-		params.TokenIn,
-		params.TokenOut,
-		params.Fee,
-		params.Recipient,
-		params.AmountIn,
-		params.AmountOutMinimum,
-		params.SqrtPriceLimitX96,
-	)
+	calldata, err := EncodeExactInputSingle(req.Params.TokenIn, req.Params.TokenOut, req.Params.Fee, req.Params.Recipient, req.Params.AmountIn, req.Params.AmountOutMinimum, req.Params.SqrtPriceLimitX96)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: callExactInputSingle: %w", err)
 	}
-	data, err := r.call(ctx, sender, contract, value, calldata, block)
+
+	callOpts := bind.NewCallOptions()
+	if opts != nil {
+		*callOpts = *opts
+	}
+	callOpts.Value = req.NativeAmount
+
+	data, err := bind.Call(ctx, r.c, callOpts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv3: callExactInputSingle: %w", r.wrapRevertError(err))
+	}
+
+	amountOut, err := DecodeExactInputSingle(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: callExactInputSingle: %w", err)
 	}
-	amountOut, err = DecodeExactInputSingle(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: callExactInputSingle: %w", err)
-	}
+
 	return amountOut, nil
 }
 
-// ExactInputSingle broadcasts an already-signed exactInputSingle transaction.
-func (r *Router) ExactInputSingle(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: exactInputSingle: %w", err)
-	}
-	hash, err := tx.Broadcast(ctx, r.c, raw)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: exactInputSingle: %w", err)
-	}
-	return hash, nil
-}
-
-// CreateExactInput builds an unsigned exactInput(params) transaction via b, sent by sender with
-// value wei attached (value may be nil for a non-ETH-input swap).
-func (r *Router) CreateExactInput(
-	ctx context.Context,
-	b tx.Builder,
-	contract, sender *types.Address,
-	value *big.Int,
-	params *ExactInputParams,
-) (core.Transaction, error) {
-	calldata, err := EncodeExactInput(
-		params.Path,
-		params.Recipient,
-		params.AmountIn,
-		params.AmountOutMinimum,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: createExactInput: %w", err)
+// CallExactInput runs exactInput via eth_call as opts.From with req.NativeAmount as msg.value, returning its result or the revert.
+func (r *Router) CallExactInput(ctx context.Context, opts *bind.CallOptions, req *ExactInputRequest) (*big.Int, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv3: callExactInput: %w", err)
 	}
 
-	unsigned, err := b.Build(sender, contract, value, calldata).Pack(ctx, r.c)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: createExactInput: %w", r.wrapRevertError(err))
+	if opts != nil && opts.Value != nil {
+		return nil, fmt.Errorf("uniswapv3: callExactInput: %w: value must be nil", bind.ErrInvalidOptions)
 	}
-	return unsigned, nil
-}
 
-// CallExactInput simulates exactInput(params) via eth_call, as sender with value wei attached,
-// returning the amount of the final token in path it would receive -- without broadcasting
-// anything.
-func (r *Router) CallExactInput(
-	ctx context.Context,
-	contract, sender *types.Address,
-	value *big.Int,
-	params *ExactInputParams,
-	block string,
-) (amountOut *big.Int, err error) {
-	calldata, err := EncodeExactInput(
-		params.Path,
-		params.Recipient,
-		params.AmountIn,
-		params.AmountOutMinimum,
-	)
+	calldata, err := EncodeExactInput(req.Params.Path, req.Params.Recipient, req.Params.AmountIn, req.Params.AmountOutMinimum)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: callExactInput: %w", err)
 	}
-	data, err := r.call(ctx, sender, contract, value, calldata, block)
+
+	callOpts := bind.NewCallOptions()
+	if opts != nil {
+		*callOpts = *opts
+	}
+	callOpts.Value = req.NativeAmount
+
+	data, err := bind.Call(ctx, r.c, callOpts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv3: callExactInput: %w", r.wrapRevertError(err))
+	}
+
+	amountOut, err := DecodeExactInput(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: callExactInput: %w", err)
 	}
-	amountOut, err = DecodeExactInput(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: callExactInput: %w", err)
-	}
+
 	return amountOut, nil
 }
 
-// ExactInput broadcasts an already-signed exactInput transaction.
-func (r *Router) ExactInput(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: exactInput: %w", err)
-	}
-	hash, err := tx.Broadcast(ctx, r.c, raw)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: exactInput: %w", err)
-	}
-	return hash, nil
-}
-
-// CreateExactOutputSingle builds an unsigned exactOutputSingle(params) transaction via b, sent by
-// sender with value wei attached (value may be nil for a non-ETH-input swap).
-func (r *Router) CreateExactOutputSingle(
-	ctx context.Context,
-	b tx.Builder,
-	contract, sender *types.Address,
-	value *big.Int,
-	params *ExactOutputSingleParams,
-) (core.Transaction, error) {
-	calldata, err := EncodeExactOutputSingle(
-		params.TokenIn,
-		params.TokenOut,
-		params.Fee,
-		params.Recipient,
-		params.AmountOut,
-		params.AmountInMaximum,
-		params.SqrtPriceLimitX96,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: createExactOutputSingle: %w", err)
+// CallExactOutputSingle runs exactOutputSingle via eth_call as opts.From with req.NativeAmount as msg.value, returning its result or the revert.
+func (r *Router) CallExactOutputSingle(ctx context.Context, opts *bind.CallOptions, req *ExactOutputSingleRequest) (*big.Int, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv3: callExactOutputSingle: %w", err)
 	}
 
-	unsigned, err := b.Build(sender, contract, value, calldata).Pack(ctx, r.c)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: createExactOutputSingle: %w", r.wrapRevertError(err))
+	if opts != nil && opts.Value != nil {
+		return nil, fmt.Errorf("uniswapv3: callExactOutputSingle: %w: value must be nil", bind.ErrInvalidOptions)
 	}
-	return unsigned, nil
-}
 
-// CallExactOutputSingle simulates exactOutputSingle(params) via eth_call, as sender with value
-// wei attached, returning the amount of tokenIn it would require -- without broadcasting
-// anything.
-func (r *Router) CallExactOutputSingle(
-	ctx context.Context,
-	contract, sender *types.Address,
-	value *big.Int,
-	params *ExactOutputSingleParams,
-	block string,
-) (amountIn *big.Int, err error) {
-	calldata, err := EncodeExactOutputSingle(
-		params.TokenIn,
-		params.TokenOut,
-		params.Fee,
-		params.Recipient,
-		params.AmountOut,
-		params.AmountInMaximum,
-		params.SqrtPriceLimitX96,
-	)
+	calldata, err := EncodeExactOutputSingle(req.Params.TokenIn, req.Params.TokenOut, req.Params.Fee, req.Params.Recipient, req.Params.AmountOut, req.Params.AmountInMaximum, req.Params.SqrtPriceLimitX96)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: callExactOutputSingle: %w", err)
 	}
-	data, err := r.call(ctx, sender, contract, value, calldata, block)
+
+	callOpts := bind.NewCallOptions()
+	if opts != nil {
+		*callOpts = *opts
+	}
+	callOpts.Value = req.NativeAmount
+
+	data, err := bind.Call(ctx, r.c, callOpts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv3: callExactOutputSingle: %w", r.wrapRevertError(err))
+	}
+
+	amountIn, err := DecodeExactOutputSingle(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: callExactOutputSingle: %w", err)
 	}
-	amountIn, err = DecodeExactOutputSingle(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: callExactOutputSingle: %w", err)
-	}
+
 	return amountIn, nil
 }
 
-// ExactOutputSingle broadcasts an already-signed exactOutputSingle transaction.
-func (r *Router) ExactOutputSingle(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: exactOutputSingle: %w", err)
-	}
-	hash, err := tx.Broadcast(ctx, r.c, raw)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: exactOutputSingle: %w", err)
-	}
-	return hash, nil
-}
-
-// CreateExactOutput builds an unsigned exactOutput(params) transaction via b, sent by sender with
-// value wei attached (value may be nil for a non-ETH-input swap).
-func (r *Router) CreateExactOutput(
-	ctx context.Context,
-	b tx.Builder,
-	contract, sender *types.Address,
-	value *big.Int,
-	params *ExactOutputParams,
-) (core.Transaction, error) {
-	calldata, err := EncodeExactOutput(
-		params.Path,
-		params.Recipient,
-		params.AmountOut,
-		params.AmountInMaximum,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: createExactOutput: %w", err)
+// CallExactOutput runs exactOutput via eth_call as opts.From with req.NativeAmount as msg.value, returning its result or the revert.
+func (r *Router) CallExactOutput(ctx context.Context, opts *bind.CallOptions, req *ExactOutputRequest) (*big.Int, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv3: callExactOutput: %w", err)
 	}
 
-	unsigned, err := b.Build(sender, contract, value, calldata).Pack(ctx, r.c)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: createExactOutput: %w", r.wrapRevertError(err))
+	if opts != nil && opts.Value != nil {
+		return nil, fmt.Errorf("uniswapv3: callExactOutput: %w: value must be nil", bind.ErrInvalidOptions)
 	}
-	return unsigned, nil
-}
 
-// CallExactOutput simulates exactOutput(params) via eth_call, as sender with value wei attached,
-// returning the amount of the first token in path it would require -- without broadcasting
-// anything.
-func (r *Router) CallExactOutput(
-	ctx context.Context,
-	contract, sender *types.Address,
-	value *big.Int,
-	params *ExactOutputParams,
-	block string,
-) (amountIn *big.Int, err error) {
-	calldata, err := EncodeExactOutput(
-		params.Path,
-		params.Recipient,
-		params.AmountOut,
-		params.AmountInMaximum,
-	)
+	calldata, err := EncodeExactOutput(req.Params.Path, req.Params.Recipient, req.Params.AmountOut, req.Params.AmountInMaximum)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: callExactOutput: %w", err)
 	}
-	data, err := r.call(ctx, sender, contract, value, calldata, block)
+
+	callOpts := bind.NewCallOptions()
+	if opts != nil {
+		*callOpts = *opts
+	}
+	callOpts.Value = req.NativeAmount
+
+	data, err := bind.Call(ctx, r.c, callOpts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv3: callExactOutput: %w", r.wrapRevertError(err))
+	}
+
+	amountIn, err := DecodeExactOutput(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: callExactOutput: %w", err)
 	}
-	amountIn, err = DecodeExactOutput(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: callExactOutput: %w", err)
-	}
+
 	return amountIn, nil
 }
 
-// ExactOutput broadcasts an already-signed exactOutput transaction.
-func (r *Router) ExactOutput(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: exactOutput: %w", err)
-	}
-	hash, err := tx.Broadcast(ctx, r.c, raw)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: exactOutput: %w", err)
-	}
-	return hash, nil
-}
-
-// CreateUnwrapWETH9 builds an unsigned unwrapWETH9(amountMinimum, recipient) transaction via b,
-// sent by sender.
-func (r *Router) CreateUnwrapWETH9(
-	ctx context.Context,
-	b tx.Builder,
-	p *RouterUnwrapWETH9Params,
-) (core.Transaction, error) {
-	calldata, err := EncodeRouterUnwrapWETH9(p.AmountMinimum, p.Recipient)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: createUnwrapWETH9: %w", err)
+// CallMulticall runs multicall via eth_call as opts.From with req.NativeAmount as msg.value, returning its result or the revert.
+func (r *Router) CallMulticall(ctx context.Context, opts *bind.CallOptions, req *RouterMulticallRequest) ([][]byte, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv3: callMulticall: %w", err)
 	}
 
-	unsigned, err := b.Build(p.Sender, p.Router, nil, calldata).Pack(ctx, r.c)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: createUnwrapWETH9: %w", r.wrapRevertError(err))
-	}
-	return unsigned, nil
-}
-
-// UnwrapWETH9 broadcasts an already-signed unwrapWETH9 transaction.
-func (r *Router) UnwrapWETH9(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: unwrapWETH9: %w", err)
-	}
-	hash, err := tx.Broadcast(ctx, r.c, raw)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: unwrapWETH9: %w", err)
-	}
-	return hash, nil
-}
-
-// CreateUnwrapWETH9WithFee builds an unsigned unwrapWETH9WithFee(amountMinimum, recipient,
-// feeBips, feeRecipient) transaction via b, sent by sender.
-func (r *Router) CreateUnwrapWETH9WithFee(
-	ctx context.Context,
-	b tx.Builder,
-	p *RouterUnwrapWETH9WithFeeParams,
-) (core.Transaction, error) {
-	calldata, err := EncodeUnwrapWETH9WithFee(p.AmountMinimum, p.Recipient, p.FeeBips, p.FeeRecipient)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: createUnwrapWETH9WithFee: %w", err)
+	if opts != nil && opts.Value != nil {
+		return nil, fmt.Errorf("uniswapv3: callMulticall: %w: value must be nil", bind.ErrInvalidOptions)
 	}
 
-	unsigned, err := b.Build(p.Sender, p.Router, nil, calldata).Pack(ctx, r.c)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: createUnwrapWETH9WithFee: %w", r.wrapRevertError(err))
+	var calldata []byte
+	var err error
+	if req.Deadline != nil {
+		calldata, err = EncodeRouterMulticallWithDeadline(req.Deadline, req.Data)
+	} else {
+		calldata, err = EncodeRouterMulticall(req.Data)
 	}
-	return unsigned, nil
-}
-
-// UnwrapWETH9WithFee broadcasts an already-signed unwrapWETH9WithFee transaction.
-func (r *Router) UnwrapWETH9WithFee(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: unwrapWETH9WithFee: %w", err)
-	}
-	hash, err := tx.Broadcast(ctx, r.c, raw)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: unwrapWETH9WithFee: %w", err)
-	}
-	return hash, nil
-}
-
-// CreateSweepToken builds an unsigned sweepToken(token, amountMinimum, recipient) transaction
-// via b, sent by sender.
-func (r *Router) CreateSweepToken(
-	ctx context.Context,
-	b tx.Builder,
-	p *RouterSweepTokenParams,
-) (core.Transaction, error) {
-	calldata, err := EncodeRouterSweepToken(p.Token, p.AmountMinimum, p.Recipient)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: createSweepToken: %w", err)
-	}
-
-	unsigned, err := b.Build(p.Sender, p.Router, nil, calldata).Pack(ctx, r.c)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: createSweepToken: %w", r.wrapRevertError(err))
-	}
-	return unsigned, nil
-}
-
-// SweepToken broadcasts an already-signed sweepToken transaction.
-func (r *Router) SweepToken(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: sweepToken: %w", err)
-	}
-	hash, err := tx.Broadcast(ctx, r.c, raw)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: sweepToken: %w", err)
-	}
-	return hash, nil
-}
-
-// CreateSweepTokenWithFee builds an unsigned sweepTokenWithFee(token, amountMinimum, recipient,
-// feeBips, feeRecipient) transaction via b, sent by sender.
-func (r *Router) CreateSweepTokenWithFee(
-	ctx context.Context,
-	b tx.Builder,
-	p *RouterSweepTokenWithFeeParams,
-) (core.Transaction, error) {
-	calldata, err := EncodeSweepTokenWithFee(p.Token, p.AmountMinimum, p.Recipient, p.FeeBips, p.FeeRecipient)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: createSweepTokenWithFee: %w", err)
-	}
-
-	unsigned, err := b.Build(p.Sender, p.Router, nil, calldata).Pack(ctx, r.c)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: createSweepTokenWithFee: %w", r.wrapRevertError(err))
-	}
-	return unsigned, nil
-}
-
-// SweepTokenWithFee broadcasts an already-signed sweepTokenWithFee transaction.
-func (r *Router) SweepTokenWithFee(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: sweepTokenWithFee: %w", err)
-	}
-	hash, err := tx.Broadcast(ctx, r.c, raw)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: sweepTokenWithFee: %w", err)
-	}
-	return hash, nil
-}
-
-// CreateRefundETH builds an unsigned refundETH() transaction via b, sent by sender.
-func (r *Router) CreateRefundETH(
-	ctx context.Context,
-	b tx.Builder,
-	p *RouterRefundETHParams,
-) (core.Transaction, error) {
-	unsigned, err := b.Build(p.Sender, p.Router, nil, EncodeRouterRefundETH()).Pack(ctx, r.c)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: createRefundETH: %w", r.wrapRevertError(err))
-	}
-	return unsigned, nil
-}
-
-// RefundETH broadcasts an already-signed refundETH transaction.
-func (r *Router) RefundETH(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: refundETH: %w", err)
-	}
-	hash, err := tx.Broadcast(ctx, r.c, raw)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: refundETH: %w", err)
-	}
-	return hash, nil
-}
-
-// CreateMulticall builds an unsigned multicall(data) transaction via b, sent by sender with
-// value wei attached (value may be nil).
-func (r *Router) CreateMulticall(
-	ctx context.Context,
-	b tx.Builder,
-	p *RouterMulticallParams,
-) (core.Transaction, error) {
-	calldata, err := EncodeRouterMulticall(p.Data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: createMulticall: %w", err)
-	}
-
-	unsigned, err := b.Build(p.Sender, p.Router, p.Value, calldata).Pack(ctx, r.c)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: createMulticall: %w", r.wrapRevertError(err))
-	}
-	return unsigned, nil
-}
-
-// CallMulticall simulates multicall(data) via eth_call, as sender with value wei attached,
-// returning each sub-call's own return data -- without broadcasting anything.
-func (r *Router) CallMulticall(
-	ctx context.Context,
-	p *RouterMulticallParams,
-	block string,
-) ([][]byte, error) {
-	calldata, err := EncodeRouterMulticall(p.Data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: callMulticall: %w", err)
 	}
-	raw, err := r.call(ctx, p.Sender, p.Router, p.Value, calldata, block)
+
+	callOpts := bind.NewCallOptions()
+	if opts != nil {
+		*callOpts = *opts
+	}
+	callOpts.Value = req.NativeAmount
+
+	data, err := bind.Call(ctx, r.c, callOpts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv3: callMulticall: %w", r.wrapRevertError(err))
+	}
+
+	results, err := DecodeRouterMulticall(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: callMulticall: %w", err)
 	}
-	results, err := DecodeRouterMulticall(raw)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: callMulticall: %w", err)
-	}
+
 	return results, nil
 }
 
-// Multicall broadcasts an already-signed multicall transaction.
-func (r *Router) Multicall(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: multicall: %w", err)
+// ExactInputSingle swaps exactly Params.AmountIn of TokenIn for as much TokenOut as possible in one pool, signed by opts.Signer with req.NativeAmount (nil sends none) as msg.value.
+func (r *Router) ExactInputSingle(ctx context.Context, opts *bind.TransactOptions, req *ExactInputSingleRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: exactInputSingle: %w", err)
 	}
-	hash, err := tx.Broadcast(ctx, r.c, raw)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: multicall: %w", err)
+
+	if opts != nil && opts.Value != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: exactInputSingle: %w: value must be nil", bind.ErrInvalidOptions)
 	}
-	return hash, nil
+
+	calldata, err := EncodeExactInputSingle(req.Params.TokenIn, req.Params.TokenOut, req.Params.Fee, req.Params.Recipient, req.Params.AmountIn, req.Params.AmountOutMinimum, req.Params.SqrtPriceLimitX96)
+	if err != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: exactInputSingle: %w", err)
+	}
+
+	var txOpts *bind.TransactOptions
+	if opts != nil {
+		o := *opts
+		o.Value = req.NativeAmount
+		txOpts = &o
+	}
+
+	signed, hash, err := bind.Transact(ctx, r.c, txOpts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv3: exactInputSingle: %w", r.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
 }
 
-// CreateSelfPermit builds an unsigned selfPermit(token, value, deadline, v, r, s) transaction
-// via b, sent by sender.
-func (r *Router) CreateSelfPermit(
-	ctx context.Context,
-	b tx.Builder,
-	p *SelfPermitParams,
-) (core.Transaction, error) {
-	calldata, err := EncodeSelfPermit(p.Token, p.Value, p.Deadline, p.Sig)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: createSelfPermit: %w", err)
+// ExactInput swaps exactly Params.AmountIn along Params.Path (see EncodePath), signed by opts.Signer with req.NativeAmount (nil sends none) as msg.value.
+func (r *Router) ExactInput(ctx context.Context, opts *bind.TransactOptions, req *ExactInputRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: exactInput: %w", err)
 	}
 
-	unsigned, err := b.Build(p.Sender, p.Router, nil, calldata).Pack(ctx, r.c)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: createSelfPermit: %w", r.wrapRevertError(err))
+	if opts != nil && opts.Value != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: exactInput: %w: value must be nil", bind.ErrInvalidOptions)
 	}
-	return unsigned, nil
+
+	calldata, err := EncodeExactInput(req.Params.Path, req.Params.Recipient, req.Params.AmountIn, req.Params.AmountOutMinimum)
+	if err != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: exactInput: %w", err)
+	}
+
+	var txOpts *bind.TransactOptions
+	if opts != nil {
+		o := *opts
+		o.Value = req.NativeAmount
+		txOpts = &o
+	}
+
+	signed, hash, err := bind.Transact(ctx, r.c, txOpts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv3: exactInput: %w", r.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
 }
 
-// SelfPermit broadcasts an already-signed selfPermit transaction.
-func (r *Router) SelfPermit(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: selfPermit: %w", err)
+// ExactOutputSingle swaps as little TokenIn as possible for exactly Params.AmountOut in one pool, signed by opts.Signer with req.NativeAmount (nil sends none) as msg.value.
+func (r *Router) ExactOutputSingle(ctx context.Context, opts *bind.TransactOptions, req *ExactOutputSingleRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: exactOutputSingle: %w", err)
 	}
-	hash, err := tx.Broadcast(ctx, r.c, raw)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: selfPermit: %w", err)
+
+	if opts != nil && opts.Value != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: exactOutputSingle: %w: value must be nil", bind.ErrInvalidOptions)
 	}
-	return hash, nil
+
+	calldata, err := EncodeExactOutputSingle(req.Params.TokenIn, req.Params.TokenOut, req.Params.Fee, req.Params.Recipient, req.Params.AmountOut, req.Params.AmountInMaximum, req.Params.SqrtPriceLimitX96)
+	if err != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: exactOutputSingle: %w", err)
+	}
+
+	var txOpts *bind.TransactOptions
+	if opts != nil {
+		o := *opts
+		o.Value = req.NativeAmount
+		txOpts = &o
+	}
+
+	signed, hash, err := bind.Transact(ctx, r.c, txOpts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv3: exactOutputSingle: %w", r.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
 }
 
-// CreateSelfPermitIfNecessary builds an unsigned selfPermitIfNecessary(token, value, deadline,
-// v, r, s) transaction via b, sent by sender.
-func (r *Router) CreateSelfPermitIfNecessary(
-	ctx context.Context,
-	b tx.Builder,
-	p *SelfPermitIfNecessaryParams,
-) (core.Transaction, error) {
-	calldata, err := EncodeSelfPermitIfNecessary(p.Token, p.Value, p.Deadline, p.Sig)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: createSelfPermitIfNecessary: %w", err)
+// ExactOutput swaps for exactly Params.AmountOut along Params.Path, which runs tokenOut to tokenIn, signed by opts.Signer with req.NativeAmount (nil sends none) as msg.value.
+func (r *Router) ExactOutput(ctx context.Context, opts *bind.TransactOptions, req *ExactOutputRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: exactOutput: %w", err)
 	}
 
-	unsigned, err := b.Build(p.Sender, p.Router, nil, calldata).Pack(ctx, r.c)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: createSelfPermitIfNecessary: %w", r.wrapRevertError(err))
+	if opts != nil && opts.Value != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: exactOutput: %w: value must be nil", bind.ErrInvalidOptions)
 	}
-	return unsigned, nil
+
+	calldata, err := EncodeExactOutput(req.Params.Path, req.Params.Recipient, req.Params.AmountOut, req.Params.AmountInMaximum)
+	if err != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: exactOutput: %w", err)
+	}
+
+	var txOpts *bind.TransactOptions
+	if opts != nil {
+		o := *opts
+		o.Value = req.NativeAmount
+		txOpts = &o
+	}
+
+	signed, hash, err := bind.Transact(ctx, r.c, txOpts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv3: exactOutput: %w", r.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
 }
 
-// SelfPermitIfNecessary broadcasts an already-signed selfPermitIfNecessary transaction.
-func (r *Router) SelfPermitIfNecessary(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: selfPermitIfNecessary: %w", err)
+// UnwrapWETH9 unwraps req.Contract's whole WETH9 balance to req.Recipient as native currency, signed by opts.Signer.
+func (r *Router) UnwrapWETH9(ctx context.Context, opts *bind.TransactOptions, req *RouterUnwrapWETH9Request) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: unwrapWETH9: %w", err)
 	}
-	hash, err := tx.Broadcast(ctx, r.c, raw)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: selfPermitIfNecessary: %w", err)
+
+	if opts != nil && opts.Value != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: unwrapWETH9: %w: value must be nil", bind.ErrInvalidOptions)
 	}
-	return hash, nil
+
+	calldata, err := EncodeRouterUnwrapWETH9(req.AmountMinimum, req.Recipient)
+	if err != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: unwrapWETH9: %w", err)
+	}
+
+	signed, hash, err := bind.Transact(ctx, r.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv3: unwrapWETH9: %w", r.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
 }
 
-// CreateSelfPermitAllowed builds an unsigned selfPermitAllowed(token, nonce, expiry, v, r, s)
-// transaction via b, sent by sender.
-func (r *Router) CreateSelfPermitAllowed(
-	ctx context.Context,
-	b tx.Builder,
-	p *SelfPermitAllowedParams,
-) (core.Transaction, error) {
-	calldata, err := EncodeSelfPermitAllowed(p.Token, p.Nonce, p.Expiry, p.Sig)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: createSelfPermitAllowed: %w", err)
+// UnwrapWETH9WithFee is UnwrapWETH9 with req.FeeBips of the amount sent to req.FeeRecipient, signed by opts.Signer.
+func (r *Router) UnwrapWETH9WithFee(ctx context.Context, opts *bind.TransactOptions, req *RouterUnwrapWETH9WithFeeRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: unwrapWETH9WithFee: %w", err)
 	}
 
-	unsigned, err := b.Build(p.Sender, p.Router, nil, calldata).Pack(ctx, r.c)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: createSelfPermitAllowed: %w", r.wrapRevertError(err))
+	if opts != nil && opts.Value != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: unwrapWETH9WithFee: %w: value must be nil", bind.ErrInvalidOptions)
 	}
-	return unsigned, nil
+
+	calldata, err := EncodeUnwrapWETH9WithFee(req.AmountMinimum, req.Recipient, req.FeeBips, req.FeeRecipient)
+	if err != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: unwrapWETH9WithFee: %w", err)
+	}
+
+	signed, hash, err := bind.Transact(ctx, r.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv3: unwrapWETH9WithFee: %w", r.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
 }
 
-// SelfPermitAllowed broadcasts an already-signed selfPermitAllowed transaction.
-func (r *Router) SelfPermitAllowed(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: selfPermitAllowed: %w", err)
+// SweepToken sends req.Contract's whole req.Token balance to req.Recipient, signed by opts.Signer.
+func (r *Router) SweepToken(ctx context.Context, opts *bind.TransactOptions, req *RouterSweepTokenRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: sweepToken: %w", err)
 	}
-	hash, err := tx.Broadcast(ctx, r.c, raw)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: selfPermitAllowed: %w", err)
+
+	if opts != nil && opts.Value != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: sweepToken: %w: value must be nil", bind.ErrInvalidOptions)
 	}
-	return hash, nil
+
+	calldata, err := EncodeRouterSweepToken(req.Token, req.AmountMinimum, req.Recipient)
+	if err != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: sweepToken: %w", err)
+	}
+
+	signed, hash, err := bind.Transact(ctx, r.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv3: sweepToken: %w", r.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
 }
 
-// CreateSelfPermitAllowedIfNecessary builds an unsigned selfPermitAllowedIfNecessary(token,
-// nonce, expiry, v, r, s) transaction via b, sent by sender.
-func (r *Router) CreateSelfPermitAllowedIfNecessary(
-	ctx context.Context,
-	b tx.Builder,
-	p *SelfPermitAllowedIfNecessaryParams,
-) (core.Transaction, error) {
-	calldata, err := EncodeSelfPermitAllowedIfNecessary(p.Token, p.Nonce, p.Expiry, p.Sig)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: createSelfPermitAllowedIfNecessary: %w", err)
+// SweepTokenWithFee is SweepToken with req.FeeBips of the amount sent to req.FeeRecipient, signed by opts.Signer.
+func (r *Router) SweepTokenWithFee(ctx context.Context, opts *bind.TransactOptions, req *RouterSweepTokenWithFeeRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: sweepTokenWithFee: %w", err)
 	}
 
-	unsigned, err := b.Build(p.Sender, p.Router, nil, calldata).Pack(ctx, r.c)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: createSelfPermitAllowedIfNecessary: %w", r.wrapRevertError(err))
+	if opts != nil && opts.Value != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: sweepTokenWithFee: %w: value must be nil", bind.ErrInvalidOptions)
 	}
-	return unsigned, nil
+
+	calldata, err := EncodeSweepTokenWithFee(req.Token, req.AmountMinimum, req.Recipient, req.FeeBips, req.FeeRecipient)
+	if err != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: sweepTokenWithFee: %w", err)
+	}
+
+	signed, hash, err := bind.Transact(ctx, r.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv3: sweepTokenWithFee: %w", r.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
 }
 
-// SelfPermitAllowedIfNecessary broadcasts an already-signed selfPermitAllowedIfNecessary transaction.
-func (r *Router) SelfPermitAllowedIfNecessary(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: selfPermitAllowedIfNecessary: %w", err)
+// RefundETH returns req.Contract's native balance to the sender, signed by opts.Signer.
+func (r *Router) RefundETH(ctx context.Context, opts *bind.TransactOptions, req *RouterRefundETHRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: refundETH: %w", err)
 	}
-	hash, err := tx.Broadcast(ctx, r.c, raw)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: selfPermitAllowedIfNecessary: %w", err)
+
+	if opts != nil && opts.Value != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: refundETH: %w: value must be nil", bind.ErrInvalidOptions)
 	}
-	return hash, nil
+
+	calldata := EncodeRouterRefundETH()
+
+	signed, hash, err := bind.Transact(ctx, r.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv3: refundETH: %w", r.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
 }
 
-// call eth_calls contract with calldata, optionally simulating from a specific sender.
-func (r *Router) call(
-	ctx context.Context,
-	from, contract *types.Address,
-	value *big.Int,
-	calldata []byte,
-	block string,
-) ([]byte, error) {
-	params := map[string]any{
-		"to":   contract.String(),
-		"data": encoding.Hex.EncodePrefixed(calldata),
-	}
-	if from != nil {
-		params["from"] = from.String()
-	}
-	if value != nil && value.Sign() != 0 {
-		params["value"] = "0x" + value.Text(16)
+// Multicall runs req.Data as one transaction on req.Contract; a non-nil req.Deadline uses the multicall(deadline, data) overload, signed by opts.Signer with req.NativeAmount (nil sends none) as msg.value.
+func (r *Router) Multicall(ctx context.Context, opts *bind.TransactOptions, req *RouterMulticallRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: multicall: %w", err)
 	}
 
-	var raw string
-	if err := r.c.Call(ctx, rpc.ETHCall("call", params, block, &raw)); err != nil {
-		return nil, r.wrapRevertError(err)
+	if opts != nil && opts.Value != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: multicall: %w: value must be nil", bind.ErrInvalidOptions)
 	}
-	return encoding.Hex.Decode(raw)
+
+	var calldata []byte
+	var err error
+	if req.Deadline != nil {
+		calldata, err = EncodeRouterMulticallWithDeadline(req.Deadline, req.Data)
+	} else {
+		calldata, err = EncodeRouterMulticall(req.Data)
+	}
+	if err != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: multicall: %w", err)
+	}
+
+	var txOpts *bind.TransactOptions
+	if opts != nil {
+		o := *opts
+		o.Value = req.NativeAmount
+		txOpts = &o
+	}
+
+	signed, hash, err := bind.Transact(ctx, r.c, txOpts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv3: multicall: %w", r.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
+}
+
+// SelfPermit approves req.Contract for req.Amount of req.Token with an EIP-2612 signature, signed by opts.Signer.
+func (r *Router) SelfPermit(ctx context.Context, opts *bind.TransactOptions, req *SelfPermitRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: selfPermit: %w", err)
+	}
+
+	if opts != nil && opts.Value != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: selfPermit: %w: value must be nil", bind.ErrInvalidOptions)
+	}
+
+	calldata, err := EncodeSelfPermit(req.Token, req.Amount, req.Deadline, req.Sig)
+	if err != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: selfPermit: %w", err)
+	}
+
+	signed, hash, err := bind.Transact(ctx, r.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv3: selfPermit: %w", r.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
+}
+
+// SelfPermitIfNecessary is SelfPermit, skipped when the allowance already covers req.Amount, signed by opts.Signer.
+func (r *Router) SelfPermitIfNecessary(ctx context.Context, opts *bind.TransactOptions, req *SelfPermitIfNecessaryRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: selfPermitIfNecessary: %w", err)
+	}
+
+	if opts != nil && opts.Value != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: selfPermitIfNecessary: %w: value must be nil", bind.ErrInvalidOptions)
+	}
+
+	calldata, err := EncodeSelfPermitIfNecessary(req.Token, req.Amount, req.Deadline, req.Sig)
+	if err != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: selfPermitIfNecessary: %w", err)
+	}
+
+	signed, hash, err := bind.Transact(ctx, r.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv3: selfPermitIfNecessary: %w", r.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
+}
+
+// SelfPermitAllowed approves req.Contract for all of req.Token with a DAI-style permit signature, signed by opts.Signer.
+func (r *Router) SelfPermitAllowed(ctx context.Context, opts *bind.TransactOptions, req *SelfPermitAllowedRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: selfPermitAllowed: %w", err)
+	}
+
+	if opts != nil && opts.Value != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: selfPermitAllowed: %w: value must be nil", bind.ErrInvalidOptions)
+	}
+
+	calldata, err := EncodeSelfPermitAllowed(req.Token, req.Nonce, req.Expiry, req.Sig)
+	if err != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: selfPermitAllowed: %w", err)
+	}
+
+	signed, hash, err := bind.Transact(ctx, r.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv3: selfPermitAllowed: %w", r.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
+}
+
+// SelfPermitAllowedIfNecessary is SelfPermitAllowed, skipped when the allowance is already unlimited, signed by opts.Signer.
+func (r *Router) SelfPermitAllowedIfNecessary(ctx context.Context, opts *bind.TransactOptions, req *SelfPermitAllowedIfNecessaryRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: selfPermitAllowedIfNecessary: %w", err)
+	}
+
+	if opts != nil && opts.Value != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: selfPermitAllowedIfNecessary: %w: value must be nil", bind.ErrInvalidOptions)
+	}
+
+	calldata, err := EncodeSelfPermitAllowedIfNecessary(req.Token, req.Nonce, req.Expiry, req.Sig)
+	if err != nil {
+		return nil, nil, fmt.Errorf("uniswapv3: selfPermitAllowedIfNecessary: %w", err)
+	}
+
+	signed, hash, err := bind.Transact(ctx, r.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv3: selfPermitAllowedIfNecessary: %w", r.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
 }
 
 // wrapRevertError maps a known SwapRouter revert reason in err to its sentinel.
@@ -804,6 +702,6 @@ func (_ *Router) wrapRevertError(err error) error {
 	case reasonTransferETHFailed:
 		return fmt.Errorf("%w: %w", ErrTransferETHFailed, err)
 	default:
-		return fmt.Errorf("%w: %w", ErrReverted, err)
+		return (*Pool)(nil).wrapRevertError(err)
 	}
 }

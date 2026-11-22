@@ -643,11 +643,11 @@ func EncodeSwapExactTokensForETHSupportingFeeOnTransferTokens(amountIn, amountOu
 
 // permitSignatureParts extracts (v, r, s) from sig in the shape UniswapV2Router's
 // *WithPermit functions expect -- the same shape erc2612.EncodePermit uses.
-func permitSignatureParts(sig *types.Signature) (v uint8, r, s []byte) {
-	v = uint8(sig.LegacyV().Uint64())
-	r = make([]byte, 32)
+func permitSignatureParts(sig *types.Signature) (uint8, []byte, []byte) {
+	v := uint8(sig.LegacyV().Uint64())
+	r := make([]byte, 32)
 	sig.R().FillBytes(r)
-	s = make([]byte, 32)
+	s := make([]byte, 32)
 	sig.S().FillBytes(s)
 	return v, r, s
 }
@@ -678,7 +678,7 @@ func decodeAmounts(fn *abi.Function, data []byte) ([]*big.Int, error) {
 }
 
 // decodeAmountPair decodes a (uint256, uint256) return value via fn.
-func decodeAmountPair(fn *abi.Function, data []byte) (first, second *big.Int, err error) {
+func decodeAmountPair(fn *abi.Function, data []byte) (*big.Int, *big.Int, error) {
 	vals, err := fn.DecodeReturn(data)
 	if err != nil {
 		return nil, nil, err
@@ -687,7 +687,7 @@ func decodeAmountPair(fn *abi.Function, data []byte) (first, second *big.Int, er
 	if !ok {
 		return nil, nil, fmt.Errorf("unexpected decoded type for first: %T", vals[0])
 	}
-	second, ok = vals[1].(*big.Int)
+	second, ok := vals[1].(*big.Int)
 	if !ok {
 		return nil, nil, fmt.Errorf("unexpected decoded type for second: %T", vals[1])
 	}

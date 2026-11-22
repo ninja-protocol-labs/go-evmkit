@@ -205,8 +205,8 @@ func (_c *IPool_CallBurn_Call) Run(run func(ctx context.Context, opts *bind.Call
 	return _c
 }
 
-func (_c *IPool_CallBurn_Call) Return(amount0 *big.Int, amount1 *big.Int, err error) *IPool_CallBurn_Call {
-	_c.Call.Return(amount0, amount1, err)
+func (_c *IPool_CallBurn_Call) Return(intParam *big.Int, intParam1 *big.Int, err error) *IPool_CallBurn_Call {
+	_c.Call.Return(intParam, intParam1, err)
 	return _c
 }
 
@@ -287,8 +287,8 @@ func (_c *IPool_CallCollect_Call) Run(run func(ctx context.Context, opts *bind.C
 	return _c
 }
 
-func (_c *IPool_CallCollect_Call) Return(amount0 *big.Int, amount1 *big.Int, err error) *IPool_CallCollect_Call {
-	_c.Call.Return(amount0, amount1, err)
+func (_c *IPool_CallCollect_Call) Return(intParam *big.Int, intParam1 *big.Int, err error) *IPool_CallCollect_Call {
+	_c.Call.Return(intParam, intParam1, err)
 	return _c
 }
 
@@ -369,8 +369,8 @@ func (_c *IPool_CallCollectProtocol_Call) Run(run func(ctx context.Context, opts
 	return _c
 }
 
-func (_c *IPool_CallCollectProtocol_Call) Return(amount0 *big.Int, amount1 *big.Int, err error) *IPool_CallCollectProtocol_Call {
-	_c.Call.Return(amount0, amount1, err)
+func (_c *IPool_CallCollectProtocol_Call) Return(intParam *big.Int, intParam1 *big.Int, err error) *IPool_CallCollectProtocol_Call {
+	_c.Call.Return(intParam, intParam1, err)
 	return _c
 }
 
@@ -451,8 +451,8 @@ func (_c *IPool_CallMint_Call) Run(run func(ctx context.Context, opts *bind.Call
 	return _c
 }
 
-func (_c *IPool_CallMint_Call) Return(amount0 *big.Int, amount1 *big.Int, err error) *IPool_CallMint_Call {
-	_c.Call.Return(amount0, amount1, err)
+func (_c *IPool_CallMint_Call) Return(intParam *big.Int, intParam1 *big.Int, err error) *IPool_CallMint_Call {
+	_c.Call.Return(intParam, intParam1, err)
 	return _c
 }
 
@@ -533,8 +533,8 @@ func (_c *IPool_CallSwap_Call) Run(run func(ctx context.Context, opts *bind.Call
 	return _c
 }
 
-func (_c *IPool_CallSwap_Call) Return(amount0 *big.Int, amount1 *big.Int, err error) *IPool_CallSwap_Call {
-	_c.Call.Return(amount0, amount1, err)
+func (_c *IPool_CallSwap_Call) Return(intParam *big.Int, intParam1 *big.Int, err error) *IPool_CallSwap_Call {
+	_c.Call.Return(intParam, intParam1, err)
 	return _c
 }
 

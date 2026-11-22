@@ -54,14 +54,14 @@ func EncodePath(tokens []*types.Address, fees []*big.Int) ([]byte, error) {
 }
 
 // DecodePath splits a v3 swap path back into its tokens and per-hop fees.
-func DecodePath(path []byte) (tokens []*types.Address, fees []*big.Int, err error) {
+func DecodePath(path []byte) ([]*types.Address, []*big.Int, error) {
 	if len(path) < pathAddressLen+pathHopLen || (len(path)-pathAddressLen)%pathHopLen != 0 {
 		return nil, nil, fmt.Errorf("uniswapv3: decodePath: %w: length %d is not 20 + 23*n with n >= 1", ErrInvalidPath, len(path))
 	}
 
 	hops := (len(path) - pathAddressLen) / pathHopLen
-	tokens = make([]*types.Address, 0, hops+1)
-	fees = make([]*big.Int, 0, hops)
+	tokens := make([]*types.Address, 0, hops+1)
+	fees := make([]*big.Int, 0, hops)
 
 	tokens = append(tokens, types.NewAddressFromBytes(path[:pathAddressLen]))
 	for i := range hops {

@@ -46,10 +46,10 @@ type IPoolDerivedState interface {
 
 // IPoolActions mirrors IUniswapV3PoolActions.
 type IPoolActions interface {
-	CallMint(ctx context.Context, opts *bind.CallOptions, req *PoolMintRequest) (amount0, amount1 *big.Int, err error)
-	CallCollect(ctx context.Context, opts *bind.CallOptions, req *PoolCollectRequest) (amount0, amount1 *big.Int, err error)
-	CallBurn(ctx context.Context, opts *bind.CallOptions, req *BurnRequest) (amount0, amount1 *big.Int, err error)
-	CallSwap(ctx context.Context, opts *bind.CallOptions, req *SwapRequest) (amount0, amount1 *big.Int, err error)
+	CallMint(ctx context.Context, opts *bind.CallOptions, req *PoolMintRequest) (*big.Int, *big.Int, error)
+	CallCollect(ctx context.Context, opts *bind.CallOptions, req *PoolCollectRequest) (*big.Int, *big.Int, error)
+	CallBurn(ctx context.Context, opts *bind.CallOptions, req *BurnRequest) (*big.Int, *big.Int, error)
+	CallSwap(ctx context.Context, opts *bind.CallOptions, req *SwapRequest) (*big.Int, *big.Int, error)
 
 	Initialize(ctx context.Context, opts *bind.TransactOptions, req *InitializeRequest) (core.Transaction, *types.Hash, error)
 	Mint(ctx context.Context, opts *bind.TransactOptions, req *PoolMintRequest) (core.Transaction, *types.Hash, error)
@@ -62,7 +62,7 @@ type IPoolActions interface {
 
 // IPoolOwnerActions mirrors IUniswapV3PoolOwnerActions.
 type IPoolOwnerActions interface {
-	CallCollectProtocol(ctx context.Context, opts *bind.CallOptions, req *CollectProtocolRequest) (amount0, amount1 *big.Int, err error)
+	CallCollectProtocol(ctx context.Context, opts *bind.CallOptions, req *CollectProtocolRequest) (*big.Int, *big.Int, error)
 
 	SetFeeProtocol(ctx context.Context, opts *bind.TransactOptions, req *SetFeeProtocolRequest) (core.Transaction, *types.Hash, error)
 	CollectProtocol(ctx context.Context, opts *bind.TransactOptions, req *CollectProtocolRequest) (core.Transaction, *types.Hash, error)
@@ -445,7 +445,7 @@ func (pl *Pool) SnapshotCumulativesInside(ctx context.Context, opts *bind.CallOp
 }
 
 // CallMint runs mint via eth_call as opts.From, returning (amount0, amount1) or the revert.
-func (pl *Pool) CallMint(ctx context.Context, opts *bind.CallOptions, req *PoolMintRequest) (amount0, amount1 *big.Int, err error) {
+func (pl *Pool) CallMint(ctx context.Context, opts *bind.CallOptions, req *PoolMintRequest) (*big.Int, *big.Int, error) {
 	if err := req.Validate(); err != nil {
 		return nil, nil, fmt.Errorf("uniswapv3: callMint: %w", err)
 	}
@@ -460,7 +460,7 @@ func (pl *Pool) CallMint(ctx context.Context, opts *bind.CallOptions, req *PoolM
 		return nil, nil, fmt.Errorf("uniswapv3: callMint: %w", pl.wrapRevertError(err))
 	}
 
-	amount0, amount1, err = DecodeMint(data)
+	amount0, amount1, err := DecodeMint(data)
 	if err != nil {
 		return nil, nil, fmt.Errorf("uniswapv3: callMint: %w", err)
 	}
@@ -469,7 +469,7 @@ func (pl *Pool) CallMint(ctx context.Context, opts *bind.CallOptions, req *PoolM
 }
 
 // CallCollect runs collect via eth_call as opts.From, returning (amount0, amount1) or the revert.
-func (pl *Pool) CallCollect(ctx context.Context, opts *bind.CallOptions, req *PoolCollectRequest) (amount0, amount1 *big.Int, err error) {
+func (pl *Pool) CallCollect(ctx context.Context, opts *bind.CallOptions, req *PoolCollectRequest) (*big.Int, *big.Int, error) {
 	if err := req.Validate(); err != nil {
 		return nil, nil, fmt.Errorf("uniswapv3: callCollect: %w", err)
 	}
@@ -484,7 +484,7 @@ func (pl *Pool) CallCollect(ctx context.Context, opts *bind.CallOptions, req *Po
 		return nil, nil, fmt.Errorf("uniswapv3: callCollect: %w", pl.wrapRevertError(err))
 	}
 
-	amount0, amount1, err = DecodeCollect(data)
+	amount0, amount1, err := DecodeCollect(data)
 	if err != nil {
 		return nil, nil, fmt.Errorf("uniswapv3: callCollect: %w", err)
 	}
@@ -493,7 +493,7 @@ func (pl *Pool) CallCollect(ctx context.Context, opts *bind.CallOptions, req *Po
 }
 
 // CallBurn runs burn via eth_call as opts.From, returning (amount0, amount1) or the revert.
-func (pl *Pool) CallBurn(ctx context.Context, opts *bind.CallOptions, req *BurnRequest) (amount0, amount1 *big.Int, err error) {
+func (pl *Pool) CallBurn(ctx context.Context, opts *bind.CallOptions, req *BurnRequest) (*big.Int, *big.Int, error) {
 	if err := req.Validate(); err != nil {
 		return nil, nil, fmt.Errorf("uniswapv3: callBurn: %w", err)
 	}
@@ -508,7 +508,7 @@ func (pl *Pool) CallBurn(ctx context.Context, opts *bind.CallOptions, req *BurnR
 		return nil, nil, fmt.Errorf("uniswapv3: callBurn: %w", pl.wrapRevertError(err))
 	}
 
-	amount0, amount1, err = DecodeBurn(data)
+	amount0, amount1, err := DecodeBurn(data)
 	if err != nil {
 		return nil, nil, fmt.Errorf("uniswapv3: callBurn: %w", err)
 	}
@@ -517,7 +517,7 @@ func (pl *Pool) CallBurn(ctx context.Context, opts *bind.CallOptions, req *BurnR
 }
 
 // CallSwap runs swap via eth_call as opts.From, returning (amount0, amount1) or the revert.
-func (pl *Pool) CallSwap(ctx context.Context, opts *bind.CallOptions, req *SwapRequest) (amount0, amount1 *big.Int, err error) {
+func (pl *Pool) CallSwap(ctx context.Context, opts *bind.CallOptions, req *SwapRequest) (*big.Int, *big.Int, error) {
 	if err := req.Validate(); err != nil {
 		return nil, nil, fmt.Errorf("uniswapv3: callSwap: %w", err)
 	}
@@ -532,7 +532,7 @@ func (pl *Pool) CallSwap(ctx context.Context, opts *bind.CallOptions, req *SwapR
 		return nil, nil, fmt.Errorf("uniswapv3: callSwap: %w", pl.wrapRevertError(err))
 	}
 
-	amount0, amount1, err = DecodeSwap(data)
+	amount0, amount1, err := DecodeSwap(data)
 	if err != nil {
 		return nil, nil, fmt.Errorf("uniswapv3: callSwap: %w", err)
 	}
@@ -541,7 +541,7 @@ func (pl *Pool) CallSwap(ctx context.Context, opts *bind.CallOptions, req *SwapR
 }
 
 // CallCollectProtocol runs collectProtocol via eth_call as opts.From, returning (amount0, amount1) or the revert.
-func (pl *Pool) CallCollectProtocol(ctx context.Context, opts *bind.CallOptions, req *CollectProtocolRequest) (amount0, amount1 *big.Int, err error) {
+func (pl *Pool) CallCollectProtocol(ctx context.Context, opts *bind.CallOptions, req *CollectProtocolRequest) (*big.Int, *big.Int, error) {
 	if err := req.Validate(); err != nil {
 		return nil, nil, fmt.Errorf("uniswapv3: callCollectProtocol: %w", err)
 	}
@@ -556,7 +556,7 @@ func (pl *Pool) CallCollectProtocol(ctx context.Context, opts *bind.CallOptions,
 		return nil, nil, fmt.Errorf("uniswapv3: callCollectProtocol: %w", pl.wrapRevertError(err))
 	}
 
-	amount0, amount1, err = DecodeCollectProtocol(data)
+	amount0, amount1, err := DecodeCollectProtocol(data)
 	if err != nil {
 		return nil, nil, fmt.Errorf("uniswapv3: callCollectProtocol: %w", err)
 	}

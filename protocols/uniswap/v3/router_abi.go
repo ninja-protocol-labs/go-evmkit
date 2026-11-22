@@ -37,7 +37,8 @@ var (
 	sweepTokenWithFeeFn  = abi.NewFunction("sweepTokenWithFee", abi.NewTypes(abi.Address, abi.Uint256, abi.Address, abi.Uint256, abi.Address), nil)
 	routerRefundETHFn    = abi.NewFunction("refundETH", nil, nil)
 
-	routerMulticallFn = abi.NewFunction("multicall", abi.NewTypes(abi.Slice(abi.Bytes)), abi.NewTypes(abi.Slice(abi.Bytes)))
+	routerMulticallFn         = abi.NewFunction("multicall", abi.NewTypes(abi.Slice(abi.Bytes)), abi.NewTypes(abi.Slice(abi.Bytes)))
+	routerMulticallDeadlineFn = abi.NewFunction("multicall", abi.NewTypes(abi.Uint256, abi.Slice(abi.Bytes)), abi.NewTypes(abi.Slice(abi.Bytes)))
 
 	selfPermitFn                   = abi.NewFunction("selfPermit", abi.NewTypes(abi.Address, abi.Uint256, abi.Uint256, abi.Uint8, abi.Bytes32, abi.Bytes32), nil)
 	selfPermitIfNecessaryFn        = abi.NewFunction("selfPermitIfNecessary", abi.NewTypes(abi.Address, abi.Uint256, abi.Uint256, abi.Uint8, abi.Bytes32, abi.Bytes32), nil)
@@ -57,8 +58,8 @@ const (
 )
 
 var (
-	ErrTooLittleReceived = errors.New("uniswapv3: too little received")
-	ErrTooMuchRequested  = errors.New("uniswapv3: too much requested")
+	ErrTooLittleReceived = errors.New("too little received")
+	ErrTooMuchRequested  = errors.New("too much requested")
 )
 
 // EncodeRouterFactory returns the calldata for factory().
@@ -266,6 +267,15 @@ func DecodeRouterMulticall(data []byte) ([][]byte, error) {
 		results[i] = b
 	}
 	return results, nil
+}
+
+// EncodeRouterMulticallWithDeadline returns the calldata for multicall(deadline, data), which reverts with "Transaction too old" past deadline.
+func EncodeRouterMulticallWithDeadline(deadline *big.Int, data [][]byte) ([]byte, error) {
+	calldata, err := routerMulticallDeadlineFn.EncodeCall(deadline, data)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv3: encodeRouterMulticallWithDeadline: %w", err)
+	}
+	return calldata, nil
 }
 
 // EncodeSelfPermit returns the calldata for selfPermit(token, value, deadline, v, r, s). sig's

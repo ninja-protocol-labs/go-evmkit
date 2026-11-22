@@ -98,7 +98,7 @@ func TestQuoterLifeCycleSuite(t *testing.T) {
 		Timeout:             10 * time.Minute,
 		ReceiptPollInterval: c.Constant.ReceiptPollInterval,
 		ReceiptTimeout:      c.Constant.ReceiptTimeout,
-		ByteCode:            erc20PermitFullByteCodeHex,
+		ByteCode:            testenv.ERC20PermitFullByteCodeHex,
 		Constructor:         abi.NewFunction("constructor", abi.Types{abi.String, abi.String}, nil),
 		Salt:                core.Keccak256([]byte("go-evmkit")),
 		MintValue:           "1000000000000000000000000",
@@ -315,12 +315,12 @@ func (s *QuoterLifeCycleSuite) Test01ReadMethods() {
 	s.Require().False(weth9.IsZero())
 	s.T().Logf("Test01ReadMethods: Quoter's WETH9() = %s", weth9)
 
-	routerFactory, err := s.v3Router.Factory(s.ctx, s.router, rpc.BlockTagLatest)
+	routerFactory, err := s.v3Router.Factory(s.ctx, nil, NewFactoryRequest(s.router))
 	s.Require().NoError(err)
 	s.Require().True(routerFactory.Equal(factory), "Quoter and Router are different periphery contracts, but they must share the same core Factory")
 	s.T().Logf("Test01ReadMethods: Router's factory() = %s matches Quoter's", routerFactory)
 
-	routerWETH9, err := s.v3Router.WETH9(s.ctx, s.router, rpc.BlockTagLatest)
+	routerWETH9, err := s.v3Router.WETH9(s.ctx, nil, NewWETH9Request(s.router))
 	s.Require().NoError(err)
 	s.Require().True(routerWETH9.Equal(weth9), "Quoter and Router are different periphery contracts, but they must share the same WETH9")
 	s.T().Logf("Test01ReadMethods: Router's WETH9() = %s matches Quoter's", routerWETH9)
@@ -507,7 +507,7 @@ func (s *QuoterLifeCycleSuite) Test04QuoteExactInputSingleMatchesRouterPreview()
 	s.T().Logf("Test04QuoteExactInputSingleMatchesRouterPreview: Quoter amountOut=%s sqrtPriceX96After=%s initializedTicksCrossed=%s gasEstimate=%s", quote.AmountOut, quote.SqrtPriceX96After, quote.InitializedTicksCrossed, quote.GasEstimate)
 
 	swapParams := NewExactInputSingleParams(s.tokenA, s.tokenB, s.Fee, s.from, amountIn, big.NewInt(0), big.NewInt(0))
-	routerAmountOut, err := s.v3Router.CallExactInputSingle(s.ctx, s.router, s.from, nil, swapParams, rpc.BlockTagLatest)
+	routerAmountOut, err := s.v3Router.CallExactInputSingle(s.ctx, bind.NewCallOptions().WithFrom(s.from), NewExactInputSingleRequest(s.router, swapParams, nil))
 	s.Require().NoError(err)
 	s.T().Logf("Test04QuoteExactInputSingleMatchesRouterPreview: Router CallExactInputSingle amountOut=%s", routerAmountOut)
 
@@ -545,14 +545,11 @@ func (s *QuoterLifeCycleSuite) Test05QuoteExactInputSingleMatchesActualSwap() {
 	swapBuilder := tx.NewDynamicFeeBuilder()
 	swapBuilder.PriceBuffer(150)
 	swapBuilder.LimitBuffer(300)
-	unsignedSwap, err := s.v3Router.CreateExactInputSingle(s.ctx, swapBuilder, s.router, s.from, nil, swapParams)
+	swapTx, swapHash, err := s.v3Router.ExactInputSingle(s.ctx, bind.NewTransactOptions(s.signer, swapBuilder), NewExactInputSingleRequest(s.router, swapParams, nil))
 	s.Require().NoError(err)
-	s.Require().NoError(unsignedSwap.Sign(s.signer))
 	s.mu.Lock()
-	s.totalFee.Add(s.totalFee, unsignedSwap.MaxFee())
+	s.totalFee.Add(s.totalFee, swapTx.MaxFee())
 	s.mu.Unlock()
-	swapHash, err := s.v3Router.ExactInputSingle(s.ctx, unsignedSwap)
-	s.Require().NoError(err)
 	s.T().Logf("Test05QuoteExactInputSingleMatchesActualSwap: broadcast swap tx %s", swapHash)
 
 	swapReceipt, err := tx.WaitForReceipt(s.ctx, s.client, swapHash, s.ReceiptPollInterval, s.ReceiptTimeout)
@@ -606,7 +603,7 @@ func (s *QuoterLifeCycleSuite) Test06QuoteExactOutputSingleMatchesRouterPreview(
 	s.T().Logf("Test06QuoteExactOutputSingleMatchesRouterPreview: Quoter amountIn=%s sqrtPriceX96After=%s", quote.AmountIn, quote.SqrtPriceX96After)
 
 	swapParams := NewExactOutputSingleParams(s.tokenB, s.tokenA, s.Fee, s.from, amountOut, approveCap, big.NewInt(0))
-	routerAmountIn, err := s.v3Router.CallExactOutputSingle(s.ctx, s.router, s.from, nil, swapParams, rpc.BlockTagLatest)
+	routerAmountIn, err := s.v3Router.CallExactOutputSingle(s.ctx, bind.NewCallOptions().WithFrom(s.from), NewExactOutputSingleRequest(s.router, swapParams, nil))
 	s.Require().NoError(err)
 	s.T().Logf("Test06QuoteExactOutputSingleMatchesRouterPreview: Router CallExactOutputSingle amountIn=%s", routerAmountIn)
 
@@ -646,14 +643,11 @@ func (s *QuoterLifeCycleSuite) Test07QuoteExactOutputSingleMatchesActualSwap() {
 	swapBuilder := tx.NewDynamicFeeBuilder()
 	swapBuilder.PriceBuffer(150)
 	swapBuilder.LimitBuffer(300)
-	unsignedSwap, err := s.v3Router.CreateExactOutputSingle(s.ctx, swapBuilder, s.router, s.from, nil, swapParams)
+	swapTx, swapHash, err := s.v3Router.ExactOutputSingle(s.ctx, bind.NewTransactOptions(s.signer, swapBuilder), NewExactOutputSingleRequest(s.router, swapParams, nil))
 	s.Require().NoError(err)
-	s.Require().NoError(unsignedSwap.Sign(s.signer))
 	s.mu.Lock()
-	s.totalFee.Add(s.totalFee, unsignedSwap.MaxFee())
+	s.totalFee.Add(s.totalFee, swapTx.MaxFee())
 	s.mu.Unlock()
-	swapHash, err := s.v3Router.ExactOutputSingle(s.ctx, unsignedSwap)
-	s.Require().NoError(err)
 	s.T().Logf("Test07QuoteExactOutputSingleMatchesActualSwap: broadcast swap tx %s", swapHash)
 
 	swapReceipt, err := tx.WaitForReceipt(s.ctx, s.client, swapHash, s.ReceiptPollInterval, s.ReceiptTimeout)
@@ -824,14 +818,11 @@ func (s *QuoterLifeCycleSuite) Test10QuoteExactInputMatchesActualMultihopSwap() 
 	swapBuilder := tx.NewDynamicFeeBuilder()
 	swapBuilder.PriceBuffer(150)
 	swapBuilder.LimitBuffer(300)
-	unsigned, err := s.v3Router.CreateExactInput(s.ctx, swapBuilder, s.router, s.from, nil, params)
+	sentTx, hash, err := s.v3Router.ExactInput(s.ctx, bind.NewTransactOptions(s.signer, swapBuilder), NewExactInputRequest(s.router, params, nil))
 	s.Require().NoError(err)
-	s.Require().NoError(unsigned.Sign(s.signer))
 	s.mu.Lock()
-	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
+	s.totalFee.Add(s.totalFee, sentTx.MaxFee())
 	s.mu.Unlock()
-	hash, err := s.v3Router.ExactInput(s.ctx, unsigned)
-	s.Require().NoError(err)
 	s.T().Logf("Test10QuoteExactInputMatchesActualMultihopSwap: broadcast swap tx %s", hash)
 
 	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, s.ReceiptPollInterval, s.ReceiptTimeout)
@@ -906,14 +897,11 @@ func (s *QuoterLifeCycleSuite) Test11QuoteExactOutputMatchesActualMultihopSwap()
 	swapBuilder := tx.NewDynamicFeeBuilder()
 	swapBuilder.PriceBuffer(150)
 	swapBuilder.LimitBuffer(300)
-	unsigned, err := s.v3Router.CreateExactOutput(s.ctx, swapBuilder, s.router, s.from, nil, params)
+	sentTx, hash, err := s.v3Router.ExactOutput(s.ctx, bind.NewTransactOptions(s.signer, swapBuilder), NewExactOutputRequest(s.router, params, nil))
 	s.Require().NoError(err)
-	s.Require().NoError(unsigned.Sign(s.signer))
 	s.mu.Lock()
-	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
+	s.totalFee.Add(s.totalFee, sentTx.MaxFee())
 	s.mu.Unlock()
-	hash, err := s.v3Router.ExactOutput(s.ctx, unsigned)
-	s.Require().NoError(err)
 	s.T().Logf("Test11QuoteExactOutputMatchesActualMultihopSwap: broadcast swap tx %s", hash)
 
 	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, s.ReceiptPollInterval, s.ReceiptTimeout)

@@ -32,7 +32,7 @@ type IPair interface {
 	KLast(ctx context.Context, opts *bind.CallOptions, req *KLastRequest) (*big.Int, error)
 	PermitTypehash(ctx context.Context, opts *bind.CallOptions, req *PermitTypehashRequest) ([]byte, error)
 	CallMint(ctx context.Context, opts *bind.CallOptions, req *MintRequest) (*big.Int, error)
-	CallBurn(ctx context.Context, opts *bind.CallOptions, req *BurnRequest) (amount0, amount1 *big.Int, err error)
+	CallBurn(ctx context.Context, opts *bind.CallOptions, req *BurnRequest) (*big.Int, *big.Int, error)
 
 	Initialize(ctx context.Context, opts *bind.TransactOptions, req *InitializeRequest) (core.Transaction, *types.Hash, error)
 	Mint(ctx context.Context, opts *bind.TransactOptions, req *MintRequest) (core.Transaction, *types.Hash, error)
@@ -257,7 +257,7 @@ func (pr *Pair) CallMint(ctx context.Context, opts *bind.CallOptions, req *MintR
 }
 
 // CallBurn runs burn(to) via eth_call as opts.From, returning the (amount0, amount1) it would withdraw or the revert.
-func (pr *Pair) CallBurn(ctx context.Context, opts *bind.CallOptions, req *BurnRequest) (amount0, amount1 *big.Int, err error) {
+func (pr *Pair) CallBurn(ctx context.Context, opts *bind.CallOptions, req *BurnRequest) (*big.Int, *big.Int, error) {
 	if err := req.Validate(); err != nil {
 		return nil, nil, fmt.Errorf("uniswapv2: callBurn: %w", err)
 	}
@@ -272,7 +272,7 @@ func (pr *Pair) CallBurn(ctx context.Context, opts *bind.CallOptions, req *BurnR
 		return nil, nil, fmt.Errorf("uniswapv2: callBurn: %w", pr.wrapRevertError(err))
 	}
 
-	amount0, amount1, err = DecodeBurn(data)
+	amount0, amount1, err := DecodeBurn(data)
 	if err != nil {
 		return nil, nil, fmt.Errorf("uniswapv2: callBurn: %w", err)
 	}

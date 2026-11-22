@@ -363,8 +363,8 @@ func (_c *INFPM_CallCollect_Call) Run(run func(ctx context.Context, opts *bind.C
 	return _c
 }
 
-func (_c *INFPM_CallCollect_Call) Return(amount0 *big.Int, amount1 *big.Int, err error) *INFPM_CallCollect_Call {
-	_c.Call.Return(amount0, amount1, err)
+func (_c *INFPM_CallCollect_Call) Return(intParam *big.Int, intParam1 *big.Int, err error) *INFPM_CallCollect_Call {
+	_c.Call.Return(intParam, intParam1, err)
 	return _c
 }
 
@@ -437,8 +437,8 @@ func (_c *INFPM_CallCreateAndInitializePoolIfNecessary_Call) Run(run func(ctx co
 	return _c
 }
 
-func (_c *INFPM_CallCreateAndInitializePoolIfNecessary_Call) Return(pool *types.Address, err error) *INFPM_CallCreateAndInitializePoolIfNecessary_Call {
-	_c.Call.Return(pool, err)
+func (_c *INFPM_CallCreateAndInitializePoolIfNecessary_Call) Return(address *types.Address, err error) *INFPM_CallCreateAndInitializePoolIfNecessary_Call {
+	_c.Call.Return(address, err)
 	return _c
 }
 
@@ -519,8 +519,8 @@ func (_c *INFPM_CallDecreaseLiquidity_Call) Run(run func(ctx context.Context, op
 	return _c
 }
 
-func (_c *INFPM_CallDecreaseLiquidity_Call) Return(amount0 *big.Int, amount1 *big.Int, err error) *INFPM_CallDecreaseLiquidity_Call {
-	_c.Call.Return(amount0, amount1, err)
+func (_c *INFPM_CallDecreaseLiquidity_Call) Return(intParam *big.Int, intParam1 *big.Int, err error) *INFPM_CallDecreaseLiquidity_Call {
+	_c.Call.Return(intParam, intParam1, err)
 	return _c
 }
 
@@ -609,8 +609,8 @@ func (_c *INFPM_CallIncreaseLiquidity_Call) Run(run func(ctx context.Context, op
 	return _c
 }
 
-func (_c *INFPM_CallIncreaseLiquidity_Call) Return(liquidity *big.Int, amount0 *big.Int, amount1 *big.Int, err error) *INFPM_CallIncreaseLiquidity_Call {
-	_c.Call.Return(liquidity, amount0, amount1, err)
+func (_c *INFPM_CallIncreaseLiquidity_Call) Return(intParam *big.Int, intParam1 *big.Int, intParam2 *big.Int, err error) *INFPM_CallIncreaseLiquidity_Call {
+	_c.Call.Return(intParam, intParam1, intParam2, err)
 	return _c
 }
 
@@ -707,8 +707,8 @@ func (_c *INFPM_CallMint_Call) Run(run func(ctx context.Context, opts *bind.Call
 	return _c
 }
 
-func (_c *INFPM_CallMint_Call) Return(tokenID *big.Int, liquidity *big.Int, amount0 *big.Int, amount1 *big.Int, err error) *INFPM_CallMint_Call {
-	_c.Call.Return(tokenID, liquidity, amount0, amount1, err)
+func (_c *INFPM_CallMint_Call) Return(intParam *big.Int, intParam1 *big.Int, intParam2 *big.Int, intParam3 *big.Int, err error) *INFPM_CallMint_Call {
+	_c.Call.Return(intParam, intParam1, intParam2, intParam3, err)
 	return _c
 }
 
@@ -781,8 +781,8 @@ func (_c *INFPM_CallMulticall_Call) Run(run func(ctx context.Context, opts *bind
 	return _c
 }
 
-func (_c *INFPM_CallMulticall_Call) Return(results [][]byte, err error) *INFPM_CallMulticall_Call {
-	_c.Call.Return(results, err)
+func (_c *INFPM_CallMulticall_Call) Return(bytess [][]byte, err error) *INFPM_CallMulticall_Call {
+	_c.Call.Return(bytess, err)
 	return _c
 }
 
