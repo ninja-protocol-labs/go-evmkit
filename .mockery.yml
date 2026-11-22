@@ -40,3 +40,8 @@ packages:
     config:
       all: true
       filename: "{{.InterfaceName | lower}}.go"
+  github.com/ninja-protocol-labs/go-evmkit/protocols/uniswap/v2:
+    config:
+      filename: "{{.InterfaceName | lower}}.go"
+    interfaces:
+      IFactory:

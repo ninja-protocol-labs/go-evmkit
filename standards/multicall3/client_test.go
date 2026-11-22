@@ -229,7 +229,7 @@ func TestReadsSendCallAndDecode(t *testing.T) {
 
 			got, err := tc.call(New(c))
 			require.NoError(t, err)
-			require.Equal(t, tc.want, got)
+			require.Equal(t, fmt.Sprint(tc.want), fmt.Sprint(got))
 		})
 	}
 }

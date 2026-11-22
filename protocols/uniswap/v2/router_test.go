@@ -14,6 +14,7 @@ import (
 	"github.com/ninja-protocol-labs/go-evmkit/core"
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
+	"github.com/ninja-protocol-labs/go-evmkit/internal/testenv"
 	"github.com/ninja-protocol-labs/go-evmkit/protocols/weth"
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
 	"github.com/ninja-protocol-labs/go-evmkit/standards/deploy"
@@ -414,7 +415,7 @@ func TestRouterSuite(t *testing.T) {
 		DeadlineSeconds: 600,
 		LimitBuffer:     300,
 		PriceBuffer:     150,
-		ByteCode:        erc20ByteCodeHex,
+		ByteCode:        testenv.ERC20ByteCodeHex,
 		Constructor:     abi.NewFunction("constructor", abi.NewTypes(abi.String, abi.String, abi.Uint8), nil),
 		MintValue:       "1000000000000000000000000",
 		LiquidityAmount: "1000000000000000000000",

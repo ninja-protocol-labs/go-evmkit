@@ -19,6 +19,7 @@ import (
 
 	"github.com/ninja-protocol-labs/go-evmkit/core"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
+	"github.com/ninja-protocol-labs/go-evmkit/internal/testenv"
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
 	"github.com/ninja-protocol-labs/go-evmkit/tx"
 )
@@ -67,7 +68,7 @@ func TestPairLifeCycleSuite(t *testing.T) {
 		FactoryHex:    "",
 		Interval:      1500,
 		Timeout:       60,
-		ByteCode:      erc20ByteCodeHex,
+		ByteCode:      testenv.ERC20ByteCodeHex,
 		Constructor:   abi.NewFunction("constructor", abi.NewTypes(abi.String, abi.String, abi.Uint8), nil),
 		MintValue:     "1000000000000000000000000",
 		NativeSymbol:  "",
@@ -187,15 +188,11 @@ func (s *PairLifeCycleSuite) SetupSuite() {
 
 	createBuilder := tx.NewDynamicFeeBuilder()
 	createBuilder.PriceBuffer(150)
-	unsignedCreate, err := s.v2Factory.CreateCreatePair(s.ctx, createBuilder, NewCreatePairParams(s.factory, s.from, s.token0, s.token1))
+	createTx, createHash, err := s.v2Factory.CreatePair(s.ctx, bind.NewTransactOptions(s.signer, createBuilder), NewCreatePairRequest(s.factory, s.token0, s.token1))
 	s.Require().NoError(err)
-	s.Require().NoError(unsignedCreate.Sign(s.signer))
 	s.mu.Lock()
-	s.totalFee.Add(s.totalFee, unsignedCreate.MaxFee())
+	s.totalFee.Add(s.totalFee, createTx.MaxFee())
 	s.mu.Unlock()
-
-	createHash, err := s.v2Factory.CreatePair(s.ctx, unsignedCreate)
-	s.Require().NoError(err)
 
 	createReceipt, err := tx.WaitForReceipt(s.ctx, s.client, createHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
 	s.Require().NoError(err)
@@ -739,7 +736,7 @@ func (s *PairSwapSuite) SetupSuite() {
 	s.Require().True(ok)
 	s.amount = amount
 
-	s.pair, err = s.v2Factory.GetPair(s.ctx, NewGetPairParams(s.factory, s.tokenIn, s.tokenOut), rpc.BlockTagLatest)
+	s.pair, err = s.v2Factory.GetPair(s.ctx, nil, NewGetPairRequest(s.factory, s.tokenIn, s.tokenOut))
 	s.Require().NoError(err)
 	s.Require().False(s.pair.IsZero(), "no pair exists for (%s, %s)", s.tokenIn, s.tokenOut)
 }

@@ -11,8 +11,8 @@ import (
 
 // ExtractPairCreated pulls every PairCreated-shaped log out of logs, from any factory;
 // filter by Contract afterward.
-func ExtractPairCreated(logs []tx.Log) ([]PairCreated, error) {
-	var created []PairCreated
+func ExtractPairCreated(logs []tx.Log) ([]PairCreatedEvent, error) {
+	var created []PairCreatedEvent
 	for i, log := range logs {
 		if len(log.Topics) == 0 || log.Topics[0] == nil {
 			continue
@@ -47,7 +47,7 @@ func ExtractPairCreated(logs []tx.Log) ([]PairCreated, error) {
 		if !ok {
 			return nil, fmt.Errorf("uniswapv2: extractPairCreated: logs[%d]: unexpected decoded type for allPairsLength: %T", i, vals[3])
 		}
-		created = append(created, *NewPairCreated(log.Address, token0, token1, pair, allPairsLength))
+		created = append(created, *NewPairCreatedEvent(log.Address, token0, token1, pair, allPairsLength))
 	}
 	return created, nil
 }
