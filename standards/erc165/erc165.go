@@ -1,5 +1,4 @@
-// Package erc165 encodes calls to and decodes results from an ERC-165
-// introspection call. Go types mirror the interface in
+// Package erc165 is a client for ERC-165 introspection, mirroring
 // solidity/interfaces/IERC165.sol.
 package erc165
 
@@ -8,14 +7,13 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/ninja-protocol-labs/go-evmkit/core/types"
+	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
-	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
 // IERC165 is implemented by *ERC165.
 type IERC165 interface {
-	SupportsInterface(ctx context.Context, contract *types.Address, interfaceId [4]byte, block string) (bool, error)
+	SupportsInterface(ctx context.Context, opts *bind.CallOptions, req *SupportsInterfaceRequest) (bool, error)
 }
 
 var _ IERC165 = (*ERC165)(nil)
@@ -26,49 +24,39 @@ type ERC165 struct {
 	c rpc.Client
 }
 
-// New returns an ERC165 calling standards via cli.
+// New returns an ERC165 calling contracts via cli.
 func New(cli rpc.Client) *ERC165 {
 	return &ERC165{
 		c: cli,
 	}
 }
 
-// SupportsInterface returns whether contract implements interfaceId.
-func (e *ERC165) SupportsInterface(ctx context.Context, contract *types.Address, interfaceId [4]byte, block string) (bool, error) {
-	calldata, err := EncodeSupportsInterface(interfaceId)
+// SupportsInterface returns whether req.Contract implements req.InterfaceID.
+func (e *ERC165) SupportsInterface(ctx context.Context, opts *bind.CallOptions, req *SupportsInterfaceRequest) (bool, error) {
+	if err := req.Validate(); err != nil {
+		return false, fmt.Errorf("erc165: supportsInterface: %w", err)
+	}
+
+	calldata, err := EncodeSupportsInterface(req.InterfaceID)
 	if err != nil {
 		return false, fmt.Errorf("erc165: supportsInterface: %w", err)
 	}
 
-	data, err := e.call(ctx, contract, calldata, block)
+	data, err := bind.Call(ctx, e.c, opts, req.Contract, calldata)
 	if err != nil {
-		return false, fmt.Errorf("erc165: supportsInterface: %w", err)
+		return false, fmt.Errorf("erc165: supportsInterface: %w", e.wrapRevertError(err))
 	}
 
 	ok, err := DecodeSupportsInterface(data)
 	if err != nil {
 		return false, fmt.Errorf("erc165: supportsInterface: %w: %w", ErrNotImplementedERC165, err)
 	}
+
 	return ok, nil
 }
 
-// call eth_calls contract with calldata, mapping a revert to ErrNotImplementedERC165.
-func (e *ERC165) call(ctx context.Context, contract *types.Address, calldata []byte, block string) ([]byte, error) {
-	params := map[string]any{
-		"to":   contract.String(),
-		"data": encoding.Hex.EncodePrefixed(calldata),
-	}
-
-	var raw string
-	if err := e.c.Call(ctx, rpc.ETHCall("call", params, block, &raw)); err != nil {
-		return nil, e.wrapRevertError(err)
-	}
-	return encoding.Hex.Decode(raw)
-}
-
-// wrapRevertError maps an on-chain revert (the node responded) to
-// ErrNotImplementedERC165; a transport/connection failure, which says
-// nothing about the contract, is returned unchanged.
+// wrapRevertError maps an on-chain revert to ErrNotImplementedERC165; a
+// transport failure says nothing about the contract and is returned unchanged.
 func (_ *ERC165) wrapRevertError(err error) error {
 	if _, ok := errors.AsType[*rpc.ResponseError](err); !ok {
 		return err

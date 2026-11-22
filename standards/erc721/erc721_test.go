@@ -18,6 +18,7 @@ import (
 	"github.com/ninja-protocol-labs/go-evmkit/core"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
+	"github.com/ninja-protocol-labs/go-evmkit/standards/erc165"
 	"github.com/ninja-protocol-labs/go-evmkit/tx"
 )
 
@@ -230,7 +231,7 @@ func (s *ERC721Suite) TestReadMethods() {
 	tokenId := big.NewInt(0)
 
 	for _, contract := range s.contracts {
-		supports, err := s.erc721.SupportsInterface(s.ctx, contract, interfaceIDERC721, rpc.BlockTagLatest)
+		supports, err := s.erc721.SupportsInterface(s.ctx, nil, erc165.NewSupportsInterfaceRequest(contract, interfaceIDERC721))
 		s.Require().NoError(err)
 		s.Require().True(supports)
 

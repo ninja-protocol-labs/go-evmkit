@@ -9,7 +9,7 @@ import (
 )
 
 func TestEncodeSupportsInterface(t *testing.T) {
-	interfaceId := [4]byte{0x80, 0xac, 0x58, 0xcd} // IERC721
+	interfaceId := [4]byte{0x80, 0xac, 0x58, 0xcd}
 	data, err := EncodeSupportsInterface(interfaceId)
 	require.NoError(t, err)
 	require.Equal(t, []byte{0x01, 0xff, 0xc9, 0xa7}, data[:4])
