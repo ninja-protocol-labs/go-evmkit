@@ -96,6 +96,7 @@ type Config struct {
 	ActorPrivateKeyHex  string
 	Multicall           string
 	NicksFactory        string
+	WETH                string
 	ReceiptPollInterval time.Duration
 	ReceiptTimeout      time.Duration
 }
