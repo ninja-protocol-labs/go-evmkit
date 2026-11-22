@@ -3,27 +3,24 @@ package v3
 import (
 	"context"
 	"fmt"
-	"math/big"
 
+	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
-	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
 // IQuoterImmutables mirrors PeripheryImmutableState, the only state QuoterV2 itself holds.
 type IQuoterImmutables interface {
-	Factory(ctx context.Context, contract *types.Address, block string) (*types.Address, error)
-	WETH9(ctx context.Context, contract *types.Address, block string) (*types.Address, error)
+	Factory(ctx context.Context, opts *bind.CallOptions, req *FactoryRequest) (*types.Address, error)
+	WETH9(ctx context.Context, opts *bind.CallOptions, req *WETH9Request) (*types.Address, error)
 }
 
-// IQuoterQuotes mirrors IQuoterV2's own quoting functions. These are not gas-efficient and must
-// never be broadcast as a real transaction -- they only simulate a swap via eth_call and parse
-// the result out of a deliberate revert, which is all the Call* methods below do.
+// IQuoterQuotes mirrors IQuoterV2's quoting functions, which are only ever simulated via eth_call.
 type IQuoterQuotes interface {
-	CallQuoteExactInputSingle(ctx context.Context, contract, sender *types.Address, params *QuoteExactInputSingleParams, block string) (*QuoteExactInputSingleResult, error)
-	CallQuoteExactInput(ctx context.Context, contract, sender *types.Address, path []byte, amountIn *big.Int, block string) (*QuoteExactInputResult, error)
-	CallQuoteExactOutputSingle(ctx context.Context, contract, sender *types.Address, params *QuoteExactOutputSingleParams, block string) (*QuoteExactOutputSingleResult, error)
-	CallQuoteExactOutput(ctx context.Context, contract, sender *types.Address, path []byte, amountOut *big.Int, block string) (*QuoteExactOutputResult, error)
+	CallQuoteExactInputSingle(ctx context.Context, opts *bind.CallOptions, req *QuoteExactInputSingleRequest) (*QuoteExactInputSingleResult, error)
+	CallQuoteExactInput(ctx context.Context, opts *bind.CallOptions, req *QuoteExactInputRequest) (*QuoteExactInputResult, error)
+	CallQuoteExactOutputSingle(ctx context.Context, opts *bind.CallOptions, req *QuoteExactOutputSingleRequest) (*QuoteExactOutputSingleResult, error)
+	CallQuoteExactOutput(ctx context.Context, opts *bind.CallOptions, req *QuoteExactOutputRequest) (*QuoteExactOutputResult, error)
 }
 
 // IQuoter mirrors IQuoterV2.
@@ -34,160 +31,153 @@ type IQuoter interface {
 
 var _ IQuoter = (*Quoter)(nil)
 
-// Quoter calls any QuoterV2 contract over a Client; it holds no contract address, so one
-// instance serves every network's deployment.
+// Quoter calls any QuoterV2 contract over a Client; it holds no contract address, so one instance serves every deployment.
 type Quoter struct {
 	c rpc.Client
 }
 
-// NewQuoter returns a Quoter calling QuoterV2 contracts via c.
-func NewQuoter(c rpc.Client) *Quoter {
+// NewQuoter returns a Quoter calling quoters via cli.
+func NewQuoter(cli rpc.Client) *Quoter {
 	return &Quoter{
-		c: c,
+		c: cli,
 	}
 }
 
-// Factory returns contract's immutable UniswapV3Factory address.
-func (q *Quoter) Factory(ctx context.Context, contract *types.Address, block string) (*types.Address, error) {
-	data, err := q.call(ctx, nil, contract, EncodeQuoterFactory(), block)
+// Factory returns the UniswapV3Factory req.Contract quotes against.
+func (q *Quoter) Factory(ctx context.Context, opts *bind.CallOptions, req *FactoryRequest) (*types.Address, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv3: factory: %w", err)
+	}
+
+	data, err := bind.Call(ctx, q.c, opts, req.Contract, EncodeQuoterFactory())
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv3: factory: %w", q.wrapRevertError(err))
+	}
+
+	out, err := DecodeQuoterFactory(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: factory: %w", err)
 	}
-	addr, err := DecodeQuoterFactory(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: factory: %w", err)
-	}
-	return addr, nil
+
+	return out, nil
 }
 
-// WETH9 returns contract's immutable WETH9 address.
-func (q *Quoter) WETH9(ctx context.Context, contract *types.Address, block string) (*types.Address, error) {
-	data, err := q.call(ctx, nil, contract, EncodeQuoterWETH9(), block)
+// WETH9 returns req.Contract's wrapped native token.
+func (q *Quoter) WETH9(ctx context.Context, opts *bind.CallOptions, req *WETH9Request) (*types.Address, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv3: weth9: %w", err)
+	}
+
+	data, err := bind.Call(ctx, q.c, opts, req.Contract, EncodeQuoterWETH9())
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv3: weth9: %w", q.wrapRevertError(err))
+	}
+
+	out, err := DecodeQuoterWETH9(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: weth9: %w", err)
 	}
-	addr, err := DecodeQuoterWETH9(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: weth9: %w", err)
-	}
-	return addr, nil
+
+	return out, nil
 }
 
-// CallQuoteExactInputSingle simulates quoteExactInputSingle(params) via eth_call, as sender,
-// returning the amount of tokenOut that would be received -- without executing a real swap.
-func (q *Quoter) CallQuoteExactInputSingle(
-	ctx context.Context,
-	contract, sender *types.Address,
-	params *QuoteExactInputSingleParams,
-	block string,
-) (*QuoteExactInputSingleResult, error) {
-	calldata, err := EncodeQuoteExactInputSingle(params.TokenIn, params.TokenOut, params.AmountIn, params.Fee, params.SqrtPriceLimitX96)
+// CallQuoteExactInputSingle quotes a single-pool exact-input swap via eth_call as opts.From.
+func (q *Quoter) CallQuoteExactInputSingle(ctx context.Context, opts *bind.CallOptions, req *QuoteExactInputSingleRequest) (*QuoteExactInputSingleResult, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv3: callQuoteExactInputSingle: %w", err)
+	}
+
+	calldata, err := EncodeQuoteExactInputSingle(req.Params.TokenIn, req.Params.TokenOut, req.Params.AmountIn, req.Params.Fee, req.Params.SqrtPriceLimitX96)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: callQuoteExactInputSingle: %w", err)
 	}
-	data, err := q.call(ctx, sender, contract, calldata, block)
+
+	data, err := bind.Call(ctx, q.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv3: callQuoteExactInputSingle: %w", q.wrapRevertError(err))
+	}
+
+	out, err := DecodeQuoteExactInputSingle(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: callQuoteExactInputSingle: %w", err)
 	}
-	result, err := DecodeQuoteExactInputSingle(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: callQuoteExactInputSingle: %w", err)
-	}
-	return result, nil
+
+	return out, nil
 }
 
-// CallQuoteExactInput simulates quoteExactInput(path, amountIn) via eth_call, as sender,
-// returning the amount of the final token in path that would be received -- without executing a
-// real swap.
-func (q *Quoter) CallQuoteExactInput(
-	ctx context.Context,
-	contract, sender *types.Address,
-	path []byte,
-	amountIn *big.Int,
-	block string,
-) (*QuoteExactInputResult, error) {
-	calldata, err := EncodeQuoteExactInput(path, amountIn)
+// CallQuoteExactInput quotes an exact-input swap along req.Path (see EncodePath) via eth_call as opts.From.
+func (q *Quoter) CallQuoteExactInput(ctx context.Context, opts *bind.CallOptions, req *QuoteExactInputRequest) (*QuoteExactInputResult, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv3: callQuoteExactInput: %w", err)
+	}
+
+	calldata, err := EncodeQuoteExactInput(req.Path, req.AmountIn)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: callQuoteExactInput: %w", err)
 	}
-	data, err := q.call(ctx, sender, contract, calldata, block)
+
+	data, err := bind.Call(ctx, q.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv3: callQuoteExactInput: %w", q.wrapRevertError(err))
+	}
+
+	out, err := DecodeQuoteExactInput(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: callQuoteExactInput: %w", err)
 	}
-	result, err := DecodeQuoteExactInput(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: callQuoteExactInput: %w", err)
-	}
-	return result, nil
+
+	return out, nil
 }
 
-// CallQuoteExactOutputSingle simulates quoteExactOutputSingle(params) via eth_call, as sender,
-// returning the amount of tokenIn that would be required -- without executing a real swap.
-func (q *Quoter) CallQuoteExactOutputSingle(
-	ctx context.Context,
-	contract, sender *types.Address,
-	params *QuoteExactOutputSingleParams,
-	block string,
-) (*QuoteExactOutputSingleResult, error) {
-	calldata, err := EncodeQuoteExactOutputSingle(params.TokenIn, params.TokenOut, params.Amount, params.Fee, params.SqrtPriceLimitX96)
+// CallQuoteExactOutputSingle quotes a single-pool exact-output swap via eth_call as opts.From.
+func (q *Quoter) CallQuoteExactOutputSingle(ctx context.Context, opts *bind.CallOptions, req *QuoteExactOutputSingleRequest) (*QuoteExactOutputSingleResult, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv3: callQuoteExactOutputSingle: %w", err)
+	}
+
+	calldata, err := EncodeQuoteExactOutputSingle(req.Params.TokenIn, req.Params.TokenOut, req.Params.Amount, req.Params.Fee, req.Params.SqrtPriceLimitX96)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: callQuoteExactOutputSingle: %w", err)
 	}
-	data, err := q.call(ctx, sender, contract, calldata, block)
+
+	data, err := bind.Call(ctx, q.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv3: callQuoteExactOutputSingle: %w", q.wrapRevertError(err))
+	}
+
+	out, err := DecodeQuoteExactOutputSingle(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: callQuoteExactOutputSingle: %w", err)
 	}
-	result, err := DecodeQuoteExactOutputSingle(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: callQuoteExactOutputSingle: %w", err)
-	}
-	return result, nil
+
+	return out, nil
 }
 
-// CallQuoteExactOutput simulates quoteExactOutput(path, amountOut) via eth_call, as sender,
-// returning the amount of the first token in path that would be required -- without executing a
-// real swap. path must be provided in reverse order (the final output token first).
-func (q *Quoter) CallQuoteExactOutput(
-	ctx context.Context,
-	contract, sender *types.Address,
-	path []byte,
-	amountOut *big.Int,
-	block string,
-) (*QuoteExactOutputResult, error) {
-	calldata, err := EncodeQuoteExactOutput(path, amountOut)
+// CallQuoteExactOutput quotes an exact-output swap along req.Path, which runs tokenOut to tokenIn, via eth_call as opts.From.
+func (q *Quoter) CallQuoteExactOutput(ctx context.Context, opts *bind.CallOptions, req *QuoteExactOutputRequest) (*QuoteExactOutputResult, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv3: callQuoteExactOutput: %w", err)
+	}
+
+	calldata, err := EncodeQuoteExactOutput(req.Path, req.AmountOut)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: callQuoteExactOutput: %w", err)
 	}
-	data, err := q.call(ctx, sender, contract, calldata, block)
+
+	data, err := bind.Call(ctx, q.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv3: callQuoteExactOutput: %w", q.wrapRevertError(err))
+	}
+
+	out, err := DecodeQuoteExactOutput(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv3: callQuoteExactOutput: %w", err)
 	}
-	result, err := DecodeQuoteExactOutput(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: callQuoteExactOutput: %w", err)
-	}
-	return result, nil
+
+	return out, nil
 }
 
-// call eth_calls contract with calldata, optionally simulating from a specific sender. QuoterV2's
-// own functions are never payable, so unlike Router/NFPM's call there's no value to attach.
-func (q *Quoter) call(
-	ctx context.Context,
-	from, contract *types.Address,
-	calldata []byte,
-	block string,
-) ([]byte, error) {
-	params := map[string]any{
-		"to":   contract.String(),
-		"data": encoding.Hex.EncodePrefixed(calldata),
-	}
-	if from != nil {
-		params["from"] = from.String()
-	}
-
-	var raw string
-	if err := q.c.Call(ctx, rpc.ETHCall("call", params, block, &raw)); err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrReverted, err)
-	}
-	return encoding.Hex.Decode(raw)
+// wrapRevertError maps a revert in err the same way Pool does, since QuoterV2 bubbles up the pool's own revert reasons.
+func (_ *Quoter) wrapRevertError(err error) error {
+	return (*Pool)(nil).wrapRevertError(err)
 }
