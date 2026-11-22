@@ -1,88 +1,86 @@
-// Package weth encodes calls to and decodes results from WETH9, the de facto standard
-// contract for wrapping a chain's native asset into an ERC-20 token and back.
+// Package weth is a client for WETH9, the de facto contract for wrapping a chain's native asset
+// into an ERC-20 token and back.
 package weth
 
 import (
 	"context"
 	"fmt"
 
+	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
 	"github.com/ninja-protocol-labs/go-evmkit/standards/erc20"
-	"github.com/ninja-protocol-labs/go-evmkit/tx"
 )
 
 // IWETH mirrors WETH9, embedding erc20 for the shared ERC-20 surface.
 type IWETH interface {
 	erc20.IERC20Metadata
 
-	Deposit(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	Withdraw(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
+	Deposit(ctx context.Context, opts *bind.TransactOptions, req *DepositRequest) (core.Transaction, *types.Hash, error)
+	Withdraw(ctx context.Context, opts *bind.TransactOptions, req *WithdrawRequest) (core.Transaction, *types.Hash, error)
 }
 
 var _ IWETH = (*WETH)(nil)
 
-// WETH calls any WETH9-shaped contract over a Client; it holds no contract address.
+// WETH calls any WETH9-shaped contract over a Client; ERC-20 methods are promoted from the
+// embedded *erc20.ERC20.
 type WETH struct {
 	*erc20.ERC20
 
 	c rpc.Client
 }
 
-// New returns a WETH calling contracts via c.
-func New(c rpc.Client) *WETH {
+// New returns a WETH calling contracts via cli.
+func New(cli rpc.Client) *WETH {
 	return &WETH{
-		ERC20: erc20.New(c),
-		c:     c,
+		ERC20: erc20.New(cli),
+		c:     cli,
 	}
 }
 
-// CreateDeposit builds an unsigned deposit() transaction via b, wrapping value wei of sender's native balance.
-func (w *WETH) CreateDeposit(ctx context.Context, b tx.Builder, p *DepositParams) (core.Transaction, error) {
-	unsigned, err := b.Build(p.Sender, p.WETH, p.Value, EncodeDeposit()).Pack(ctx, w.c)
-	if err != nil {
-		return nil, fmt.Errorf("weth: createDeposit: %w", err)
+// Deposit sends deposit() on req.Contract with msg.value set to req.Amount, signed by
+// opts.Signer; opts.Value must be nil.
+func (w *WETH) Deposit(ctx context.Context, opts *bind.TransactOptions, req *DepositRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("weth: deposit: %w", err)
 	}
-	return unsigned, nil
+
+	if opts != nil && opts.Value != nil {
+		return nil, nil, fmt.Errorf("weth: deposit: %w: value must be nil", bind.ErrInvalidOptions)
+	}
+
+	var txOpts *bind.TransactOptions
+	if opts != nil {
+		o := *opts
+		o.Value = req.Amount
+		txOpts = &o
+	}
+
+	signed, hash, err := bind.Transact(ctx, w.c, txOpts, req.Contract, EncodeDeposit())
+	if err != nil {
+		return signed, nil, fmt.Errorf("weth: deposit: %w", err)
+	}
+
+	return signed, hash, nil
 }
 
-// Deposit broadcasts an already-signed deposit transaction.
-func (w *WETH) Deposit(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("weth: deposit: %w", err)
-	}
-	hash, err := tx.Broadcast(ctx, w.c, raw)
-	if err != nil {
-		return nil, fmt.Errorf("weth: deposit: %w", err)
-	}
-	return hash, nil
-}
-
-// CreateWithdraw builds an unsigned withdraw(wad) transaction via b, unwrapping wad of sender's contract balance.
-func (w *WETH) CreateWithdraw(ctx context.Context, b tx.Builder, p *WithdrawParams) (core.Transaction, error) {
-	calldata, err := EncodeWithdraw(p.Wad)
-	if err != nil {
-		return nil, fmt.Errorf("weth: createWithdraw: %w", err)
+// Withdraw sends withdraw(amount) on req.Contract, signed by opts.Signer, unwrapping req.Amount
+// back to native.
+func (w *WETH) Withdraw(ctx context.Context, opts *bind.TransactOptions, req *WithdrawRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("weth: withdraw: %w", err)
 	}
 
-	unsigned, err := b.Build(p.Sender, p.WETH, nil, calldata).Pack(ctx, w.c)
+	calldata, err := EncodeWithdraw(req.Amount)
 	if err != nil {
-		return nil, fmt.Errorf("weth: createWithdraw: %w", err)
+		return nil, nil, fmt.Errorf("weth: withdraw: %w", err)
 	}
-	return unsigned, nil
-}
 
-// Withdraw broadcasts an already-signed withdraw transaction.
-func (w *WETH) Withdraw(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
+	signed, hash, err := bind.Transact(ctx, w.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("weth: withdraw: %w", err)
+		return signed, nil, fmt.Errorf("weth: withdraw: %w", err)
 	}
-	hash, err := tx.Broadcast(ctx, w.c, raw)
-	if err != nil {
-		return nil, fmt.Errorf("weth: withdraw: %w", err)
-	}
-	return hash, nil
+
+	return signed, hash, nil
 }

@@ -1,67 +1,101 @@
 package weth
 
 import (
+	"fmt"
 	"math/big"
 
+	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 )
 
-// DepositParams is CreateDeposit's argument list.
-type DepositParams struct {
-	WETH   *types.Address
-	Sender *types.Address
-	Value  *big.Int
+// DepositRequest is deposit()'s input on Contract; Amount is sent as msg.value.
+type DepositRequest struct {
+	Contract *types.Address
+	Amount   *big.Int
 }
 
-func NewDepositParams(weth, sender *types.Address, value *big.Int) *DepositParams {
-	return &DepositParams{
-		WETH:   weth,
-		Sender: sender,
-		Value:  value,
+func NewDepositRequest(contract *types.Address, amount *big.Int) *DepositRequest {
+	return &DepositRequest{
+		Contract: contract,
+		Amount:   amount,
 	}
 }
 
-// WithdrawParams is CreateWithdraw's argument list.
-type WithdrawParams struct {
-	WETH   *types.Address
-	Sender *types.Address
-	Wad    *big.Int
+func (r *DepositRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Amount == nil {
+		return fmt.Errorf("%w: amount is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Amount.Sign() < 0 {
+		return fmt.Errorf("%w: amount is negative", bind.ErrInvalidRequest)
+	}
+
+	return nil
 }
 
-func NewWithdrawParams(weth, sender *types.Address, wad *big.Int) *WithdrawParams {
-	return &WithdrawParams{
-		WETH:   weth,
-		Sender: sender,
-		Wad:    wad,
+// WithdrawRequest is withdraw(wad)'s input on Contract.
+type WithdrawRequest struct {
+	Contract *types.Address
+	Amount   *big.Int
+}
+
+func NewWithdrawRequest(contract *types.Address, amount *big.Int) *WithdrawRequest {
+	return &WithdrawRequest{
+		Contract: contract,
+		Amount:   amount,
 	}
 }
 
-// Deposit mirrors WETH9's Deposit event.
-type Deposit struct {
-	WETH *types.Address
-	Dst  *types.Address
-	Wad  *big.Int
+func (r *WithdrawRequest) Validate() error {
+	if r == nil {
+		return fmt.Errorf("%w: request is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Contract == nil {
+		return fmt.Errorf("%w: contract is nil", bind.ErrInvalidRequest)
+	}
+
+	if r.Amount == nil {
+		return fmt.Errorf("%w: amount is nil", bind.ErrInvalidRequest)
+	}
+
+	return nil
 }
 
-func NewDeposit(weth, dst *types.Address, wad *big.Int) *Deposit {
-	return &Deposit{
-		WETH: weth,
-		Dst:  dst,
-		Wad:  wad,
+// DepositEvent mirrors WETH9's Deposit event.
+type DepositEvent struct {
+	Contract *types.Address
+	Dst      *types.Address
+	Wad      *big.Int
+}
+
+func NewDepositEvent(contract, dst *types.Address, wad *big.Int) *DepositEvent {
+	return &DepositEvent{
+		Contract: contract,
+		Dst:      dst,
+		Wad:      wad,
 	}
 }
 
-// Withdrawal mirrors WETH9's Withdrawal event.
-type Withdrawal struct {
-	WETH *types.Address
-	Src  *types.Address
-	Wad  *big.Int
+// WithdrawalEvent mirrors WETH9's Withdrawal event.
+type WithdrawalEvent struct {
+	Contract *types.Address
+	Src      *types.Address
+	Wad      *big.Int
 }
 
-func NewWithdrawal(weth, src *types.Address, wad *big.Int) *Withdrawal {
-	return &Withdrawal{
-		WETH: weth,
-		Src:  src,
-		Wad:  wad,
+func NewWithdrawalEvent(contract, src *types.Address, wad *big.Int) *WithdrawalEvent {
+	return &WithdrawalEvent{
+		Contract: contract,
+		Src:      src,
+		Wad:      wad,
 	}
 }

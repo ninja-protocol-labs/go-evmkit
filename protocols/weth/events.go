@@ -11,8 +11,8 @@ import (
 
 // ExtractDeposits pulls every Deposit-shaped log out of logs, from any WETH9-shaped contract;
 // filter by Contract afterward.
-func ExtractDeposits(logs []tx.Log) ([]Deposit, error) {
-	var deposits []Deposit
+func ExtractDeposits(logs []tx.Log) ([]DepositEvent, error) {
+	var deposits []DepositEvent
 	for i, log := range logs {
 		if len(log.Topics) == 0 || log.Topics[0] == nil {
 			continue
@@ -39,15 +39,15 @@ func ExtractDeposits(logs []tx.Log) ([]Deposit, error) {
 		if !ok {
 			return nil, fmt.Errorf("weth: extractDeposits: logs[%d]: unexpected decoded type for wad: %T", i, vals[1])
 		}
-		deposits = append(deposits, *NewDeposit(log.Address, dst, wad))
+		deposits = append(deposits, *NewDepositEvent(log.Address, dst, wad))
 	}
 	return deposits, nil
 }
 
 // ExtractWithdrawals pulls every Withdrawal-shaped log out of logs, from any WETH9-shaped
 // contract; filter by Contract afterward.
-func ExtractWithdrawals(logs []tx.Log) ([]Withdrawal, error) {
-	var withdrawals []Withdrawal
+func ExtractWithdrawals(logs []tx.Log) ([]WithdrawalEvent, error) {
+	var withdrawals []WithdrawalEvent
 	for i, log := range logs {
 		if len(log.Topics) == 0 || log.Topics[0] == nil {
 			continue
@@ -74,7 +74,7 @@ func ExtractWithdrawals(logs []tx.Log) ([]Withdrawal, error) {
 		if !ok {
 			return nil, fmt.Errorf("weth: extractWithdrawals: logs[%d]: unexpected decoded type for wad: %T", i, vals[1])
 		}
-		withdrawals = append(withdrawals, *NewWithdrawal(log.Address, src, wad))
+		withdrawals = append(withdrawals, *NewWithdrawalEvent(log.Address, src, wad))
 	}
 	return withdrawals, nil
 }

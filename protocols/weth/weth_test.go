@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -13,25 +14,26 @@ import (
 	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
+	"github.com/ninja-protocol-labs/go-evmkit/internal/testenv"
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
 	"github.com/ninja-protocol-labs/go-evmkit/standards/erc20"
-	"github.com/ninja-protocol-labs/go-evmkit/standards/multicall3"
 	"github.com/ninja-protocol-labs/go-evmkit/tx"
 )
 
 type WETHSuite struct {
 	suite.Suite
 
-	Enable        bool
-	RPCURL        string
-	PrivateKeyHex string
-	SpenderKeyHex string
-	WETHHex       string
-	MulticallHex  string
-	DepositValue  string
-	NativeSymbol  string
-	Interval      int
-	Timeout       int
+	RPCURL               string
+	PrivateKeyHex        string
+	MulticallHex         string
+	WETHHex              string
+	NativeSymbol         string
+	NativeDecimals       int
+	Timeout              time.Duration
+	ReceiptPollInterval  time.Duration
+	ReceiptTimeout       time.Duration
+	SpenderPrivateKeyHex string
+	Amount               *big.Int
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -43,38 +45,41 @@ type WETHSuite struct {
 	spender       *types.Address
 	contract      *types.Address
 	multicall     *types.Address
-	depositValue  *big.Int
 
 	w *WETH
 
+	mu       *sync.Mutex
 	totalFee *big.Int
 }
 
 func TestWETHSuite(t *testing.T) {
+	c := testenv.MustLoad(t, testenv.Testnet, testenv.UnknownNetwork)
+	if c.WETH == "" {
+		t.Skip("testenv: no WETH configured for this network")
+	}
+
 	suite.Run(t, &WETHSuite{
-		Enable:        false,
-		RPCURL:        "",
-		PrivateKeyHex: "",
-		SpenderKeyHex: "",
-		WETHHex:       "",
-		MulticallHex:  multicall3.DefaultMulticall3Address.String(),
-		DepositValue:  "",
-		NativeSymbol:  "",
-		Interval:      200,
-		Timeout:       60,
+		RPCURL:               c.RPCURL,
+		PrivateKeyHex:        c.ActorPrivateKeyHex,
+		MulticallHex:         c.Multicall,
+		WETHHex:              c.WETH,
+		NativeSymbol:         c.NativeSymbol,
+		NativeDecimals:       c.NativeDecimals,
+		Timeout:              10 * time.Minute,
+		ReceiptPollInterval:  c.ReceiptPollInterval,
+		ReceiptTimeout:       c.ReceiptTimeout,
+		SpenderPrivateKeyHex: "",
+		Amount:               big.NewInt(1_000_000_000_000),
 	})
 }
 
 func (s *WETHSuite) SetupSuite() {
-	if !s.Enable {
-		s.T().Skip("disabled")
-	}
-
-	s.ctx, s.cancel = context.WithTimeout(s.T().Context(), 10*time.Minute)
+	s.ctx, s.cancel = context.WithTimeout(s.T().Context(), s.Timeout)
 
 	s.client = rpc.NewClient(s.RPCURL, rpc.WithRetry(5, rpc.ExponentialBackoff(500*time.Millisecond, 10*time.Second)))
 	s.w = New(s.client)
 
+	s.mu = &sync.Mutex{}
 	s.totalFee = big.NewInt(0)
 
 	privKey, err := types.NewPrivateKeyFromHex(s.PrivateKeyHex)
@@ -82,7 +87,7 @@ func (s *WETHSuite) SetupSuite() {
 	s.signer = privKey
 	s.from = core.PubkeyToAddress(privKey.PublicKey())
 
-	spenderKey, err := types.NewPrivateKeyFromHex(s.SpenderKeyHex)
+	spenderKey, err := types.NewPrivateKeyFromHex(s.SpenderPrivateKeyHex)
 	s.Require().NoError(err)
 	s.spenderSigner = spenderKey
 	s.spender = core.PubkeyToAddress(spenderKey.PublicKey())
@@ -92,19 +97,15 @@ func (s *WETHSuite) SetupSuite() {
 
 	s.multicall, err = types.NewAddressFromHex(s.MulticallHex)
 	s.Require().NoError(err)
-
-	depositValue, ok := new(big.Int).SetString(s.DepositValue, 10)
-	s.Require().True(ok)
-	s.depositValue = depositValue
 }
 
 func (s *WETHSuite) TearDownSuite() {
 	if s.totalFee != nil {
-		base := new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil)
+		base := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(s.NativeDecimals)), nil)
 		whole, frac := new(big.Int), new(big.Int)
 		whole.DivMod(s.totalFee, base, frac)
 
-		fracStr := strings.TrimRight(fmt.Sprintf("%018s", frac.String()), "0")
+		fracStr := strings.TrimRight(fmt.Sprintf("%0*s", s.NativeDecimals, frac.String()), "0")
 		decimal := whole.String()
 		if fracStr != "" {
 			decimal += "." + fracStr
@@ -121,11 +122,9 @@ func (s *WETHSuite) TearDownSuite() {
 func (s *WETHSuite) Test01ReadMethods() {
 	name, err := s.w.Name(s.ctx, nil, erc20.NewNameRequest(s.contract))
 	s.Require().NoError(err)
-	s.T().Logf("name: %s", name)
 
 	symbol, err := s.w.Symbol(s.ctx, nil, erc20.NewSymbolRequest(s.contract))
 	s.Require().NoError(err)
-	s.T().Logf("symbol: %s", symbol)
 
 	decimals, err := s.w.Decimals(s.ctx, nil, erc20.NewDecimalsRequest(s.contract))
 	s.Require().NoError(err)
@@ -133,163 +132,174 @@ func (s *WETHSuite) Test01ReadMethods() {
 
 	totalSupply, err := s.w.TotalSupply(s.ctx, nil, erc20.NewTotalSupplyRequest(s.contract))
 	s.Require().NoError(err)
-	s.T().Logf("totalSupply: %s", totalSupply)
 
 	balances, err := s.w.TokenBalances(s.ctx, nil, erc20.NewTokenBalancesRequest(s.multicall, s.contract, []*types.Address{s.from, s.spender}, false))
 	s.Require().NoError(err)
+
+	s.T().Logf("WETH %s Test01ReadMethods Result", s.contract)
+	s.T().Logf("\tName: %s", name)
+	s.T().Logf("\tSymbol: %s", symbol)
+	s.T().Logf("\tDecimals: %d", decimals)
+	s.T().Logf("\tTotalSupply: %s", totalSupply)
 	for _, ab := range balances.Addresses {
-		s.T().Logf("balance of %s: %s", ab.Address, ab.Amount)
+		s.T().Logf("\tBalanceOf(%s): %s", ab.Address, ab.Amount)
 	}
 }
 
 func (s *WETHSuite) Test02Deposit() {
-	unsigned, err := s.w.CreateDeposit(s.ctx, tx.NewDynamicFeeBuilder(), NewDepositParams(s.contract, s.from, s.depositValue))
+	depositTx, hash, err := s.w.Deposit(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewDepositRequest(s.contract, s.Amount))
 	s.Require().NoError(err)
-	s.Require().NoError(unsigned.Sign(s.signer))
-	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
+	s.mu.Lock()
+	s.totalFee.Add(s.totalFee, depositTx.MaxFee())
+	s.mu.Unlock()
 
-	hash, err := s.w.Deposit(s.ctx, unsigned)
-	s.Require().NoError(err)
-	s.T().Logf("deposit: broadcast tx %s", hash)
-
-	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(receipt.Status, "deposit transaction reverted")
-	s.T().Logf("deposit: confirmed in block %d", receipt.BlockNumber)
 
-	var deposits []Deposit
-	s.Require().Eventually(func() bool {
-		receipt, err = tx.WaitForReceipt(s.ctx, s.client, hash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
-		if err != nil {
-			return false
-		}
-		deposits, err = ExtractDeposits(receipt.Logs)
-		return err == nil && len(deposits) == 1
-	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "deposit log not visible after confirmation")
+	deposits, err := ExtractDeposits(receipt.Logs)
+	s.Require().NoError(err)
+	s.Require().Len(deposits, 1)
+	s.Require().True(deposits[0].Contract.Equal(s.contract))
 	s.Require().True(deposits[0].Dst.Equal(s.from))
-	s.Require().Zero(s.depositValue.Cmp(deposits[0].Wad))
+	s.Require().Zero(s.Amount.Cmp(deposits[0].Wad))
 
-	var balance *big.Int
-	s.Require().Eventually(func() bool {
-		balance, err = s.w.BalanceOf(s.ctx, nil, erc20.NewBalanceOfRequest(s.contract, s.from))
-		return err == nil && s.depositValue.Cmp(balance) == 0
-	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "balance not visible after deposit")
+	before, err := s.w.BalanceOf(s.ctx, bind.NewCallOptions().WithBlock(fmt.Sprintf("0x%x", receipt.BlockNumber-1)), erc20.NewBalanceOfRequest(s.contract, s.from))
+	s.Require().NoError(err)
+	after, err := s.w.BalanceOf(s.ctx, bind.NewCallOptions().WithBlock(fmt.Sprintf("0x%x", receipt.BlockNumber)), erc20.NewBalanceOfRequest(s.contract, s.from))
+	s.Require().NoError(err)
+	s.Require().Zero(s.Amount.Cmp(new(big.Int).Sub(after, before)))
+
+	s.T().Logf("WETH %s Test02Deposit Result", s.contract)
+	s.T().Logf("\tTx: %s (block %d, value %s)", hash, receipt.BlockNumber, s.Amount)
+	s.T().Logf("\tFrom(%s) balance: %s -> %s", s.from, before, after)
 }
 
 func (s *WETHSuite) Test03Approve() {
-	approveTx, hash, err := s.w.Approve(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), erc20.NewApproveRequest(s.contract, s.spender, s.depositValue))
+	approveTx, hash, err := s.w.Approve(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), erc20.NewApproveRequest(s.contract, s.spender, s.Amount))
 	s.Require().NoError(err)
+	s.mu.Lock()
 	s.totalFee.Add(s.totalFee, approveTx.MaxFee())
+	s.mu.Unlock()
 
-	s.T().Logf("approve: broadcast tx %s", hash)
-
-	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(receipt.Status, "approve transaction reverted")
-	s.T().Logf("approve: confirmed in block %d", receipt.BlockNumber)
 
-	var allowance *big.Int
-	s.Require().Eventually(func() bool {
-		allowance, err = s.w.Allowance(s.ctx, nil, erc20.NewAllowanceRequest(s.contract, s.from, s.spender))
-		return err == nil && s.depositValue.Cmp(allowance) == 0
-	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "allowance not visible after approve")
+	allowance, err := s.w.Allowance(s.ctx, bind.NewCallOptions().WithBlock(fmt.Sprintf("0x%x", receipt.BlockNumber)), erc20.NewAllowanceRequest(s.contract, s.from, s.spender))
+	s.Require().NoError(err)
+	s.Require().Zero(s.Amount.Cmp(allowance))
+
+	s.T().Logf("WETH %s Test03Approve Result", s.contract)
+	s.T().Logf("\tTx: %s (block %d)", hash, receipt.BlockNumber)
+	s.T().Logf("\tAllowance(%s -> %s): %s", s.from, s.spender, allowance)
 }
 
 func (s *WETHSuite) Test04TransferFrom() {
-	transferFromTx, hash, err := s.w.TransferFrom(s.ctx, bind.NewTransactOptions(s.spenderSigner, tx.NewDynamicFeeBuilder()), erc20.NewTransferFromRequest(s.contract, s.from, s.spender, s.depositValue))
+	transferFromTx, hash, err := s.w.TransferFrom(s.ctx, bind.NewTransactOptions(s.spenderSigner, tx.NewDynamicFeeBuilder()), erc20.NewTransferFromRequest(s.contract, s.from, s.spender, s.Amount))
 	s.Require().NoError(err)
+	s.mu.Lock()
 	s.totalFee.Add(s.totalFee, transferFromTx.MaxFee())
+	s.mu.Unlock()
 
-	s.T().Logf("transferFrom: broadcast tx %s", hash)
-
-	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(receipt.Status, "transferFrom transaction reverted")
-	s.T().Logf("transferFrom: confirmed in block %d", receipt.BlockNumber)
 
-	var fromBalance, spenderBalance, allowance *big.Int
-	s.Require().Eventually(func() bool {
-		fromBalance, err = s.w.BalanceOf(s.ctx, nil, erc20.NewBalanceOfRequest(s.contract, s.from))
-		if err != nil {
-			return false
-		}
-		spenderBalance, err = s.w.BalanceOf(s.ctx, nil, erc20.NewBalanceOfRequest(s.contract, s.spender))
-		if err != nil {
-			return false
-		}
-		allowance, err = s.w.Allowance(s.ctx, nil, erc20.NewAllowanceRequest(s.contract, s.from, s.spender))
-		if err != nil {
-			return false
-		}
-		return fromBalance.Sign() == 0 && s.depositValue.Cmp(spenderBalance) == 0 && allowance.Sign() == 0
-	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "balances/allowance not visible after transferFrom")
+	before := bind.NewCallOptions().WithBlock(fmt.Sprintf("0x%x", receipt.BlockNumber-1))
+	after := bind.NewCallOptions().WithBlock(fmt.Sprintf("0x%x", receipt.BlockNumber))
+
+	fromBefore, err := s.w.BalanceOf(s.ctx, before, erc20.NewBalanceOfRequest(s.contract, s.from))
+	s.Require().NoError(err)
+	fromAfter, err := s.w.BalanceOf(s.ctx, after, erc20.NewBalanceOfRequest(s.contract, s.from))
+	s.Require().NoError(err)
+	spenderBefore, err := s.w.BalanceOf(s.ctx, before, erc20.NewBalanceOfRequest(s.contract, s.spender))
+	s.Require().NoError(err)
+	spenderAfter, err := s.w.BalanceOf(s.ctx, after, erc20.NewBalanceOfRequest(s.contract, s.spender))
+	s.Require().NoError(err)
+	allowance, err := s.w.Allowance(s.ctx, after, erc20.NewAllowanceRequest(s.contract, s.from, s.spender))
+	s.Require().NoError(err)
+
+	s.Require().Zero(s.Amount.Cmp(new(big.Int).Sub(fromBefore, fromAfter)))
+	s.Require().Zero(s.Amount.Cmp(new(big.Int).Sub(spenderAfter, spenderBefore)))
+	s.Require().Zero(allowance.Sign())
+
+	s.T().Logf("WETH %s Test04TransferFrom Result", s.contract)
+	s.T().Logf("\tTx: %s (block %d)", hash, receipt.BlockNumber)
+	s.T().Logf("\tFrom(%s) balance: %s -> %s", s.from, fromBefore, fromAfter)
+	s.T().Logf("\tSpender(%s) balance: %s -> %s", s.spender, spenderBefore, spenderAfter)
 }
 
 func (s *WETHSuite) Test05Transfer() {
-	transferTx, hash, err := s.w.Transfer(s.ctx, bind.NewTransactOptions(s.spenderSigner, tx.NewDynamicFeeBuilder()), erc20.NewTransferRequest(s.contract, s.from, s.depositValue))
+	transferTx, hash, err := s.w.Transfer(s.ctx, bind.NewTransactOptions(s.spenderSigner, tx.NewDynamicFeeBuilder()), erc20.NewTransferRequest(s.contract, s.from, s.Amount))
 	s.Require().NoError(err)
+	s.mu.Lock()
 	s.totalFee.Add(s.totalFee, transferTx.MaxFee())
+	s.mu.Unlock()
 
-	s.T().Logf("transfer: broadcast tx %s", hash)
-
-	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(receipt.Status, "transfer transaction reverted")
-	s.T().Logf("transfer: confirmed in block %d", receipt.BlockNumber)
 
-	var spenderBalance, fromBalance *big.Int
-	s.Require().Eventually(func() bool {
-		spenderBalance, err = s.w.BalanceOf(s.ctx, nil, erc20.NewBalanceOfRequest(s.contract, s.spender))
-		if err != nil {
-			return false
-		}
-		fromBalance, err = s.w.BalanceOf(s.ctx, nil, erc20.NewBalanceOfRequest(s.contract, s.from))
-		if err != nil {
-			return false
-		}
-		return spenderBalance.Sign() == 0 && s.depositValue.Cmp(fromBalance) == 0
-	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "balances not visible after transfer")
+	before := bind.NewCallOptions().WithBlock(fmt.Sprintf("0x%x", receipt.BlockNumber-1))
+	after := bind.NewCallOptions().WithBlock(fmt.Sprintf("0x%x", receipt.BlockNumber))
+
+	spenderBefore, err := s.w.BalanceOf(s.ctx, before, erc20.NewBalanceOfRequest(s.contract, s.spender))
+	s.Require().NoError(err)
+	spenderAfter, err := s.w.BalanceOf(s.ctx, after, erc20.NewBalanceOfRequest(s.contract, s.spender))
+	s.Require().NoError(err)
+	fromBefore, err := s.w.BalanceOf(s.ctx, before, erc20.NewBalanceOfRequest(s.contract, s.from))
+	s.Require().NoError(err)
+	fromAfter, err := s.w.BalanceOf(s.ctx, after, erc20.NewBalanceOfRequest(s.contract, s.from))
+	s.Require().NoError(err)
+
+	s.Require().Zero(s.Amount.Cmp(new(big.Int).Sub(spenderBefore, spenderAfter)))
+	s.Require().Zero(s.Amount.Cmp(new(big.Int).Sub(fromAfter, fromBefore)))
+
+	s.T().Logf("WETH %s Test05Transfer Result", s.contract)
+	s.T().Logf("\tTx: %s (block %d)", hash, receipt.BlockNumber)
+	s.T().Logf("\tSpender(%s) balance: %s -> %s", s.spender, spenderBefore, spenderAfter)
+	s.T().Logf("\tFrom(%s) balance: %s -> %s", s.from, fromBefore, fromAfter)
 }
 
 func (s *WETHSuite) Test06Withdraw() {
-	unsigned, err := s.w.CreateWithdraw(s.ctx, tx.NewDynamicFeeBuilder(), NewWithdrawParams(s.contract, s.from, s.depositValue))
+	withdrawTx, hash, err := s.w.Withdraw(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewWithdrawRequest(s.contract, s.Amount))
 	s.Require().NoError(err)
-	s.Require().NoError(unsigned.Sign(s.signer))
-	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
+	s.mu.Lock()
+	s.totalFee.Add(s.totalFee, withdrawTx.MaxFee())
+	s.mu.Unlock()
 
-	hash, err := s.w.Withdraw(s.ctx, unsigned)
-	s.Require().NoError(err)
-	s.T().Logf("withdraw: broadcast tx %s", hash)
-
-	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(receipt.Status, "withdraw transaction reverted")
-	s.T().Logf("withdraw: confirmed in block %d", receipt.BlockNumber)
 
-	var withdrawals []Withdrawal
-	s.Require().Eventually(func() bool {
-		receipt, err = tx.WaitForReceipt(s.ctx, s.client, hash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
-		if err != nil {
-			return false
-		}
-		withdrawals, err = ExtractWithdrawals(receipt.Logs)
-		return err == nil && len(withdrawals) == 1
-	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "withdrawal log not visible after confirmation")
+	withdrawals, err := ExtractWithdrawals(receipt.Logs)
+	s.Require().NoError(err)
+	s.Require().Len(withdrawals, 1)
+	s.Require().True(withdrawals[0].Contract.Equal(s.contract))
 	s.Require().True(withdrawals[0].Src.Equal(s.from))
-	s.Require().Zero(s.depositValue.Cmp(withdrawals[0].Wad))
+	s.Require().Zero(s.Amount.Cmp(withdrawals[0].Wad))
 
-	var balance *big.Int
-	s.Require().Eventually(func() bool {
-		balance, err = s.w.BalanceOf(s.ctx, nil, erc20.NewBalanceOfRequest(s.contract, s.from))
-		return err == nil && balance.Sign() == 0
-	}, time.Duration(s.Timeout)*time.Second, time.Duration(s.Interval)*time.Millisecond, "balance not visible after withdraw")
+	before, err := s.w.BalanceOf(s.ctx, bind.NewCallOptions().WithBlock(fmt.Sprintf("0x%x", receipt.BlockNumber-1)), erc20.NewBalanceOfRequest(s.contract, s.from))
+	s.Require().NoError(err)
+	after, err := s.w.BalanceOf(s.ctx, bind.NewCallOptions().WithBlock(fmt.Sprintf("0x%x", receipt.BlockNumber)), erc20.NewBalanceOfRequest(s.contract, s.from))
+	s.Require().NoError(err)
+	s.Require().Zero(s.Amount.Cmp(new(big.Int).Sub(before, after)))
+
+	s.T().Logf("WETH %s Test06Withdraw Result", s.contract)
+	s.T().Logf("\tTx: %s (block %d)", hash, receipt.BlockNumber)
+	s.T().Logf("\tFrom(%s) balance: %s -> %s", s.from, before, after)
 }
 
 func (s *WETHSuite) Test07WithdrawInsufficientBalance() {
 	balance, err := s.w.BalanceOf(s.ctx, nil, erc20.NewBalanceOfRequest(s.contract, s.spender))
 	s.Require().NoError(err)
-	s.Require().Zero(balance.Sign(), "spender must hold no WETH for this revert case")
 
-	_, err = s.w.CreateWithdraw(s.ctx, tx.NewDynamicFeeBuilder(), NewWithdrawParams(s.contract, s.spender, s.depositValue))
+	withdrawTx, hash, err := s.w.Withdraw(s.ctx, bind.NewTransactOptions(s.spenderSigner, tx.NewDynamicFeeBuilder()), NewWithdrawRequest(s.contract, new(big.Int).Add(balance, big.NewInt(1))))
 	s.Require().Error(err)
+	s.Require().Nil(withdrawTx)
+	s.Require().Nil(hash)
+
+	s.T().Logf("WETH %s Test07WithdrawInsufficientBalance Result", s.contract)
+	s.T().Logf("\tError: %v", err)
 }
