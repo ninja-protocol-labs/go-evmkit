@@ -20,7 +20,7 @@ func TestEncodeSupportsInterface(t *testing.T) {
 }
 
 func TestDecodeSupportsInterface(t *testing.T) {
-	data, err := abi.Pack(abi.Types{abi.Bool}, true)
+	data, err := abi.Pack(abi.NewTypes(abi.Bool), true)
 	require.NoError(t, err)
 	ok, err := DecodeSupportsInterface(data)
 	require.NoError(t, err)
