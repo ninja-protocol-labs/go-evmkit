@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/standards/deploy"
 	"github.com/ninja-protocol-labs/go-evmkit/standards/erc20"
@@ -263,15 +264,11 @@ func (s *PoolManagerSuite) Test02Initialize() {
 }
 
 func (s *PoolManagerSuite) Test03SetOperator() {
-	unsigned, err := s.poolManager.CreateSetOperator(s.ctx, tx.NewDynamicFeeBuilder(), s.contract, s.from, s.spender, true)
+	sentTx, hash, err := s.poolManager.SetOperator(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), erc6909.NewSetOperatorRequest(s.contract, s.spender, true))
 	s.Require().NoError(err)
-	s.Require().NoError(unsigned.Sign(s.signer))
 	s.mu.Lock()
-	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
+	s.totalFee.Add(s.totalFee, sentTx.MaxFee())
 	s.mu.Unlock()
-
-	hash, err := s.poolManager.SetOperator(s.ctx, unsigned)
-	s.Require().NoError(err)
 
 	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, 0, 0)
 	s.Require().NoError(err)
@@ -287,7 +284,7 @@ func (s *PoolManagerSuite) Test03SetOperator() {
 
 	var after bool
 	s.Require().Eventually(func() bool {
-		after, err = s.poolManager.IsOperator(s.ctx, s.contract, s.from, s.spender, rpc.BlockTagLatest)
+		after, err = s.poolManager.IsOperator(s.ctx, nil, erc6909.NewIsOperatorRequest(s.contract, s.from, s.spender))
 		return err == nil && after
 	}, 10*time.Second, 500*time.Millisecond, "operator not visible after setOperator")
 
@@ -297,15 +294,11 @@ func (s *PoolManagerSuite) Test03SetOperator() {
 	s.T().Logf("\tTx: %s", hash)
 	s.T().Logf("\tIsOperator after: %v", after)
 
-	revertUnsigned, err := s.poolManager.CreateSetOperator(s.ctx, tx.NewDynamicFeeBuilder(), s.contract, s.from, s.spender, false)
+	revertTx, revertHash, err := s.poolManager.SetOperator(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), erc6909.NewSetOperatorRequest(s.contract, s.spender, false))
 	s.Require().NoError(err)
-	s.Require().NoError(revertUnsigned.Sign(s.signer))
 	s.mu.Lock()
-	s.totalFee.Add(s.totalFee, revertUnsigned.MaxFee())
+	s.totalFee.Add(s.totalFee, revertTx.MaxFee())
 	s.mu.Unlock()
-
-	revertHash, err := s.poolManager.SetOperator(s.ctx, revertUnsigned)
-	s.Require().NoError(err)
 
 	revertReceipt, err := tx.WaitForReceipt(s.ctx, s.client, revertHash, 0, 0)
 	s.Require().NoError(err)
@@ -313,7 +306,7 @@ func (s *PoolManagerSuite) Test03SetOperator() {
 
 	var reverted bool
 	s.Require().Eventually(func() bool {
-		reverted, err = s.poolManager.IsOperator(s.ctx, s.contract, s.from, s.spender, rpc.BlockTagLatest)
+		reverted, err = s.poolManager.IsOperator(s.ctx, nil, erc6909.NewIsOperatorRequest(s.contract, s.from, s.spender))
 		return err == nil && !reverted
 	}, 10*time.Second, 500*time.Millisecond, "operator not reverted to false")
 
@@ -326,15 +319,11 @@ func (s *PoolManagerSuite) Test04Approve() {
 	id := new(big.Int).SetBytes(s.key.Currency0.Bytes())
 	amount := big.NewInt(100)
 
-	unsigned, err := s.poolManager.CreateApprove(s.ctx, tx.NewDynamicFeeBuilder(), s.contract, s.from, s.spender, id, amount)
+	sentTx, hash, err := s.poolManager.Approve(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), erc6909.NewApproveRequest(s.contract, s.spender, id, amount))
 	s.Require().NoError(err)
-	s.Require().NoError(unsigned.Sign(s.signer))
 	s.mu.Lock()
-	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
+	s.totalFee.Add(s.totalFee, sentTx.MaxFee())
 	s.mu.Unlock()
-
-	hash, err := s.poolManager.Approve(s.ctx, unsigned)
-	s.Require().NoError(err)
 
 	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, 0, 0)
 	s.Require().NoError(err)
@@ -351,7 +340,7 @@ func (s *PoolManagerSuite) Test04Approve() {
 
 	var after *big.Int
 	s.Require().Eventually(func() bool {
-		after, err = s.poolManager.Allowance(s.ctx, s.contract, s.from, s.spender, id, rpc.BlockTagLatest)
+		after, err = s.poolManager.Allowance(s.ctx, nil, erc6909.NewAllowanceRequest(s.contract, s.from, s.spender, id))
 		return err == nil && amount.Cmp(after) == 0
 	}, 10*time.Second, 500*time.Millisecond, "allowance not visible after approve")
 
@@ -362,15 +351,11 @@ func (s *PoolManagerSuite) Test04Approve() {
 	s.T().Logf("\tTx: %s", hash)
 	s.T().Logf("\tAllowance after: %s", after)
 
-	revertUnsigned, err := s.poolManager.CreateApprove(s.ctx, tx.NewDynamicFeeBuilder(), s.contract, s.from, s.spender, id, big.NewInt(0))
+	revertTx, revertHash, err := s.poolManager.Approve(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), erc6909.NewApproveRequest(s.contract, s.spender, id, big.NewInt(0)))
 	s.Require().NoError(err)
-	s.Require().NoError(revertUnsigned.Sign(s.signer))
 	s.mu.Lock()
-	s.totalFee.Add(s.totalFee, revertUnsigned.MaxFee())
+	s.totalFee.Add(s.totalFee, revertTx.MaxFee())
 	s.mu.Unlock()
-
-	revertHash, err := s.poolManager.Approve(s.ctx, revertUnsigned)
-	s.Require().NoError(err)
 
 	revertReceipt, err := tx.WaitForReceipt(s.ctx, s.client, revertHash, 0, 0)
 	s.Require().NoError(err)
@@ -378,7 +363,7 @@ func (s *PoolManagerSuite) Test04Approve() {
 
 	var reverted *big.Int
 	s.Require().Eventually(func() bool {
-		reverted, err = s.poolManager.Allowance(s.ctx, s.contract, s.from, s.spender, id, rpc.BlockTagLatest)
+		reverted, err = s.poolManager.Allowance(s.ctx, nil, erc6909.NewAllowanceRequest(s.contract, s.from, s.spender, id))
 		return err == nil && big.NewInt(0).Cmp(reverted) == 0
 	}, 10*time.Second, 500*time.Millisecond, "allowance not reverted to zero")
 
@@ -390,15 +375,11 @@ func (s *PoolManagerSuite) Test04Approve() {
 func (s *PoolManagerSuite) Test05Transfer() {
 	id := new(big.Int).SetBytes(s.key.Currency0.Bytes())
 
-	unsigned, err := s.poolManager.CreateTransfer(s.ctx, tx.NewDynamicFeeBuilder(), s.contract, s.from, s.spender, id, big.NewInt(0))
+	sentTx, hash, err := s.poolManager.Transfer(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), erc6909.NewTransferRequest(s.contract, s.spender, id, big.NewInt(0)))
 	s.Require().NoError(err)
-	s.Require().NoError(unsigned.Sign(s.signer))
 	s.mu.Lock()
-	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
+	s.totalFee.Add(s.totalFee, sentTx.MaxFee())
 	s.mu.Unlock()
-
-	hash, err := s.poolManager.Transfer(s.ctx, unsigned)
-	s.Require().NoError(err)
 
 	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, 0, 0)
 	s.Require().NoError(err)

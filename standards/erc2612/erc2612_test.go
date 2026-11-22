@@ -34,7 +34,8 @@ type ERC2612Suite struct {
 	NativeSymbol         string
 	NativeDecimals       int
 	Timeout              time.Duration
-	Interval             int
+	ReceiptPollInterval  time.Duration
+	ReceiptTimeout       time.Duration
 	SpenderPrivateKeyHex string
 	ToHex                string
 	Value                string
@@ -80,7 +81,8 @@ func TestERC2612Suite(t *testing.T) {
 		NativeSymbol:         c.NativeSymbol,
 		NativeDecimals:       c.NativeDecimals,
 		Timeout:              10 * time.Minute,
-		Interval:             200,
+		ReceiptPollInterval:  c.ReceiptPollInterval,
+		ReceiptTimeout:       c.ReceiptTimeout,
 		SpenderPrivateKeyHex: "",
 		ToHex:                "",
 		Value:                "100000",
@@ -164,7 +166,7 @@ func (s *ERC2612Suite) SetupSuite() {
 		hash, err := s.deployer.Deploy(s.ctx, unsigned)
 		s.Require().NoError(err)
 
-		receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, 200, 15*time.Second)
+		receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, s.ReceiptPollInterval, s.ReceiptTimeout)
 		s.Require().NoError(err)
 		s.Require().True(receipt.Status, "deploy transaction reverted")
 
@@ -179,7 +181,7 @@ func (s *ERC2612Suite) SetupSuite() {
 			}
 			code, err := encoding.Hex.Decode(codeHex)
 			return err == nil && len(code) > 0
-		}, 10*time.Second, time.Duration(s.Interval)*time.Millisecond, "no code visible at deployed token %s", token)
+		}, 10*time.Second, s.ReceiptPollInterval, "no code visible at deployed token %s", token)
 
 		s.T().Logf("SetupSuite: deployed token %d/%d %s (nonce %d, tx %s)", i+1, s.TokenCount, token, unsigned.AddressNonce(), hash)
 
@@ -194,7 +196,7 @@ func (s *ERC2612Suite) SetupSuite() {
 			}
 			unsignedMint = u
 			return true
-		}, 10*time.Second, time.Duration(s.Interval)*time.Millisecond, "mint gas estimate looked like a no-code call")
+		}, 10*time.Second, s.ReceiptPollInterval, "mint gas estimate looked like a no-code call")
 		s.Require().NoError(unsignedMint.Sign(s.signer))
 		s.mu.Lock()
 		s.totalFee.Add(s.totalFee, unsignedMint.MaxFee())
@@ -205,7 +207,7 @@ func (s *ERC2612Suite) SetupSuite() {
 		mintHash, err := tx.Broadcast(s.ctx, s.client, raw)
 		s.Require().NoError(err)
 
-		mintReceipt, err := tx.WaitForReceipt(s.ctx, s.client, mintHash, time.Duration(s.Interval)*time.Millisecond, 15*time.Second)
+		mintReceipt, err := tx.WaitForReceipt(s.ctx, s.client, mintHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 		s.Require().NoError(err)
 		s.Require().True(mintReceipt.Status, "mint transaction reverted")
 
@@ -243,7 +245,7 @@ func (s *ERC2612Suite) TearDownSuite() {
 				burnHash, err := tx.Broadcast(ctx, s.client, raw)
 				s.Require().NoError(err)
 
-				burnReceipt, err := tx.WaitForReceipt(ctx, s.client, burnHash, time.Duration(s.Interval)*time.Millisecond, 15*time.Second)
+				burnReceipt, err := tx.WaitForReceipt(ctx, s.client, burnHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 				s.Require().NoError(err)
 				s.Require().True(burnReceipt.Status, "burn transaction reverted")
 
@@ -312,7 +314,7 @@ func (s *ERC2612Suite) Test02Permit() {
 		s.totalFee.Add(s.totalFee, permitTx.MaxFee())
 		s.mu.Unlock()
 
-		permitReceipt, err := tx.WaitForReceipt(s.ctx, s.client, permitHash, time.Duration(s.Interval)*time.Millisecond, 15*time.Second)
+		permitReceipt, err := tx.WaitForReceipt(s.ctx, s.client, permitHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 		s.Require().NoError(err)
 		s.Require().True(permitReceipt.Status, "permit transaction reverted")
 
@@ -329,7 +331,7 @@ func (s *ERC2612Suite) Test02Permit() {
 		s.Require().Eventually(func() bool {
 			nonceAfter, err = s.erc2612.Nonces(s.ctx, nil, NewNoncesRequest(token, s.from))
 			return err == nil && wantNonceAfter.Cmp(nonceAfter) == 0
-		}, 10*time.Second, time.Duration(s.Interval)*time.Millisecond, "nonce not visible after permit")
+		}, 10*time.Second, s.ReceiptPollInterval, "nonce not visible after permit")
 
 		var allowance *big.Int
 		s.Require().Eventually(func() bool {
@@ -350,7 +352,7 @@ func (s *ERC2612Suite) Test02Permit() {
 		s.totalFee.Add(s.totalFee, transferFromTx.MaxFee())
 		s.mu.Unlock()
 
-		transferReceipt, err := tx.WaitForReceipt(s.ctx, s.client, transferHash, time.Duration(s.Interval)*time.Millisecond, 15*time.Second)
+		transferReceipt, err := tx.WaitForReceipt(s.ctx, s.client, transferHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 		s.Require().NoError(err)
 		s.Require().True(transferReceipt.Status, "transferFrom transaction reverted")
 
@@ -366,13 +368,13 @@ func (s *ERC2612Suite) Test02Permit() {
 		s.Require().Eventually(func() bool {
 			allowanceAfter, err = s.erc20.Allowance(s.ctx, nil, erc20.NewAllowanceRequest(token, s.from, s.spender))
 			return err == nil && allowanceAfter.Sign() == 0
-		}, 10*time.Second, time.Duration(s.Interval)*time.Millisecond, "allowance not visible as consumed after transferFrom")
+		}, 10*time.Second, s.ReceiptPollInterval, "allowance not visible as consumed after transferFrom")
 
 		var toBalance *big.Int
 		s.Require().Eventually(func() bool {
 			toBalance, err = s.erc20.BalanceOf(s.ctx, nil, erc20.NewBalanceOfRequest(token, s.to))
 			return err == nil && s.value.Cmp(toBalance) == 0
-		}, 10*time.Second, time.Duration(s.Interval)*time.Millisecond, "balance not visible after transferFrom")
+		}, 10*time.Second, s.ReceiptPollInterval, "balance not visible after transferFrom")
 
 		s.T().Logf("ERC2612 %s Test02Permit TransferFrom Result", token)
 		s.T().Logf("\tFrom: %s", s.from)
@@ -429,14 +431,14 @@ func (s *ERC2612Suite) Test04PermitOverwritesAllowance() {
 		s.mu.Lock()
 		s.totalFee.Add(s.totalFee, firstTx.MaxFee())
 		s.mu.Unlock()
-		firstReceipt, err := tx.WaitForReceipt(s.ctx, s.client, firstHash, time.Duration(s.Interval)*time.Millisecond, 15*time.Second)
+		firstReceipt, err := tx.WaitForReceipt(s.ctx, s.client, firstHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 		s.Require().NoError(err)
 		s.Require().True(firstReceipt.Status, "permit transaction reverted")
 		var allowance *big.Int
 		s.Require().Eventually(func() bool {
 			allowance, err = s.erc20.Allowance(s.ctx, nil, erc20.NewAllowanceRequest(token, s.from, s.spender))
 			return err == nil && s.value.Cmp(allowance) == 0
-		}, 10*time.Second, time.Duration(s.Interval)*time.Millisecond, "allowance not visible after first permit")
+		}, 10*time.Second, s.ReceiptPollInterval, "allowance not visible after first permit")
 
 		secondNonce, err := s.erc2612.Nonces(s.ctx, nil, NewNoncesRequest(token, s.from))
 		s.Require().NoError(err)
@@ -447,13 +449,13 @@ func (s *ERC2612Suite) Test04PermitOverwritesAllowance() {
 		s.mu.Lock()
 		s.totalFee.Add(s.totalFee, secondTx.MaxFee())
 		s.mu.Unlock()
-		secondReceipt, err := tx.WaitForReceipt(s.ctx, s.client, secondHash, time.Duration(s.Interval)*time.Millisecond, 15*time.Second)
+		secondReceipt, err := tx.WaitForReceipt(s.ctx, s.client, secondHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 		s.Require().NoError(err)
 		s.Require().True(secondReceipt.Status, "permit transaction reverted")
 		s.Require().Eventually(func() bool {
 			allowance, err = s.erc20.Allowance(s.ctx, nil, erc20.NewAllowanceRequest(token, s.from, s.spender))
 			return err == nil && secondValue.Cmp(allowance) == 0
-		}, 10*time.Second, time.Duration(s.Interval)*time.Millisecond, "allowance not visible after second permit")
+		}, 10*time.Second, s.ReceiptPollInterval, "allowance not visible after second permit")
 
 		s.T().Logf("ERC2612 %s Test04PermitOverwritesAllowance Result", token)
 		s.T().Logf("\tFirst permit (value %s): %s", s.value, firstHash)
@@ -482,7 +484,7 @@ func (s *ERC2612Suite) Test05PermitReplayRejected() {
 		s.totalFee.Add(s.totalFee, permitTx.MaxFee())
 		s.mu.Unlock()
 
-		permitReceipt, err := tx.WaitForReceipt(s.ctx, s.client, permitHash, time.Duration(s.Interval)*time.Millisecond, 15*time.Second)
+		permitReceipt, err := tx.WaitForReceipt(s.ctx, s.client, permitHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 		s.Require().NoError(err)
 		s.Require().True(permitReceipt.Status, "permit transaction reverted")
 
@@ -491,7 +493,7 @@ func (s *ERC2612Suite) Test05PermitReplayRejected() {
 		s.Require().Eventually(func() bool {
 			nonceAfter, err = s.erc2612.Nonces(s.ctx, nil, NewNoncesRequest(token, s.from))
 			return err == nil && wantNonceAfter.Cmp(nonceAfter) == 0
-		}, 10*time.Second, time.Duration(s.Interval)*time.Millisecond, "nonce not visible after permit")
+		}, 10*time.Second, s.ReceiptPollInterval, "nonce not visible after permit")
 
 		failedTx, failedHash, err := s.erc2612.Permit(s.ctx, bind.NewTransactOptions(s.spenderSigner, tx.NewDynamicFeeBuilder()), NewPermitRequest(token, s.from, s.spender, s.value, deadline, sig))
 		s.Require().Nil(failedTx)

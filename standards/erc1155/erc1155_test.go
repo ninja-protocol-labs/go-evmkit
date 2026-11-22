@@ -28,19 +28,21 @@ var interfaceIDERC1155 = [4]byte{0xd9, 0xb6, 0x7a, 0x26}
 type ERC1155Suite struct {
 	suite.Suite
 
-	RPCURL          string
-	PrivateKeyHex   string
-	MulticallHex    string
-	NicksFactoryHex string
-	NativeSymbol    string
-	NativeDecimals  int
-	Timeout         time.Duration
-	ToHex           string
-	TokenCount      int
-	ByteCode        string
-	Constructor     *abi.Function
-	Args            []any
-	Salt            *types.Hash
+	RPCURL              string
+	PrivateKeyHex       string
+	MulticallHex        string
+	NicksFactoryHex     string
+	NativeSymbol        string
+	NativeDecimals      int
+	Timeout             time.Duration
+	ReceiptPollInterval time.Duration
+	ReceiptTimeout      time.Duration
+	ToHex               string
+	TokenCount          int
+	ByteCode            string
+	Constructor         *abi.Function
+	Args                []any
+	Salt                *types.Hash
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -67,19 +69,21 @@ func TestERC1155Suite(t *testing.T) {
 	c := testenv.MustLoad(t, testenv.UnknownNetworkType, testenv.UnknownNetwork)
 
 	suite.Run(t, &ERC1155Suite{
-		RPCURL:          c.RPCURL,
-		PrivateKeyHex:   c.ActorPrivateKeyHex,
-		MulticallHex:    c.Multicall,
-		NicksFactoryHex: c.NicksFactory,
-		NativeSymbol:    c.NativeSymbol,
-		NativeDecimals:  c.NativeDecimals,
-		Timeout:         10 * time.Minute,
-		ToHex:           "",
-		TokenCount:      5,
-		ByteCode:        testenv.ERC1155ByteCodeHex,
-		Constructor:     abi.NewFunction("constructor", abi.NewTypes(abi.String), nil),
-		Args:            []any{"https://evmkit-fixtures.test/erc1155/{id}.json"},
-		Salt:            core.Keccak256([]byte("hello")),
+		RPCURL:              c.RPCURL,
+		PrivateKeyHex:       c.ActorPrivateKeyHex,
+		MulticallHex:        c.Multicall,
+		NicksFactoryHex:     c.NicksFactory,
+		NativeSymbol:        c.NativeSymbol,
+		NativeDecimals:      c.NativeDecimals,
+		Timeout:             10 * time.Minute,
+		ReceiptPollInterval: c.ReceiptPollInterval,
+		ReceiptTimeout:      c.ReceiptTimeout,
+		ToHex:               "",
+		TokenCount:          5,
+		ByteCode:            testenv.ERC1155ByteCodeHex,
+		Constructor:         abi.NewFunction("constructor", abi.NewTypes(abi.String), nil),
+		Args:                []any{"https://evmkit-fixtures.test/erc1155/{id}.json"},
+		Salt:                core.Keccak256([]byte("hello")),
 	})
 }
 
@@ -141,7 +145,7 @@ func (s *ERC1155Suite) SetupSuite() {
 		hash, err := s.deployer.Deploy(s.ctx, unsigned)
 		s.Require().NoError(err)
 
-		receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, 500, 15*time.Second)
+		receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, s.ReceiptPollInterval, s.ReceiptTimeout)
 		s.Require().NoError(err)
 		s.Require().True(receipt.Status, "deploy transaction reverted")
 
@@ -182,7 +186,7 @@ func (s *ERC1155Suite) SetupSuite() {
 		mintHash, err := tx.Broadcast(s.ctx, s.client, raw)
 		s.Require().NoError(err)
 
-		mintReceipt, err := tx.WaitForReceipt(s.ctx, s.client, mintHash, 500, 15*time.Second)
+		mintReceipt, err := tx.WaitForReceipt(s.ctx, s.client, mintHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 		s.Require().NoError(err)
 		s.Require().True(mintReceipt.Status, "mintBatch transaction reverted")
 
@@ -232,7 +236,7 @@ func (s *ERC1155Suite) TearDownSuite() {
 				burnHash, err := tx.Broadcast(ctx, s.client, raw)
 				s.Require().NoError(err)
 
-				burnReceipt, err := tx.WaitForReceipt(ctx, s.client, burnHash, 500, 15*time.Second)
+				burnReceipt, err := tx.WaitForReceipt(ctx, s.client, burnHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 				s.Require().NoError(err)
 				s.Require().True(burnReceipt.Status, "burnBatch transaction reverted")
 
@@ -463,7 +467,7 @@ func (s *ERC1155Suite) Test08SafeBatchTransferFrom() {
 	}
 
 	for i, contract := range s.contracts {
-		receipt, err := tx.WaitForReceipt(s.ctx, s.client, hashes[i], 0, 0)
+		receipt, err := tx.WaitForReceipt(s.ctx, s.client, hashes[i], s.ReceiptPollInterval, s.ReceiptTimeout)
 		s.Require().NoError(err)
 		s.Require().True(receipt.Status, "transaction reverted")
 
@@ -568,7 +572,7 @@ func (s *ERC1155Suite) Test10SafeTransferFrom() {
 		}
 
 		for i, contract := range s.contracts {
-			receipt, err := tx.WaitForReceipt(s.ctx, s.client, hashes[i], 0, 0)
+			receipt, err := tx.WaitForReceipt(s.ctx, s.client, hashes[i], s.ReceiptPollInterval, s.ReceiptTimeout)
 			s.Require().NoError(err)
 			s.Require().True(receipt.Status, "transaction reverted")
 
@@ -648,7 +652,7 @@ func (s *ERC1155Suite) Test12SetApprovalForAll() {
 	}
 
 	for i, contract := range s.contracts {
-		receipt, err := tx.WaitForReceipt(s.ctx, s.client, hashes[i], 0, 0)
+		receipt, err := tx.WaitForReceipt(s.ctx, s.client, hashes[i], s.ReceiptPollInterval, s.ReceiptTimeout)
 		s.Require().NoError(err)
 		s.Require().True(receipt.Status, "transaction reverted")
 
@@ -696,7 +700,7 @@ func (s *ERC1155Suite) Test12SetApprovalForAll() {
 	}
 
 	for i, contract := range s.contracts {
-		revertReceipt, err := tx.WaitForReceipt(s.ctx, s.client, revertHashes[i], 0, 0)
+		revertReceipt, err := tx.WaitForReceipt(s.ctx, s.client, revertHashes[i], s.ReceiptPollInterval, s.ReceiptTimeout)
 		s.Require().NoError(err)
 		s.Require().True(revertReceipt.Status, "revert transaction reverted")
 

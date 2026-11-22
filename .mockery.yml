@@ -22,3 +22,6 @@ packages:
   github.com/ninja-protocol-labs/go-evmkit/standards/erc2612:
     config:
       all: true
+  github.com/ninja-protocol-labs/go-evmkit/standards/erc6909:
+    config:
+      all: true

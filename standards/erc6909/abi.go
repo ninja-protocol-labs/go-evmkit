@@ -35,13 +35,13 @@ var (
 
 // ErrInsufficientBalance, etc. mirror OpenZeppelin's ERC6909 custom errors, for errors.Is.
 var (
-	ErrInsufficientBalance   = errors.New("erc6909: insufficient balance")
-	ErrInsufficientAllowance = errors.New("erc6909: insufficient allowance")
-	ErrInvalidApprover       = errors.New("erc6909: invalid approver")
-	ErrInvalidReceiver       = errors.New("erc6909: invalid receiver")
-	ErrInvalidSender         = errors.New("erc6909: invalid sender")
-	ErrInvalidSpender        = errors.New("erc6909: invalid spender")
-	ErrUnknown               = errors.New("erc6909: unknown revert")
+	ErrInsufficientBalance   = errors.New("insufficient balance")
+	ErrInsufficientAllowance = errors.New("insufficient allowance")
+	ErrInvalidApprover       = errors.New("invalid approver")
+	ErrInvalidReceiver       = errors.New("invalid receiver")
+	ErrInvalidSender         = errors.New("invalid sender")
+	ErrInvalidSpender        = errors.New("invalid spender")
+	ErrUnknown               = errors.New("unknown revert")
 )
 
 // Events from IERC6909, for decoding logs via Event.Decode.
@@ -146,6 +146,15 @@ func EncodeApprove(spender *types.Address, id, amount *big.Int) ([]byte, error) 
 	return data, nil
 }
 
+// DecodeApprove decodes the return data of approve.
+func DecodeApprove(data []byte) (bool, error) {
+	ok, err := approveFn.DecodeSingleReturn[bool](data)
+	if err != nil {
+		return false, fmt.Errorf("erc6909: decodeApprove: %w", err)
+	}
+	return ok, nil
+}
+
 // EncodeSetOperator returns the calldata for setOperator(spender, approved).
 func EncodeSetOperator(spender *types.Address, approved bool) ([]byte, error) {
 	data, err := setOperatorFn.EncodeCall(spender, approved)
@@ -153,6 +162,15 @@ func EncodeSetOperator(spender *types.Address, approved bool) ([]byte, error) {
 		return nil, fmt.Errorf("erc6909: encodeSetOperator: %w", err)
 	}
 	return data, nil
+}
+
+// DecodeSetOperator decodes the return data of setOperator.
+func DecodeSetOperator(data []byte) (bool, error) {
+	ok, err := setOperatorFn.DecodeSingleReturn[bool](data)
+	if err != nil {
+		return false, fmt.Errorf("erc6909: decodeSetOperator: %w", err)
+	}
+	return ok, nil
 }
 
 // EncodeTransfer returns the calldata for transfer(receiver, id, amount).
@@ -164,6 +182,15 @@ func EncodeTransfer(receiver *types.Address, id, amount *big.Int) ([]byte, error
 	return data, nil
 }
 
+// DecodeTransfer decodes the return data of transfer.
+func DecodeTransfer(data []byte) (bool, error) {
+	ok, err := transferFn.DecodeSingleReturn[bool](data)
+	if err != nil {
+		return false, fmt.Errorf("erc6909: decodeTransfer: %w", err)
+	}
+	return ok, nil
+}
+
 // EncodeTransferFrom returns the calldata for transferFrom(sender, receiver, id, amount).
 func EncodeTransferFrom(sender, receiver *types.Address, id, amount *big.Int) ([]byte, error) {
 	data, err := transferFromFn.EncodeCall(sender, receiver, id, amount)
@@ -171,6 +198,15 @@ func EncodeTransferFrom(sender, receiver *types.Address, id, amount *big.Int) ([
 		return nil, fmt.Errorf("erc6909: encodeTransferFrom: %w", err)
 	}
 	return data, nil
+}
+
+// DecodeTransferFrom decodes the return data of transferFrom.
+func DecodeTransferFrom(data []byte) (bool, error) {
+	ok, err := transferFromFn.DecodeSingleReturn[bool](data)
+	if err != nil {
+		return false, fmt.Errorf("erc6909: decodeTransferFrom: %w", err)
+	}
+	return ok, nil
 }
 
 // EncodeName returns the calldata for name(id).

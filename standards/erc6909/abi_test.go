@@ -29,7 +29,7 @@ func TestEncodeBalanceOfRejectsNilArgs(t *testing.T) {
 }
 
 func TestDecodeBalanceOf(t *testing.T) {
-	data, err := abi.Pack(abi.Types{abi.Uint256}, big.NewInt(42))
+	data, err := abi.Pack(abi.NewTypes(abi.Uint256), big.NewInt(42))
 	require.NoError(t, err)
 	n, err := DecodeBalanceOf(data)
 	require.NoError(t, err)
@@ -63,7 +63,7 @@ func TestEncodeAllowanceRejectsNilArgs(t *testing.T) {
 }
 
 func TestDecodeAllowance(t *testing.T) {
-	data, err := abi.Pack(abi.Types{abi.Uint256}, big.NewInt(100))
+	data, err := abi.Pack(abi.NewTypes(abi.Uint256), big.NewInt(100))
 	require.NoError(t, err)
 	n, err := DecodeAllowance(data)
 	require.NoError(t, err)
@@ -94,7 +94,7 @@ func TestEncodeIsOperatorRejectsNilArgs(t *testing.T) {
 }
 
 func TestDecodeIsOperator(t *testing.T) {
-	data, err := abi.Pack(abi.Types{abi.Bool}, true)
+	data, err := abi.Pack(abi.NewTypes(abi.Bool), true)
 	require.NoError(t, err)
 	ok, err := DecodeIsOperator(data)
 	require.NoError(t, err)
@@ -204,7 +204,7 @@ func TestEncodeNameRejectsNilArgs(t *testing.T) {
 }
 
 func TestDecodeName(t *testing.T) {
-	data, err := abi.Pack(abi.Types{abi.String}, "evmkit test token")
+	data, err := abi.Pack(abi.NewTypes(abi.String), "evmkit test token")
 	require.NoError(t, err)
 	s, err := DecodeName(data)
 	require.NoError(t, err)
@@ -232,7 +232,7 @@ func TestEncodeSymbolRejectsNilArgs(t *testing.T) {
 }
 
 func TestDecodeSymbol(t *testing.T) {
-	data, err := abi.Pack(abi.Types{abi.String}, "EVK6909")
+	data, err := abi.Pack(abi.NewTypes(abi.String), "EVK6909")
 	require.NoError(t, err)
 	s, err := DecodeSymbol(data)
 	require.NoError(t, err)
@@ -260,7 +260,7 @@ func TestEncodeDecimalsRejectsNilArgs(t *testing.T) {
 }
 
 func TestDecodeDecimals(t *testing.T) {
-	data, err := abi.Pack(abi.Types{abi.Uint8}, uint8(18))
+	data, err := abi.Pack(abi.NewTypes(abi.Uint8), uint8(18))
 	require.NoError(t, err)
 	d, err := DecodeDecimals(data)
 	require.NoError(t, err)
