@@ -5,69 +5,98 @@ import (
 	"encoding/json/v2"
 	"errors"
 	"fmt"
-	"math/big"
 
+	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core"
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
-	"github.com/ninja-protocol-labs/go-evmkit/tx"
 	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
-// IRouter mirrors a V4Router-based deployment's own entry point: a concrete inheriting contract's
-// executeActions(bytes), which forwards to BaseActionsRouter._executeActions and unlocks
-// PoolManager to dispatch the encoded actions.
+// IRouter mirrors a V4Router-based deployment's executeActions(bytes) entry point, which unlocks PoolManager and dispatches the encoded actions.
 type IRouter interface {
-	ExecuteActions(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
+	CallExecuteActions(ctx context.Context, opts *bind.CallOptions, req *ExecuteActionsRequest) error
+
+	ExecuteActions(ctx context.Context, opts *bind.TransactOptions, req *ExecuteActionsRequest) (core.Transaction, *types.Hash, error)
 }
 
 var _ IRouter = (*Router)(nil)
 
-// Router calls any V4Router-based deployment (e.g. our own Kit router fixture) over a Client; it
-// holds no contract address, so one instance serves every deployment.
+// Router calls any V4Router-based deployment exposing executeActions(bytes) over a Client; it holds no contract address.
 type Router struct {
 	c rpc.Client
 }
 
 // NewRouter returns a Router calling deployments via cli.
 func NewRouter(cli rpc.Client) *Router {
-	return &Router{c: cli}
+	return &Router{
+		c: cli,
+	}
 }
 
-// CreateExecuteActions builds an unsigned executeActions(abi.encode(actions, params)) transaction
-// via b, sent by sender with value wei attached (for native-ETH-funded swaps).
-func (r *Router) CreateExecuteActions(ctx context.Context, b tx.Builder, contract, sender *types.Address, actions []byte, params [][]byte, value *big.Int) (core.Transaction, error) {
-	calldata, err := EncodeExecuteActions(actions, params)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: createExecuteActions: %w", err)
+// CallExecuteActions runs executeActions via eth_call as opts.From with req.NativeAmount as msg.value, returning nil or the revert; opts.Value must be nil.
+func (r *Router) CallExecuteActions(ctx context.Context, opts *bind.CallOptions, req *ExecuteActionsRequest) error {
+	if err := req.Validate(); err != nil {
+		return fmt.Errorf("uniswapv4: callExecuteActions: %w", err)
 	}
-	unsigned, err := b.Build(sender, contract, value, calldata).Pack(ctx, r.c)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: createExecuteActions: %w", r.wrapRevertError(err))
+
+	if opts != nil && opts.Value != nil {
+		return fmt.Errorf("uniswapv4: callExecuteActions: %w: value must be nil", bind.ErrInvalidOptions)
 	}
-	return unsigned, nil
+
+	calldata, err := EncodeExecuteActions(req.Actions, req.Params)
+	if err != nil {
+		return fmt.Errorf("uniswapv4: callExecuteActions: %w", err)
+	}
+
+	callOpts := bind.NewCallOptions()
+	if opts != nil {
+		*callOpts = *opts
+	}
+	callOpts.Value = req.NativeAmount
+
+	if _, err := bind.Call(ctx, r.c, callOpts, req.Contract, calldata); err != nil {
+		return fmt.Errorf("uniswapv4: callExecuteActions: %w", r.wrapRevertError(err))
+	}
+
+	return nil
 }
 
-// ExecuteActions broadcasts an already-signed executeActions transaction.
-func (r *Router) ExecuteActions(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: executeActions: %w", err)
+// ExecuteActions sends executeActions(abi.encode(actions, params)) on req.Contract, signed by opts.Signer with req.NativeAmount (nil sends none) as msg.value; opts.Value must be nil.
+func (r *Router) ExecuteActions(ctx context.Context, opts *bind.TransactOptions, req *ExecuteActionsRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv4: executeActions: %w", err)
 	}
-	hash, err := tx.Broadcast(ctx, r.c, raw)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: executeActions: %w", err)
+
+	if opts != nil && opts.Value != nil {
+		return nil, nil, fmt.Errorf("uniswapv4: executeActions: %w: value must be nil", bind.ErrInvalidOptions)
 	}
-	return hash, nil
+
+	calldata, err := EncodeExecuteActions(req.Actions, req.Params)
+	if err != nil {
+		return nil, nil, fmt.Errorf("uniswapv4: executeActions: %w", err)
+	}
+
+	var txOpts *bind.TransactOptions
+	if opts != nil {
+		o := *opts
+		o.Value = req.NativeAmount
+		txOpts = &o
+	}
+
+	signed, hash, err := bind.Transact(ctx, r.c, txOpts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv4: executeActions: %w", r.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
 }
 
-// wrapRevertError maps a known IV4Router/BaseActionsRouter custom error in err to its sentinel. A
-// revert that bubbles up from the underlying PoolManager call (e.g. PoolNotInitialized) isn't
-// mapped here; it falls through to ErrUnknown, since that selector space belongs to poolmanager.go.
+// wrapRevertError maps an IV4Router, BaseActionsRouter or DeltaResolver custom error in err to its sentinel; anything else (PoolManager reverts bubbling out of unlock) falls through to PoolManager's mapper.
 func (_ *Router) wrapRevertError(err error) error {
-	var rpcErr *rpc.ResponseError
-	if !errors.As(err, &rpcErr) || len(rpcErr.Data) == 0 {
+	rpcErr, ok := errors.AsType[*rpc.ResponseError](err)
+	if !ok || len(rpcErr.Data) == 0 {
 		return err
 	}
 
@@ -105,7 +134,13 @@ func (_ *Router) wrapRevertError(err error) error {
 		return fmt.Errorf("%w: %w", ErrInputLengthMismatch, err)
 	case errUnsupportedAction.Selector():
 		return fmt.Errorf("%w: %w", ErrUnsupportedAction, err)
+	case errDeltaNotPositive.Selector():
+		return fmt.Errorf("%w: %w", ErrDeltaNotPositive, err)
+	case errDeltaNotNegative.Selector():
+		return fmt.Errorf("%w: %w", ErrDeltaNotNegative, err)
+	case errInsufficientBalance.Selector():
+		return fmt.Errorf("%w: %w", ErrInsufficientBalance, err)
 	default:
-		return fmt.Errorf("%w: %w", ErrUnknown, err)
+		return (*PoolManager)(nil).wrapRevertError(err)
 	}
 }

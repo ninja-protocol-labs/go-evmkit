@@ -54,8 +54,7 @@ const (
 	ActionUnwindWithFallback
 )
 
-// MsgSender returns ActionConstants.sol's MSG_SENDER sentinel. Fresh value each call since
-// *types.Address is mutable in place.
+// MsgSender returns ActionConstants.sol's MSG_SENDER sentinel. Fresh value each call since *types.Address is mutable in place.
 func MsgSender() *types.Address {
 	return types.MustNewAddressFromHex("0x0000000000000000000000000000000000000001")
 }
@@ -65,8 +64,7 @@ func AddressThis() *types.Address {
 	return types.MustNewAddressFromHex("0x0000000000000000000000000000000000000002")
 }
 
-// OpenDelta returns ActionConstants.sol's OPEN_DELTA sentinel. Fresh value each call since
-// *big.Int is mutable in place.
+// OpenDelta returns ActionConstants.sol's OPEN_DELTA sentinel. Fresh value each call since *big.Int is mutable in place.
 func OpenDelta() *big.Int {
 	return big.NewInt(0)
 }
@@ -76,8 +74,7 @@ func ContractBalance() *big.Int {
 	return new(big.Int).Lsh(big.NewInt(1), 255)
 }
 
-// executeActionsFn mirrors our own Kit router fixture's executeActions(bytes), the concrete
-// entry point that forwards its single argument to BaseActionsRouter._executeActions.
+// executeActionsFn mirrors a V4Router-based deployment's executeActions(bytes), forwarding to BaseActionsRouter._executeActions.
 var executeActionsFn = abi.NewFunction("executeActions", abi.NewTypes(abi.Bytes), nil)
 
 // Custom errors from IV4Router, for decoding reverts via abi.Error.Decode.
@@ -100,20 +97,19 @@ var (
 
 // ErrV4TooLittleReceived, etc. mirror IV4Router's/BaseActionsRouter's own custom errors, for errors.Is.
 var (
-	ErrV4TooLittleReceived             = errors.New("uniswapv4: too little received")
-	ErrV4TooMuchRequested              = errors.New("uniswapv4: too much requested")
-	ErrV4TooLittleReceivedPerHop       = errors.New("uniswapv4: too little received per hop")
-	ErrV4TooMuchRequestedPerHop        = errors.New("uniswapv4: too much requested per hop")
-	ErrV4TooLittleReceivedPerHopSingle = errors.New("uniswapv4: too little received per hop (single)")
-	ErrV4TooMuchRequestedPerHopSingle  = errors.New("uniswapv4: too much requested per hop (single)")
-	ErrInvalidHopPriceLength           = errors.New("uniswapv4: invalid hop price length")
-	ErrV4ExactOutputUnfilled           = errors.New("uniswapv4: exact output unfilled")
-	ErrInputLengthMismatch             = errors.New("uniswapv4: input length mismatch")
-	ErrUnsupportedAction               = errors.New("uniswapv4: unsupported action")
+	ErrV4TooLittleReceived             = errors.New("too little received")
+	ErrV4TooMuchRequested              = errors.New("too much requested")
+	ErrV4TooLittleReceivedPerHop       = errors.New("too little received per hop")
+	ErrV4TooMuchRequestedPerHop        = errors.New("too much requested per hop")
+	ErrV4TooLittleReceivedPerHopSingle = errors.New("too little received per hop (single)")
+	ErrV4TooMuchRequestedPerHopSingle  = errors.New("too much requested per hop (single)")
+	ErrInvalidHopPriceLength           = errors.New("invalid hop price length")
+	ErrV4ExactOutputUnfilled           = errors.New("exact output unfilled")
+	ErrInputLengthMismatch             = errors.New("input length mismatch")
+	ErrUnsupportedAction               = errors.New("unsupported action")
 )
 
-// EncodeExecuteActions returns the calldata for our Kit router's executeActions(abi.encode(actions,
-// params)).
+// EncodeExecuteActions returns the calldata for our Kit router's executeActions(abi.encode(actions, params)).
 func EncodeExecuteActions(actions []byte, params [][]byte) ([]byte, error) {
 	actionsData, err := EncodeActions(actions, params)
 	if err != nil {
@@ -126,8 +122,7 @@ func EncodeExecuteActions(actions []byte, params [][]byte) ([]byte, error) {
 	return data, nil
 }
 
-// EncodeActions returns the calldata for BaseActionsRouter's unlockCallback data: abi.encode(bytes
-// actions, bytes[] params), where params[i] is the encoded parameters for actions[i].
+// EncodeActions returns BaseActionsRouter's unlock data abi.encode(actions, params), where params[i] belongs to actions[i].
 func EncodeActions(actions []byte, params [][]byte) ([]byte, error) {
 	paramsArg := make([]any, len(params))
 	for i, p := range params {
