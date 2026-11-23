@@ -359,6 +359,10 @@ func (in *SweepInput) Validate() error {
 		return fmt.Errorf("%w: amountMin is nil", bind.ErrInvalidRequest)
 	}
 
+	if in.AmountMin.BitLen() > 160 {
+		return fmt.Errorf("%w: amountMin %s exceeds uint160", bind.ErrInvalidRequest, in.AmountMin)
+	}
+
 	return nil
 }
 

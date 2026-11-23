@@ -39,8 +39,6 @@ const (
 	Celo
 	Ethereum
 	HyperEVM
-	Ink
-	Linea
 	Monad
 	Optimism
 	Polygon
@@ -66,10 +64,6 @@ func (n Network) String() string {
 		return "ethereum"
 	case HyperEVM:
 		return "hyperevm"
-	case Ink:
-		return "ink"
-	case Linea:
-		return "linea"
 	case Monad:
 		return "monad"
 	case Optimism:

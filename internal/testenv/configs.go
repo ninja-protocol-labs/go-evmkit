@@ -338,88 +338,6 @@ var configs = map[NetworkType]map[Network]Config{
 				},
 			},
 		},
-		Ink: {
-			RPCURL: "https://ink-mainnet.g.alchemy.com/v2/%s",
-			Constant: ChainConstants{
-				ChainID:             57073,
-				NativeSymbol:        "ETH",
-				NativeDecimals:      18,
-				ReceiptPollInterval: 500 * time.Millisecond,
-				ReceiptTimeout:      10 * time.Second,
-			},
-			Addresses: AddressBook{
-				Standard: StandardAddressBook{
-					Multicall:    "0xcA11bde05977b3631167028862bE2a173976CA11",
-					NicksFactory: "0x4e59b44847b379578588920cA78FbF26c0B4956C",
-					WETH:         "0x4200000000000000000000000000000000000006",
-					Permit2:      "0x000000000022D473030F116dDEE9F6B43aC78BA3",
-				},
-				Protocol: ProtocolAddressBook{
-					Uniswap: UniswapAddressBook{
-						V2: UniswapV2AddressBook{
-							Factory: "0xfe57A6BA1951F69aE2Ed4abe23e0f095DF500C04",
-							Router:  "0xB3FB126ACDd5AdCA2f50Ac644a7a2303745f18b4",
-						},
-						V3: UniswapV3AddressBook{
-							Factory: "0x640887A9ba3A9C53Ed27D0F7e8246A4F933f3424",
-							Router:  "0x177778F19E89dD1012BdBe603F144088A95C4B53",
-							Quoter:  "0x96b572D2d880cf2Fa2563651BD23ADE6f5516652",
-							NFPM:    "0xC0836E5B058BBE22ae2266e1AC488A1A0fD8DCE8",
-						},
-						V4: UniswapV4AddressBook{
-							PoolManager:             "0x360E68faCcca8cA495c1B759Fd9EEe466db9FB32",
-							PositionManager:         "0x1b35d13a2E2528f192637F14B05f0Dc0e7dEB566",
-							StateView:               "0x76Fd297e2D437cd7f76d50F01AfE6160f86e9990",
-							Quoter:                  "0x8928074CA1b241D8Ec02815881c1Af11E8bC5219",
-							PoolSwapTest:            "", // Not supported
-							PoolModifyLiquidityTest: "", // Not supported
-						},
-						UniversalRouter: "0x661E93cca42AfacB172121EF892830cA3b70F08d",
-					},
-				},
-			},
-		},
-		Linea: {
-			RPCURL: "https://linea-mainnet.g.alchemy.com/v2/%s",
-			Constant: ChainConstants{
-				ChainID:             59144,
-				NativeSymbol:        "ETH",
-				NativeDecimals:      18,
-				ReceiptPollInterval: 500 * time.Millisecond,
-				ReceiptTimeout:      10 * time.Second,
-			},
-			Addresses: AddressBook{
-				Standard: StandardAddressBook{
-					Multicall:    "0xcA11bde05977b3631167028862bE2a173976CA11",
-					NicksFactory: "0x4e59b44847b379578588920cA78FbF26c0B4956C",
-					WETH:         "0xe5D7C2a44FfDDf6b295A15c148167daaAf5Cf34f",
-					Permit2:      "0x000000000022D473030F116dDEE9F6B43aC78BA3",
-				},
-				Protocol: ProtocolAddressBook{
-					Uniswap: UniswapAddressBook{
-						V2: UniswapV2AddressBook{
-							Factory: "0x114A43DF6C5f54EBB8A9d70Cd1951D3dD68004c7",
-							Router:  "0x8702463e73f74d0b6765aBceb314Ef07aCb92650",
-						},
-						V3: UniswapV3AddressBook{
-							Factory: "0x31FAfd4889FA1269F7a13A66eE0fB458f27D72A9",
-							Router:  "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
-							Quoter:  "0x42bE4D6527829FeFA1493e1fb9F3676d2425C3C1",
-							NFPM:    "0x4615C383F85D0a2BbED973d83ccecf5CB7121463",
-						},
-						V4: UniswapV4AddressBook{
-							PoolManager:             "0x248083Fb965359d82b06C1F5322480Dcfc1AD857",
-							PositionManager:         "0xdDCAD5775B2816a87495f207731b3571D7EE3c76",
-							StateView:               "0xE861de206E460A8b936b05ad3816520B58ccDf9b",
-							Quoter:                  "0x2C125569C0BeE20A66E33E5491C552B37EBD9934",
-							PoolSwapTest:            "", // Not supported
-							PoolModifyLiquidityTest: "", // Not supported
-						},
-						UniversalRouter: "0xDc264714F68d84CF29BC605589405E78bDBE7C9f",
-					},
-				},
-			},
-		},
 		Monad: {
 			RPCURL: "https://monad-mainnet.g.alchemy.com/v2/%s",
 			Constant: ChainConstants{
@@ -769,7 +687,7 @@ var configs = map[NetworkType]map[Network]Config{
 				Protocol: ProtocolAddressBook{
 					Uniswap: UniswapAddressBook{
 						V2: UniswapV2AddressBook{
-							Factory: "", // Not supported
+							Factory: "0x7Ae58f10f7849cA6F5fB71b7f45CB416c9204b1e",
 							Router:  "", // Not supported
 						},
 						V3: UniswapV3AddressBook{
@@ -928,88 +846,6 @@ var configs = map[NetworkType]map[Network]Config{
 					Multicall:    "0xcA11bde05977b3631167028862bE2a173976CA11",
 					NicksFactory: "0x4e59b44847b379578588920cA78FbF26c0B4956C",
 					WETH:         "0x5555555555555555555555555555555555555555",
-					Permit2:      "0x000000000022D473030F116dDEE9F6B43aC78BA3",
-				},
-				Protocol: ProtocolAddressBook{
-					Uniswap: UniswapAddressBook{
-						V2: UniswapV2AddressBook{
-							Factory: "", // Not supported
-							Router:  "", // Not supported
-						},
-						V3: UniswapV3AddressBook{
-							Factory: "", // Not supported
-							Router:  "", // Not supported
-							Quoter:  "", // Not supported
-							NFPM:    "", // Not supported
-						},
-						V4: UniswapV4AddressBook{
-							PoolManager:             "", // Not supported
-							PositionManager:         "", // Not supported
-							StateView:               "", // Not supported
-							Quoter:                  "", // Not supported
-							PoolSwapTest:            "", // Not supported
-							PoolModifyLiquidityTest: "", // Not supported
-						},
-						UniversalRouter: "", // Not supported
-					},
-				},
-			},
-		},
-		Ink: {
-			RPCURL: "https://ink-sepolia.g.alchemy.com/v2/%s",
-			Constant: ChainConstants{
-				ChainID:             763373,
-				NativeSymbol:        "ETH",
-				NativeDecimals:      18,
-				ReceiptPollInterval: 500 * time.Millisecond,
-				ReceiptTimeout:      10 * time.Second,
-			},
-			Addresses: AddressBook{
-				Standard: StandardAddressBook{
-					Multicall:    "0xcA11bde05977b3631167028862bE2a173976CA11",
-					NicksFactory: "0x4e59b44847b379578588920cA78FbF26c0B4956C",
-					WETH:         "0x4200000000000000000000000000000000000006",
-					Permit2:      "0x000000000022D473030F116dDEE9F6B43aC78BA3",
-				},
-				Protocol: ProtocolAddressBook{
-					Uniswap: UniswapAddressBook{
-						V2: UniswapV2AddressBook{
-							Factory: "", // Not supported
-							Router:  "", // Not supported
-						},
-						V3: UniswapV3AddressBook{
-							Factory: "", // Not supported
-							Router:  "", // Not supported
-							Quoter:  "", // Not supported
-							NFPM:    "", // Not supported
-						},
-						V4: UniswapV4AddressBook{
-							PoolManager:             "", // Not supported
-							PositionManager:         "", // Not supported
-							StateView:               "", // Not supported
-							Quoter:                  "", // Not supported
-							PoolSwapTest:            "", // Not supported
-							PoolModifyLiquidityTest: "", // Not supported
-						},
-						UniversalRouter: "", // Not supported
-					},
-				},
-			},
-		},
-		Linea: {
-			RPCURL: "https://linea-sepolia.g.alchemy.com/v2/%s",
-			Constant: ChainConstants{
-				ChainID:             59141,
-				NativeSymbol:        "ETH",
-				NativeDecimals:      18,
-				ReceiptPollInterval: 500 * time.Millisecond,
-				ReceiptTimeout:      10 * time.Second,
-			},
-			Addresses: AddressBook{
-				Standard: StandardAddressBook{
-					Multicall:    "0xcA11bde05977b3631167028862bE2a173976CA11",
-					NicksFactory: "0x4e59b44847b379578588920cA78FbF26c0B4956C",
-					WETH:         "0x06565ed324Ee9fb4DB0FF80B7eDbE4Cb007555a3",
 					Permit2:      "0x000000000022D473030F116dDEE9F6B43aC78BA3",
 				},
 				Protocol: ProtocolAddressBook{

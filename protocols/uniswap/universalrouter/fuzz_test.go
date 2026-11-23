@@ -213,6 +213,7 @@ func FuzzPaymentInputsRoundTrip(f *testing.F) {
 		switch kind % 8 {
 		case 0:
 			input = NewSweepInput(a, b, amount)
+			valid = amount.BitLen() <= 160
 		case 1:
 			input = NewTransferInput(a, b, amount)
 		case 2:
