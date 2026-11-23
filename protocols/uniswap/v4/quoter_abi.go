@@ -51,26 +51,24 @@ var (
 	errSqrtPriceMathNotEnoughLiquidity = abi.NewError("NotEnoughLiquidity", abi.NewTypes())
 )
 
-// ErrNotEnoughLiquidity, etc. mirror the above custom errors, for errors.Is. ErrNotEnoughLiquidity
-// covers both BaseV4Quoter's NotEnoughLiquidity(bytes32) and SqrtPriceMath's NotEnoughLiquidity().
-// ErrWrappedError is a hook revert; ErrHookCallFailed is added when its details say so.
+// ErrNotEnoughLiquidity, etc. mirror the above custom errors; ErrNotEnoughLiquidity covers both NotEnoughLiquidity variants, and ErrHookCallFailed joins ErrWrappedError when its details say so.
 var (
-	ErrNotEnoughLiquidity         = errors.New("uniswapv4: not enough liquidity")
-	ErrNotSelf                    = errors.New("uniswapv4: not self")
-	ErrUnexpectedCallSuccess      = errors.New("uniswapv4: unexpected call success")
-	ErrUnexpectedRevertBytes      = errors.New("uniswapv4: unexpected revert bytes")
-	ErrSafeCastOverflow           = errors.New("uniswapv4: safe cast overflow")
-	ErrPriceLimitAlreadyExceeded  = errors.New("uniswapv4: price limit already exceeded")
-	ErrPriceLimitOutOfBounds      = errors.New("uniswapv4: price limit out of bounds")
-	ErrInvalidFeeForExactOut      = errors.New("uniswapv4: invalid fee for exact out")
-	ErrInvalidHookResponse        = errors.New("uniswapv4: invalid hook response")
-	ErrHookCallFailed             = errors.New("uniswapv4: hook call failed")
-	ErrHookDeltaExceedsSwapAmount = errors.New("uniswapv4: hook delta exceeds swap amount")
-	ErrLPFeeTooLarge              = errors.New("uniswapv4: lp fee too large")
-	ErrWrappedError               = errors.New("uniswapv4: wrapped error")
-	ErrInvalidPriceOrLiquidity    = errors.New("uniswapv4: invalid price or liquidity")
-	ErrInvalidPrice               = errors.New("uniswapv4: invalid price")
-	ErrPriceOverflow              = errors.New("uniswapv4: price overflow")
+	ErrNotEnoughLiquidity         = errors.New("not enough liquidity")
+	ErrNotSelf                    = errors.New("not self")
+	ErrUnexpectedCallSuccess      = errors.New("unexpected call success")
+	ErrUnexpectedRevertBytes      = errors.New("unexpected revert bytes")
+	ErrSafeCastOverflow           = errors.New("safe cast overflow")
+	ErrPriceLimitAlreadyExceeded  = errors.New("price limit already exceeded")
+	ErrPriceLimitOutOfBounds      = errors.New("price limit out of bounds")
+	ErrInvalidFeeForExactOut      = errors.New("invalid fee for exact out")
+	ErrInvalidHookResponse        = errors.New("invalid hook response")
+	ErrHookCallFailed             = errors.New("hook call failed")
+	ErrHookDeltaExceedsSwapAmount = errors.New("hook delta exceeds swap amount")
+	ErrLPFeeTooLarge              = errors.New("lp fee too large")
+	ErrWrappedError               = errors.New("wrapped error")
+	ErrInvalidPriceOrLiquidity    = errors.New("invalid price or liquidity")
+	ErrInvalidPrice               = errors.New("invalid price")
+	ErrPriceOverflow              = errors.New("price overflow")
 )
 
 // EncodeQuoteExactInputSingle returns the calldata for quoteExactInputSingle(params).
@@ -188,8 +186,7 @@ func DecodeQuoteExactOutputSingle(data []byte) (*QuoteExactOutputResult, error) 
 	return NewQuoteExactOutputResult(amountIn, gasEstimate), nil
 }
 
-// EncodeQuoteExactOutput returns the calldata for quoteExactOutput(params). ExactCurrency is the
-// output currency; each PathKey names its hop's input currency, so Path[0] holds the swap's input.
+// EncodeQuoteExactOutput returns the calldata for quoteExactOutput(params); ExactCurrency is the output and Path[0] holds the swap's input.
 func EncodeQuoteExactOutput(p *QuoteExactParams) ([]byte, error) {
 	if p == nil {
 		return nil, fmt.Errorf("uniswapv4: encodeQuoteExactOutput: params must not be nil")
@@ -247,8 +244,7 @@ func EncodeQuoterMsgSender() []byte {
 	return quoterMsgSenderFn.SelectorBytes()
 }
 
-// DecodeQuoterMsgSender decodes the return data of msgSender. Outside a quote this is always the
-// zero address, since V4Quoter resets its Locker slot after each quote.
+// DecodeQuoterMsgSender decodes the return data of msgSender, always the zero address outside a quote.
 func DecodeQuoterMsgSender(data []byte) (*types.Address, error) {
 	addr, err := quoterMsgSenderFn.DecodeSingleReturn[*types.Address](data)
 	if err != nil {
