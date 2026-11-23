@@ -6,6 +6,7 @@ import (
 	"math/big"
 
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
+	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 )
 
 var (
@@ -206,4 +207,161 @@ func DecodeExecuteCall(calldata []byte) (*ExecuteCall, error) {
 	}
 
 	return NewExecuteCall(plan, deadline, signed), nil
+}
+
+// Function signatures of the Universal Router's read-only entry points.
+var (
+	noncesUsedFn         = abi.NewFunction("noncesUsed", abi.NewTypes(abi.Address, abi.Bytes32), abi.NewTypes(abi.Bool))
+	signedRouteContextFn = abi.NewFunction("signedRouteContext", nil, abi.NewTypes(abi.Address, abi.Bytes32, abi.Bytes32))
+)
+
+// Custom errors from IUniversalRouter, Lock, RouteSigner and Dispatcher, for decoding reverts via abi.Error.Decode.
+var (
+	errExecutionFailed           = abi.NewError("ExecutionFailed", abi.NewTypes(abi.Uint256, abi.Bytes))
+	errETHNotAccepted            = abi.NewError("ETHNotAccepted", abi.NewTypes())
+	errTransactionDeadlinePassed = abi.NewError("TransactionDeadlinePassed", abi.NewTypes())
+	errLengthMismatch            = abi.NewError("LengthMismatch", abi.NewTypes())
+	errInvalidEthSender          = abi.NewError("InvalidEthSender", abi.NewTypes())
+	errContractLocked            = abi.NewError("ContractLocked", abi.NewTypes())
+	errNonceAlreadyUsed          = abi.NewError("NonceAlreadyUsed", abi.NewTypes())
+	errInvalidCommandType        = abi.NewError("InvalidCommandType", abi.NewTypes(abi.Uint256))
+	errBalanceTooLow             = abi.NewError("BalanceTooLow", abi.NewTypes())
+)
+
+// Custom errors from Payments, Permit2Payments, BipsLibrary, V3ToV4Migrator and ChainedActions, for decoding reverts via abi.Error.Decode.
+var (
+	errInsufficientToken        = abi.NewError("InsufficientToken", abi.NewTypes())
+	errInsufficientETH          = abi.NewError("InsufficientETH", abi.NewTypes())
+	errInvalidPortion           = abi.NewError("InvalidPortion", abi.NewTypes())
+	errInvalidBips              = abi.NewError("InvalidBips", abi.NewTypes())
+	errFromAddressIsNotOwner    = abi.NewError("FromAddressIsNotOwner", abi.NewTypes())
+	errInvalidAction            = abi.NewError("InvalidAction", abi.NewTypes(abi.Bytes4))
+	errOnlyMintAllowed          = abi.NewError("OnlyMintAllowed", abi.NewTypes())
+	errNotAuthorizedForToken    = abi.NewError("NotAuthorizedForToken", abi.NewTypes(abi.Uint256))
+	errSafeERC20FailedOperation = abi.NewError("SafeERC20FailedOperation", abi.NewTypes(abi.Address))
+	errAddressEmptyCode         = abi.NewError("AddressEmptyCode", abi.NewTypes(abi.Address))
+	errFailedInnerCall          = abi.NewError("FailedInnerCall", abi.NewTypes())
+)
+
+// Custom errors from the V2 and V3 swap modules, UniswapV2Library and BytesLib, for decoding reverts via abi.Error.Decode.
+var (
+	errInvalidReserves                 = abi.NewError("InvalidReserves", abi.NewTypes())
+	errInvalidPath                     = abi.NewError("InvalidPath", abi.NewTypes())
+	errSliceOutOfBounds                = abi.NewError("SliceOutOfBounds", abi.NewTypes())
+	errV2TooLittleReceived             = abi.NewError("V2TooLittleReceived", abi.NewTypes())
+	errV2TooMuchRequested              = abi.NewError("V2TooMuchRequested", abi.NewTypes())
+	errV2InvalidPath                   = abi.NewError("V2InvalidPath", abi.NewTypes())
+	errV2TooLittleReceivedPerHop       = abi.NewError("V2TooLittleReceivedPerHop", abi.NewTypes(abi.Uint256, abi.Uint256, abi.Uint256))
+	errV2InvalidHopPriceLength         = abi.NewError("V2InvalidHopPriceLength", abi.NewTypes())
+	errV3InvalidSwap                   = abi.NewError("V3InvalidSwap", abi.NewTypes())
+	errV3TooLittleReceived             = abi.NewError("V3TooLittleReceived", abi.NewTypes())
+	errV3TooMuchRequested              = abi.NewError("V3TooMuchRequested", abi.NewTypes())
+	errV3InvalidAmountOut              = abi.NewError("V3InvalidAmountOut", abi.NewTypes())
+	errV3InvalidCaller                 = abi.NewError("V3InvalidCaller", abi.NewTypes())
+	errV3TooLittleReceivedPerHop       = abi.NewError("V3TooLittleReceivedPerHop", abi.NewTypes(abi.Uint256, abi.Uint256, abi.Uint256))
+	errV3TooMuchRequestedPerHop        = abi.NewError("V3TooMuchRequestedPerHop", abi.NewTypes(abi.Uint256, abi.Uint256, abi.Uint256))
+	errV3HopPriceAndPathLengthMismatch = abi.NewError("V3HopPriceAndPathLengthMismatch", abi.NewTypes())
+)
+
+// Custom errors from OpenZeppelin's ECDSA, raised when executeSigned cannot recover a signer.
+var (
+	errECDSAInvalidSignature       = abi.NewError("ECDSAInvalidSignature", abi.NewTypes())
+	errECDSAInvalidSignatureLength = abi.NewError("ECDSAInvalidSignatureLength", abi.NewTypes(abi.Uint256))
+	errECDSAInvalidSignatureS      = abi.NewError("ECDSAInvalidSignatureS", abi.NewTypes(abi.Bytes32))
+)
+
+// ErrExecutionFailed, etc. mirror the above custom errors, for errors.Is; ErrUnknown covers reverts no router, Permit2 or v4 mapper recognises.
+var (
+	ErrExecutionFailed                 = errors.New("execution failed")
+	ErrETHNotAccepted                  = errors.New("eth not accepted")
+	ErrTransactionDeadlinePassed       = errors.New("transaction deadline passed")
+	ErrLengthMismatch                  = errors.New("length mismatch")
+	ErrInvalidEthSender                = errors.New("invalid eth sender")
+	ErrContractLocked                  = errors.New("contract locked")
+	ErrNonceAlreadyUsed                = errors.New("nonce already used")
+	ErrInvalidCommandType              = errors.New("invalid command type")
+	ErrBalanceTooLow                   = errors.New("balance too low")
+	ErrInsufficientToken               = errors.New("insufficient token")
+	ErrInsufficientETH                 = errors.New("insufficient eth")
+	ErrInvalidPortion                  = errors.New("invalid portion")
+	ErrInvalidBips                     = errors.New("invalid bips")
+	ErrFromAddressIsNotOwner           = errors.New("from address is not owner")
+	ErrInvalidAction                   = errors.New("invalid position manager action")
+	ErrOnlyMintAllowed                 = errors.New("only mint allowed")
+	ErrNotAuthorizedForToken           = errors.New("not authorized for token")
+	ErrSafeERC20FailedOperation        = errors.New("safe erc20 operation failed")
+	ErrAddressEmptyCode                = errors.New("address has no code")
+	ErrFailedInnerCall                 = errors.New("inner call failed")
+	ErrInvalidReserves                 = errors.New("invalid reserves")
+	ErrInvalidPath                     = errors.New("invalid path")
+	ErrSliceOutOfBounds                = errors.New("slice out of bounds")
+	ErrV2TooLittleReceived             = errors.New("v2 too little received")
+	ErrV2TooMuchRequested              = errors.New("v2 too much requested")
+	ErrV2InvalidPath                   = errors.New("v2 invalid path")
+	ErrV2TooLittleReceivedPerHop       = errors.New("v2 too little received per hop")
+	ErrV2InvalidHopPriceLength         = errors.New("v2 invalid hop price length")
+	ErrV3InvalidSwap                   = errors.New("v3 invalid swap")
+	ErrV3TooLittleReceived             = errors.New("v3 too little received")
+	ErrV3TooMuchRequested              = errors.New("v3 too much requested")
+	ErrV3InvalidAmountOut              = errors.New("v3 invalid amount out")
+	ErrV3InvalidCaller                 = errors.New("v3 invalid caller")
+	ErrV3TooLittleReceivedPerHop       = errors.New("v3 too little received per hop")
+	ErrV3TooMuchRequestedPerHop        = errors.New("v3 too much requested per hop")
+	ErrV3HopPriceAndPathLengthMismatch = errors.New("v3 hop price and path length mismatch")
+	ErrECDSAInvalidSignature           = errors.New("ecdsa invalid signature")
+	ErrECDSAInvalidSignatureLength     = errors.New("ecdsa invalid signature length")
+	ErrECDSAInvalidSignatureS          = errors.New("ecdsa invalid signature s")
+	ErrUnknown                         = errors.New("unknown revert")
+)
+
+// EncodeNoncesUsed returns the calldata for noncesUsed(user, nonce).
+func EncodeNoncesUsed(user *types.Address, nonce [32]byte) ([]byte, error) {
+	data, err := noncesUsedFn.EncodeCall(user, nonce[:])
+	if err != nil {
+		return nil, fmt.Errorf("universalrouter: encodeNoncesUsed: %w", err)
+	}
+	return data, nil
+}
+
+// DecodeNoncesUsed decodes the return data of noncesUsed.
+func DecodeNoncesUsed(data []byte) (bool, error) {
+	used, err := noncesUsedFn.DecodeSingleReturn[bool](data)
+	if err != nil {
+		return false, fmt.Errorf("universalrouter: decodeNoncesUsed: %w", err)
+	}
+	return used, nil
+}
+
+// EncodeSignedRouteContext returns the calldata for signedRouteContext().
+func EncodeSignedRouteContext() ([]byte, error) {
+	data, err := signedRouteContextFn.EncodeCall()
+	if err != nil {
+		return nil, fmt.Errorf("universalrouter: encodeSignedRouteContext: %w", err)
+	}
+	return data, nil
+}
+
+// DecodeSignedRouteContext decodes the return data of signedRouteContext: signer, intent and data, all zero outside an executeSigned call.
+func DecodeSignedRouteContext(data []byte) (*RouteContext, error) {
+	vals, err := signedRouteContextFn.DecodeReturn(data)
+	if err != nil {
+		return nil, fmt.Errorf("universalrouter: decodeSignedRouteContext: %w", err)
+	}
+
+	signer, ok := vals[0].(*types.Address)
+	if !ok {
+		return nil, fmt.Errorf("universalrouter: decodeSignedRouteContext: unexpected decoded type for signer: %T", vals[0])
+	}
+
+	intent, ok := vals[1].([]byte)
+	if !ok || len(intent) != 32 {
+		return nil, fmt.Errorf("universalrouter: decodeSignedRouteContext: unexpected decoded type for intent: %T", vals[1])
+	}
+
+	data32, ok := vals[2].([]byte)
+	if !ok || len(data32) != 32 {
+		return nil, fmt.Errorf("universalrouter: decodeSignedRouteContext: unexpected decoded type for data: %T", vals[2])
+	}
+
+	return NewRouteContext(signer, [32]byte(intent), [32]byte(data32)), nil
 }

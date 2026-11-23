@@ -56,6 +56,11 @@ packages:
       IPool:
       IQuoter:
       IRouter:
+  github.com/ninja-protocol-labs/go-evmkit/protocols/uniswap/universalrouter:
+    config:
+      filename: "{{.InterfaceName | lower}}.go"
+    interfaces:
+      IUniversalRouter:
   github.com/ninja-protocol-labs/go-evmkit/protocols/uniswap/v4:
     config:
       filename: "{{.InterfaceName | lower}}.go"

@@ -384,3 +384,44 @@ func TestRouterCallsPropagateContext(t *testing.T) {
 	_, _, err = r.ExecuteActions(ctx, bind.NewTransactOptions(key, builder), NewExecuteActionsRequest(testHooks, []byte{ActionSettleAll}, [][]byte{{0x01}}, nil))
 	require.NoError(t, err)
 }
+
+func TestMapRevertErrorCoversRouterPositionManagerAndPoolManager(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		err  *abi.Error
+		args []any
+		want error
+	}{
+		{"router V4TooLittleReceived", errV4TooLittleReceived, []any{big.NewInt(2), big.NewInt(1)}, ErrV4TooLittleReceived},
+		{"router UnsupportedAction", errUnsupportedAction, []any{big.NewInt(0x19)}, ErrUnsupportedAction},
+		{"delta DeltaNotPositive", errDeltaNotPositive, []any{testCurrency0}, ErrDeltaNotPositive},
+		{"positionManager NotApproved", errNotApproved, []any{testSender}, ErrNotApproved},
+		{"positionManager DeadlinePassed", errDeadlinePassed, []any{big.NewInt(1)}, ErrDeadlinePassed},
+		{"positionManager NotSubscribed", errNotSubscribed, nil, ErrNotSubscribed},
+		{"poolManager PoolNotInitialized", errPoolNotInitialized, nil, ErrPoolNotInitialized},
+		{"poolManager CurrencyNotSettled", errCurrencyNotSettled, nil, ErrCurrencyNotSettled},
+		{"poolManager WrappedError", errWrappedError, []any{testHooks, []byte{0x12, 0x34, 0x56, 0x78}, []byte{}, []byte{0xde, 0xad, 0xbe, 0xef}}, ErrWrappedError},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sel := tc.err.Selector()
+			packed, err := abi.Pack(tc.err.Inputs, tc.args...)
+			require.NoError(t, err)
+			rpcErr := &rpc.ResponseError{Code: 3, Message: "execution reverted", Data: jsontext.Value(`"` + encoding.Hex.EncodePrefixed(append(sel[:], packed...)) + `"`)}
+
+			mapped := MapRevertError(rpcErr)
+			require.ErrorIs(t, mapped, tc.want)
+			require.NotErrorIs(t, mapped, ErrUnknown)
+			got, ok := errors.AsType[*rpc.ResponseError](mapped)
+			require.True(t, ok)
+			require.Same(t, rpcErr, got)
+		})
+	}
+
+	unknown := &rpc.ResponseError{Code: 3, Message: "execution reverted", Data: jsontext.Value(`"0xdeadbeef"`)}
+	require.ErrorIs(t, MapRevertError(unknown), ErrUnknown)
+
+	plain := errors.New("dial tcp: connection refused")
+	require.Same(t, plain, MapRevertError(plain))
+	empty := &rpc.ResponseError{Code: 3, Message: "execution reverted"}
+	require.Same(t, empty, MapRevertError(empty))
+}

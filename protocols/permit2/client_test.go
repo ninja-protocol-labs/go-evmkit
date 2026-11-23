@@ -497,3 +497,38 @@ func TestCallsPropagateContext(t *testing.T) {
 	_, _, err = New(c).InvalidateUnorderedNonces(ctx, bind.NewTransactOptions(key, builder), NewInvalidateUnorderedNoncesRequest(contract, big.NewInt(0), big.NewInt(1)))
 	require.NoError(t, err)
 }
+
+func TestMapRevertErrorMatchesClientMapper(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		err  *abi.Error
+		args []any
+		want error
+	}{
+		{"AllowanceExpired", errAllowanceExpired, []any{big.NewInt(1)}, ErrAllowanceExpired},
+		{"SignatureExpired", errSignatureExpired, []any{big.NewInt(2)}, ErrSignatureExpired},
+		{"InvalidNonce", errInvalidNonce, nil, ErrInvalidNonce},
+		{"InvalidSigner", errInvalidSigner, nil, ErrInvalidSigner},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sel := tc.err.Selector()
+			packed, err := abi.Pack(tc.err.Inputs, tc.args...)
+			require.NoError(t, err)
+			rpcErr := &rpc.ResponseError{Code: 3, Message: "execution reverted", Data: jsontext.Value(`"` + encoding.Hex.EncodePrefixed(append(sel[:], packed...)) + `"`)}
+
+			mapped := MapRevertError(rpcErr)
+			require.ErrorIs(t, mapped, tc.want)
+			require.NotErrorIs(t, mapped, ErrUnknown)
+			require.ErrorIs(t, mapped, rpcErr)
+			require.Equal(t, (*Permit2)(nil).wrapRevertError(rpcErr).Error(), mapped.Error())
+		})
+	}
+
+	unknown := &rpc.ResponseError{Code: 3, Message: "execution reverted", Data: jsontext.Value(`"0xdeadbeef"`)}
+	require.ErrorIs(t, MapRevertError(unknown), ErrUnknown)
+
+	plain := fmt.Errorf("dial tcp: connection refused")
+	require.Same(t, plain, MapRevertError(plain))
+	empty := &rpc.ResponseError{Code: 3, Message: "execution reverted"}
+	require.Same(t, empty, MapRevertError(empty))
+}

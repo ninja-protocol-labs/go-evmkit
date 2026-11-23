@@ -418,3 +418,8 @@ func (_ *Permit2) wrapRevertError(err error) error {
 		return fmt.Errorf("%w: %w", ErrUnknown, err)
 	}
 }
+
+// MapRevertError maps a Permit2 custom error in err to its sentinel (unknown selectors to ErrUnknown) and passes data-less errors through; for callers such as the Universal Router that surface Permit2 reverts.
+func MapRevertError(err error) error {
+	return (*Permit2)(nil).wrapRevertError(err)
+}

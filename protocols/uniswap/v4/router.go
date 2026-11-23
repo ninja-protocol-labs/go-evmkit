@@ -144,3 +144,13 @@ func (_ *Router) wrapRevertError(err error) error {
 		return (*PoolManager)(nil).wrapRevertError(err)
 	}
 }
+
+// MapRevertError maps a V4Router, BaseActionsRouter, DeltaResolver, PositionManager or PoolManager custom error in err to its sentinel (unknown selectors to ErrUnknown) and passes data-less errors through; for callers such as the Universal Router that execute v4 actions.
+func MapRevertError(err error) error {
+	wrapped := (*Router)(nil).wrapRevertError(err)
+	if !errors.Is(wrapped, ErrUnknown) {
+		return wrapped
+	}
+
+	return (*PositionManager)(nil).wrapRevertError(err)
+}
