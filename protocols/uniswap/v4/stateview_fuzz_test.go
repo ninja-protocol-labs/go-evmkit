@@ -1,14 +1,21 @@
 package v4
 
 import (
+	"context"
+	"fmt"
 	"math/big"
 	"testing"
 
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core"
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
+	"github.com/ninja-protocol-labs/go-evmkit/rpc"
+	"github.com/ninja-protocol-labs/go-evmkit/rpc/mocks"
+	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
 // go test -run '^$' -fuzz '^FuzzAllStateViewDecodersDoNotPanic$' -fuzztime=10s ./protocols/uniswap/v4
@@ -273,5 +280,94 @@ func FuzzDecodeStateViewReturnsRoundTrip(f *testing.F) {
 		inside, err := DecodeGetFeeGrowthInside(tickInfoData[64:])
 		require.NoError(t, err)
 		require.Zero(t, growth1.Cmp(inside.FeeGrowthInside1X128))
+	})
+}
+
+// go test -run '^$' -fuzz '^FuzzStateViewTickInfoThroughClient$' -fuzztime=10s ./protocols/uniswap/v4
+func FuzzStateViewTickInfoThroughClient(f *testing.F) {
+	f.Add(make([]byte, 32), int32(0), uint64(0))
+	f.Add([]byte{0xab, 0xcd}, int32(-887272), uint64(1))
+	f.Add([]byte{0xff}, int32(1<<23-1), uint64(1<<40))
+
+	word, err := abi.Pack(abi.NewTypes(abi.Uint128, abi.Int128, abi.Uint256, abi.Uint256), big.NewInt(1), big.NewInt(-1), big.NewInt(2), big.NewInt(3))
+	require.NoError(f, err)
+
+	f.Fuzz(func(t *testing.T, poolIDRaw []byte, tickRaw int32, block uint64) {
+		var poolID PoolID
+		copy(poolID[:], poolIDRaw)
+		// fold tickRaw into int24's [-2^23, 2^23) range
+		tick := big.NewInt(int64(tickRaw<<8) >> 8)
+		blockTag := fmt.Sprintf("0x%x", block)
+
+		c := mocks.NewClient(t)
+		c.EXPECT().Call(mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, e rpc.Element) error {
+			params := e.Params.([]any)
+			require.Equal(t, blockTag, params[1])
+			call := params[0].(map[string]any)
+			require.Equal(t, testPoolManager.String(), call["to"])
+			calldata, err := encoding.Hex.Decode(call["data"].(string))
+			require.NoError(t, err)
+			vals, err := getTickInfoFn.DecodeCall(calldata)
+			require.NoError(t, err)
+			require.Equal(t, poolID[:], vals[0].([]byte))
+			require.Zero(t, tick.Cmp(vals[1].(*big.Int)))
+			*e.Result.(*string) = encoding.Hex.EncodePrefixed(word)
+			return nil
+		}).Once()
+
+		info, err := NewStateView(c).GetTickInfo(t.Context(), bind.NewCallOptions().WithBlock(blockTag), NewGetTickInfoRequest(testPoolManager, poolID, tick))
+		require.NoError(t, err)
+		require.Zero(t, big.NewInt(1).Cmp(info.LiquidityGross))
+		require.Zero(t, big.NewInt(-1).Cmp(info.LiquidityNet))
+	})
+}
+
+// go test -run '^$' -fuzz '^FuzzStateViewReadsSurviveArbitraryResult$' -fuzztime=10s ./protocols/uniswap/v4
+func FuzzStateViewReadsSurviveArbitraryResult(f *testing.F) {
+	f.Add([]byte{})
+	f.Add(make([]byte, 31))
+	f.Add(make([]byte, 32))
+	f.Add(make([]byte, 96))
+	f.Add(make([]byte, 128))
+	f.Add(append(make([]byte, 31), 0xff))
+
+	tick := big.NewInt(60)
+
+	f.Fuzz(func(t *testing.T, result []byte) {
+		c := mocks.NewClient(t)
+		c.EXPECT().Call(mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, e rpc.Element) error {
+			*e.Result.(*string) = encoding.Hex.EncodePrefixed(result)
+			return nil
+		}).Times(12)
+		v := NewStateView(c)
+		ctx := t.Context()
+
+		poolManager, err := v.PoolManager(ctx, nil, NewPoolManagerRequest(testPoolManager))
+		require.True(t, (err == nil) != (poolManager == nil))
+		slot0, err := v.GetSlot0(ctx, nil, NewGetSlot0Request(testPoolManager, PoolID{}))
+		require.True(t, (err == nil) != (slot0 == nil))
+		liquidity, err := v.GetLiquidity(ctx, nil, NewGetLiquidityRequest(testPoolManager, PoolID{}))
+		require.True(t, (err == nil) != (liquidity == nil))
+		globals, err := v.GetFeeGrowthGlobals(ctx, nil, NewGetFeeGrowthGlobalsRequest(testPoolManager, PoolID{}))
+		require.True(t, (err == nil) != (globals == nil))
+		inside, err := v.GetFeeGrowthInside(ctx, nil, NewGetFeeGrowthInsideRequest(testPoolManager, PoolID{}, tick, tick))
+		require.True(t, (err == nil) != (inside == nil))
+		tickInfo, err := v.GetTickInfo(ctx, nil, NewGetTickInfoRequest(testPoolManager, PoolID{}, tick))
+		require.True(t, (err == nil) != (tickInfo == nil))
+		tickLiquidity, err := v.GetTickLiquidity(ctx, nil, NewGetTickLiquidityRequest(testPoolManager, PoolID{}, tick))
+		require.True(t, (err == nil) != (tickLiquidity == nil))
+		outside, err := v.GetTickFeeGrowthOutside(ctx, nil, NewGetTickFeeGrowthOutsideRequest(testPoolManager, PoolID{}, tick))
+		require.True(t, (err == nil) != (outside == nil))
+		bitmap, err := v.GetTickBitmap(ctx, nil, NewGetTickBitmapRequest(testPoolManager, PoolID{}, 0))
+		require.True(t, (err == nil) != (bitmap == nil))
+		position, err := v.GetPositionInfo(ctx, nil, NewGetPositionInfoRequest(testPoolManager, PoolID{}, testSender, tick, tick, [32]byte{}))
+		require.True(t, (err == nil) != (position == nil))
+		positionByID, err := v.GetPositionInfoByID(ctx, nil, NewGetPositionInfoByIDRequest(testPoolManager, PoolID{}, [32]byte{}))
+		require.True(t, (err == nil) != (positionByID == nil))
+		positionLiquidity, err := v.GetPositionLiquidity(ctx, nil, NewStateViewGetPositionLiquidityRequest(testPoolManager, PoolID{}, [32]byte{}))
+		require.True(t, (err == nil) != (positionLiquidity == nil))
+		if err == nil {
+			require.LessOrEqual(t, positionLiquidity.BitLen(), 128)
+		}
 	})
 }

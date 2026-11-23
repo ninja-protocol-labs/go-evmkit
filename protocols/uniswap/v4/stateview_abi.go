@@ -206,8 +206,7 @@ func DecodeGetLiquidity(data []byte) (*big.Int, error) {
 	return liquidity, nil
 }
 
-// EncodeGetTickBitmap returns the calldata for getTickBitmap(poolId, word). word is the bitmap word
-// position, i.e. (tick / tickSpacing) >> 8.
+// EncodeGetTickBitmap returns the calldata for getTickBitmap(poolId, word), where word is (tick / tickSpacing) >> 8.
 func EncodeGetTickBitmap(poolID PoolID, word int16) ([]byte, error) {
 	data, err := getTickBitmapFn.EncodeCall(poolID[:], word)
 	if err != nil {
@@ -225,8 +224,7 @@ func DecodeGetTickBitmap(data []byte) (*big.Int, error) {
 	return bitmap, nil
 }
 
-// EncodeGetPositionInfo returns the calldata for getPositionInfo(poolId, owner, tickLower,
-// tickUpper, salt).
+// EncodeGetPositionInfo returns the calldata for getPositionInfo(poolId, owner, tickLower, tickUpper, salt).
 func EncodeGetPositionInfo(poolID PoolID, owner *types.Address, tickLower, tickUpper *big.Int, salt [32]byte) ([]byte, error) {
 	data, err := getPositionInfoFn.EncodeCall(poolID[:], owner, tickLower, tickUpper, salt[:])
 	if err != nil {
@@ -259,8 +257,7 @@ func DecodeGetPositionInfo(data []byte) (*PositionState, error) {
 	return NewPositionState(liquidity, feeGrowthInside0LastX128, feeGrowthInside1LastX128), nil
 }
 
-// EncodeGetPositionInfoByID returns the calldata for getPositionInfo(poolId, positionId); see
-// CalculatePositionKey for positionId.
+// EncodeGetPositionInfoByID returns the calldata for getPositionInfo(poolId, positionId); see CalculatePositionKey for positionId.
 func EncodeGetPositionInfoByID(poolID PoolID, positionID [32]byte) ([]byte, error) {
 	data, err := getPositionInfoByIDFn.EncodeCall(poolID[:], positionID[:])
 	if err != nil {
@@ -269,8 +266,7 @@ func EncodeGetPositionInfoByID(poolID PoolID, positionID [32]byte) ([]byte, erro
 	return data, nil
 }
 
-// EncodeStateViewGetPositionLiquidity returns the calldata for getPositionLiquidity(poolId,
-// positionId).
+// EncodeStateViewGetPositionLiquidity returns the calldata for getPositionLiquidity(poolId, positionId).
 func EncodeStateViewGetPositionLiquidity(poolID PoolID, positionID [32]byte) ([]byte, error) {
 	data, err := stateViewGetPositionLiquidityFn.EncodeCall(poolID[:], positionID[:])
 	if err != nil {

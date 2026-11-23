@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
@@ -179,4 +180,103 @@ func TestCalculatePositionKeyRejectsInvalidInputs(t *testing.T) {
 			require.ErrorContains(t, err, "uniswapv4: calculatePositionKey")
 		})
 	}
+}
+
+func TestStateViewRequestsValidate(t *testing.T) {
+	sv := testPoolManager
+	owner := testSender
+	var poolID PoolID
+	poolID[0] = 0xab
+	tick := big.NewInt(-60)
+
+	for _, tc := range []struct {
+		name string
+		err  error
+		want string
+	}{
+		{"poolManager nil", (*PoolManagerRequest)(nil).Validate(), "invalid request: request is nil"},
+		{"poolManager empty", (&PoolManagerRequest{}).Validate(), "invalid request: contract is nil"},
+		{"poolManager valid", (&PoolManagerRequest{Contract: sv}).Validate(), ""},
+		{"getSlot0 nil", (*GetSlot0Request)(nil).Validate(), "invalid request: request is nil"},
+		{"getSlot0 empty", (&GetSlot0Request{}).Validate(), "invalid request: contract is nil"},
+		{"getSlot0 zero poolId", (&GetSlot0Request{Contract: sv}).Validate(), ""},
+		{"getSlot0 valid", (&GetSlot0Request{Contract: sv, PoolID: poolID}).Validate(), ""},
+		{"getLiquidity nil", (*GetLiquidityRequest)(nil).Validate(), "invalid request: request is nil"},
+		{"getLiquidity empty", (&GetLiquidityRequest{}).Validate(), "invalid request: contract is nil"},
+		{"getLiquidity valid", (&GetLiquidityRequest{Contract: sv, PoolID: poolID}).Validate(), ""},
+		{"getFeeGrowthGlobals nil", (*GetFeeGrowthGlobalsRequest)(nil).Validate(), "invalid request: request is nil"},
+		{"getFeeGrowthGlobals empty", (&GetFeeGrowthGlobalsRequest{}).Validate(), "invalid request: contract is nil"},
+		{"getFeeGrowthGlobals valid", (&GetFeeGrowthGlobalsRequest{Contract: sv, PoolID: poolID}).Validate(), ""},
+		{"getFeeGrowthInside nil", (*GetFeeGrowthInsideRequest)(nil).Validate(), "invalid request: request is nil"},
+		{"getFeeGrowthInside empty", (&GetFeeGrowthInsideRequest{}).Validate(), "invalid request: contract is nil"},
+		{"getFeeGrowthInside nil contract", (&GetFeeGrowthInsideRequest{TickLower: tick, TickUpper: tick}).Validate(), "invalid request: contract is nil"},
+		{"getFeeGrowthInside nil tickLower", (&GetFeeGrowthInsideRequest{Contract: sv, TickUpper: tick}).Validate(), "invalid request: tickLower is nil"},
+		{"getFeeGrowthInside nil tickUpper", (&GetFeeGrowthInsideRequest{Contract: sv, TickLower: tick}).Validate(), "invalid request: tickUpper is nil"},
+		{"getFeeGrowthInside valid", (&GetFeeGrowthInsideRequest{Contract: sv, PoolID: poolID, TickLower: tick, TickUpper: big.NewInt(60)}).Validate(), ""},
+		{"getFeeGrowthInside reversed ticks", (&GetFeeGrowthInsideRequest{Contract: sv, TickLower: big.NewInt(60), TickUpper: tick}).Validate(), ""},
+		{"getTickInfo nil", (*GetTickInfoRequest)(nil).Validate(), "invalid request: request is nil"},
+		{"getTickInfo empty", (&GetTickInfoRequest{}).Validate(), "invalid request: contract is nil"},
+		{"getTickInfo nil tick", (&GetTickInfoRequest{Contract: sv}).Validate(), "invalid request: tick is nil"},
+		{"getTickInfo valid", (&GetTickInfoRequest{Contract: sv, PoolID: poolID, Tick: tick}).Validate(), ""},
+		{"getTickLiquidity nil", (*GetTickLiquidityRequest)(nil).Validate(), "invalid request: request is nil"},
+		{"getTickLiquidity empty", (&GetTickLiquidityRequest{}).Validate(), "invalid request: contract is nil"},
+		{"getTickLiquidity nil tick", (&GetTickLiquidityRequest{Contract: sv}).Validate(), "invalid request: tick is nil"},
+		{"getTickLiquidity valid", (&GetTickLiquidityRequest{Contract: sv, Tick: big.NewInt(0)}).Validate(), ""},
+		{"getTickFeeGrowthOutside nil", (*GetTickFeeGrowthOutsideRequest)(nil).Validate(), "invalid request: request is nil"},
+		{"getTickFeeGrowthOutside empty", (&GetTickFeeGrowthOutsideRequest{}).Validate(), "invalid request: contract is nil"},
+		{"getTickFeeGrowthOutside nil tick", (&GetTickFeeGrowthOutsideRequest{Contract: sv}).Validate(), "invalid request: tick is nil"},
+		{"getTickFeeGrowthOutside valid", (&GetTickFeeGrowthOutsideRequest{Contract: sv, Tick: tick}).Validate(), ""},
+		{"getTickBitmap nil", (*GetTickBitmapRequest)(nil).Validate(), "invalid request: request is nil"},
+		{"getTickBitmap empty", (&GetTickBitmapRequest{}).Validate(), "invalid request: contract is nil"},
+		{"getTickBitmap negative word", (&GetTickBitmapRequest{Contract: sv, WordPosition: -32768}).Validate(), ""},
+		{"getPositionInfo nil", (*GetPositionInfoRequest)(nil).Validate(), "invalid request: request is nil"},
+		{"getPositionInfo empty", (&GetPositionInfoRequest{}).Validate(), "invalid request: contract is nil"},
+		{"getPositionInfo nil contract", (&GetPositionInfoRequest{Owner: owner, TickLower: tick, TickUpper: tick}).Validate(), "invalid request: contract is nil"},
+		{"getPositionInfo nil owner", (&GetPositionInfoRequest{Contract: sv, TickLower: tick, TickUpper: tick}).Validate(), "invalid request: owner is nil"},
+		{"getPositionInfo nil tickLower", (&GetPositionInfoRequest{Contract: sv, Owner: owner, TickUpper: tick}).Validate(), "invalid request: tickLower is nil"},
+		{"getPositionInfo nil tickUpper", (&GetPositionInfoRequest{Contract: sv, Owner: owner, TickLower: tick}).Validate(), "invalid request: tickUpper is nil"},
+		{"getPositionInfo valid", (&GetPositionInfoRequest{Contract: sv, PoolID: poolID, Owner: owner, TickLower: tick, TickUpper: big.NewInt(60), Salt: [32]byte{0x01}}).Validate(), ""},
+		{"getPositionInfo zero owner", (&GetPositionInfoRequest{Contract: sv, Owner: types.ZeroAddress(), TickLower: tick, TickUpper: tick}).Validate(), ""},
+		{"getPositionInfoByID nil", (*GetPositionInfoByIDRequest)(nil).Validate(), "invalid request: request is nil"},
+		{"getPositionInfoByID empty", (&GetPositionInfoByIDRequest{}).Validate(), "invalid request: contract is nil"},
+		{"getPositionInfoByID valid", (&GetPositionInfoByIDRequest{Contract: sv, PoolID: poolID, PositionID: [32]byte{0x02}}).Validate(), ""},
+		{"stateViewGetPositionLiquidity nil", (*StateViewGetPositionLiquidityRequest)(nil).Validate(), "invalid request: request is nil"},
+		{"stateViewGetPositionLiquidity empty", (&StateViewGetPositionLiquidityRequest{}).Validate(), "invalid request: contract is nil"},
+		{"stateViewGetPositionLiquidity valid", (&StateViewGetPositionLiquidityRequest{Contract: sv, PoolID: poolID}).Validate(), ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.want == "" {
+				require.NoError(t, tc.err)
+				return
+			}
+			require.ErrorIs(t, tc.err, bind.ErrInvalidRequest)
+			require.EqualError(t, tc.err, tc.want)
+		})
+	}
+}
+
+func TestNewStateViewRequestsSetFields(t *testing.T) {
+	sv := testPoolManager
+	owner := testSender
+	poolID := PoolID{0x11}
+	positionID := [32]byte{0x22}
+	salt := [32]byte{0x33}
+
+	require.Equal(t, &PoolManagerRequest{Contract: sv}, NewPoolManagerRequest(sv))
+	require.Equal(t, &GetSlot0Request{Contract: sv, PoolID: poolID}, NewGetSlot0Request(sv, poolID))
+	require.Equal(t, &GetLiquidityRequest{Contract: sv, PoolID: poolID}, NewGetLiquidityRequest(sv, poolID))
+	require.Equal(t, &GetFeeGrowthGlobalsRequest{Contract: sv, PoolID: poolID}, NewGetFeeGrowthGlobalsRequest(sv, poolID))
+	require.Equal(t, &GetFeeGrowthInsideRequest{Contract: sv, PoolID: poolID, TickLower: big.NewInt(-600), TickUpper: big.NewInt(600)}, NewGetFeeGrowthInsideRequest(sv, poolID, big.NewInt(-600), big.NewInt(600)))
+	require.Equal(t, &GetTickInfoRequest{Contract: sv, PoolID: poolID, Tick: big.NewInt(-887220)}, NewGetTickInfoRequest(sv, poolID, big.NewInt(-887220)))
+	require.Equal(t, &GetTickLiquidityRequest{Contract: sv, PoolID: poolID, Tick: big.NewInt(60)}, NewGetTickLiquidityRequest(sv, poolID, big.NewInt(60)))
+	require.Equal(t, &GetTickFeeGrowthOutsideRequest{Contract: sv, PoolID: poolID, Tick: big.NewInt(120)}, NewGetTickFeeGrowthOutsideRequest(sv, poolID, big.NewInt(120)))
+	require.Equal(t, &GetTickBitmapRequest{Contract: sv, PoolID: poolID, WordPosition: -58}, NewGetTickBitmapRequest(sv, poolID, -58))
+	require.Equal(t, &GetPositionInfoRequest{Contract: sv, PoolID: poolID, Owner: owner, TickLower: big.NewInt(-60), TickUpper: big.NewInt(60), Salt: salt}, NewGetPositionInfoRequest(sv, poolID, owner, big.NewInt(-60), big.NewInt(60), salt))
+	require.Equal(t, &GetPositionInfoByIDRequest{Contract: sv, PoolID: poolID, PositionID: positionID}, NewGetPositionInfoByIDRequest(sv, poolID, positionID))
+	require.Equal(t, &StateViewGetPositionLiquidityRequest{Contract: sv, PoolID: poolID, PositionID: positionID}, NewStateViewGetPositionLiquidityRequest(sv, poolID, positionID))
+
+	tickLower := big.NewInt(-60)
+	req := NewGetPositionInfoRequest(sv, poolID, owner, tickLower, big.NewInt(60), salt)
+	require.Same(t, owner, req.Owner)
+	require.Same(t, tickLower, req.TickLower)
 }
