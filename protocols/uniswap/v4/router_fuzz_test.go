@@ -1,12 +1,23 @@
 package v4
 
 import (
+	"context"
+	"encoding/json/jsontext"
+	"errors"
 	"math/big"
 	"testing"
 
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/ninja-protocol-labs/go-evmkit/bind"
+	"github.com/ninja-protocol-labs/go-evmkit/core"
+	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
+	"github.com/ninja-protocol-labs/go-evmkit/rpc"
+	"github.com/ninja-protocol-labs/go-evmkit/rpc/mocks"
+	"github.com/ninja-protocol-labs/go-evmkit/tx"
+	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
 // go test -run '^$' -fuzz '^FuzzAllRouterDecodersDoNotPanic$' -fuzztime=10s ./protocols/uniswap/v4
@@ -429,5 +440,90 @@ func FuzzEncodeActionsRoundTrip(f *testing.F) {
 		require.NoError(t, err)
 		require.Equal(t, actions, decodedActions)
 		require.Equal(t, params, decodedParams)
+	})
+}
+
+// go test -run '^$' -fuzz '^FuzzRouterExecuteActionsThroughClient$' -fuzztime=10s ./protocols/uniswap/v4
+func FuzzRouterExecuteActionsThroughClient(f *testing.F) {
+	f.Add([]byte{ActionSwapExactInSingle, ActionSettleAll, ActionTakeAll}, []byte{0x01}, uint64(0), false)
+	f.Add([]byte{ActionSweep}, []byte{}, uint64(1), true)
+	f.Add([]byte{0xff, 0x00}, make([]byte, 96), uint64(1<<40), true)
+
+	key, err := types.NewPrivateKeyFromBig(big.NewInt(0xb1d))
+	require.NoError(f, err)
+
+	f.Fuzz(func(t *testing.T, actions []byte, blob []byte, nativeRaw uint64, withNative bool) {
+		if len(actions) == 0 {
+			return
+		}
+		params := make([][]byte, len(actions))
+		for i := range params {
+			params[i] = append([]byte{byte(i)}, blob...)
+		}
+		var native *big.Int
+		if withNative {
+			native = new(big.Int).SetUint64(nativeRaw)
+		}
+
+		builder := tx.NewDynamicFeeBuilder()
+		builder.ChainID(big.NewInt(1))
+		builder.Nonce(3)
+		builder.Limit(6_000_000)
+		builder.Price(big.NewInt(2), big.NewInt(1))
+
+		var raw []byte
+		c := mocks.NewClient(t)
+		c.EXPECT().Call(mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, e rpc.Element) error {
+			var err error
+			raw, err = encoding.Hex.Decode(e.Params.([]any)[0].(string))
+			require.NoError(t, err)
+			*e.Result.(*string) = core.Keccak256(raw).String()
+			return nil
+		}).Once()
+
+		_, hash, err := NewRouter(c).ExecuteActions(t.Context(), bind.NewTransactOptions(key, builder), NewExecuteActionsRequest(testHooks, actions, params, native))
+		require.NoError(t, err)
+		require.True(t, hash.Equal(core.Keccak256(raw)))
+
+		decoded, err := core.DecodeTransaction(raw)
+		require.NoError(t, err)
+		dyn := decoded.(*core.DynamicFeeTx)
+		if native == nil {
+			require.Zero(t, dyn.Value.Sign())
+		} else {
+			require.Zero(t, native.Cmp(dyn.Value))
+		}
+
+		vals, err := executeActionsFn.DecodeCall(dyn.Data)
+		require.NoError(t, err)
+		gotActions, gotParams, err := DecodeActions(vals[0].([]byte))
+		require.NoError(t, err)
+		require.Equal(t, actions, gotActions)
+		require.Equal(t, params, gotParams)
+	})
+}
+
+// go test -run '^$' -fuzz '^FuzzRouterWrapRevertErrorKeepsCause$' -fuzztime=10s ./protocols/uniswap/v4
+func FuzzRouterWrapRevertErrorKeepsCause(f *testing.F) {
+	for _, e := range []*abi.Error{errV4TooLittleReceived, errUnsupportedAction, errDeltaNotPositive, errPoolNotInitialized, errWrappedError} {
+		sel := e.Selector()
+		f.Add(sel[:])
+	}
+	f.Add([]byte{})
+	f.Add([]byte{0x08, 0xc3, 0x79, 0xa0})
+
+	f.Fuzz(func(t *testing.T, data []byte) {
+		rpcErr := &rpc.ResponseError{Code: 3, Message: "execution reverted", Data: jsontext.Value(`"` + encoding.Hex.EncodePrefixed(data) + `"`)}
+
+		var wrapped error
+		require.NotPanics(t, func() { wrapped = (&Router{}).wrapRevertError(rpcErr) })
+		got, ok := errors.AsType[*rpc.ResponseError](wrapped)
+		require.True(t, ok)
+		require.Same(t, rpcErr, got)
+		if len(data) < 4 {
+			require.Same(t, rpcErr, wrapped)
+		} else {
+			require.NotSame(t, rpcErr, wrapped)
+		}
 	})
 }
