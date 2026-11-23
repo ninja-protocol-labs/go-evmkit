@@ -45,7 +45,6 @@ const (
 	Optimism
 	Polygon
 	Robinhood
-	Sei
 	Unichain
 )
 
@@ -79,8 +78,6 @@ func (n Network) String() string {
 		return "polygon"
 	case Robinhood:
 		return "robinhood"
-	case Sei:
-		return "sei"
 	case Unichain:
 		return "unichain"
 	default:
@@ -121,9 +118,10 @@ type ProtocolAddressBook struct {
 }
 
 type UniswapAddressBook struct {
-	V2 UniswapV2AddressBook
-	V3 UniswapV3AddressBook
-	V4 UniswapV4AddressBook
+	V2              UniswapV2AddressBook
+	V3              UniswapV3AddressBook
+	V4              UniswapV4AddressBook
+	UniversalRouter string
 }
 
 type UniswapV2AddressBook struct {

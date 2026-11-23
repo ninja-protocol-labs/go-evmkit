@@ -46,6 +46,7 @@ var configs = map[NetworkType]map[Network]Config{
 							PoolSwapTest:            "", // Not supported
 							PoolModifyLiquidityTest: "", // Not supported
 						},
+						UniversalRouter: "0x2d01411773c8C24805306E89A41F7855C3c4Fe65",
 					},
 				},
 			},
@@ -86,6 +87,7 @@ var configs = map[NetworkType]map[Network]Config{
 							PoolSwapTest:            "", // Not supported
 							PoolModifyLiquidityTest: "", // Not supported
 						},
+						UniversalRouter: "0x8702463e73f74d0b6765aBceb314Ef07aCb92650",
 					},
 				},
 			},
@@ -126,6 +128,7 @@ var configs = map[NetworkType]map[Network]Config{
 							PoolSwapTest:            "", // Not supported
 							PoolModifyLiquidityTest: "", // Not supported
 						},
+						UniversalRouter: "0x661E93cca42AfacB172121EF892830cA3b70F08d",
 					},
 				},
 			},
@@ -166,6 +169,7 @@ var configs = map[NetworkType]map[Network]Config{
 							PoolSwapTest:            "", // Not supported
 							PoolModifyLiquidityTest: "", // Not supported
 						},
+						UniversalRouter: "0xd6145b2D3F379919E8CdEda7B97e37c4b2Ca9c40",
 					},
 				},
 			},
@@ -206,6 +210,7 @@ var configs = map[NetworkType]map[Network]Config{
 							PoolSwapTest:            "", // Not supported
 							PoolModifyLiquidityTest: "", // Not supported
 						},
+						UniversalRouter: "0xDc264714F68d84CF29BC605589405E78bDBE7C9f",
 					},
 				},
 			},
@@ -246,6 +251,7 @@ var configs = map[NetworkType]map[Network]Config{
 							PoolSwapTest:            "", // Not supported
 							PoolModifyLiquidityTest: "", // Not supported
 						},
+						UniversalRouter: "0xe2023F3FA515cF070e07fD9d51c1d236e07843f4",
 					},
 				},
 			},
@@ -286,6 +292,7 @@ var configs = map[NetworkType]map[Network]Config{
 							PoolSwapTest:            "", // Not supported
 							PoolModifyLiquidityTest: "", // Not supported
 						},
+						UniversalRouter: "0x23617e59A5925b2A4Bf75d73ff6711cD0b29De85",
 					},
 				},
 			},
@@ -326,6 +333,7 @@ var configs = map[NetworkType]map[Network]Config{
 							PoolSwapTest:            "", // Not supported
 							PoolModifyLiquidityTest: "", // Not supported
 						},
+						UniversalRouter: "0xeD270A1Bcdc63cf1356D695e7f40961d4819d6bF",
 					},
 				},
 			},
@@ -366,6 +374,7 @@ var configs = map[NetworkType]map[Network]Config{
 							PoolSwapTest:            "", // Not supported
 							PoolModifyLiquidityTest: "", // Not supported
 						},
+						UniversalRouter: "0x661E93cca42AfacB172121EF892830cA3b70F08d",
 					},
 				},
 			},
@@ -406,6 +415,7 @@ var configs = map[NetworkType]map[Network]Config{
 							PoolSwapTest:            "", // Not supported
 							PoolModifyLiquidityTest: "", // Not supported
 						},
+						UniversalRouter: "0xDc264714F68d84CF29BC605589405E78bDBE7C9f",
 					},
 				},
 			},
@@ -446,6 +456,7 @@ var configs = map[NetworkType]map[Network]Config{
 							PoolSwapTest:            "", // Not supported
 							PoolModifyLiquidityTest: "", // Not supported
 						},
+						UniversalRouter: "0xa6CE4F10d83dBdDAc17E68e1837ca9cE6a1b596e",
 					},
 				},
 			},
@@ -486,6 +497,7 @@ var configs = map[NetworkType]map[Network]Config{
 							PoolSwapTest:            "", // Not supported
 							PoolModifyLiquidityTest: "", // Not supported
 						},
+						UniversalRouter: "0xC09255D86DB563cBc11C2fCf4a0C512e160111B4",
 					},
 				},
 			},
@@ -526,6 +538,7 @@ var configs = map[NetworkType]map[Network]Config{
 							PoolSwapTest:            "", // Not supported
 							PoolModifyLiquidityTest: "", // Not supported
 						},
+						UniversalRouter: "0xDc264714F68d84CF29BC605589405E78bDBE7C9f",
 					},
 				},
 			},
@@ -566,46 +579,7 @@ var configs = map[NetworkType]map[Network]Config{
 							PoolSwapTest:            "", // Not supported
 							PoolModifyLiquidityTest: "", // Not supported
 						},
-					},
-				},
-			},
-		},
-		Sei: {
-			RPCURL: "https://sei-mainnet.g.alchemy.com/v2/%s",
-			Constant: ChainConstants{
-				ChainID:             1329,
-				NativeSymbol:        "SEI",
-				NativeDecimals:      18,
-				ReceiptPollInterval: 500 * time.Millisecond,
-				ReceiptTimeout:      10 * time.Second,
-			},
-			Addresses: AddressBook{
-				Standard: StandardAddressBook{
-					Multicall:    "0xcA11bde05977b3631167028862bE2a173976CA11",
-					NicksFactory: "0x4e59b44847b379578588920cA78FbF26c0B4956C",
-					WETH:         "0xE30feDd158A2e3b13e9badaeABaFc5516e95e8C7",
-					Permit2:      "0x000000000022D473030F116dDEE9F6B43aC78BA3",
-				},
-				Protocol: ProtocolAddressBook{
-					Uniswap: UniswapAddressBook{
-						V2: UniswapV2AddressBook{
-							Factory: "", // Not supported
-							Router:  "", // Not supported
-						},
-						V3: UniswapV3AddressBook{
-							Factory: "0x75FC67473A91335B5b8F8821277262a13B38c9b3",
-							Router:  "0xdD489C75be1039ec7d843A6aC2Fd658350B067Cf",
-							Quoter:  "0x807F4E281B7A3B324825C64ca53c69F0b418dE40",
-							NFPM:    "0x8B3c541c30f9b29560f56B9E44b59718916B69EF",
-						},
-						V4: UniswapV4AddressBook{
-							PoolManager:             "", // Not supported
-							PositionManager:         "", // Not supported
-							StateView:               "", // Not supported
-							Quoter:                  "", // Not supported
-							PoolSwapTest:            "", // Not supported
-							PoolModifyLiquidityTest: "", // Not supported
-						},
+						UniversalRouter: "0x204FAca1764B154221e35c0d20aBb3c525710498",
 					},
 				},
 			},
@@ -646,6 +620,7 @@ var configs = map[NetworkType]map[Network]Config{
 							PoolSwapTest:            "", // Not supported
 							PoolModifyLiquidityTest: "", // Not supported
 						},
+						UniversalRouter: "0xD1b797D92d87B688193A2B976eFc8D577D204343",
 					},
 				},
 			},
@@ -688,6 +663,7 @@ var configs = map[NetworkType]map[Network]Config{
 							PoolSwapTest:            "0xf3A39C86dbd13C45365E57FB90fe413371F65AF8",
 							PoolModifyLiquidityTest: "0x9A8ca723F5dcCb7926D00B71deC55c2fEa1F50f7",
 						},
+						UniversalRouter: "", // Not supported
 					},
 				},
 			},
@@ -728,6 +704,7 @@ var configs = map[NetworkType]map[Network]Config{
 							PoolSwapTest:            "", // Not supported
 							PoolModifyLiquidityTest: "", // Not supported
 						},
+						UniversalRouter: "", // Not supported
 					},
 				},
 			},
@@ -768,6 +745,7 @@ var configs = map[NetworkType]map[Network]Config{
 							PoolSwapTest:            "", // Not supported
 							PoolModifyLiquidityTest: "", // Not supported
 						},
+						UniversalRouter: "", // Not supported
 					},
 				},
 			},
@@ -808,6 +786,7 @@ var configs = map[NetworkType]map[Network]Config{
 							PoolSwapTest:            "0x8B5bcC363ddE2614281aD875bad385E0A785D3B9",
 							PoolModifyLiquidityTest: "0x37429cD17Cb1454C34E7F50b09725202Fd533039",
 						},
+						UniversalRouter: "0x8702463e73f74d0b6765aBceb314Ef07aCb92650",
 					},
 				},
 			},
@@ -848,6 +827,7 @@ var configs = map[NetworkType]map[Network]Config{
 							PoolSwapTest:            "", // Not supported
 							PoolModifyLiquidityTest: "", // Not supported
 						},
+						UniversalRouter: "", // Not supported
 					},
 				},
 			},
@@ -888,6 +868,7 @@ var configs = map[NetworkType]map[Network]Config{
 							PoolSwapTest:            "", // Not supported
 							PoolModifyLiquidityTest: "", // Not supported
 						},
+						UniversalRouter: "", // Not supported
 					},
 				},
 			},
@@ -928,6 +909,7 @@ var configs = map[NetworkType]map[Network]Config{
 							PoolSwapTest:            "0x9B6b46e2c869aa39918Db7f52f5557FE577B6eEe",
 							PoolModifyLiquidityTest: "0x0C478023803a644c94c4CE1C1e7b9A087e411B0A",
 						},
+						UniversalRouter: "0x7E4f6c5e954Da5c61B3423D81E2277431Ac043f3",
 					},
 				},
 			},
@@ -968,6 +950,7 @@ var configs = map[NetworkType]map[Network]Config{
 							PoolSwapTest:            "", // Not supported
 							PoolModifyLiquidityTest: "", // Not supported
 						},
+						UniversalRouter: "", // Not supported
 					},
 				},
 			},
@@ -1008,6 +991,7 @@ var configs = map[NetworkType]map[Network]Config{
 							PoolSwapTest:            "", // Not supported
 							PoolModifyLiquidityTest: "", // Not supported
 						},
+						UniversalRouter: "", // Not supported
 					},
 				},
 			},
@@ -1048,6 +1032,7 @@ var configs = map[NetworkType]map[Network]Config{
 							PoolSwapTest:            "", // Not supported
 							PoolModifyLiquidityTest: "", // Not supported
 						},
+						UniversalRouter: "", // Not supported
 					},
 				},
 			},
@@ -1088,6 +1073,7 @@ var configs = map[NetworkType]map[Network]Config{
 							PoolSwapTest:            "", // Not supported
 							PoolModifyLiquidityTest: "", // Not supported
 						},
+						UniversalRouter: "", // Not supported
 					},
 				},
 			},
@@ -1128,6 +1114,7 @@ var configs = map[NetworkType]map[Network]Config{
 							PoolSwapTest:            "", // Not supported
 							PoolModifyLiquidityTest: "", // Not supported
 						},
+						UniversalRouter: "", // Not supported
 					},
 				},
 			},
@@ -1168,6 +1155,7 @@ var configs = map[NetworkType]map[Network]Config{
 							PoolSwapTest:            "", // Not supported
 							PoolModifyLiquidityTest: "", // Not supported
 						},
+						UniversalRouter: "", // Not supported
 					},
 				},
 			},
@@ -1208,46 +1196,7 @@ var configs = map[NetworkType]map[Network]Config{
 							PoolSwapTest:            "", // Not supported
 							PoolModifyLiquidityTest: "", // Not supported
 						},
-					},
-				},
-			},
-		},
-		Sei: {
-			RPCURL: "https://sei-testnet.g.alchemy.com/v2/%s",
-			Constant: ChainConstants{
-				ChainID:             1328,
-				NativeSymbol:        "SEI",
-				NativeDecimals:      18,
-				ReceiptPollInterval: 500 * time.Millisecond,
-				ReceiptTimeout:      10 * time.Second,
-			},
-			Addresses: AddressBook{
-				Standard: StandardAddressBook{
-					Multicall:    "0xcA11bde05977b3631167028862bE2a173976CA11",
-					NicksFactory: "0x4e59b44847b379578588920cA78FbF26c0B4956C",
-					WETH:         "0xF8EB55EC97B59d91fe9E91A1d61147e0d2A7b6F7",
-					Permit2:      "0x000000000022D473030F116dDEE9F6B43aC78BA3",
-				},
-				Protocol: ProtocolAddressBook{
-					Uniswap: UniswapAddressBook{
-						V2: UniswapV2AddressBook{
-							Factory: "", // Not supported
-							Router:  "", // Not supported
-						},
-						V3: UniswapV3AddressBook{
-							Factory: "", // Not supported
-							Router:  "", // Not supported
-							Quoter:  "", // Not supported
-							NFPM:    "", // Not supported
-						},
-						V4: UniswapV4AddressBook{
-							PoolManager:             "", // Not supported
-							PositionManager:         "", // Not supported
-							StateView:               "", // Not supported
-							Quoter:                  "", // Not supported
-							PoolSwapTest:            "", // Not supported
-							PoolModifyLiquidityTest: "", // Not supported
-						},
+						UniversalRouter: "", // Not supported
 					},
 				},
 			},
@@ -1288,6 +1237,7 @@ var configs = map[NetworkType]map[Network]Config{
 							PoolSwapTest:            "0x9140a78c1A137c7fF1c151EC8231272aF78a99A4",
 							PoolModifyLiquidityTest: "0x5fa728C0A5cfd51BEe4B060773f50554c0C8A7AB",
 						},
+						UniversalRouter: "0xDf38F24fE153761634Be942F9d859f3DBA857E95",
 					},
 				},
 			},
