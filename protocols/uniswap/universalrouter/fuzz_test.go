@@ -2,15 +2,21 @@ package universalrouter
 
 import (
 	"bytes"
+	"encoding/json/jsontext"
+	"errors"
 	"math/big"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/ninja-protocol-labs/go-evmkit/bind"
+	"github.com/ninja-protocol-labs/go-evmkit/core"
+	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 	"github.com/ninja-protocol-labs/go-evmkit/protocols/permit2"
 	v4 "github.com/ninja-protocol-labs/go-evmkit/protocols/uniswap/v4"
+	"github.com/ninja-protocol-labs/go-evmkit/rpc"
+	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
 // go test -run '^$' -fuzz '^FuzzParseCommandByteRoundTrip$' -fuzztime=10s ./protocols/uniswap/universalrouter
@@ -531,6 +537,146 @@ func FuzzV4PositionManagerCallOnlyAllowsMint(f *testing.F) {
 			require.ErrorContains(t, err, "only mint")
 		} else {
 			require.NoError(t, err)
+		}
+	})
+}
+
+// go test -run '^$' -fuzz '^FuzzWrapRevertErrorKeepsCause$' -fuzztime=10s ./protocols/uniswap/universalrouter
+func FuzzWrapRevertErrorKeepsCause(f *testing.F) {
+	for _, e := range []*abi.Error{errExecutionFailed, errV3TooLittleReceived, errBalanceTooLow, errInvalidAction, errECDSAInvalidSignatureS} {
+		sel := e.Selector()
+		f.Add(sel[:])
+	}
+	f.Add([]byte{})
+	f.Add([]byte{0x08, 0xc3, 0x79, 0xa0})
+	f.Add([]byte{0x75, 0x6d, 0x82, 0x0b})
+	f.Add([]byte{0x48, 0x6a, 0xa3, 0x07})
+
+	f.Fuzz(func(t *testing.T, data []byte) {
+		rpcErr := &rpc.ResponseError{Code: 3, Message: "execution reverted", Data: jsontext.Value(`"` + encoding.Hex.EncodePrefixed(data) + `"`)}
+
+		var wrapped error
+		require.NotPanics(t, func() { wrapped = (&UniversalRouter{}).wrapRevertError(rpcErr) })
+		got, ok := errors.AsType[*rpc.ResponseError](wrapped)
+		require.True(t, ok)
+		require.Same(t, rpcErr, got)
+		if len(data) < 4 {
+			require.Same(t, rpcErr, wrapped)
+			return
+		}
+		require.NotSame(t, rpcErr, wrapped)
+		require.NotPanics(t, func() { _ = wrapped.Error() })
+	})
+}
+
+// go test -run '^$' -fuzz '^FuzzExecutionFailedNestingUnwraps$' -fuzztime=10s ./protocols/uniswap/universalrouter
+func FuzzExecutionFailedNestingUnwraps(f *testing.F) {
+	balanceTooLow := errBalanceTooLow.Selector()
+	f.Add(uint8(1), uint64(0), balanceTooLow[:])
+	f.Add(uint8(3), uint64(7), []byte{0xde, 0xad, 0xbe, 0xef})
+	f.Add(uint8(5), ^uint64(0), []byte{})
+	f.Add(uint8(2), uint64(1), []byte{0x01})
+
+	f.Fuzz(func(t *testing.T, depthRaw uint8, index uint64, inner []byte) {
+		if len(inner) > 512 {
+			return
+		}
+		depth := int(depthRaw%5) + 1
+		failedSel := errExecutionFailed.Selector()
+
+		message := inner
+		for i := 0; i < depth; i++ {
+			packed, err := abi.Pack(errExecutionFailed.Inputs, new(big.Int).SetUint64(index+uint64(i)), message)
+			require.NoError(t, err)
+			message = append(append([]byte{}, failedSel[:]...), packed...)
+		}
+
+		rpcErr := &rpc.ResponseError{Code: 3, Message: "execution reverted", Data: jsontext.Value(`"` + encoding.Hex.EncodePrefixed(message) + `"`)}
+		var wrapped error
+		require.NotPanics(t, func() { wrapped = (&UniversalRouter{}).wrapRevertError(rpcErr) })
+		require.ErrorIs(t, wrapped, ErrExecutionFailed)
+
+		outer, ok := errors.AsType[*ExecutionFailedError](wrapped)
+		require.True(t, ok)
+		require.Zero(t, new(big.Int).SetUint64(index+uint64(depth-1)).Cmp(outer.CommandIndex))
+
+		got, ok := errors.AsType[*rpc.ResponseError](wrapped)
+		require.True(t, ok)
+		require.Same(t, rpcErr, got)
+
+		if bytes.HasPrefix(inner, balanceTooLow[:]) {
+			require.ErrorIs(t, wrapped, ErrBalanceTooLow)
+		}
+	})
+}
+
+// go test -run '^$' -fuzz '^FuzzExecuteSignedMessageSignRecovers$' -fuzztime=10s ./protocols/uniswap/universalrouter
+func FuzzExecuteSignedMessageSignRecovers(f *testing.F) {
+	f.Add([]byte{0x01}, []byte{0x02}, []byte{0x03}, uint64(1_700_000_000), uint64(1), true, uint8(0))
+	f.Add([]byte{}, []byte{}, bytes.Repeat([]byte{0xff}, 32), uint64(0), uint64(8453), false, uint8(9))
+	f.Add(bytes.Repeat([]byte{0x77}, 40), bytes.Repeat([]byte{0x88}, 5), []byte{}, ^uint64(0), ^uint64(0), true, uint8(255))
+
+	key, err := types.NewPrivateKeyFromBig(big.NewInt(0xfeed))
+	require.NoError(f, err)
+	signer := core.PubkeyToAddress(key.PublicKey())
+
+	f.Fuzz(func(t *testing.T, intentRaw, dataRaw, nonceRaw []byte, deadline, chainID uint64, withSender bool, amount uint8) {
+		var intent, data, nonce [32]byte
+		copy(intent[:], intentRaw)
+		copy(data[:], dataRaw)
+		copy(nonce[:], nonceRaw)
+		sender := types.ZeroAddress()
+		if withSender {
+			sender = testSender
+		}
+
+		msg := NewExecuteSignedMessage(NewPlan().Add(NewWrapETHInput(AddressThis(), big.NewInt(int64(amount)))), intent, data, sender, nonce, new(big.Int).SetUint64(deadline))
+		domain := NewUniversalRouterDomain(new(big.Int).SetUint64(chainID), testRouter)
+
+		digest, err := msg.Hash(domain)
+		require.NoError(t, err)
+		again, err := msg.Hash(domain)
+		require.NoError(t, err)
+		require.Equal(t, digest.String(), again.String())
+
+		sig, err := msg.Sign(domain, key)
+		require.NoError(t, err)
+		pub, err := sig.ECRecover(digest)
+		require.NoError(t, err)
+		require.True(t, core.PubkeyToAddress(pub).Equal(signer))
+
+		other, err := NewExecuteSignedMessage(msg.Plan, intent, data, sender, nonce, new(big.Int).SetUint64(deadline)).Hash(NewUniversalRouterDomain(new(big.Int).SetUint64(chainID), testTokenA))
+		require.NoError(t, err)
+		require.NotEqual(t, digest.String(), other.String())
+	})
+}
+
+// go test -run '^$' -fuzz '^FuzzClientRequestsValidateNativeAmount$' -fuzztime=10s ./protocols/uniswap/universalrouter
+func FuzzClientRequestsValidateNativeAmount(f *testing.F) {
+	f.Add([]byte{}, false)
+	f.Add([]byte{0x01}, true)
+	f.Add(bytes.Repeat([]byte{0xff}, 32), false)
+	f.Add(append([]byte{0x01}, make([]byte, 32)...), false)
+
+	plan := NewPlan().Add(NewWrapETHInput(AddressThis(), big.NewInt(1)))
+
+	f.Fuzz(func(t *testing.T, magnitude []byte, negative bool) {
+		native := new(big.Int).SetBytes(magnitude)
+		if negative {
+			native.Neg(native)
+		}
+		valid := native.Sign() >= 0 && native.BitLen() <= 256
+
+		for _, err := range []error{
+			NewExecuteRequest(testRouter, plan, nil, native).Validate(),
+			NewExecuteRequest(testRouter, plan, big.NewInt(1), native).Validate(),
+			NewExecuteSignedRequest(testRouter, plan, [32]byte{}, [32]byte{}, false, [32]byte{}, []byte{0x01}, big.NewInt(1), native).Validate(),
+		} {
+			if valid {
+				require.NoError(t, err)
+			} else {
+				require.ErrorIs(t, err, bind.ErrInvalidRequest)
+			}
 		}
 	})
 }
