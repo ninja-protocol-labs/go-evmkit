@@ -61,4 +61,5 @@ packages:
       filename: "{{.InterfaceName | lower}}.go"
     interfaces:
       IPoolManager:
+      IPositionManager:
       IStateView:

@@ -259,15 +259,11 @@ func (s *QuoterSuite) SetupSuite() {
 		{s.keyAC, big.NewInt(-60), big.NewInt(60)},
 	} {
 		key := pool.key
-		initUnsigned, err := s.positionManager.CreateInitializePool(s.ctx, tx.NewDynamicFeeBuilder(), s.positionManagerContract, s.from, key, new(big.Int).Lsh(big.NewInt(1), 96), big.NewInt(0))
+		initTx, initHash, err := s.positionManager.InitializePool(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewInitializePoolRequest(s.positionManagerContract, key, new(big.Int).Lsh(big.NewInt(1), 96)))
 		s.Require().NoError(err)
-		s.Require().NoError(initUnsigned.Sign(s.signer))
 		s.mu.Lock()
-		s.totalFee.Add(s.totalFee, initUnsigned.MaxFee())
+		s.totalFee.Add(s.totalFee, initTx.MaxFee())
 		s.mu.Unlock()
-
-		initHash, err := s.positionManager.InitializePool(s.ctx, initUnsigned)
-		s.Require().NoError(err)
 
 		initReceipt, err := tx.WaitForReceipt(s.ctx, s.client, initHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
 		s.Require().NoError(err)
@@ -280,17 +276,11 @@ func (s *QuoterSuite) SetupSuite() {
 		s.Require().NoError(err)
 
 		deadline := big.NewInt(time.Now().Add(1 * time.Hour).Unix())
-		mintUnsigned, err := s.positionManager.CreateModifyLiquidities(s.ctx, tx.NewDynamicFeeBuilder(), s.positionManagerContract, s.from, []byte{ActionMintPosition, ActionSettlePair}, [][]byte{mintData, settleData}, deadline, big.NewInt(0))
+		mintTx, mintHash, err := s.positionManager.ModifyLiquidities(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewModifyLiquiditiesRequest(s.positionManagerContract, []byte{ActionMintPosition, ActionSettlePair}, [][]byte{mintData, settleData}, deadline, nil))
 		s.Require().NoError(err)
-		s.Require().NoError(mintUnsigned.Sign(s.signer))
 		s.mu.Lock()
-		s.totalFee.Add(s.totalFee, mintUnsigned.MaxFee())
+		s.totalFee.Add(s.totalFee, mintTx.MaxFee())
 		s.mu.Unlock()
-
-		mintRaw, err := mintUnsigned.EncodeRLP()
-		s.Require().NoError(err)
-		mintHash, err := tx.Broadcast(s.ctx, s.client, mintRaw)
-		s.Require().NoError(err)
 
 		mintReceipt, err := tx.WaitForReceipt(s.ctx, s.client, mintHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
 		s.Require().NoError(err)
@@ -323,17 +313,11 @@ func (s *QuoterSuite) TearDownSuite() {
 		s.Require().NoError(err)
 
 		deadline := big.NewInt(time.Now().Add(1 * time.Hour).Unix())
-		unsignedBurnPosition, err := s.positionManager.CreateModifyLiquidities(s.ctx, tx.NewDynamicFeeBuilder(), s.positionManagerContract, s.from, []byte{ActionBurnPosition, ActionTakePair}, [][]byte{burnData, takeData}, deadline, big.NewInt(0))
+		burnPositionTx, burnPositionHash, err := s.positionManager.ModifyLiquidities(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewModifyLiquiditiesRequest(s.positionManagerContract, []byte{ActionBurnPosition, ActionTakePair}, [][]byte{burnData, takeData}, deadline, nil))
 		s.Require().NoError(err)
-		s.Require().NoError(unsignedBurnPosition.Sign(s.signer))
 		s.mu.Lock()
-		s.totalFee.Add(s.totalFee, unsignedBurnPosition.MaxFee())
+		s.totalFee.Add(s.totalFee, burnPositionTx.MaxFee())
 		s.mu.Unlock()
-
-		raw, err := unsignedBurnPosition.EncodeRLP()
-		s.Require().NoError(err)
-		burnPositionHash, err := tx.Broadcast(s.ctx, s.client, raw)
-		s.Require().NoError(err)
 
 		burnPositionReceipt, err := tx.WaitForReceipt(s.ctx, s.client, burnPositionHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
 		s.Require().NoError(err)

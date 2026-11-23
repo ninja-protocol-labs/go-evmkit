@@ -1,15 +1,24 @@
 package v4
 
 import (
+	"context"
+	"encoding/json/jsontext"
+	"errors"
 	"math/big"
 	"testing"
 
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/ninja-protocol-labs/go-evmkit/bind"
+	"github.com/ninja-protocol-labs/go-evmkit/core"
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 	"github.com/ninja-protocol-labs/go-evmkit/protocols/permit2"
+	"github.com/ninja-protocol-labs/go-evmkit/rpc"
+	"github.com/ninja-protocol-labs/go-evmkit/rpc/mocks"
 	"github.com/ninja-protocol-labs/go-evmkit/tx"
+	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
 // go test -run '^$' -fuzz '^FuzzExtractModifyPositionDoesNotPanic$' -fuzztime=10s ./protocols/uniswap/v4
@@ -1281,5 +1290,175 @@ func FuzzEncodePermit2PermitRoundTrip(f *testing.F) {
 		decodedSignature, ok := vals[2].([]byte)
 		require.True(t, ok)
 		require.Equal(t, signature, decodedSignature)
+	})
+}
+
+// go test -run '^$' -fuzz '^FuzzPositionManagerModifyLiquiditiesThroughClient$' -fuzztime=10s ./protocols/uniswap/v4
+func FuzzPositionManagerModifyLiquiditiesThroughClient(f *testing.F) {
+	f.Add([]byte{ActionMintPosition, ActionSettlePair}, []byte{0x01, 0x02}, uint64(1_700_000_000), uint64(0), false)
+	f.Add([]byte{ActionBurnPosition}, []byte{}, uint64(0), uint64(1), true)
+	f.Add([]byte{0xff, 0x00, 0x7f}, make([]byte, 64), uint64(1<<63), uint64(1<<40), true)
+
+	key, err := types.NewPrivateKeyFromBig(big.NewInt(0xb1d))
+	require.NoError(f, err)
+
+	f.Fuzz(func(t *testing.T, actions []byte, blob []byte, deadlineRaw uint64, nativeRaw uint64, withNative bool) {
+		if len(actions) == 0 {
+			return
+		}
+		params := make([][]byte, len(actions))
+		for i := range params {
+			params[i] = append([]byte{byte(i)}, blob...)
+		}
+		deadline := new(big.Int).SetUint64(deadlineRaw)
+		var native *big.Int
+		if withNative {
+			native = new(big.Int).SetUint64(nativeRaw)
+		}
+
+		builder := tx.NewDynamicFeeBuilder()
+		builder.ChainID(big.NewInt(1))
+		builder.Nonce(3)
+		builder.Limit(6_000_000)
+		builder.Price(big.NewInt(2), big.NewInt(1))
+
+		var raw []byte
+		c := mocks.NewClient(t)
+		c.EXPECT().Call(mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, e rpc.Element) error {
+			var err error
+			raw, err = encoding.Hex.Decode(e.Params.([]any)[0].(string))
+			require.NoError(t, err)
+			*e.Result.(*string) = core.Keccak256(raw).String()
+			return nil
+		}).Once()
+
+		_, hash, err := NewPositionManager(c).ModifyLiquidities(t.Context(), bind.NewTransactOptions(key, builder), NewModifyLiquiditiesRequest(testPositionManager, actions, params, deadline, native))
+		require.NoError(t, err)
+		require.True(t, hash.Equal(core.Keccak256(raw)))
+
+		decoded, err := core.DecodeTransaction(raw)
+		require.NoError(t, err)
+		dyn := decoded.(*core.DynamicFeeTx)
+		if native == nil {
+			require.Zero(t, dyn.Value.Sign())
+		} else {
+			require.Zero(t, native.Cmp(dyn.Value))
+		}
+
+		vals, err := modifyLiquiditiesFn.DecodeCall(dyn.Data)
+		require.NoError(t, err)
+		require.Zero(t, deadline.Cmp(vals[1].(*big.Int)))
+		gotActions, gotParams, err := DecodeActions(vals[0].([]byte))
+		require.NoError(t, err)
+		require.Equal(t, actions, gotActions)
+		require.Equal(t, params, gotParams)
+	})
+}
+
+// go test -run '^$' -fuzz '^FuzzPositionManagerRequestsValidateNativeAmount$' -fuzztime=10s ./protocols/uniswap/v4
+func FuzzPositionManagerRequestsValidateNativeAmount(f *testing.F) {
+	f.Add([]byte{}, false)
+	f.Add([]byte{0x01}, true)
+	f.Add(make([]byte, 32), false)
+	f.Add(append([]byte{0x01}, make([]byte, 32)...), false)
+	f.Add(append([]byte{0xff}, make([]byte, 31)...), true)
+
+	f.Fuzz(func(t *testing.T, magnitude []byte, negative bool) {
+		native := new(big.Int).SetBytes(magnitude)
+		if negative {
+			native.Neg(native)
+		}
+		valid := native.Sign() >= 0 && native.BitLen() <= 256
+
+		for _, err := range []error{
+			NewModifyLiquiditiesRequest(testPositionManager, []byte{ActionSettlePair}, [][]byte{{0x01}}, big.NewInt(1), native).Validate(),
+			NewModifyLiquiditiesWithoutUnlockRequest(testPositionManager, []byte{ActionSettlePair}, [][]byte{{0x01}}, native).Validate(),
+			NewMulticallRequest(testPositionManager, [][]byte{{0x01}}, native).Validate(),
+		} {
+			if valid {
+				require.NoError(t, err)
+			} else {
+				require.ErrorIs(t, err, bind.ErrInvalidRequest)
+			}
+		}
+	})
+}
+
+// go test -run '^$' -fuzz '^FuzzPositionManagerReadsSurviveArbitraryResult$' -fuzztime=10s ./protocols/uniswap/v4
+func FuzzPositionManagerReadsSurviveArbitraryResult(f *testing.F) {
+	f.Add([]byte{})
+	f.Add(make([]byte, 31))
+	f.Add(make([]byte, 32))
+	f.Add(make([]byte, 64))
+	f.Add(make([]byte, 192))
+	f.Add(append(make([]byte, 31), 0xff))
+
+	key := NewPoolKey(testCurrency0, testCurrency1, big.NewInt(3000), big.NewInt(60), testHooks)
+	tokenID := big.NewInt(1)
+
+	f.Fuzz(func(t *testing.T, result []byte) {
+		c := mocks.NewClient(t)
+		c.EXPECT().Call(mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, e rpc.Element) error {
+			*e.Result.(*string) = encoding.Hex.EncodePrefixed(result)
+			return nil
+		}).Times(13)
+		p := NewPositionManager(c)
+		ctx := t.Context()
+		pm := testPositionManager
+
+		poolManager, err := p.PoolManager(ctx, nil, NewPoolManagerRequest(pm))
+		require.True(t, (err == nil) != (poolManager == nil))
+		weth9, err := p.WETH9(ctx, nil, NewWETH9Request(pm))
+		require.True(t, (err == nil) != (weth9 == nil))
+		permit2Addr, err := p.Permit2(ctx, nil, NewPermit2Request(pm))
+		require.True(t, (err == nil) != (permit2Addr == nil))
+		next, err := p.NextTokenID(ctx, nil, NewNextTokenIDRequest(pm))
+		require.True(t, (err == nil) != (next == nil))
+		liquidity, err := p.GetPositionLiquidity(ctx, nil, NewGetPositionLiquidityRequest(pm, tokenID))
+		require.True(t, (err == nil) != (liquidity == nil))
+		gotKey, gotInfo, err := p.GetPoolAndPositionInfo(ctx, nil, NewGetPoolAndPositionInfoRequest(pm, tokenID))
+		require.True(t, (err == nil) != (gotKey == nil))
+		require.True(t, (err == nil) != (gotInfo == nil))
+		info, err := p.PositionInfo(ctx, nil, NewPositionInfoRequest(pm, tokenID))
+		require.True(t, (err == nil) != (info == nil))
+		byID, err := p.PoolKeys(ctx, nil, NewPoolKeysRequest(pm, [25]byte{}))
+		require.True(t, (err == nil) != (byID == nil))
+		subscriber, err := p.Subscriber(ctx, nil, NewSubscriberRequest(pm, tokenID))
+		require.True(t, (err == nil) != (subscriber == nil))
+		gasLimit, err := p.UnsubscribeGasLimit(ctx, nil, NewUnsubscribeGasLimitRequest(pm))
+		require.True(t, (err == nil) != (gasLimit == nil))
+		nonces, err := p.Nonces(ctx, nil, NewNoncesRequest(pm, testSender, big.NewInt(0)))
+		require.True(t, (err == nil) != (nonces == nil))
+		tick, err := p.CallInitializePool(ctx, nil, NewInitializePoolRequest(pm, key, big.NewInt(1)))
+		require.True(t, (err == nil) != (tick == nil))
+		results, err := p.CallMulticall(ctx, nil, NewMulticallRequest(pm, [][]byte{{0x01}}, nil))
+		if err != nil {
+			require.Nil(t, results)
+		}
+	})
+}
+
+// go test -run '^$' -fuzz '^FuzzPositionManagerWrapRevertErrorKeepsCause$' -fuzztime=10s ./protocols/uniswap/v4
+func FuzzPositionManagerWrapRevertErrorKeepsCause(f *testing.F) {
+	for _, e := range []*abi.Error{errNotApproved, errDeadlinePassed, errInvalidSigner, errCurrencyNotSettled, errWrappedError} {
+		sel := e.Selector()
+		f.Add(sel[:])
+	}
+	f.Add([]byte{})
+	f.Add([]byte{0x08, 0xc3, 0x79, 0xa0})
+
+	f.Fuzz(func(t *testing.T, data []byte) {
+		rpcErr := &rpc.ResponseError{Code: 3, Message: "execution reverted", Data: jsontext.Value(`"` + encoding.Hex.EncodePrefixed(data) + `"`)}
+
+		var wrapped error
+		require.NotPanics(t, func() { wrapped = (&PositionManager{}).wrapRevertError(rpcErr) })
+		got, ok := errors.AsType[*rpc.ResponseError](wrapped)
+		require.True(t, ok)
+		require.Same(t, rpcErr, got)
+		if len(data) < 4 {
+			require.Same(t, rpcErr, wrapped)
+		} else {
+			require.NotSame(t, rpcErr, wrapped)
+		}
 	})
 }

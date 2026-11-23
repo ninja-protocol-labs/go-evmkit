@@ -396,7 +396,7 @@ func TestPoolManagerReadsMapRevertToSentinel(t *testing.T) {
 			got, ok := errors.AsType[*rpc.ResponseError](err)
 			require.True(t, ok)
 			require.Same(t, rpcErr, got)
-			if tc.want != ErrUnknown {
+			if !errors.Is(tc.want, ErrUnknown) {
 				require.NotErrorIs(t, err, ErrUnknown)
 			}
 		})
@@ -601,7 +601,7 @@ func TestPoolManagerMethodsRejectInvalidRequestWithoutRPC(t *testing.T) {
 			return err
 		}, bind.ErrInvalidRequest},
 		{"protocolFeeController", "uniswapv4: protocolFeeController: ", func() error {
-			_, err := m.ProtocolFeeController(ctx, nil, nil)
+			_, err := m.ProtocolFeeController(ctx, nil, &ProtocolFeeControllerRequest{})
 			return err
 		}, bind.ErrInvalidRequest},
 		{"extsload", "uniswapv4: extsload: ", func() error {
@@ -621,7 +621,7 @@ func TestPoolManagerMethodsRejectInvalidRequestWithoutRPC(t *testing.T) {
 			return err
 		}, bind.ErrInvalidRequest},
 		{"exttload", "uniswapv4: exttload: ", func() error {
-			_, err := m.Exttload(ctx, nil, nil)
+			_, err := m.Exttload(ctx, nil, &ExttloadRequest{})
 			return err
 		}, bind.ErrInvalidRequest},
 		{"exttloadSlots", "uniswapv4: exttloadSlots: ", func() error {
@@ -649,7 +649,7 @@ func TestPoolManagerMethodsRejectInvalidRequestWithoutRPC(t *testing.T) {
 			return err
 		}, bind.ErrInvalidRequest},
 		{"callUnlock", "uniswapv4: callUnlock: ", func() error {
-			_, err := m.CallUnlock(ctx, nil, nil)
+			_, err := m.CallUnlock(ctx, nil, &UnlockRequest{})
 			return err
 		}, bind.ErrInvalidRequest},
 		{"callSettle", "uniswapv4: callSettle: ", func() error {
@@ -701,7 +701,7 @@ func TestPoolManagerMethodsRejectInvalidRequestWithoutRPC(t *testing.T) {
 			return err
 		}, bind.ErrInvalidRequest},
 		{"settle", "uniswapv4: settle: ", func() error {
-			_, _, err := m.Settle(ctx, opts, nil)
+			_, _, err := m.Settle(ctx, opts, &SettleRequest{})
 			return err
 		}, bind.ErrInvalidRequest},
 		{"settleFor", "uniswapv4: settleFor: ", func() error {
