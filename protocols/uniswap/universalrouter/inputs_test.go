@@ -227,6 +227,7 @@ func TestInputsValidate(t *testing.T) {
 		{"permit2 permit signature", (&Permit2PermitInput{PermitSingle: permit2.NewPermitSingle(details, testTokenB, one), Signature: []byte{}}).Validate(), "invalid request: signature is empty"},
 		{"sweep token", (&SweepInput{Recipient: testTokenA, AmountMin: one}).Validate(), "invalid request: token is nil"},
 		{"sweep amountMin", (&SweepInput{Token: types.ZeroAddress(), Recipient: testTokenA}).Validate(), "invalid request: amountMin is nil"},
+		{"sweep amountMin overflow", (&SweepInput{Token: types.ZeroAddress(), Recipient: testTokenA, AmountMin: new(big.Int).Lsh(big.NewInt(1), 160)}).Validate(), "invalid request: amountMin 1461501637330902918203684832716283019655932542976 exceeds uint160"},
 		{"transfer value", (&TransferInput{Token: testTokenA, Recipient: testTokenB}).Validate(), "invalid request: value is nil"},
 		{"payPortion bips", (&PayPortionInput{Token: testTokenA, Recipient: testTokenB}).Validate(), "invalid request: bips is nil"},
 		{"payPortion bips too large", (&PayPortionInput{Token: testTokenA, Recipient: testTokenB, Bips: big.NewInt(10_001)}).Validate(), "invalid request: bips 10001 exceeds 10000"},
