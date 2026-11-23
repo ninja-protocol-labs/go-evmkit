@@ -9,20 +9,22 @@ import (
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 )
 
-// pathKeyTuple mirrors libraries/PathKey.sol's PathKey struct.
-var pathKeyTuple = abi.Tuple(abi.Address, abi.Uint24, abi.Int24, abi.Address, abi.Bytes)
+var (
+	// pathKeyTuple mirrors libraries/PathKey.sol's PathKey struct.
+	pathKeyTuple = abi.Tuple(abi.Address, abi.Uint24, abi.Int24, abi.Address, abi.Bytes)
 
-// exactInputSingleParamsTuple mirrors IV4Router's ExactInputSingleParams.
-var exactInputSingleParamsTuple = abi.Tuple(poolKeyTuple, abi.Bool, abi.Uint128, abi.Uint128, abi.Uint256, abi.Bytes)
+	// exactInputSingleParamsTuple mirrors IV4Router's ExactInputSingleParams.
+	exactInputSingleParamsTuple = abi.Tuple(poolKeyTuple, abi.Bool, abi.Uint128, abi.Uint128, abi.Uint256, abi.Bytes)
 
-// exactInputParamsTuple mirrors IV4Router's ExactInputParams.
-var exactInputParamsTuple = abi.Tuple(abi.Address, abi.Slice(pathKeyTuple), abi.Slice(abi.Uint256), abi.Uint128, abi.Uint128)
+	// exactInputParamsTuple mirrors IV4Router's ExactInputParams.
+	exactInputParamsTuple = abi.Tuple(abi.Address, abi.Slice(pathKeyTuple), abi.Slice(abi.Uint256), abi.Uint128, abi.Uint128)
 
-// exactOutputSingleParamsTuple mirrors IV4Router's ExactOutputSingleParams.
-var exactOutputSingleParamsTuple = abi.Tuple(poolKeyTuple, abi.Bool, abi.Uint128, abi.Uint128, abi.Uint256, abi.Bytes)
+	// exactOutputSingleParamsTuple mirrors IV4Router's ExactOutputSingleParams.
+	exactOutputSingleParamsTuple = abi.Tuple(poolKeyTuple, abi.Bool, abi.Uint128, abi.Uint128, abi.Uint256, abi.Bytes)
 
-// exactOutputParamsTuple mirrors IV4Router's ExactOutputParams.
-var exactOutputParamsTuple = abi.Tuple(abi.Address, abi.Slice(pathKeyTuple), abi.Slice(abi.Uint256), abi.Uint128, abi.Uint128)
+	// exactOutputParamsTuple mirrors IV4Router's ExactOutputParams.
+	exactOutputParamsTuple = abi.Tuple(abi.Address, abi.Slice(pathKeyTuple), abi.Slice(abi.Uint256), abi.Uint128, abi.Uint128)
+)
 
 // Action IDs from libraries/Actions.sol, the full set (0x00-0x19)
 const (
