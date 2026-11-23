@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
@@ -14,17 +15,16 @@ import (
 
 // IQuoterImmutables mirrors IImmutableState plus IMsgSender, the only state V4Quoter exposes.
 type IQuoterImmutables interface {
-	PoolManager(ctx context.Context, contract *types.Address, block string) (*types.Address, error)
-	MsgSender(ctx context.Context, contract *types.Address, block string) (*types.Address, error)
+	PoolManager(ctx context.Context, opts *bind.CallOptions, req *PoolManagerRequest) (*types.Address, error)
+	MsgSender(ctx context.Context, opts *bind.CallOptions, req *MsgSenderRequest) (*types.Address, error)
 }
 
-// IQuoterQuotes mirrors IV4Quoter's quoting functions. They simulate a swap and are never meant to
-// be broadcast, so only eth_call-backed Call* methods exist.
+// IQuoterQuotes mirrors IV4Quoter's quoting functions; they only simulate, so only eth_call-backed Call* methods exist.
 type IQuoterQuotes interface {
-	CallQuoteExactInputSingle(ctx context.Context, contract, sender *types.Address, params *QuoteExactSingleParams, block string) (*QuoteExactInputResult, error)
-	CallQuoteExactInput(ctx context.Context, contract, sender *types.Address, params *QuoteExactParams, block string) (*QuoteExactInputResult, error)
-	CallQuoteExactOutputSingle(ctx context.Context, contract, sender *types.Address, params *QuoteExactSingleParams, block string) (*QuoteExactOutputResult, error)
-	CallQuoteExactOutput(ctx context.Context, contract, sender *types.Address, params *QuoteExactParams, block string) (*QuoteExactOutputResult, error)
+	CallQuoteExactInputSingle(ctx context.Context, opts *bind.CallOptions, req *QuoteExactInputSingleRequest) (*QuoteExactInputResult, error)
+	CallQuoteExactInput(ctx context.Context, opts *bind.CallOptions, req *QuoteExactInputRequest) (*QuoteExactInputResult, error)
+	CallQuoteExactOutputSingle(ctx context.Context, opts *bind.CallOptions, req *QuoteExactOutputSingleRequest) (*QuoteExactOutputResult, error)
+	CallQuoteExactOutput(ctx context.Context, opts *bind.CallOptions, req *QuoteExactOutputRequest) (*QuoteExactOutputResult, error)
 }
 
 // IQuoter mirrors IV4Quoter.
@@ -35,140 +35,156 @@ type IQuoter interface {
 
 var _ IQuoter = (*Quoter)(nil)
 
-// Quoter calls any V4Quoter contract over a Client; it holds no contract address, so one instance
-// serves every network's deployment.
+// Quoter calls any V4Quoter deployment over a Client; it holds no contract address.
 type Quoter struct {
 	c rpc.Client
 }
 
-// NewQuoter returns a Quoter calling V4Quoter contracts via c.
-func NewQuoter(c rpc.Client) *Quoter {
+// NewQuoter returns a Quoter calling V4Quoter deployments via cli.
+func NewQuoter(cli rpc.Client) *Quoter {
 	return &Quoter{
-		c: c,
+		c: cli,
 	}
 }
 
-// PoolManager returns contract's immutable PoolManager address.
-func (q *Quoter) PoolManager(ctx context.Context, contract *types.Address, block string) (*types.Address, error) {
-	data, err := q.call(ctx, nil, contract, EncodeQuoterPoolManager(), block)
+// PoolManager returns the PoolManager req.Contract quotes against.
+func (q *Quoter) PoolManager(ctx context.Context, opts *bind.CallOptions, req *PoolManagerRequest) (*types.Address, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv4: quoterPoolManager: %w", err)
+	}
+
+	data, err := bind.Call(ctx, q.c, opts, req.Contract, EncodeQuoterPoolManager())
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv4: quoterPoolManager: %w", q.wrapRevertError(err))
+	}
+
+	out, err := DecodeQuoterPoolManager(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv4: quoterPoolManager: %w", err)
 	}
-	addr, err := DecodeQuoterPoolManager(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: quoterPoolManager: %w", err)
-	}
-	return addr, nil
+
+	return out, nil
 }
 
-// MsgSender returns contract's current msgSender; the zero address outside a quote.
-func (q *Quoter) MsgSender(ctx context.Context, contract *types.Address, block string) (*types.Address, error) {
-	data, err := q.call(ctx, nil, contract, EncodeQuoterMsgSender(), block)
+// MsgSender returns req.Contract's current msgSender, the zero address outside a quote.
+func (q *Quoter) MsgSender(ctx context.Context, opts *bind.CallOptions, req *MsgSenderRequest) (*types.Address, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv4: quoterMsgSender: %w", err)
+	}
+
+	data, err := bind.Call(ctx, q.c, opts, req.Contract, EncodeQuoterMsgSender())
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv4: quoterMsgSender: %w", q.wrapRevertError(err))
+	}
+
+	out, err := DecodeQuoterMsgSender(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv4: quoterMsgSender: %w", err)
 	}
-	addr, err := DecodeQuoterMsgSender(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: quoterMsgSender: %w", err)
-	}
-	return addr, nil
+
+	return out, nil
 }
 
-// CallQuoteExactInputSingle simulates quoteExactInputSingle(params) via eth_call, as sender,
-// returning the output amount for ExactAmount in.
-func (q *Quoter) CallQuoteExactInputSingle(ctx context.Context, contract, sender *types.Address, params *QuoteExactSingleParams, block string) (*QuoteExactInputResult, error) {
-	calldata, err := EncodeQuoteExactInputSingle(params)
+// CallQuoteExactInputSingle runs quoteExactInputSingle via eth_call as opts.From, returning the output for req.Params.ExactAmount in or the revert.
+func (q *Quoter) CallQuoteExactInputSingle(ctx context.Context, opts *bind.CallOptions, req *QuoteExactInputSingleRequest) (*QuoteExactInputResult, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv4: callQuoteExactInputSingle: %w", err)
+	}
+
+	calldata, err := EncodeQuoteExactInputSingle(req.Params)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv4: callQuoteExactInputSingle: %w", err)
 	}
-	data, err := q.call(ctx, sender, contract, calldata, block)
+
+	data, err := bind.Call(ctx, q.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv4: callQuoteExactInputSingle: %w", q.wrapRevertError(err))
+	}
+
+	out, err := DecodeQuoteExactInputSingle(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv4: callQuoteExactInputSingle: %w", err)
 	}
-	result, err := DecodeQuoteExactInputSingle(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: callQuoteExactInputSingle: %w", err)
-	}
-	return result, nil
+
+	return out, nil
 }
 
-// CallQuoteExactInput simulates quoteExactInput(params) via eth_call, as sender, returning the
-// final output amount for ExactAmount of ExactCurrency in.
-func (q *Quoter) CallQuoteExactInput(ctx context.Context, contract, sender *types.Address, params *QuoteExactParams, block string) (*QuoteExactInputResult, error) {
-	calldata, err := EncodeQuoteExactInput(params)
+// CallQuoteExactInput runs quoteExactInput via eth_call as opts.From, returning the final output for req.Params.ExactAmount of ExactCurrency in or the revert.
+func (q *Quoter) CallQuoteExactInput(ctx context.Context, opts *bind.CallOptions, req *QuoteExactInputRequest) (*QuoteExactInputResult, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv4: callQuoteExactInput: %w", err)
+	}
+
+	calldata, err := EncodeQuoteExactInput(req.Params)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv4: callQuoteExactInput: %w", err)
 	}
-	data, err := q.call(ctx, sender, contract, calldata, block)
+
+	data, err := bind.Call(ctx, q.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv4: callQuoteExactInput: %w", q.wrapRevertError(err))
+	}
+
+	out, err := DecodeQuoteExactInput(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv4: callQuoteExactInput: %w", err)
 	}
-	result, err := DecodeQuoteExactInput(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: callQuoteExactInput: %w", err)
-	}
-	return result, nil
+
+	return out, nil
 }
 
-// CallQuoteExactOutputSingle simulates quoteExactOutputSingle(params) via eth_call, as sender,
-// returning the input amount required for ExactAmount out.
-func (q *Quoter) CallQuoteExactOutputSingle(ctx context.Context, contract, sender *types.Address, params *QuoteExactSingleParams, block string) (*QuoteExactOutputResult, error) {
-	calldata, err := EncodeQuoteExactOutputSingle(params)
+// CallQuoteExactOutputSingle runs quoteExactOutputSingle via eth_call as opts.From, returning the input required for req.Params.ExactAmount out or the revert.
+func (q *Quoter) CallQuoteExactOutputSingle(ctx context.Context, opts *bind.CallOptions, req *QuoteExactOutputSingleRequest) (*QuoteExactOutputResult, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv4: callQuoteExactOutputSingle: %w", err)
+	}
+
+	calldata, err := EncodeQuoteExactOutputSingle(req.Params)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv4: callQuoteExactOutputSingle: %w", err)
 	}
-	data, err := q.call(ctx, sender, contract, calldata, block)
+
+	data, err := bind.Call(ctx, q.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv4: callQuoteExactOutputSingle: %w", q.wrapRevertError(err))
+	}
+
+	out, err := DecodeQuoteExactOutputSingle(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv4: callQuoteExactOutputSingle: %w", err)
 	}
-	result, err := DecodeQuoteExactOutputSingle(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: callQuoteExactOutputSingle: %w", err)
-	}
-	return result, nil
+
+	return out, nil
 }
 
-// CallQuoteExactOutput simulates quoteExactOutput(params) via eth_call, as sender, returning the
-// input amount required for ExactAmount of ExactCurrency out.
-func (q *Quoter) CallQuoteExactOutput(ctx context.Context, contract, sender *types.Address, params *QuoteExactParams, block string) (*QuoteExactOutputResult, error) {
-	calldata, err := EncodeQuoteExactOutput(params)
+// CallQuoteExactOutput runs quoteExactOutput via eth_call as opts.From, returning the input required for req.Params.ExactAmount of ExactCurrency out or the revert.
+func (q *Quoter) CallQuoteExactOutput(ctx context.Context, opts *bind.CallOptions, req *QuoteExactOutputRequest) (*QuoteExactOutputResult, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv4: callQuoteExactOutput: %w", err)
+	}
+
+	calldata, err := EncodeQuoteExactOutput(req.Params)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv4: callQuoteExactOutput: %w", err)
 	}
-	data, err := q.call(ctx, sender, contract, calldata, block)
+
+	data, err := bind.Call(ctx, q.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv4: callQuoteExactOutput: %w", q.wrapRevertError(err))
+	}
+
+	out, err := DecodeQuoteExactOutput(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv4: callQuoteExactOutput: %w", err)
 	}
-	result, err := DecodeQuoteExactOutput(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: callQuoteExactOutput: %w", err)
-	}
-	return result, nil
+
+	return out, nil
 }
 
-// call eth_calls contract with calldata, optionally simulating from a specific sender.
-func (q *Quoter) call(ctx context.Context, from, contract *types.Address, calldata []byte, block string) ([]byte, error) {
-	params := map[string]any{
-		"to":   contract.String(),
-		"data": encoding.Hex.EncodePrefixed(calldata),
-	}
-	if from != nil {
-		params["from"] = from.String()
-	}
-
-	var raw string
-	if err := q.c.Call(ctx, rpc.ETHCall("call", params, block, &raw)); err != nil {
-		return nil, q.wrapRevertError(err)
-	}
-	return encoding.Hex.Decode(raw)
-}
-
-// wrapRevertError maps a known V4Quoter custom error in err to its sentinel. A failed quote reverts
-// with UnexpectedRevertBytes(inner); a known BaseV4Quoter, IPoolManager, or v4-core library selector in inner is
-// mapped too, so errors.Is matches both ErrUnexpectedRevertBytes and e.g. ErrPoolNotInitialized.
+// wrapRevertError maps a V4Quoter custom error in err to its sentinel, including the selector inside UnexpectedRevertBytes; other top-level reverts fall through to PoolManager's mapper.
 func (_ *Quoter) wrapRevertError(err error) error {
-	var rpcErr *rpc.ResponseError
-	if !errors.As(err, &rpcErr) || len(rpcErr.Data) == 0 {
+	rpcErr, ok := errors.AsType[*rpc.ResponseError](err)
+	if !ok || len(rpcErr.Data) == 0 {
 		return err
 	}
 
@@ -275,6 +291,6 @@ func (_ *Quoter) wrapRevertError(err error) error {
 			return fmt.Errorf("%w: %w", ErrUnexpectedRevertBytes, err)
 		}
 	default:
-		return fmt.Errorf("%w: %w", ErrUnknown, err)
+		return (*PoolManager)(nil).wrapRevertError(err) // HACK
 	}
 }

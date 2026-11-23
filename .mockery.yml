@@ -62,4 +62,5 @@ packages:
     interfaces:
       IPoolManager:
       IPositionManager:
+      IQuoter:
       IStateView:

@@ -1,16 +1,21 @@
 package v4
 
 import (
+	"context"
 	"encoding/json/jsontext"
 	"errors"
+	"fmt"
 	"math/big"
 	"testing"
 
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
+	"github.com/ninja-protocol-labs/go-evmkit/rpc/mocks"
 	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
@@ -271,5 +276,79 @@ func FuzzDecodeQuoteResultRoundTrip(f *testing.F) {
 
 		_, err = DecodeQuoteExactInputSingle(data[:63])
 		require.Error(t, err)
+	})
+}
+
+// go test -run '^$' -fuzz '^FuzzQuoterExactInputSingleThroughClient$' -fuzztime=10s ./protocols/uniswap/v4
+func FuzzQuoterExactInputSingleThroughClient(f *testing.F) {
+	f.Add(true, uint64(0), []byte{}, uint64(0))
+	f.Add(false, uint64(1_000_000), []byte{0x01, 0x02}, uint64(1))
+	f.Add(true, uint64(1<<63), make([]byte, 64), uint64(1<<40))
+
+	key := NewPoolKey(testCurrency0, testCurrency1, big.NewInt(3000), big.NewInt(60), testHooks)
+
+	f.Fuzz(func(t *testing.T, zeroForOne bool, amountRaw uint64, hookData []byte, block uint64) {
+		amount := new(big.Int).SetUint64(amountRaw)
+		blockTag := fmt.Sprintf("0x%x", block)
+		word, err := abi.Pack(abi.NewTypes(abi.Uint256, abi.Uint256), new(big.Int).Add(amount, big.NewInt(1)), big.NewInt(21_000))
+		require.NoError(t, err)
+
+		c := mocks.NewClient(t)
+		c.EXPECT().Call(mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, e rpc.Element) error {
+			params := e.Params.([]any)
+			require.Equal(t, blockTag, params[1])
+			call := params[0].(map[string]any)
+			require.Equal(t, testPoolManager.String(), call["to"])
+			require.Equal(t, testSender.String(), call["from"])
+			calldata, err := encoding.Hex.Decode(call["data"].(string))
+			require.NoError(t, err)
+			vals, err := quoteExactInputSingleFn.DecodeCall(calldata)
+			require.NoError(t, err)
+			tuple := vals[0].([]any)
+			require.Equal(t, zeroForOne, tuple[1].(bool))
+			require.Zero(t, amount.Cmp(tuple[2].(*big.Int)))
+			require.Equal(t, append([]byte{}, hookData...), tuple[3].([]byte))
+			*e.Result.(*string) = encoding.Hex.EncodePrefixed(word)
+			return nil
+		}).Once()
+
+		quote, err := NewQuoter(c).CallQuoteExactInputSingle(t.Context(), bind.NewCallOptions().WithFrom(testSender).WithBlock(blockTag), NewQuoteExactInputSingleRequest(testPoolManager, NewQuoteExactSingleParams(key, zeroForOne, amount, hookData)))
+		require.NoError(t, err)
+		require.Zero(t, new(big.Int).Add(amount, big.NewInt(1)).Cmp(quote.AmountOut))
+		require.Zero(t, big.NewInt(21_000).Cmp(quote.GasEstimate))
+	})
+}
+
+// go test -run '^$' -fuzz '^FuzzQuoterReadsSurviveArbitraryResult$' -fuzztime=10s ./protocols/uniswap/v4
+func FuzzQuoterReadsSurviveArbitraryResult(f *testing.F) {
+	f.Add([]byte{})
+	f.Add(make([]byte, 31))
+	f.Add(make([]byte, 32))
+	f.Add(make([]byte, 64))
+	f.Add(append(make([]byte, 63), 0xff))
+
+	key := NewPoolKey(testCurrency0, testCurrency1, big.NewInt(3000), big.NewInt(60), testHooks)
+
+	f.Fuzz(func(t *testing.T, result []byte) {
+		c := mocks.NewClient(t)
+		c.EXPECT().Call(mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, e rpc.Element) error {
+			*e.Result.(*string) = encoding.Hex.EncodePrefixed(result)
+			return nil
+		}).Times(6)
+		q := NewQuoter(c)
+		ctx := t.Context()
+
+		poolManager, err := q.PoolManager(ctx, nil, NewPoolManagerRequest(testPoolManager))
+		require.True(t, (err == nil) != (poolManager == nil))
+		msgSender, err := q.MsgSender(ctx, nil, NewMsgSenderRequest(testPoolManager))
+		require.True(t, (err == nil) != (msgSender == nil))
+		inSingle, err := q.CallQuoteExactInputSingle(ctx, nil, NewQuoteExactInputSingleRequest(testPoolManager, NewQuoteExactSingleParams(key, true, big.NewInt(1), nil)))
+		require.True(t, (err == nil) != (inSingle == nil))
+		in, err := q.CallQuoteExactInput(ctx, nil, NewQuoteExactInputRequest(testPoolManager, NewQuoteExactParams(testCurrency0, nil, big.NewInt(1))))
+		require.True(t, (err == nil) != (in == nil))
+		outSingle, err := q.CallQuoteExactOutputSingle(ctx, nil, NewQuoteExactOutputSingleRequest(testPoolManager, NewQuoteExactSingleParams(key, false, big.NewInt(1), nil)))
+		require.True(t, (err == nil) != (outSingle == nil))
+		out, err := q.CallQuoteExactOutput(ctx, nil, NewQuoteExactOutputRequest(testPoolManager, NewQuoteExactParams(testCurrency0, nil, big.NewInt(1))))
+		require.True(t, (err == nil) != (out == nil))
 	})
 }

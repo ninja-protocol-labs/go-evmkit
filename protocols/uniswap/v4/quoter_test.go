@@ -2,6 +2,7 @@ package v4
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/big"
 	"strings"
@@ -21,7 +22,6 @@ import (
 	"github.com/ninja-protocol-labs/go-evmkit/standards/deploy"
 	"github.com/ninja-protocol-labs/go-evmkit/standards/erc20"
 	"github.com/ninja-protocol-labs/go-evmkit/standards/erc721"
-	"github.com/ninja-protocol-labs/go-evmkit/standards/multicall3"
 	"github.com/ninja-protocol-labs/go-evmkit/tx"
 	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
@@ -29,7 +29,6 @@ import (
 type QuoterSuite struct {
 	suite.Suite
 
-	Enable                 bool
 	RPCURL                 string
 	PrivateKeyHex          string
 	PoolManagerHex         string
@@ -38,44 +37,46 @@ type QuoterSuite struct {
 	QuoterHex              string
 	PoolSwapTestHex        string
 	MulticallHex           string
+	NicksFactoryHex        string
 	NativeSymbol           string
-	Interval               int
-	Timeout                int
+	NativeDecimals         int
+	Timeout                time.Duration
+	ReceiptPollInterval    time.Duration
+	ReceiptTimeout         time.Duration
 	ByteCode               string
 	Constructor            *abi.Function
 	Salt                   *types.Hash
 	MintValue              *big.Int
 	Permit2ApproveAmount   *big.Int
-	Permit2ApproveDuration *big.Int
+	Permit2ApproveDuration time.Duration
 	MintLiquidity          *big.Int
 	MintAmountMax          *big.Int
 	SwapAmountIn           *big.Int
 	SwapAmountOut          *big.Int
 	ExcessiveAmountOut     *big.Int
 
-	ctx    context.Context
-	cancel context.CancelFunc
-
-	client   rpc.Client
-	deployer *deploy.NicksDeployer
-	signer   core.Signer
-	from     *types.Address
-
-	quoter                  *Quoter
-	positionManager         *PositionManager
-	erc20                   *erc20.ERC20
-	permit2                 *permit2.Permit2
+	client                  rpc.Client
+	deployer                *deploy.NicksDeployer
+	signer                  core.Signer
+	from                    *types.Address
 	poolManagerContract     *types.Address
 	positionManagerContract *types.Address
 	permit2Contract         *types.Address
 	quoterContract          *types.Address
 	poolSwapTest            *types.Address
 	multicall               *types.Address
+	nicks                   *types.Address
 
-	tokens [3]*types.Address
-	keyAB  *PoolKey
-	keyBC  *PoolKey
-	keyAC  *PoolKey
+	quoter          *Quoter
+	positionManager *PositionManager
+	erc20           *erc20.ERC20
+	permit2         *permit2.Permit2
+
+	tokens     [3]*types.Address
+	keyAB      *PoolKey
+	keyBC      *PoolKey
+	keyAC      *PoolKey
+	stateBlock string
 
 	positionTokenIDs []*big.Int
 	positionKeys     []*PoolKey
@@ -85,25 +86,36 @@ type QuoterSuite struct {
 }
 
 func TestQuoterSuite(t *testing.T) {
+	c := testenv.MustLoad(t, testenv.Testnet, testenv.UnknownNetwork)
+	v4 := c.Addresses.Protocol.Uniswap.V4
+	if v4.PoolManager == "" || v4.PositionManager == "" || v4.Quoter == "" || v4.PoolSwapTest == "" {
+		t.Skip("testenv: no Uniswap V4 PoolManager/PositionManager/Quoter/PoolSwapTest configured for this network")
+	}
+	if c.Addresses.Standard.Permit2 == "" {
+		t.Skip("testenv: no Permit2 configured for this network")
+	}
+
 	suite.Run(t, &QuoterSuite{
-		Enable:                 false,
-		RPCURL:                 "",
-		PrivateKeyHex:          "",
-		PoolManagerHex:         "",
-		PositionManagerHex:     "",
-		Permit2Hex:             "",
-		QuoterHex:              "",
-		PoolSwapTestHex:        "0xf3A39C86dbd13C45365E57FB90fe413371F65AF8",
-		MulticallHex:           multicall3.DefaultMulticall3Address.String(),
-		NativeSymbol:           "",
-		Interval:               1500,
-		Timeout:                60,
+		RPCURL:                 c.RPCURL,
+		PrivateKeyHex:          c.ActorPrivateKeyHex,
+		PoolManagerHex:         v4.PoolManager,
+		PositionManagerHex:     v4.PositionManager,
+		Permit2Hex:             c.Addresses.Standard.Permit2,
+		QuoterHex:              v4.Quoter,
+		PoolSwapTestHex:        v4.PoolSwapTest,
+		MulticallHex:           c.Addresses.Standard.Multicall,
+		NicksFactoryHex:        c.Addresses.Standard.NicksFactory,
+		NativeSymbol:           c.Constant.NativeSymbol,
+		NativeDecimals:         c.Constant.NativeDecimals,
+		Timeout:                10 * time.Minute,
+		ReceiptPollInterval:    c.Constant.ReceiptPollInterval,
+		ReceiptTimeout:         c.Constant.ReceiptTimeout,
 		ByteCode:               testenv.ERC20ByteCodeHex,
 		Constructor:            abi.NewFunction("constructor", abi.Types{abi.String, abi.String, abi.Uint8}, nil),
 		Salt:                   core.Keccak256([]byte("go-evmkit-v4-quoter")),
 		MintValue:              new(big.Int).Exp(big.NewInt(10), big.NewInt(24), nil),
 		Permit2ApproveAmount:   new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 160), big.NewInt(1)),
-		Permit2ApproveDuration: big.NewInt(30 * 24 * 60 * 60),
+		Permit2ApproveDuration: 30 * 24 * time.Hour,
 		MintLiquidity:          new(big.Int).Exp(big.NewInt(10), big.NewInt(21), nil),
 		MintAmountMax:          new(big.Int).Exp(big.NewInt(10), big.NewInt(22), nil),
 		SwapAmountIn:           new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil),
@@ -113,18 +125,13 @@ func TestQuoterSuite(t *testing.T) {
 }
 
 func (s *QuoterSuite) SetupSuite() {
-	if !s.Enable {
-		s.T().Skip("disabled")
-	}
-
-	s.ctx, s.cancel = context.WithTimeout(context.Background(), 15*time.Minute)
-
 	s.client = rpc.NewClient(s.RPCURL, rpc.WithRetry(5, rpc.ExponentialBackoff(500*time.Millisecond, 10*time.Second)))
 	s.deployer = deploy.NewNicksDeployer(s.client)
 	s.quoter = NewQuoter(s.client)
 	s.positionManager = NewPositionManager(s.client)
 	s.erc20 = erc20.New(s.client)
 	s.permit2 = permit2.New(s.client)
+	s.T().Logf("SetupSuite: client ready for %s", s.RPCURL)
 
 	s.mu = &sync.Mutex{}
 	s.totalFee = big.NewInt(0)
@@ -133,6 +140,7 @@ func (s *QuoterSuite) SetupSuite() {
 	s.Require().NoError(err)
 	s.signer = privKey
 	s.from = core.PubkeyToAddress(privKey.PublicKey())
+	s.T().Logf("SetupSuite: signing as %s", s.from)
 
 	s.poolManagerContract, err = types.NewAddressFromHex(s.PoolManagerHex)
 	s.Require().NoError(err)
@@ -146,6 +154,9 @@ func (s *QuoterSuite) SetupSuite() {
 	s.Require().NoError(err)
 	s.multicall, err = types.NewAddressFromHex(s.MulticallHex)
 	s.Require().NoError(err)
+	s.nicks, err = types.NewAddressFromHex(s.NicksFactoryHex)
+	s.Require().NoError(err)
+	s.T().Logf("SetupSuite: Quoter %s, PoolManager %s, PositionManager %s, PoolSwapTest %s", s.quoterContract, s.poolManagerContract, s.positionManagerContract, s.poolSwapTest)
 
 	bytecode, err := encoding.Hex.Decode(s.ByteCode)
 	s.Require().NoError(err)
@@ -154,6 +165,8 @@ func (s *QuoterSuite) SetupSuite() {
 
 	names := [3]string{"evmkit v4 quoter test token A", "evmkit v4 quoter test token B", "evmkit v4 quoter test token C"}
 	symbols := [3]string{"EVQA", "EVQB", "EVQC"}
+	tokenMintFn := abi.NewFunction("mint", abi.NewTypes(abi.Address, abi.Uint256), nil)
+	expiration := big.NewInt(time.Now().Add(s.Permit2ApproveDuration).Unix())
 
 	for i := range 3 {
 		var salt [32]byte
@@ -167,73 +180,69 @@ func (s *QuoterSuite) SetupSuite() {
 		builder := tx.NewDynamicFeeBuilder()
 		builder.PriceBuffer(150)
 
-		deployTx, hash, err := s.deployer.Deploy(s.ctx, bind.NewTransactOptions(s.signer, builder), deploy.NewCreate2Request(deploy.DefaultNicksMethodFactory, deployment))
+		deployTx, hash, err := s.deployer.Deploy(s.T().Context(), bind.NewTransactOptions(s.signer, builder), deploy.NewCreate2Request(s.nicks, deployment))
 		s.Require().NoError(err)
 		s.mu.Lock()
 		s.totalFee.Add(s.totalFee, deployTx.MaxFee())
 		s.mu.Unlock()
 
-		receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+		receipt, err := tx.WaitForReceipt(s.T().Context(), s.client, hash, s.ReceiptPollInterval, s.ReceiptTimeout)
 		s.Require().NoError(err)
 		s.Require().True(receipt.Status, "deploy transaction reverted")
 
-		token, err := s.deployer.DeployAddress(deploy.NewCreate2Request(deploy.DefaultNicksMethodFactory, deployment))
+		token, err := s.deployer.DeployAddress(deploy.NewCreate2Request(s.nicks, deployment))
 		s.Require().NoError(err)
 		s.tokens[i] = token
 
 		s.Require().Eventually(func() bool {
 			var codeHex string
-			if err := s.client.Call(s.ctx, rpc.ETHGetCode("code", token.String(), rpc.BlockTagLatest, &codeHex)); err != nil {
+			if err := s.client.Call(s.T().Context(), rpc.ETHGetCode("code", token.String(), rpc.BlockTagLatest, &codeHex)); err != nil {
 				return false
 			}
 			code, err := encoding.Hex.Decode(codeHex)
 			return err == nil && len(code) > 0
-		}, 20*time.Second, time.Duration(s.Interval)*time.Millisecond, "no code visible at deployed token %s", token)
+		}, 20*time.Second, s.ReceiptPollInterval, "no code visible at deployed token %s", token)
+		s.T().Logf("SetupSuite: deployed token %s %s (nonce %d, tx %s, block %d)", symbols[i], token, deployTx.AddressNonce(), hash, receipt.BlockNumber)
 
-		tokenMintFn := abi.NewFunction("mint", abi.NewTypes(abi.Address, abi.Uint256), nil)
 		calldata, err := tokenMintFn.EncodeCall(s.from, s.MintValue)
 		s.Require().NoError(err)
 
-		mintUnsigned, err := tx.NewDynamicFeeBuilder().Build(s.from, token, big.NewInt(0), calldata).Pack(s.ctx, s.client)
+		mintBuilder := tx.NewDynamicFeeBuilder()
+		mintBuilder.PriceBuffer(150)
+		mintTx, mintHash, err := bind.Transact(s.T().Context(), s.client, bind.NewTransactOptions(s.signer, mintBuilder), token, calldata)
 		s.Require().NoError(err)
-		s.Require().NoError(mintUnsigned.Sign(s.signer))
 		s.mu.Lock()
-		s.totalFee.Add(s.totalFee, mintUnsigned.MaxFee())
+		s.totalFee.Add(s.totalFee, mintTx.MaxFee())
 		s.mu.Unlock()
 
-		mintRaw, err := mintUnsigned.EncodeRLP()
-		s.Require().NoError(err)
-		mintHash, err := tx.Broadcast(s.ctx, s.client, mintRaw)
-		s.Require().NoError(err)
-
-		mintReceipt, err := tx.WaitForReceipt(s.ctx, s.client, mintHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+		mintReceipt, err := tx.WaitForReceipt(s.T().Context(), s.client, mintHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 		s.Require().NoError(err)
 		s.Require().True(mintReceipt.Status, "mint transaction reverted")
+		s.T().Logf("SetupSuite: minted %s %s to %s (tx %s)", s.MintValue, symbols[i], s.from, mintHash)
 
 		for _, spender := range []*types.Address{s.permit2Contract, s.poolSwapTest} {
-			approveTx, approveHash, err := s.erc20.Approve(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), erc20.NewApproveRequest(token, spender, s.MintValue))
+			approveTx, approveHash, err := s.erc20.Approve(s.T().Context(), bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), erc20.NewApproveRequest(token, spender, s.MintValue))
 			s.Require().NoError(err)
 			s.mu.Lock()
 			s.totalFee.Add(s.totalFee, approveTx.MaxFee())
 			s.mu.Unlock()
 
-			approveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, approveHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+			approveReceipt, err := tx.WaitForReceipt(s.T().Context(), s.client, approveHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 			s.Require().NoError(err)
 			s.Require().True(approveReceipt.Status, "erc20 approve transaction reverted")
+			s.T().Logf("SetupSuite: approved %s for %s (tx %s)", spender, symbols[i], approveHash)
 		}
 
-		expiration := big.NewInt(time.Now().Add(time.Duration(s.Permit2ApproveDuration.Int64()) * time.Second).Unix())
-		permit2ApproveTx, permit2ApproveHash, err := s.permit2.Approve(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), permit2.NewApproveRequest(s.permit2Contract, token, s.positionManagerContract, s.Permit2ApproveAmount, expiration))
+		permit2ApproveTx, permit2ApproveHash, err := s.permit2.Approve(s.T().Context(), bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), permit2.NewApproveRequest(s.permit2Contract, token, s.positionManagerContract, s.Permit2ApproveAmount, expiration))
 		s.Require().NoError(err)
 		s.mu.Lock()
 		s.totalFee.Add(s.totalFee, permit2ApproveTx.MaxFee())
 		s.mu.Unlock()
 
-		permit2ApproveReceipt, err := tx.WaitForReceipt(s.ctx, s.client, permit2ApproveHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+		permit2ApproveReceipt, err := tx.WaitForReceipt(s.T().Context(), s.client, permit2ApproveHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 		s.Require().NoError(err)
 		s.Require().True(permit2ApproveReceipt.Status, "permit2 approve transaction reverted")
-
-		s.T().Logf("SetupSuite: deployed, minted, and approved token %s %s (tx %s)", symbols[i], token, hash)
+		s.T().Logf("SetupSuite: Permit2 allowance for PositionManager on %s set (tx %s)", symbols[i], permit2ApproveHash)
 	}
 
 	for i := range len(s.tokens) {
@@ -259,30 +268,34 @@ func (s *QuoterSuite) SetupSuite() {
 		{s.keyAC, big.NewInt(-60), big.NewInt(60)},
 	} {
 		key := pool.key
-		initTx, initHash, err := s.positionManager.InitializePool(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewInitializePoolRequest(s.positionManagerContract, key, new(big.Int).Lsh(big.NewInt(1), 96)))
+		initTx, initHash, err := s.positionManager.InitializePool(s.T().Context(), bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewInitializePoolRequest(s.positionManagerContract, key, new(big.Int).Lsh(big.NewInt(1), 96)))
 		s.Require().NoError(err)
 		s.mu.Lock()
 		s.totalFee.Add(s.totalFee, initTx.MaxFee())
 		s.mu.Unlock()
 
-		initReceipt, err := tx.WaitForReceipt(s.ctx, s.client, initHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+		initReceipt, err := tx.WaitForReceipt(s.T().Context(), s.client, initHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 		s.Require().NoError(err)
 		s.Require().True(initReceipt.Status, "initializePool transaction reverted")
 
-		mintParams := NewMintPositionParams(key, pool.tickLower, pool.tickUpper, s.MintLiquidity, s.MintAmountMax, s.MintAmountMax, s.from, nil)
-		mintData, err := EncodeActionMintPosition(mintParams)
+		mintData, err := EncodeActionMintPosition(NewMintPositionParams(key, pool.tickLower, pool.tickUpper, s.MintLiquidity, s.MintAmountMax, s.MintAmountMax, s.from, nil))
 		s.Require().NoError(err)
 		settleData, err := EncodeActionSettlePair(key.Currency0, key.Currency1)
 		s.Require().NoError(err)
+		deadline := big.NewInt(time.Now().Add(time.Hour).Unix())
 
-		deadline := big.NewInt(time.Now().Add(1 * time.Hour).Unix())
-		mintTx, mintHash, err := s.positionManager.ModifyLiquidities(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewModifyLiquiditiesRequest(s.positionManagerContract, []byte{ActionMintPosition, ActionSettlePair}, [][]byte{mintData, settleData}, deadline, nil))
+		var mintTx core.Transaction
+		var mintHash *types.Hash
+		s.Require().Eventually(func() bool {
+			mintTx, mintHash, err = s.positionManager.ModifyLiquidities(s.T().Context(), bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewModifyLiquiditiesRequest(s.positionManagerContract, []byte{ActionMintPosition, ActionSettlePair}, [][]byte{mintData, settleData}, deadline, nil))
+			return !errors.Is(err, ErrPoolNotInitialized)
+		}, 20*time.Second, s.ReceiptPollInterval, "pool still not initialized on the estimating node")
 		s.Require().NoError(err)
 		s.mu.Lock()
 		s.totalFee.Add(s.totalFee, mintTx.MaxFee())
 		s.mu.Unlock()
 
-		mintReceipt, err := tx.WaitForReceipt(s.ctx, s.client, mintHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+		mintReceipt, err := tx.WaitForReceipt(s.T().Context(), s.client, mintHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 		s.Require().NoError(err)
 		s.Require().True(mintReceipt.Status, "modifyLiquidities (mint) transaction reverted")
 
@@ -298,12 +311,16 @@ func (s *QuoterSuite) SetupSuite() {
 		s.Require().True(transfers[0].To.Equal(s.from))
 		s.positionTokenIDs = append(s.positionTokenIDs, transfers[0].TokenId)
 		s.positionKeys = append(s.positionKeys, key)
+		s.stateBlock = fmt.Sprintf("0x%x", mintReceipt.BlockNumber)
 
-		s.T().Logf("SetupSuite: initialized pool %s/%s and minted liquidity %s in ticks [%s, %s] as tokenID %s (init tx %s, mint tx %s)", key.Currency0, key.Currency1, s.MintLiquidity, pool.tickLower, pool.tickUpper, transfers[0].TokenId, initHash, mintHash)
+		s.T().Logf("SetupSuite: initialized pool %s/%s and minted liquidity %s in ticks [%s, %s] as tokenID %s (init tx %s, mint tx %s, block %d)", key.Currency0, key.Currency1, s.MintLiquidity, pool.tickLower, pool.tickUpper, transfers[0].TokenId, initHash, mintHash, mintReceipt.BlockNumber)
 	}
 }
 
 func (s *QuoterSuite) TearDownSuite() {
+	ctx, cancel := context.WithTimeout(s.T().Context(), s.Timeout)
+	defer cancel()
+
 	for i, tokenID := range s.positionTokenIDs {
 		key := s.positionKeys[i]
 
@@ -311,35 +328,23 @@ func (s *QuoterSuite) TearDownSuite() {
 		s.Require().NoError(err)
 		takeData, err := EncodeActionTakePair(key.Currency0, key.Currency1, s.from)
 		s.Require().NoError(err)
+		deadline := big.NewInt(time.Now().Add(time.Hour).Unix())
 
-		deadline := big.NewInt(time.Now().Add(1 * time.Hour).Unix())
-		burnPositionTx, burnPositionHash, err := s.positionManager.ModifyLiquidities(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewModifyLiquiditiesRequest(s.positionManagerContract, []byte{ActionBurnPosition, ActionTakePair}, [][]byte{burnData, takeData}, deadline, nil))
+		burnTx, burnHash, err := s.positionManager.ModifyLiquidities(ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewModifyLiquiditiesRequest(s.positionManagerContract, []byte{ActionBurnPosition, ActionTakePair}, [][]byte{burnData, takeData}, deadline, nil))
 		s.Require().NoError(err)
 		s.mu.Lock()
-		s.totalFee.Add(s.totalFee, burnPositionTx.MaxFee())
+		s.totalFee.Add(s.totalFee, burnTx.MaxFee())
 		s.mu.Unlock()
 
-		burnPositionReceipt, err := tx.WaitForReceipt(s.ctx, s.client, burnPositionHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+		burnReceipt, err := tx.WaitForReceipt(ctx, s.client, burnHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 		s.Require().NoError(err)
-		s.Require().True(burnPositionReceipt.Status, "modifyLiquidities (burn position) transaction reverted")
+		s.Require().True(burnReceipt.Status, "modifyLiquidities (burn position) transaction reverted")
 
-		var positionManagerLogs []tx.Log
-		for _, log := range burnPositionReceipt.Logs {
-			if log.Address.Equal(s.positionManagerContract) {
-				positionManagerLogs = append(positionManagerLogs, log)
-			}
-		}
-		transfers, err := erc721.ExtractTransfers(positionManagerLogs)
-		s.Require().NoError(err)
-		s.Require().Len(transfers, 1)
-		s.Require().True(transfers[0].To.Equal(types.ZeroAddress()))
-		s.Require().Zero(tokenID.Cmp(transfers[0].TokenId))
-
-		s.T().Logf("TearDownSuite: burned position tokenID %s in pool %s/%s and took its liquidity back (tx %s)", tokenID, key.Currency0, key.Currency1, burnPositionHash)
+		s.T().Logf("TearDownSuite: burned position tokenID %s in pool %s/%s (tx %s, block %d, gas %d)", tokenID, key.Currency0, key.Currency1, burnHash, burnReceipt.BlockNumber, burnReceipt.GasUsed)
 	}
 
 	if s.tokens[0] != nil && s.tokens[1] != nil && s.tokens[2] != nil {
-		balances, err := s.erc20.AddressBalances(s.ctx, nil, erc20.NewAddressBalancesRequest(s.multicall, s.from, s.tokens[:], false))
+		balances, err := s.erc20.AddressBalances(ctx, nil, erc20.NewAddressBalancesRequest(s.multicall, s.from, s.tokens[:], false))
 		s.Require().NoError(err)
 
 		tokenBurnFn := abi.NewFunction("burn", abi.NewTypes(abi.Address, abi.Uint256), nil)
@@ -349,39 +354,29 @@ func (s *QuoterSuite) TearDownSuite() {
 				continue
 			}
 
-			s.T().Logf("TearDownSuite: leftover balance of %s is %s, burning it", tb.Token, tb.Amount)
-
 			calldata, err := tokenBurnFn.EncodeCall(s.from, tb.Amount)
 			s.Require().NoError(err)
 
-			unsignedBurn, err := tx.NewDynamicFeeBuilder().Build(s.from, tb.Token, big.NewInt(0), calldata).Pack(s.ctx, s.client)
+			burnTx, burnHash, err := bind.Transact(ctx, s.client, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), tb.Token, calldata)
 			s.Require().NoError(err)
-			s.Require().NoError(unsignedBurn.Sign(s.signer))
 			s.mu.Lock()
-			s.totalFee.Add(s.totalFee, unsignedBurn.MaxFee())
+			s.totalFee.Add(s.totalFee, burnTx.MaxFee())
 			s.mu.Unlock()
-			s.T().Logf("TearDownSuite: signed burn of %s (nonce %d, maxFee %s)", tb.Token, unsignedBurn.AddressNonce(), unsignedBurn.MaxFee())
 
-			raw, err := unsignedBurn.EncodeRLP()
-			s.Require().NoError(err)
-			burnHash, err := tx.Broadcast(s.ctx, s.client, raw)
-			s.Require().NoError(err)
-			s.T().Logf("TearDownSuite: broadcast burn of %s, tx %s", tb.Token, burnHash)
-
-			burnReceipt, err := tx.WaitForReceipt(s.ctx, s.client, burnHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+			burnReceipt, err := tx.WaitForReceipt(ctx, s.client, burnHash, s.ReceiptPollInterval, s.ReceiptTimeout)
 			s.Require().NoError(err)
 			s.Require().True(burnReceipt.Status, "burn transaction reverted")
 
-			s.T().Logf("TearDownSuite: burned %s of %s from %s, confirmed in block %d (tx %s)", tb.Amount, tb.Token, s.from, burnReceipt.BlockNumber, burnHash)
+			s.T().Logf("TearDownSuite: burned %s of %s from %s (tx %s, block %d, gas %d)", tb.Amount, tb.Token, s.from, burnHash, burnReceipt.BlockNumber, burnReceipt.GasUsed)
 		}
 	}
 
 	if s.totalFee != nil {
-		base := new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil)
+		base := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(s.NativeDecimals)), nil)
 		whole, frac := new(big.Int), new(big.Int)
 		whole.DivMod(s.totalFee, base, frac)
 
-		fracStr := strings.TrimRight(fmt.Sprintf("%018s", frac.String()), "0")
+		fracStr := strings.TrimRight(fmt.Sprintf("%0*s", s.NativeDecimals, frac.String()), "0")
 		decimal := whole.String()
 		if fracStr != "" {
 			decimal += "." + fracStr
@@ -389,35 +384,42 @@ func (s *QuoterSuite) TearDownSuite() {
 
 		s.T().Logf("QuoterSuite total fee spent: %s %s", decimal, s.NativeSymbol)
 	}
-
-	if s.cancel != nil {
-		s.cancel()
-	}
 }
 
 func (s *QuoterSuite) Test01Immutables() {
-	poolManager, err := s.quoter.PoolManager(s.ctx, s.quoterContract, rpc.BlockTagLatest)
-	s.Require().NoError(err)
+	atBlock := bind.NewCallOptions().WithBlock(s.stateBlock)
+
+	var poolManager *types.Address
+	var err error
+	s.Require().Eventually(func() bool {
+		poolManager, err = s.quoter.PoolManager(s.T().Context(), atBlock, NewPoolManagerRequest(s.quoterContract))
+		return err == nil
+	}, 20*time.Second, s.ReceiptPollInterval, "poolManager not readable at block %s", s.stateBlock)
 	s.Require().True(poolManager.Equal(s.poolManagerContract))
 
-	msgSender, err := s.quoter.MsgSender(s.ctx, s.quoterContract, rpc.BlockTagLatest)
+	msgSender, err := s.quoter.MsgSender(s.T().Context(), nil, NewMsgSenderRequest(s.quoterContract))
 	s.Require().NoError(err)
 	s.Require().True(msgSender.Equal(types.ZeroAddress()))
 
-	s.T().Logf("QuoterSuite Test01Immutables Result")
+	s.T().Logf("Quoter %s Test01Immutables Result", s.quoterContract)
 	s.T().Logf("\tPoolManager: %s", poolManager)
 	s.T().Logf("\tMsgSender: %s", msgSender)
 }
 
 func (s *QuoterSuite) Test02QuoteExactInputSingleMatchesSwap() {
-	quote, err := s.quoter.CallQuoteExactInputSingle(s.ctx, s.quoterContract, s.from, NewQuoteExactSingleParams(s.keyAB, true, s.SwapAmountIn, nil), rpc.BlockTagLatest)
-	s.Require().NoError(err)
+	atBlock := bind.NewCallOptions().WithFrom(s.from).WithBlock(s.stateBlock)
+
+	var quote *QuoteExactInputResult
+	var err error
+	s.Require().Eventually(func() bool {
+		quote, err = s.quoter.CallQuoteExactInputSingle(s.T().Context(), atBlock, NewQuoteExactInputSingleRequest(s.quoterContract, NewQuoteExactSingleParams(s.keyAB, true, s.SwapAmountIn, nil)))
+		return err == nil
+	}, 20*time.Second, s.ReceiptPollInterval, "quote not available at block %s", s.stateBlock)
 	s.Require().Positive(quote.AmountOut.Sign())
 	s.Require().Negative(quote.AmountOut.Cmp(s.SwapAmountIn))
 	s.Require().Positive(quote.GasEstimate.Sign())
 
-	testSettingsTuple := abi.Tuple(abi.Bool, abi.Bool)
-	poolSwapTestFn := abi.NewFunction("swap", abi.NewTypes(poolKeyTuple, swapAmountParamsTuple, testSettingsTuple, abi.Bytes), abi.NewTypes(abi.Bytes32))
+	poolSwapTestFn := abi.NewFunction("swap", abi.NewTypes(poolKeyTuple, swapAmountParamsTuple, abi.Tuple(abi.Bool, abi.Bool), abi.Bytes), abi.NewTypes(abi.Bytes32))
 	calldata, err := poolSwapTestFn.EncodeCall(
 		[]any{s.keyAB.Currency0, s.keyAB.Currency1, s.keyAB.Fee, s.keyAB.TickSpacing, s.keyAB.Hooks},
 		[]any{true, new(big.Int).Neg(s.SwapAmountIn), big.NewInt(4295128740)},
@@ -426,21 +428,17 @@ func (s *QuoterSuite) Test02QuoteExactInputSingleMatchesSwap() {
 	)
 	s.Require().NoError(err)
 
-	unsigned, err := tx.NewDynamicFeeBuilder().Build(s.from, s.poolSwapTest, big.NewInt(0), calldata).Pack(s.ctx, s.client)
+	sentTx, hash, err := bind.Transact(s.T().Context(), s.client, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), s.poolSwapTest, calldata)
 	s.Require().NoError(err)
-	s.Require().NoError(unsigned.Sign(s.signer))
 	s.mu.Lock()
-	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
+	s.totalFee.Add(s.totalFee, sentTx.MaxFee())
 	s.mu.Unlock()
+	s.T().Logf("Test02QuoteExactInputSingleMatchesSwap: sent PoolSwapTest.swap (nonce %d, maxFee %s), tx %s", sentTx.AddressNonce(), sentTx.MaxFee(), hash)
 
-	raw, err := unsigned.EncodeRLP()
-	s.Require().NoError(err)
-	hash, err := tx.Broadcast(s.ctx, s.client, raw)
-	s.Require().NoError(err)
-
-	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	receipt, err := tx.WaitForReceipt(s.T().Context(), s.client, hash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(receipt.Status, "swap transaction reverted")
+	s.stateBlock = fmt.Sprintf("0x%x", receipt.BlockNumber)
 
 	var poolManagerLogs []tx.Log
 	for _, log := range receipt.Logs {
@@ -454,25 +452,29 @@ func (s *QuoterSuite) Test02QuoteExactInputSingleMatchesSwap() {
 	s.Require().Zero(new(big.Int).Neg(s.SwapAmountIn).Cmp(swaps[0].Amount0))
 	s.Require().Zero(quote.AmountOut.Cmp(swaps[0].Amount1), "quoted amountOut must equal the swap's actual output to the wei")
 
-	s.T().Logf("QuoterSuite Test02QuoteExactInputSingleMatchesSwap Result")
+	s.T().Logf("Quoter %s Test02QuoteExactInputSingleMatchesSwap Result", s.quoterContract)
 	s.T().Logf("\tAmountIn: %s", s.SwapAmountIn)
-	s.T().Logf("\tQuoted AmountOut: %s", quote.AmountOut)
+	s.T().Logf("\tQuoted AmountOut: %s (gas estimate %s)", quote.AmountOut, quote.GasEstimate)
 	s.T().Logf("\tSwap Amount1: %s", swaps[0].Amount1)
-	s.T().Logf("\tGasEstimate: %s", quote.GasEstimate)
-	s.T().Logf("\tTx: %s", hash)
+	s.T().Logf("\tTx: %s (block %d, gas %d)", hash, receipt.BlockNumber, receipt.GasUsed)
 }
 
 func (s *QuoterSuite) Test03QuoteExactInputSingleOneForZeroMatchesSwap() {
-	quote, err := s.quoter.CallQuoteExactInputSingle(s.ctx, s.quoterContract, s.from, NewQuoteExactSingleParams(s.keyAB, false, s.SwapAmountIn, nil), rpc.BlockTagLatest)
-	s.Require().NoError(err)
+	atBlock := bind.NewCallOptions().WithFrom(s.from).WithBlock(s.stateBlock)
+
+	var quote *QuoteExactInputResult
+	var err error
+	s.Require().Eventually(func() bool {
+		quote, err = s.quoter.CallQuoteExactInputSingle(s.T().Context(), atBlock, NewQuoteExactInputSingleRequest(s.quoterContract, NewQuoteExactSingleParams(s.keyAB, false, s.SwapAmountIn, nil)))
+		return err == nil
+	}, 20*time.Second, s.ReceiptPollInterval, "quote not available at block %s", s.stateBlock)
 	s.Require().Positive(quote.AmountOut.Sign())
 	s.Require().Positive(quote.GasEstimate.Sign())
 
 	maxSqrtPriceMinus1, ok := new(big.Int).SetString("1461446703485210103287273052203988822378723970341", 10)
 	s.Require().True(ok)
 
-	testSettingsTuple := abi.Tuple(abi.Bool, abi.Bool)
-	poolSwapTestFn := abi.NewFunction("swap", abi.NewTypes(poolKeyTuple, swapAmountParamsTuple, testSettingsTuple, abi.Bytes), abi.NewTypes(abi.Bytes32))
+	poolSwapTestFn := abi.NewFunction("swap", abi.NewTypes(poolKeyTuple, swapAmountParamsTuple, abi.Tuple(abi.Bool, abi.Bool), abi.Bytes), abi.NewTypes(abi.Bytes32))
 	calldata, err := poolSwapTestFn.EncodeCall(
 		[]any{s.keyAB.Currency0, s.keyAB.Currency1, s.keyAB.Fee, s.keyAB.TickSpacing, s.keyAB.Hooks},
 		[]any{false, new(big.Int).Neg(s.SwapAmountIn), maxSqrtPriceMinus1},
@@ -481,21 +483,17 @@ func (s *QuoterSuite) Test03QuoteExactInputSingleOneForZeroMatchesSwap() {
 	)
 	s.Require().NoError(err)
 
-	unsigned, err := tx.NewDynamicFeeBuilder().Build(s.from, s.poolSwapTest, big.NewInt(0), calldata).Pack(s.ctx, s.client)
+	sentTx, hash, err := bind.Transact(s.T().Context(), s.client, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), s.poolSwapTest, calldata)
 	s.Require().NoError(err)
-	s.Require().NoError(unsigned.Sign(s.signer))
 	s.mu.Lock()
-	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
+	s.totalFee.Add(s.totalFee, sentTx.MaxFee())
 	s.mu.Unlock()
+	s.T().Logf("Test03QuoteExactInputSingleOneForZeroMatchesSwap: sent PoolSwapTest.swap (nonce %d, maxFee %s), tx %s", sentTx.AddressNonce(), sentTx.MaxFee(), hash)
 
-	raw, err := unsigned.EncodeRLP()
-	s.Require().NoError(err)
-	hash, err := tx.Broadcast(s.ctx, s.client, raw)
-	s.Require().NoError(err)
-
-	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	receipt, err := tx.WaitForReceipt(s.T().Context(), s.client, hash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(receipt.Status, "swap transaction reverted")
+	s.stateBlock = fmt.Sprintf("0x%x", receipt.BlockNumber)
 
 	var poolManagerLogs []tx.Log
 	for _, log := range receipt.Logs {
@@ -509,22 +507,26 @@ func (s *QuoterSuite) Test03QuoteExactInputSingleOneForZeroMatchesSwap() {
 	s.Require().Zero(new(big.Int).Neg(s.SwapAmountIn).Cmp(swaps[0].Amount1))
 	s.Require().Zero(quote.AmountOut.Cmp(swaps[0].Amount0), "quoted amountOut must equal the swap's actual output to the wei")
 
-	s.T().Logf("QuoterSuite Test03QuoteExactInputSingleOneForZeroMatchesSwap Result")
+	s.T().Logf("Quoter %s Test03QuoteExactInputSingleOneForZeroMatchesSwap Result", s.quoterContract)
 	s.T().Logf("\tAmountIn: %s", s.SwapAmountIn)
-	s.T().Logf("\tQuoted AmountOut: %s", quote.AmountOut)
+	s.T().Logf("\tQuoted AmountOut: %s (gas estimate %s)", quote.AmountOut, quote.GasEstimate)
 	s.T().Logf("\tSwap Amount0: %s", swaps[0].Amount0)
-	s.T().Logf("\tGasEstimate: %s", quote.GasEstimate)
-	s.T().Logf("\tTx: %s", hash)
+	s.T().Logf("\tTx: %s (block %d, gas %d)", hash, receipt.BlockNumber, receipt.GasUsed)
 }
 
 func (s *QuoterSuite) Test04QuoteExactOutputSingleMatchesSwap() {
-	quote, err := s.quoter.CallQuoteExactOutputSingle(s.ctx, s.quoterContract, s.from, NewQuoteExactSingleParams(s.keyAB, true, s.SwapAmountOut, nil), rpc.BlockTagLatest)
-	s.Require().NoError(err)
+	atBlock := bind.NewCallOptions().WithFrom(s.from).WithBlock(s.stateBlock)
+
+	var quote *QuoteExactOutputResult
+	var err error
+	s.Require().Eventually(func() bool {
+		quote, err = s.quoter.CallQuoteExactOutputSingle(s.T().Context(), atBlock, NewQuoteExactOutputSingleRequest(s.quoterContract, NewQuoteExactSingleParams(s.keyAB, true, s.SwapAmountOut, nil)))
+		return err == nil
+	}, 20*time.Second, s.ReceiptPollInterval, "quote not available at block %s", s.stateBlock)
 	s.Require().Positive(quote.AmountIn.Cmp(s.SwapAmountOut))
 	s.Require().Positive(quote.GasEstimate.Sign())
 
-	testSettingsTuple := abi.Tuple(abi.Bool, abi.Bool)
-	poolSwapTestFn := abi.NewFunction("swap", abi.NewTypes(poolKeyTuple, swapAmountParamsTuple, testSettingsTuple, abi.Bytes), abi.NewTypes(abi.Bytes32))
+	poolSwapTestFn := abi.NewFunction("swap", abi.NewTypes(poolKeyTuple, swapAmountParamsTuple, abi.Tuple(abi.Bool, abi.Bool), abi.Bytes), abi.NewTypes(abi.Bytes32))
 	calldata, err := poolSwapTestFn.EncodeCall(
 		[]any{s.keyAB.Currency0, s.keyAB.Currency1, s.keyAB.Fee, s.keyAB.TickSpacing, s.keyAB.Hooks},
 		[]any{true, s.SwapAmountOut, big.NewInt(4295128740)},
@@ -533,21 +535,17 @@ func (s *QuoterSuite) Test04QuoteExactOutputSingleMatchesSwap() {
 	)
 	s.Require().NoError(err)
 
-	unsigned, err := tx.NewDynamicFeeBuilder().Build(s.from, s.poolSwapTest, big.NewInt(0), calldata).Pack(s.ctx, s.client)
+	sentTx, hash, err := bind.Transact(s.T().Context(), s.client, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), s.poolSwapTest, calldata)
 	s.Require().NoError(err)
-	s.Require().NoError(unsigned.Sign(s.signer))
 	s.mu.Lock()
-	s.totalFee.Add(s.totalFee, unsigned.MaxFee())
+	s.totalFee.Add(s.totalFee, sentTx.MaxFee())
 	s.mu.Unlock()
+	s.T().Logf("Test04QuoteExactOutputSingleMatchesSwap: sent PoolSwapTest.swap (nonce %d, maxFee %s), tx %s", sentTx.AddressNonce(), sentTx.MaxFee(), hash)
 
-	raw, err := unsigned.EncodeRLP()
-	s.Require().NoError(err)
-	hash, err := tx.Broadcast(s.ctx, s.client, raw)
-	s.Require().NoError(err)
-
-	receipt, err := tx.WaitForReceipt(s.ctx, s.client, hash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
+	receipt, err := tx.WaitForReceipt(s.T().Context(), s.client, hash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
 	s.Require().True(receipt.Status, "swap transaction reverted")
+	s.stateBlock = fmt.Sprintf("0x%x", receipt.BlockNumber)
 
 	var poolManagerLogs []tx.Log
 	for _, log := range receipt.Logs {
@@ -561,92 +559,98 @@ func (s *QuoterSuite) Test04QuoteExactOutputSingleMatchesSwap() {
 	s.Require().Zero(s.SwapAmountOut.Cmp(swaps[0].Amount1))
 	s.Require().Zero(new(big.Int).Neg(quote.AmountIn).Cmp(swaps[0].Amount0), "quoted amountIn must equal the swap's actual input to the wei")
 
-	s.T().Logf("QuoterSuite Test04QuoteExactOutputSingleMatchesSwap Result")
+	s.T().Logf("Quoter %s Test04QuoteExactOutputSingleMatchesSwap Result", s.quoterContract)
 	s.T().Logf("\tAmountOut: %s", s.SwapAmountOut)
-	s.T().Logf("\tQuoted AmountIn: %s", quote.AmountIn)
+	s.T().Logf("\tQuoted AmountIn: %s (gas estimate %s)", quote.AmountIn, quote.GasEstimate)
 	s.T().Logf("\tSwap Amount0: %s", swaps[0].Amount0)
-	s.T().Logf("\tGasEstimate: %s", quote.GasEstimate)
-	s.T().Logf("\tTx: %s", hash)
+	s.T().Logf("\tTx: %s (block %d, gas %d)", hash, receipt.BlockNumber, receipt.GasUsed)
 }
 
 func (s *QuoterSuite) Test05QuoteExactInputMultiHopMatchesChainedSingles() {
-	var blockHex string
-	s.Require().NoError(s.client.Call(s.ctx, rpc.ETHBlockNumber("blockNumber", &blockHex)))
-
+	atBlock := bind.NewCallOptions().WithFrom(s.from).WithBlock(s.stateBlock)
 	path := []*PathKey{
 		NewPathKey(s.tokens[1], s.keyAB.Fee, s.keyAB.TickSpacing, s.keyAB.Hooks, nil),
 		NewPathKey(s.tokens[2], s.keyBC.Fee, s.keyBC.TickSpacing, s.keyBC.Hooks, nil),
 	}
-	multi, err := s.quoter.CallQuoteExactInput(s.ctx, s.quoterContract, s.from, NewQuoteExactParams(s.tokens[0], path, s.SwapAmountIn), blockHex)
-	s.Require().NoError(err)
+
+	var multi *QuoteExactInputResult
+	var err error
+	s.Require().Eventually(func() bool {
+		multi, err = s.quoter.CallQuoteExactInput(s.T().Context(), atBlock, NewQuoteExactInputRequest(s.quoterContract, NewQuoteExactParams(s.tokens[0], path, s.SwapAmountIn)))
+		return err == nil
+	}, 20*time.Second, s.ReceiptPollInterval, "quote not available at block %s", s.stateBlock)
 	s.Require().Positive(multi.AmountOut.Sign())
 	s.Require().Positive(multi.GasEstimate.Sign())
 
-	hop1, err := s.quoter.CallQuoteExactInputSingle(s.ctx, s.quoterContract, s.from, NewQuoteExactSingleParams(s.keyAB, true, s.SwapAmountIn, nil), blockHex)
+	hop1, err := s.quoter.CallQuoteExactInputSingle(s.T().Context(), atBlock, NewQuoteExactInputSingleRequest(s.quoterContract, NewQuoteExactSingleParams(s.keyAB, true, s.SwapAmountIn, nil)))
 	s.Require().NoError(err)
-	hop2, err := s.quoter.CallQuoteExactInputSingle(s.ctx, s.quoterContract, s.from, NewQuoteExactSingleParams(s.keyBC, true, hop1.AmountOut, nil), blockHex)
+	hop2, err := s.quoter.CallQuoteExactInputSingle(s.T().Context(), atBlock, NewQuoteExactInputSingleRequest(s.quoterContract, NewQuoteExactSingleParams(s.keyBC, true, hop1.AmountOut, nil)))
 	s.Require().NoError(err)
 
 	s.Require().Zero(hop2.AmountOut.Cmp(multi.AmountOut), "multi-hop quote must equal two chained single-hop quotes")
 	s.Require().Negative(multi.AmountOut.Cmp(hop1.AmountOut))
 	s.Require().Positive(multi.GasEstimate.Cmp(hop1.GasEstimate))
 
-	s.T().Logf("QuoterSuite Test05QuoteExactInputMultiHopMatchesChainedSingles Result")
-	s.T().Logf("\tBlock: %s", blockHex)
+	s.T().Logf("Quoter %s Test05QuoteExactInputMultiHopMatchesChainedSingles Result", s.quoterContract)
+	s.T().Logf("\tBlock: %s", s.stateBlock)
 	s.T().Logf("\tAmountIn: %s", s.SwapAmountIn)
 	s.T().Logf("\tHop1 AmountOut: %s", hop1.AmountOut)
 	s.T().Logf("\tHop2 AmountOut: %s", hop2.AmountOut)
-	s.T().Logf("\tMulti AmountOut: %s", multi.AmountOut)
-	s.T().Logf("\tMulti GasEstimate: %s", multi.GasEstimate)
+	s.T().Logf("\tMulti AmountOut: %s (gas estimate %s)", multi.AmountOut, multi.GasEstimate)
 }
 
 func (s *QuoterSuite) Test06QuoteExactOutputMultiHopMatchesChainedSingles() {
-	var blockHex string
-	s.Require().NoError(s.client.Call(s.ctx, rpc.ETHBlockNumber("blockNumber", &blockHex)))
-
+	atBlock := bind.NewCallOptions().WithFrom(s.from).WithBlock(s.stateBlock)
 	path := []*PathKey{
 		NewPathKey(s.tokens[0], s.keyAB.Fee, s.keyAB.TickSpacing, s.keyAB.Hooks, nil),
 		NewPathKey(s.tokens[1], s.keyBC.Fee, s.keyBC.TickSpacing, s.keyBC.Hooks, nil),
 	}
-	multi, err := s.quoter.CallQuoteExactOutput(s.ctx, s.quoterContract, s.from, NewQuoteExactParams(s.tokens[2], path, s.SwapAmountOut), blockHex)
-	s.Require().NoError(err)
+
+	var multi *QuoteExactOutputResult
+	var err error
+	s.Require().Eventually(func() bool {
+		multi, err = s.quoter.CallQuoteExactOutput(s.T().Context(), atBlock, NewQuoteExactOutputRequest(s.quoterContract, NewQuoteExactParams(s.tokens[2], path, s.SwapAmountOut)))
+		return err == nil
+	}, 20*time.Second, s.ReceiptPollInterval, "quote not available at block %s", s.stateBlock)
 	s.Require().Positive(multi.AmountIn.Sign())
 	s.Require().Positive(multi.GasEstimate.Sign())
 
-	hop2, err := s.quoter.CallQuoteExactOutputSingle(s.ctx, s.quoterContract, s.from, NewQuoteExactSingleParams(s.keyBC, true, s.SwapAmountOut, nil), blockHex)
+	hop2, err := s.quoter.CallQuoteExactOutputSingle(s.T().Context(), atBlock, NewQuoteExactOutputSingleRequest(s.quoterContract, NewQuoteExactSingleParams(s.keyBC, true, s.SwapAmountOut, nil)))
 	s.Require().NoError(err)
-	hop1, err := s.quoter.CallQuoteExactOutputSingle(s.ctx, s.quoterContract, s.from, NewQuoteExactSingleParams(s.keyAB, true, hop2.AmountIn, nil), blockHex)
+	hop1, err := s.quoter.CallQuoteExactOutputSingle(s.T().Context(), atBlock, NewQuoteExactOutputSingleRequest(s.quoterContract, NewQuoteExactSingleParams(s.keyAB, true, hop2.AmountIn, nil)))
 	s.Require().NoError(err)
 
 	s.Require().Zero(hop1.AmountIn.Cmp(multi.AmountIn), "multi-hop quote must equal two chained single-hop quotes")
 	s.Require().Positive(multi.AmountIn.Cmp(hop2.AmountIn))
 
-	s.T().Logf("QuoterSuite Test06QuoteExactOutputMultiHopMatchesChainedSingles Result")
-	s.T().Logf("\tBlock: %s", blockHex)
+	s.T().Logf("Quoter %s Test06QuoteExactOutputMultiHopMatchesChainedSingles Result", s.quoterContract)
+	s.T().Logf("\tBlock: %s", s.stateBlock)
 	s.T().Logf("\tAmountOut: %s", s.SwapAmountOut)
 	s.T().Logf("\tHop2 AmountIn: %s", hop2.AmountIn)
 	s.T().Logf("\tHop1 AmountIn: %s", hop1.AmountIn)
-	s.T().Logf("\tMulti AmountIn: %s", multi.AmountIn)
-	s.T().Logf("\tMulti GasEstimate: %s", multi.GasEstimate)
+	s.T().Logf("\tMulti AmountIn: %s (gas estimate %s)", multi.AmountIn, multi.GasEstimate)
 }
 
 func (s *QuoterSuite) Test07ExactInputAndExactOutputAreConsistent() {
-	var blockHex string
-	s.Require().NoError(s.client.Call(s.ctx, rpc.ETHBlockNumber("blockNumber", &blockHex)))
+	atBlock := bind.NewCallOptions().WithFrom(s.from).WithBlock(s.stateBlock)
 
 	for _, zeroForOne := range []bool{true, false} {
-		in, err := s.quoter.CallQuoteExactInputSingle(s.ctx, s.quoterContract, s.from, NewQuoteExactSingleParams(s.keyBC, zeroForOne, s.SwapAmountIn, nil), blockHex)
-		s.Require().NoError(err)
+		var in *QuoteExactInputResult
+		var err error
+		s.Require().Eventually(func() bool {
+			in, err = s.quoter.CallQuoteExactInputSingle(s.T().Context(), atBlock, NewQuoteExactInputSingleRequest(s.quoterContract, NewQuoteExactSingleParams(s.keyBC, zeroForOne, s.SwapAmountIn, nil)))
+			return err == nil
+		}, 20*time.Second, s.ReceiptPollInterval, "quote not available at block %s", s.stateBlock)
 
-		out, err := s.quoter.CallQuoteExactOutputSingle(s.ctx, s.quoterContract, s.from, NewQuoteExactSingleParams(s.keyBC, zeroForOne, in.AmountOut, nil), blockHex)
+		out, err := s.quoter.CallQuoteExactOutputSingle(s.T().Context(), atBlock, NewQuoteExactOutputSingleRequest(s.quoterContract, NewQuoteExactSingleParams(s.keyBC, zeroForOne, in.AmountOut, nil)))
 		s.Require().NoError(err)
 		s.Require().LessOrEqual(out.AmountIn.Cmp(s.SwapAmountIn), 0, "input needed for the quoted output must not exceed the original input")
 
-		back, err := s.quoter.CallQuoteExactInputSingle(s.ctx, s.quoterContract, s.from, NewQuoteExactSingleParams(s.keyBC, zeroForOne, out.AmountIn, nil), blockHex)
+		back, err := s.quoter.CallQuoteExactInputSingle(s.T().Context(), atBlock, NewQuoteExactInputSingleRequest(s.quoterContract, NewQuoteExactSingleParams(s.keyBC, zeroForOne, out.AmountIn, nil)))
 		s.Require().NoError(err)
 		s.Require().GreaterOrEqual(back.AmountOut.Cmp(in.AmountOut), 0, "the exact-output quote's input must buy at least the requested output")
 
-		s.T().Logf("QuoterSuite Test07ExactInputAndExactOutputAreConsistent Result (zeroForOne=%t)", zeroForOne)
+		s.T().Logf("Quoter %s Test07ExactInputAndExactOutputAreConsistent Result (zeroForOne=%t)", s.quoterContract, zeroForOne)
 		s.T().Logf("\tAmountIn: %s", s.SwapAmountIn)
 		s.T().Logf("\tExactIn AmountOut: %s", in.AmountOut)
 		s.T().Logf("\tExactOut AmountIn: %s", out.AmountIn)
@@ -655,9 +659,7 @@ func (s *QuoterSuite) Test07ExactInputAndExactOutputAreConsistent() {
 }
 
 func (s *QuoterSuite) Test08LargerInputHasMorePriceImpact() {
-	var blockHex string
-	s.Require().NoError(s.client.Call(s.ctx, rpc.ETHBlockNumber("blockNumber", &blockHex)))
-
+	atBlock := bind.NewCallOptions().WithFrom(s.from).WithBlock(s.stateBlock)
 	amounts := []*big.Int{
 		new(big.Int).Exp(big.NewInt(10), big.NewInt(15), nil),
 		new(big.Int).Exp(big.NewInt(10), big.NewInt(17), nil),
@@ -666,8 +668,12 @@ func (s *QuoterSuite) Test08LargerInputHasMorePriceImpact() {
 	}
 	outs := make([]*big.Int, len(amounts))
 	for i, amountIn := range amounts {
-		quote, err := s.quoter.CallQuoteExactInputSingle(s.ctx, s.quoterContract, s.from, NewQuoteExactSingleParams(s.keyBC, true, amountIn, nil), blockHex)
-		s.Require().NoError(err)
+		var quote *QuoteExactInputResult
+		var err error
+		s.Require().Eventually(func() bool {
+			quote, err = s.quoter.CallQuoteExactInputSingle(s.T().Context(), atBlock, NewQuoteExactInputSingleRequest(s.quoterContract, NewQuoteExactSingleParams(s.keyBC, true, amountIn, nil)))
+			return err == nil
+		}, 20*time.Second, s.ReceiptPollInterval, "quote not available at block %s", s.stateBlock)
 		outs[i] = quote.AmountOut
 	}
 
@@ -678,57 +684,73 @@ func (s *QuoterSuite) Test08LargerInputHasMorePriceImpact() {
 		s.Require().Negative(lhs.Cmp(rhs), "amountOut/amountIn must shrink as amountIn grows")
 	}
 
-	s.T().Logf("QuoterSuite Test08LargerInputHasMorePriceImpact Result")
+	s.T().Logf("Quoter %s Test08LargerInputHasMorePriceImpact Result", s.quoterContract)
 	for i := range amounts {
 		s.T().Logf("\tAmountIn: %s -> AmountOut: %s", amounts[i], outs[i])
 	}
 }
 
 func (s *QuoterSuite) Test09EmptyPathReturnsExactAmount() {
-	in, err := s.quoter.CallQuoteExactInput(s.ctx, s.quoterContract, s.from, NewQuoteExactParams(s.tokens[0], []*PathKey{}, s.SwapAmountIn), rpc.BlockTagLatest)
+	in, err := s.quoter.CallQuoteExactInput(s.T().Context(), bind.NewCallOptions().WithFrom(s.from), NewQuoteExactInputRequest(s.quoterContract, NewQuoteExactParams(s.tokens[0], []*PathKey{}, s.SwapAmountIn)))
 	s.Require().NoError(err)
 	s.Require().Zero(s.SwapAmountIn.Cmp(in.AmountOut))
 
-	out, err := s.quoter.CallQuoteExactOutput(s.ctx, s.quoterContract, s.from, NewQuoteExactParams(s.tokens[0], nil, s.SwapAmountOut), rpc.BlockTagLatest)
+	out, err := s.quoter.CallQuoteExactOutput(s.T().Context(), bind.NewCallOptions().WithFrom(s.from), NewQuoteExactOutputRequest(s.quoterContract, NewQuoteExactParams(s.tokens[0], nil, s.SwapAmountOut)))
 	s.Require().NoError(err)
 	s.Require().Zero(s.SwapAmountOut.Cmp(out.AmountIn))
 
-	s.T().Logf("QuoterSuite Test09EmptyPathReturnsExactAmount Result")
-	s.T().Logf("\tExactInput AmountOut: %s", in.AmountOut)
-	s.T().Logf("\tExactOutput AmountIn: %s", out.AmountIn)
+	s.T().Logf("Quoter %s Test09EmptyPathReturnsExactAmount Result", s.quoterContract)
+	s.T().Logf("\tExactInput AmountOut: %s (gas estimate %s)", in.AmountOut, in.GasEstimate)
+	s.T().Logf("\tExactOutput AmountIn: %s (gas estimate %s)", out.AmountIn, out.GasEstimate)
 }
 
 func (s *QuoterSuite) Test10PoolNotInitialized() {
+	atBlock := bind.NewCallOptions().WithFrom(s.from).WithBlock(s.stateBlock)
 	key := NewPoolKey(s.tokens[0], s.tokens[2], big.NewInt(500), big.NewInt(10), types.ZeroAddress())
 
-	_, err := s.quoter.CallQuoteExactInputSingle(s.ctx, s.quoterContract, s.from, NewQuoteExactSingleParams(key, true, s.SwapAmountIn, nil), rpc.BlockTagLatest)
-	s.Require().ErrorIs(err, ErrUnexpectedRevertBytes)
+	var single *QuoteExactInputResult
+	var err error
+	s.Require().Eventually(func() bool {
+		single, err = s.quoter.CallQuoteExactInputSingle(s.T().Context(), atBlock, NewQuoteExactInputSingleRequest(s.quoterContract, NewQuoteExactSingleParams(key, true, s.SwapAmountIn, nil)))
+		return errors.Is(err, ErrUnexpectedRevertBytes)
+	}, 20*time.Second, s.ReceiptPollInterval, "no quoter revert at block %s", s.stateBlock)
+	s.Require().Nil(single)
 	s.Require().ErrorIs(err, ErrPoolNotInitialized)
 	s.Require().NotErrorIs(err, ErrUnknown)
+	singleErr := err
 
 	path := []*PathKey{NewPathKey(s.tokens[2], key.Fee, key.TickSpacing, key.Hooks, nil)}
-	_, err = s.quoter.CallQuoteExactInput(s.ctx, s.quoterContract, s.from, NewQuoteExactParams(s.tokens[0], path, s.SwapAmountIn), rpc.BlockTagLatest)
+	multi, err := s.quoter.CallQuoteExactInput(s.T().Context(), atBlock, NewQuoteExactInputRequest(s.quoterContract, NewQuoteExactParams(s.tokens[0], path, s.SwapAmountIn)))
+	s.Require().Nil(multi)
 	s.Require().ErrorIs(err, ErrUnexpectedRevertBytes)
 	s.Require().ErrorIs(err, ErrPoolNotInitialized)
 
-	s.T().Logf("QuoterSuite Test10PoolNotInitialized Result")
-	s.T().Logf("\tError: %v", err)
+	s.T().Logf("Quoter %s Test10PoolNotInitialized Result", s.quoterContract)
+	s.T().Logf("\tSingle: %v", singleErr)
+	s.T().Logf("\tMulti: %v", err)
 }
 
 func (s *QuoterSuite) Test11NotEnoughLiquidity() {
+	atBlock := bind.NewCallOptions().WithFrom(s.from).WithBlock(s.stateBlock)
+
 	for _, zeroForOne := range []bool{true, false} {
-		_, err := s.quoter.CallQuoteExactOutputSingle(s.ctx, s.quoterContract, s.from, NewQuoteExactSingleParams(s.keyAC, zeroForOne, s.ExcessiveAmountOut, nil), rpc.BlockTagLatest)
-		s.Require().ErrorIs(err, ErrUnexpectedRevertBytes)
+		var quote *QuoteExactOutputResult
+		var err error
+		s.Require().Eventually(func() bool {
+			quote, err = s.quoter.CallQuoteExactOutputSingle(s.T().Context(), atBlock, NewQuoteExactOutputSingleRequest(s.quoterContract, NewQuoteExactSingleParams(s.keyAC, zeroForOne, s.ExcessiveAmountOut, nil)))
+			return errors.Is(err, ErrUnexpectedRevertBytes)
+		}, 20*time.Second, s.ReceiptPollInterval, "no quoter revert at block %s", s.stateBlock)
+		s.Require().Nil(quote)
 		s.Require().ErrorIs(err, ErrNotEnoughLiquidity)
 		s.Require().NotErrorIs(err, ErrSafeCastOverflow)
 		s.Require().NotErrorIs(err, ErrUnknown)
 
-		s.T().Logf("QuoterSuite Test11NotEnoughLiquidity Result (zeroForOne=%t)", zeroForOne)
+		s.T().Logf("Quoter %s Test11NotEnoughLiquidity Result (zeroForOne=%t)", s.quoterContract, zeroForOne)
 		s.T().Logf("\tExactAmount: %s", s.ExcessiveAmountOut)
 		s.T().Logf("\tError: %v", err)
 	}
 
-	quote, err := s.quoter.CallQuoteExactOutputSingle(s.ctx, s.quoterContract, s.from, NewQuoteExactSingleParams(s.keyAC, true, s.SwapAmountOut, nil), rpc.BlockTagLatest)
+	quote, err := s.quoter.CallQuoteExactOutputSingle(s.T().Context(), atBlock, NewQuoteExactOutputSingleRequest(s.quoterContract, NewQuoteExactSingleParams(s.keyAC, true, s.SwapAmountOut, nil)))
 	s.Require().NoError(err)
 	s.Require().Positive(quote.AmountIn.Cmp(s.SwapAmountOut))
 
@@ -736,46 +758,65 @@ func (s *QuoterSuite) Test11NotEnoughLiquidity() {
 }
 
 func (s *QuoterSuite) Test12SafeCastOverflow() {
-	_, err := s.quoter.CallQuoteExactOutputSingle(s.ctx, s.quoterContract, s.from, NewQuoteExactSingleParams(s.keyAB, true, s.ExcessiveAmountOut, nil), rpc.BlockTagLatest)
-	s.Require().ErrorIs(err, ErrUnexpectedRevertBytes)
+	atBlock := bind.NewCallOptions().WithFrom(s.from).WithBlock(s.stateBlock)
+
+	var quote *QuoteExactOutputResult
+	var err error
+	s.Require().Eventually(func() bool {
+		quote, err = s.quoter.CallQuoteExactOutputSingle(s.T().Context(), atBlock, NewQuoteExactOutputSingleRequest(s.quoterContract, NewQuoteExactSingleParams(s.keyAB, true, s.ExcessiveAmountOut, nil)))
+		return errors.Is(err, ErrUnexpectedRevertBytes)
+	}, 20*time.Second, s.ReceiptPollInterval, "no quoter revert at block %s", s.stateBlock)
+	s.Require().Nil(quote)
 	s.Require().ErrorIs(err, ErrSafeCastOverflow)
 	s.Require().NotErrorIs(err, ErrNotEnoughLiquidity)
 	s.Require().NotErrorIs(err, ErrUnknown)
 
-	s.T().Logf("QuoterSuite Test12SafeCastOverflow Result")
+	s.T().Logf("Quoter %s Test12SafeCastOverflow Result", s.quoterContract)
 	s.T().Logf("\tExactAmount: %s", s.ExcessiveAmountOut)
 	s.T().Logf("\tError: %v", err)
 }
 
 func (s *QuoterSuite) Test13SwapAmountCannotBeZero() {
-	_, err := s.quoter.CallQuoteExactInputSingle(s.ctx, s.quoterContract, s.from, NewQuoteExactSingleParams(s.keyAB, true, big.NewInt(0), nil), rpc.BlockTagLatest)
-	s.Require().ErrorIs(err, ErrUnexpectedRevertBytes)
+	atBlock := bind.NewCallOptions().WithFrom(s.from).WithBlock(s.stateBlock)
+
+	var quote *QuoteExactInputResult
+	var err error
+	s.Require().Eventually(func() bool {
+		quote, err = s.quoter.CallQuoteExactInputSingle(s.T().Context(), atBlock, NewQuoteExactInputSingleRequest(s.quoterContract, NewQuoteExactSingleParams(s.keyAB, true, big.NewInt(0), nil)))
+		return errors.Is(err, ErrUnexpectedRevertBytes)
+	}, 20*time.Second, s.ReceiptPollInterval, "no quoter revert at block %s", s.stateBlock)
+	s.Require().Nil(quote)
 	s.Require().ErrorIs(err, ErrSwapAmountCannotBeZero)
 	s.Require().NotErrorIs(err, ErrUnknown)
 
-	s.T().Logf("QuoterSuite Test13SwapAmountCannotBeZero Result")
+	s.T().Logf("Quoter %s Test13SwapAmountCannotBeZero Result", s.quoterContract)
 	s.T().Logf("\tError: %v", err)
 }
 
 func (s *QuoterSuite) Test14QuotingDoesNotChangeState() {
-	var blockHex string
-	s.Require().NoError(s.client.Call(s.ctx, rpc.ETHBlockNumber("blockNumber", &blockHex)))
+	atBlock := bind.NewCallOptions().WithFrom(s.from).WithBlock(s.stateBlock)
 
-	first, err := s.quoter.CallQuoteExactInputSingle(s.ctx, s.quoterContract, s.from, NewQuoteExactSingleParams(s.keyAB, true, s.SwapAmountIn, nil), blockHex)
-	s.Require().NoError(err)
-	second, err := s.quoter.CallQuoteExactInputSingle(s.ctx, s.quoterContract, s.from, NewQuoteExactSingleParams(s.keyAB, true, s.SwapAmountIn, nil), blockHex)
+	var first *QuoteExactInputResult
+	var err error
+	s.Require().Eventually(func() bool {
+		first, err = s.quoter.CallQuoteExactInputSingle(s.T().Context(), atBlock, NewQuoteExactInputSingleRequest(s.quoterContract, NewQuoteExactSingleParams(s.keyAB, true, s.SwapAmountIn, nil)))
+		return err == nil
+	}, 20*time.Second, s.ReceiptPollInterval, "quote not available at block %s", s.stateBlock)
+
+	second, err := s.quoter.CallQuoteExactInputSingle(s.T().Context(), atBlock, NewQuoteExactInputSingleRequest(s.quoterContract, NewQuoteExactSingleParams(s.keyAB, true, s.SwapAmountIn, nil)))
 	s.Require().NoError(err)
 	s.Require().Zero(first.AmountOut.Cmp(second.AmountOut))
 
-	nilSender, err := s.quoter.CallQuoteExactInputSingle(s.ctx, s.quoterContract, nil, NewQuoteExactSingleParams(s.keyAB, true, s.SwapAmountIn, nil), blockHex)
+	withoutFrom, err := s.quoter.CallQuoteExactInputSingle(s.T().Context(), bind.NewCallOptions().WithBlock(s.stateBlock), NewQuoteExactInputSingleRequest(s.quoterContract, NewQuoteExactSingleParams(s.keyAB, true, s.SwapAmountIn, nil)))
 	s.Require().NoError(err)
-	s.Require().Zero(first.AmountOut.Cmp(nilSender.AmountOut))
+	s.Require().Zero(first.AmountOut.Cmp(withoutFrom.AmountOut))
 
-	msgSender, err := s.quoter.MsgSender(s.ctx, s.quoterContract, blockHex)
+	msgSender, err := s.quoter.MsgSender(s.T().Context(), bind.NewCallOptions().WithBlock(s.stateBlock), NewMsgSenderRequest(s.quoterContract))
 	s.Require().NoError(err)
 	s.Require().True(msgSender.Equal(types.ZeroAddress()))
 
-	s.T().Logf("QuoterSuite Test14QuotingDoesNotChangeState Result")
-	s.T().Logf("\tBlock: %s", blockHex)
-	s.T().Logf("\tAmountOut: %s", first.AmountOut)
+	s.T().Logf("Quoter %s Test14QuotingDoesNotChangeState Result", s.quoterContract)
+	s.T().Logf("\tBlock: %s", s.stateBlock)
+	s.T().Logf("\tAmountOut (from / again / no from): %s / %s / %s", first.AmountOut, second.AmountOut, withoutFrom.AmountOut)
+	s.T().Logf("\tMsgSender after quotes: %s", msgSender)
 }
