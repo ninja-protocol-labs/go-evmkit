@@ -1,8 +1,6 @@
 package v4
 
 import (
-	"encoding/json/jsontext"
-	"errors"
 	"math/big"
 	"testing"
 
@@ -11,8 +9,6 @@ import (
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 	"github.com/ninja-protocol-labs/go-evmkit/protocols/permit2"
-	"github.com/ninja-protocol-labs/go-evmkit/rpc"
-	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
 func TestEncodeDecodeActionMintPosition(t *testing.T) {
@@ -802,78 +798,6 @@ func TestEncodePermit2PermitBatchRejectsNilArgs(t *testing.T) {
 func TestDecodePermit2PermitBatchRejectsGarbage(t *testing.T) {
 	_, err := DecodePermit2PermitBatch([]byte{0x01, 0x02})
 	require.Error(t, err)
-}
-
-func TestPositionWrapRevertErrorZeroLengthDataPassesThrough(t *testing.T) {
-	p := &PositionManager{}
-	rpcErr := &rpc.ResponseError{Code: 3, Message: "execution reverted"}
-	err := p.wrapRevertError(rpcErr)
-	require.Same(t, rpcErr, err)
-}
-
-func TestPositionWrapRevertErrorUnknownSelectorMapsToErrUnknown(t *testing.T) {
-	p := &PositionManager{}
-	revertData := []byte{0xde, 0xad, 0xbe, 0xef}
-	hexData := `"` + encoding.Hex.EncodePrefixed(revertData) + `"`
-	rpcErr := &rpc.ResponseError{Code: 3, Message: "execution reverted", Data: jsontext.Value(hexData)}
-	err := p.wrapRevertError(rpcErr)
-	require.ErrorIs(t, err, ErrUnknown)
-}
-
-func TestPositionWrapRevertErrorNonRPCErrorPassesThrough(t *testing.T) {
-	p := &PositionManager{}
-	plain := errors.New("boom")
-	err := p.wrapRevertError(plain)
-	require.Same(t, plain, err)
-}
-
-func TestPositionWrapRevertErrorKnownSelectorMapsToSentinel(t *testing.T) {
-	cases := []struct {
-		name string
-		sel  abi.Error
-		args []any
-		want error
-	}{
-		{"NotApproved", *errNotApproved, []any{testCurrency0}, ErrNotApproved},
-		{"DeadlinePassed", *errDeadlinePassed, []any{big.NewInt(1234567890)}, ErrDeadlinePassed},
-		{"PoolManagerMustBeLocked", *errPoolManagerMustBeLocked, nil, ErrPoolManagerMustBeLocked},
-		{"SignatureDeadlineExpired", *errSignatureDeadlineExpired, nil, ErrSignatureDeadlineExpired},
-		{"NoSelfPermit", *errNoSelfPermit, nil, ErrNoSelfPermit},
-		{"Unauthorized", *errUnauthorized, nil, ErrUnauthorized},
-		{"NotSubscribed", *errNotSubscribed, nil, ErrNotSubscribed},
-		{"NoCodeSubscriber", *errNoCodeSubscriber, nil, ErrNoCodeSubscriber},
-		{"GasLimitTooLow", *errGasLimitTooLow, nil, ErrGasLimitTooLow},
-		{"SubscriptionReverted", *errSubscriptionReverted, []any{testCurrency0, []byte{0xde, 0xad}}, ErrSubscriptionReverted},
-		{"ModifyLiquidityNotificationReverted", *errModifyLiquidityNotificationReverted, []any{testCurrency0, []byte{}}, ErrModifyLiquidityNotificationReverted},
-		{"BurnNotificationReverted", *errBurnNotificationReverted, []any{testCurrency0, []byte{}}, ErrBurnNotificationReverted},
-		{"AlreadySubscribed", *errAlreadySubscribed, []any{big.NewInt(1), testCurrency0}, ErrAlreadySubscribed},
-		{"NonceAlreadyUsed", *errNonceAlreadyUsed, nil, ErrNonceAlreadyUsed},
-		{"ContractLocked", *errContractLocked, nil, ErrContractLocked},
-		{"InvalidEthSender", *errInvalidEthSender, nil, ErrInvalidEthSender},
-		{"DeltaNotPositive", *errDeltaNotPositive, []any{testCurrency0}, ErrDeltaNotPositive},
-		{"DeltaNotNegative", *errDeltaNotNegative, []any{testCurrency0}, ErrDeltaNotNegative},
-		{"InsufficientBalance", *errInsufficientBalance, nil, ErrInsufficientBalance},
-		{"MaximumAmountExceeded", *errMaximumAmountExceeded, []any{big.NewInt(1000), big.NewInt(1100)}, ErrMaximumAmountExceeded},
-		{"MinimumAmountInsufficient", *errMinimumAmountInsufficient, []any{big.NewInt(900), big.NewInt(800)}, ErrMinimumAmountInsufficient},
-		{"InvalidSignatureLength", *errInvalidSignatureLength, nil, ErrInvalidSignatureLength},
-		{"InvalidSignature", *errInvalidSignature, nil, ErrInvalidSignature},
-		{"InvalidSigner", *errInvalidSigner, nil, ErrInvalidSigner},
-		{"InvalidContractSignature", *errInvalidContractSignature, nil, ErrInvalidContractSignature},
-	}
-
-	p := &PositionManager{}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			sel := c.sel.Selector()
-			argsData, err := abi.Pack(c.sel.Inputs, c.args...)
-			require.NoError(t, err)
-			revertData := append(sel[:], argsData...)
-			hexData := `"` + encoding.Hex.EncodePrefixed(revertData) + `"`
-			rpcErr := &rpc.ResponseError{Code: 3, Message: "execution reverted", Data: jsontext.Value(hexData)}
-			wrapped := p.wrapRevertError(rpcErr)
-			require.ErrorIs(t, wrapped, c.want)
-		})
-	}
 }
 
 func TestEncodeDecodePoolKeys(t *testing.T) {

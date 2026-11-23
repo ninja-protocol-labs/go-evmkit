@@ -41,7 +41,7 @@ func TestExtractModifyPositionSampleReceipt(t *testing.T) {
 	mods, err := ExtractModifyPosition(logs)
 	require.NoError(t, err)
 	require.Len(t, mods, 1)
-	require.True(t, mods[0].PositionManager.Equal(testPositionManager))
+	require.True(t, mods[0].Contract.Equal(testPositionManager))
 	require.True(t, mods[0].Sender.Equal(testSender))
 	require.Zero(t, big.NewInt(-200).Cmp(mods[0].TickLower))
 	require.Zero(t, big.NewInt(200).Cmp(mods[0].TickUpper))
@@ -67,7 +67,7 @@ func TestExtractSubscriptionSampleReceipt(t *testing.T) {
 	subs, err := ExtractSubscription(logs)
 	require.NoError(t, err)
 	require.Len(t, subs, 1)
-	require.True(t, subs[0].PositionManager.Equal(testPositionManager))
+	require.True(t, subs[0].Contract.Equal(testPositionManager))
 	require.Zero(t, big.NewInt(7).Cmp(subs[0].TokenID))
 	require.True(t, subs[0].Subscriber.Equal(testSubscriber))
 }
@@ -90,7 +90,7 @@ func TestExtractUnsubscriptionSampleReceipt(t *testing.T) {
 	unsubs, err := ExtractUnsubscription(logs)
 	require.NoError(t, err)
 	require.Len(t, unsubs, 1)
-	require.True(t, unsubs[0].PositionManager.Equal(testPositionManager))
+	require.True(t, unsubs[0].Contract.Equal(testPositionManager))
 	require.Zero(t, big.NewInt(9).Cmp(unsubs[0].TokenID))
 	require.True(t, unsubs[0].Subscriber.Equal(testSubscriber))
 }

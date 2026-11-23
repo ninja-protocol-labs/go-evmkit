@@ -9,10 +9,9 @@ import (
 	"github.com/ninja-protocol-labs/go-evmkit/tx"
 )
 
-// ExtractModifyPosition pulls every ModifyPosition-shaped log out of logs, from any contract;
-// filter by PositionManager afterward.
-func ExtractModifyPosition(logs []tx.Log) ([]ModifyPosition, error) {
-	var mods []ModifyPosition
+// ExtractModifyPosition pulls every ModifyPosition-shaped log out of logs, from any contract; filter by Contract afterward.
+func ExtractModifyPosition(logs []tx.Log) ([]ModifyPositionEvent, error) {
+	var mods []ModifyPositionEvent
 	for i, log := range logs {
 		if len(log.Topics) == 0 || log.Topics[0] == nil {
 			continue
@@ -59,14 +58,14 @@ func ExtractModifyPosition(logs []tx.Log) ([]ModifyPosition, error) {
 		}
 		var salt [32]byte
 		copy(salt[:], saltBytes)
-		mods = append(mods, *NewModifyPosition(log.Address, id, sender, tickLower, tickUpper, liquidityDelta, salt))
+		mods = append(mods, *NewModifyPositionEvent(log.Address, id, sender, tickLower, tickUpper, liquidityDelta, salt))
 	}
 	return mods, nil
 }
 
 // ExtractSubscription pulls every Subscription-shaped log out of logs; see ExtractModifyPosition.
-func ExtractSubscription(logs []tx.Log) ([]Subscription, error) {
-	var subs []Subscription
+func ExtractSubscription(logs []tx.Log) ([]SubscriptionEvent, error) {
+	var subs []SubscriptionEvent
 	for i, log := range logs {
 		if len(log.Topics) == 0 || log.Topics[0] == nil {
 			continue
@@ -93,14 +92,14 @@ func ExtractSubscription(logs []tx.Log) ([]Subscription, error) {
 		if !ok {
 			return nil, fmt.Errorf("uniswapv4: extractSubscription: logs[%d]: unexpected decoded type for subscriber: %T", i, vals[1])
 		}
-		subs = append(subs, *NewSubscription(log.Address, tokenID, subscriber))
+		subs = append(subs, *NewSubscriptionEvent(log.Address, tokenID, subscriber))
 	}
 	return subs, nil
 }
 
 // ExtractUnsubscription pulls every Unsubscription-shaped log out of logs; see ExtractModifyPosition.
-func ExtractUnsubscription(logs []tx.Log) ([]Unsubscription, error) {
-	var unsubs []Unsubscription
+func ExtractUnsubscription(logs []tx.Log) ([]UnsubscriptionEvent, error) {
+	var unsubs []UnsubscriptionEvent
 	for i, log := range logs {
 		if len(log.Topics) == 0 || log.Topics[0] == nil {
 			continue
@@ -127,7 +126,7 @@ func ExtractUnsubscription(logs []tx.Log) ([]Unsubscription, error) {
 		if !ok {
 			return nil, fmt.Errorf("uniswapv4: extractUnsubscription: logs[%d]: unexpected decoded type for subscriber: %T", i, vals[1])
 		}
-		unsubs = append(unsubs, *NewUnsubscription(log.Address, tokenID, subscriber))
+		unsubs = append(unsubs, *NewUnsubscriptionEvent(log.Address, tokenID, subscriber))
 	}
 	return unsubs, nil
 }

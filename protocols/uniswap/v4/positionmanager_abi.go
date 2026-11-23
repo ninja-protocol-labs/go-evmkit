@@ -11,12 +11,10 @@ import (
 )
 
 var (
-	// modifyLiquiditiesFn mirrors IPositionManager's modifyLiquidities(bytes unlockData, uint256
-	// deadline): the standard entry point, which unlocks PoolManager and batches unlockData's actions.
+	// modifyLiquiditiesFn mirrors modifyLiquidities(bytes unlockData, uint256 deadline), which unlocks PoolManager and runs unlockData's actions.
 	modifyLiquiditiesFn = abi.NewFunction("modifyLiquidities", abi.NewTypes(abi.Bytes, abi.Uint256), nil)
 
-	// modifyLiquiditiesWithoutUnlockFn mirrors IPositionManager's modifyLiquiditiesWithoutUnlock
-	// (bytes actions, bytes[] params): must be called by a contract that has already unlocked PoolManager.
+	// modifyLiquiditiesWithoutUnlockFn mirrors modifyLiquiditiesWithoutUnlock(bytes actions, bytes[] params), for callers that already unlocked PoolManager.
 	modifyLiquiditiesWithoutUnlockFn = abi.NewFunction("modifyLiquiditiesWithoutUnlock", abi.NewTypes(abi.Bytes, abi.Slice(abi.Bytes)), nil)
 
 	// nextTokenIdFn mirrors IPositionManager's nextTokenId() view.
@@ -25,16 +23,13 @@ var (
 	// getPositionLiquidityFn mirrors IPositionManager's getPositionLiquidity(uint256) view.
 	getPositionLiquidityFn = abi.NewFunction("getPositionLiquidity", abi.NewTypes(abi.Uint256), abi.NewTypes(abi.Uint128))
 
-	// getPoolAndPositionInfoFn mirrors IPositionManager's getPoolAndPositionInfo(uint256) view,
-	// returning (PoolKey, PositionInfo); PositionInfo is a user-defined uint256 on the Solidity side.
+	// getPoolAndPositionInfoFn mirrors getPoolAndPositionInfo(uint256) -> (PoolKey, PositionInfo as uint256).
 	getPoolAndPositionInfoFn = abi.NewFunction("getPoolAndPositionInfo", abi.NewTypes(abi.Uint256), abi.NewTypes(poolKeyTuple, abi.Uint256))
 
 	// positionInfoFn mirrors IPositionManager's positionInfo(uint256) view.
 	positionInfoFn = abi.NewFunction("positionInfo", abi.NewTypes(abi.Uint256), abi.NewTypes(abi.Uint256))
 
-	// poolKeysFn mirrors PositionManager's auto-generated public getter for its
-	// poolKeys(bytes25 => PoolKey) mapping: looks up a pool's full PoolKey from the truncated
-	// 25-byte poolId stored in a PositionInfo.
+	// poolKeysFn mirrors the public poolKeys(bytes25 => PoolKey) getter, keyed by PositionInfo's truncated poolId.
 	poolKeysFn = abi.NewFunction("poolKeys", abi.NewTypes(abi.Bytes25), abi.NewTypes(abi.Address, abi.Address, abi.Uint24, abi.Int24, abi.Address))
 
 	// subscribeFn mirrors INotifier's subscribe(uint256 tokenId, address newSubscriber, bytes data).
@@ -61,8 +56,7 @@ var (
 	// weth9Fn mirrors NativeWrapper's auto-generated public getter for its immutable WETH9 field.
 	weth9Fn = abi.NewFunction("WETH9", nil, abi.NewTypes(abi.Address))
 
-	// permit2ContractFn mirrors Permit2Forwarder's auto-generated public getter for its immutable
-	// permit2 field: the Permit2 contract this PositionManager forwards permit/permitBatch to.
+	// permit2ContractFn mirrors Permit2Forwarder's immutable permit2() getter.
 	permit2ContractFn = abi.NewFunction("permit2", nil, abi.NewTypes(abi.Address))
 
 	// noncesFn mirrors IUnorderedNonce's nonces(address owner, uint256 word) view.
@@ -71,27 +65,21 @@ var (
 	// revokeNonceFn mirrors IUnorderedNonce's revokeNonce(uint256 nonce).
 	revokeNonceFn = abi.NewFunction("revokeNonce", abi.NewTypes(abi.Uint256), nil)
 
-	// erc721PermitFn mirrors IERC721Permit_v4's permit(address spender, uint256 tokenId, uint256
-	// deadline, uint256 nonce, bytes signature): single-tokenId approval via signature.
+	// erc721PermitFn mirrors IERC721Permit_v4's permit(spender, tokenId, deadline, nonce, signature).
 	erc721PermitFn = abi.NewFunction("permit", abi.NewTypes(abi.Address, abi.Uint256, abi.Uint256, abi.Uint256, abi.Bytes), nil)
 
-	// erc721PermitForAllFn mirrors IERC721Permit_v4's permitForAll(address owner, address
-	// operator, bool approved, uint256 deadline, uint256 nonce, bytes signature).
+	// erc721PermitForAllFn mirrors IERC721Permit_v4's permitForAll(owner, operator, approved, deadline, nonce, signature).
 	erc721PermitForAllFn = abi.NewFunction("permitForAll", abi.NewTypes(abi.Address, abi.Address, abi.Bool, abi.Uint256, abi.Uint256, abi.Bytes), nil)
 
-	// permitDetailsTuple/permitSingleTuple/permitBatchTuple mirror IAllowanceTransfer's
-	// PermitDetails/PermitSingle/PermitBatch structs (same shapes as the permit2 package's own,
-	// redeclared here per this repo's per-package duplication convention for ABI shapes).
+	// permitDetailsTuple/permitSingleTuple/permitBatchTuple mirror IAllowanceTransfer's PermitDetails/PermitSingle/PermitBatch.
 	permitDetailsTuple = abi.Tuple(abi.Address, abi.Uint160, abi.Uint48, abi.Uint48)
 	permitSingleTuple  = abi.Tuple(permitDetailsTuple, abi.Address, abi.Uint256)
 	permitBatchTuple   = abi.Tuple(abi.Slice(permitDetailsTuple), abi.Address, abi.Uint256)
 
-	// permit2PermitFn mirrors IPermit2Forwarder's permit(address owner, PermitSingle permitSingle,
-	// bytes signature), forwarding a single-token permit2 approval.
+	// permit2PermitFn mirrors IPermit2Forwarder's permit(owner, permitSingle, signature).
 	permit2PermitFn = abi.NewFunction("permit", abi.NewTypes(abi.Address, permitSingleTuple, abi.Bytes), abi.NewTypes(abi.Bytes))
 
-	// permit2PermitBatchFn mirrors IPermit2Forwarder's permitBatch(address owner, PermitBatch
-	// permitBatch, bytes signature), forwarding a batch permit2 approval.
+	// permit2PermitBatchFn mirrors IPermit2Forwarder's permitBatch(owner, permitBatch, signature).
 	permit2PermitBatchFn = abi.NewFunction("permitBatch", abi.NewTypes(abi.Address, permitBatchTuple, abi.Bytes), abi.NewTypes(abi.Bytes))
 )
 
@@ -131,8 +119,7 @@ var (
 	errInvalidEthSender = abi.NewError("InvalidEthSender", abi.NewTypes())
 )
 
-// Custom errors from DeltaResolver, for decoding reverts via abi.Error.Decode. Shared with
-// router.go's Router (same base contract), but not mapped there; mapped here for PositionManager.
+// Custom errors from DeltaResolver, for decoding reverts via abi.Error.Decode.
 var (
 	errDeltaNotPositive    = abi.NewError("DeltaNotPositive", abi.NewTypes(abi.Address))
 	errDeltaNotNegative    = abi.NewError("DeltaNotNegative", abi.NewTypes(abi.Address))
@@ -145,8 +132,7 @@ var (
 	errMinimumAmountInsufficient = abi.NewError("MinimumAmountInsufficient", abi.NewTypes(abi.Uint128, abi.Uint128))
 )
 
-// Custom errors from permit2's SignatureVerification, used internally by ERC721Permit_v4.permit/
-// permitForAll's signature checks, for decoding reverts via abi.Error.Decode.
+// Custom errors from permit2's SignatureVerification, mapped to permit2's sentinels.
 var (
 	errInvalidSignatureLength   = abi.NewError("InvalidSignatureLength", abi.NewTypes())
 	errInvalidSignature         = abi.NewError("InvalidSignature", abi.NewTypes())
@@ -154,37 +140,32 @@ var (
 	errInvalidContractSignature = abi.NewError("InvalidContractSignature", abi.NewTypes())
 )
 
-// ErrNotApproved, etc. mirror the above custom errors, for errors.Is.
+// ErrNotApproved, etc. mirror the above custom errors, for errors.Is; SignatureVerification errors map to permit2.ErrInvalidSignature etc.
 var (
-	ErrNotApproved                         = errors.New("uniswapv4: caller not approved to modify position")
-	ErrDeadlinePassed                      = errors.New("uniswapv4: deadline passed")
-	ErrPoolManagerMustBeLocked             = errors.New("uniswapv4: pool manager must be locked")
-	ErrSignatureDeadlineExpired            = errors.New("uniswapv4: signature deadline expired")
-	ErrNoSelfPermit                        = errors.New("uniswapv4: cannot self-permit")
-	ErrUnauthorized                        = errors.New("uniswapv4: unauthorized")
-	ErrNotSubscribed                       = errors.New("uniswapv4: not subscribed")
-	ErrNoCodeSubscriber                    = errors.New("uniswapv4: subscriber has no code")
-	ErrGasLimitTooLow                      = errors.New("uniswapv4: gas limit too low to notify unsubscribe")
-	ErrSubscriptionReverted                = errors.New("uniswapv4: subscription reverted")
-	ErrModifyLiquidityNotificationReverted = errors.New("uniswapv4: modify-liquidity notification reverted")
-	ErrBurnNotificationReverted            = errors.New("uniswapv4: burn notification reverted")
-	ErrAlreadySubscribed                   = errors.New("uniswapv4: already subscribed")
-	ErrNonceAlreadyUsed                    = errors.New("uniswapv4: nonce already used")
-	ErrContractLocked                      = errors.New("uniswapv4: contract locked")
-	ErrInvalidEthSender                    = errors.New("uniswapv4: invalid eth sender")
-	ErrDeltaNotPositive                    = errors.New("uniswapv4: delta not positive")
-	ErrDeltaNotNegative                    = errors.New("uniswapv4: delta not negative")
-	ErrInsufficientBalance                 = errors.New("uniswapv4: insufficient balance")
-	ErrMaximumAmountExceeded               = errors.New("uniswapv4: maximum amount exceeded")
-	ErrMinimumAmountInsufficient           = errors.New("uniswapv4: minimum amount insufficient")
-	ErrInvalidSignatureLength              = errors.New("uniswapv4: invalid signature length")
-	ErrInvalidSignature                    = errors.New("uniswapv4: invalid signature")
-	ErrInvalidSigner                       = errors.New("uniswapv4: invalid signer")
-	ErrInvalidContractSignature            = errors.New("uniswapv4: invalid contract signature")
+	ErrNotApproved                         = errors.New("caller not approved to modify position")
+	ErrDeadlinePassed                      = errors.New("deadline passed")
+	ErrPoolManagerMustBeLocked             = errors.New("pool manager must be locked")
+	ErrSignatureDeadlineExpired            = errors.New("signature deadline expired")
+	ErrNoSelfPermit                        = errors.New("cannot self-permit")
+	ErrUnauthorized                        = errors.New("unauthorized")
+	ErrNotSubscribed                       = errors.New("not subscribed")
+	ErrNoCodeSubscriber                    = errors.New("subscriber has no code")
+	ErrGasLimitTooLow                      = errors.New("gas limit too low to notify unsubscribe")
+	ErrSubscriptionReverted                = errors.New("subscription reverted")
+	ErrModifyLiquidityNotificationReverted = errors.New("modify-liquidity notification reverted")
+	ErrBurnNotificationReverted            = errors.New("burn notification reverted")
+	ErrAlreadySubscribed                   = errors.New("already subscribed")
+	ErrNonceAlreadyUsed                    = errors.New("nonce already used")
+	ErrContractLocked                      = errors.New("contract locked")
+	ErrInvalidEthSender                    = errors.New("invalid eth sender")
+	ErrDeltaNotPositive                    = errors.New("delta not positive")
+	ErrDeltaNotNegative                    = errors.New("delta not negative")
+	ErrInsufficientBalance                 = errors.New("insufficient balance")
+	ErrMaximumAmountExceeded               = errors.New("maximum amount exceeded")
+	ErrMinimumAmountInsufficient           = errors.New("minimum amount insufficient")
 )
 
-// EncodeModifyLiquidities returns the calldata for modifyLiquidities(abi.encode(actions, params),
-// deadline): the standard entry point for batching position actions.
+// EncodeModifyLiquidities returns the calldata for modifyLiquidities(abi.encode(actions, params), deadline).
 func EncodeModifyLiquidities(actions []byte, params [][]byte, deadline *big.Int) ([]byte, error) {
 	unlockData, err := EncodeActions(actions, params)
 	if err != nil {
@@ -197,8 +178,7 @@ func EncodeModifyLiquidities(actions []byte, params [][]byte, deadline *big.Int)
 	return data, nil
 }
 
-// EncodeModifyLiquiditiesWithoutUnlock returns the calldata for modifyLiquiditiesWithoutUnlock
-// (actions, params). Only callable by a contract that has already unlocked PoolManager itself.
+// EncodeModifyLiquiditiesWithoutUnlock returns the calldata for modifyLiquiditiesWithoutUnlock(actions, params).
 func EncodeModifyLiquiditiesWithoutUnlock(actions []byte, params [][]byte) ([]byte, error) {
 	data, err := modifyLiquiditiesWithoutUnlockFn.EncodeCall(actions, params)
 	if err != nil {
@@ -234,8 +214,7 @@ func EncodeGetPositionLiquidity(tokenID *big.Int) ([]byte, error) {
 	return data, nil
 }
 
-// DecodeGetPositionLiquidity decodes the return data of getPositionLiquidity: the position's
-// liquidity amount.
+// DecodeGetPositionLiquidity decodes the return data of getPositionLiquidity: the position's liquidity amount.
 func DecodeGetPositionLiquidity(data []byte) (*big.Int, error) {
 	liquidity, err := getPositionLiquidityFn.DecodeSingleReturn[*big.Int](data)
 	if err != nil {
@@ -253,8 +232,7 @@ func EncodeGetPoolAndPositionInfo(tokenID *big.Int) ([]byte, error) {
 	return data, nil
 }
 
-// DecodeGetPoolAndPositionInfo decodes the return data of getPoolAndPositionInfo: the position's
-// pool key and its packed PositionInfo.
+// DecodeGetPoolAndPositionInfo decodes the return data of getPoolAndPositionInfo: the position's pool key and its packed PositionInfo.
 func DecodeGetPoolAndPositionInfo(data []byte) (*PoolKey, *PositionInfo, error) {
 	vals, err := getPoolAndPositionInfoFn.DecodeReturn(data)
 	if err != nil {
@@ -322,10 +300,7 @@ func EncodePositionInfo(tokenID *big.Int) ([]byte, error) {
 	return data, nil
 }
 
-// DecodePositionInfo decodes the return data of positionInfo: the position's packed PositionInfo.
-// PositionInfoLibrary.sol packs it as upper 200 bits truncated poolId | next 24 bits tickUpper |
-// next 24 bits tickLower | lowest 8 bits hasSubscriber; each field's bit offset is byte-aligned,
-// so this is plain slicing of the 32-byte big-endian word, with ticks sign-extended from int24.
+// DecodePositionInfo decodes positionInfo's packed word: poolId(200) | tickUpper(24) | tickLower(24) | hasSubscriber(8).
 func DecodePositionInfo(data []byte) (*PositionInfo, error) {
 	raw, err := positionInfoFn.DecodeSingleReturn[*big.Int](data)
 	if err != nil {
@@ -421,8 +396,7 @@ func EncodeSubscriber(tokenID *big.Int) ([]byte, error) {
 	return calldata, nil
 }
 
-// DecodeSubscriber decodes the return data of subscriber: the position's subscriber contract
-// address (the zero address if unsubscribed).
+// DecodeSubscriber decodes the return data of subscriber: the position's subscriber contract address (the zero address if unsubscribed).
 func DecodeSubscriber(data []byte) (*types.Address, error) {
 	subscriber, err := subscriberFn.DecodeSingleReturn[*types.Address](data)
 	if err != nil {
@@ -512,8 +486,7 @@ func EncodePoolManager() ([]byte, error) {
 	return calldata, nil
 }
 
-// DecodePoolManager decodes the return data of poolManager: the PoolManager this PositionManager
-// is wired to.
+// DecodePoolManager decodes the return data of poolManager: the PoolManager this PositionManager is wired to.
 func DecodePoolManager(data []byte) (*types.Address, error) {
 	addr, err := poolManagerFn.DecodeSingleReturn[*types.Address](data)
 	if err != nil {
@@ -531,8 +504,7 @@ func EncodeWETH9() ([]byte, error) {
 	return data, nil
 }
 
-// DecodeWETH9 decodes the return data of WETH9: the WETH9 contract this PositionManager wraps
-// and unwraps native ETH through.
+// DecodeWETH9 decodes the return data of WETH9: the WETH9 contract this PositionManager wraps and unwraps native ETH through.
 func DecodeWETH9(data []byte) (*types.Address, error) {
 	addr, err := weth9Fn.DecodeSingleReturn[*types.Address](data)
 	if err != nil {
@@ -550,8 +522,7 @@ func EncodePermit2Contract() ([]byte, error) {
 	return data, nil
 }
 
-// DecodePermit2Contract decodes the return data of permit2: the Permit2 contract this
-// PositionManager forwards permit/permitBatch to.
+// DecodePermit2Contract decodes the return data of permit2: the Permit2 contract this PositionManager forwards permit/permitBatch to.
 func DecodePermit2Contract(data []byte) (*types.Address, error) {
 	addr, err := permit2ContractFn.DecodeSingleReturn[*types.Address](data)
 	if err != nil {
@@ -587,8 +558,7 @@ func EncodeRevokeNonce(nonce *big.Int) ([]byte, error) {
 	return calldata, nil
 }
 
-// EncodeERC721Permit returns the calldata for permit(spender, tokenId, deadline, nonce,
-// signature): approves spender for a single position NFT via signature.
+// EncodeERC721Permit returns the calldata for permit(spender, tokenId, deadline, nonce, signature).
 func EncodeERC721Permit(spender *types.Address, tokenID, deadline, nonce *big.Int, signature []byte) ([]byte, error) {
 	calldata, err := erc721PermitFn.EncodeCall(spender, tokenID, deadline, nonce, signature)
 	if err != nil {
@@ -597,8 +567,7 @@ func EncodeERC721Permit(spender *types.Address, tokenID, deadline, nonce *big.In
 	return calldata, nil
 }
 
-// EncodeERC721PermitForAll returns the calldata for permitForAll(owner, operator, approved,
-// deadline, nonce, signature): sets an operator over all of owner's position NFTs via signature.
+// EncodeERC721PermitForAll returns the calldata for permitForAll(owner, operator, approved, deadline, nonce, signature).
 func EncodeERC721PermitForAll(owner, operator *types.Address, approved bool, deadline, nonce *big.Int, signature []byte) ([]byte, error) {
 	calldata, err := erc721PermitForAllFn.EncodeCall(owner, operator, approved, deadline, nonce, signature)
 	if err != nil {
@@ -607,8 +576,7 @@ func EncodeERC721PermitForAll(owner, operator *types.Address, approved bool, dea
 	return calldata, nil
 }
 
-// EncodePermit2Permit returns the calldata for Permit2Forwarder's permit(owner, permitSingle,
-// signature): forwards a single-token permit2 approval on owner's behalf.
+// EncodePermit2Permit returns the calldata for Permit2Forwarder's permit(owner, permitSingle, signature).
 func EncodePermit2Permit(owner *types.Address, permitSingle *permit2.PermitSingle, signature []byte) ([]byte, error) {
 	if permitSingle == nil {
 		return nil, fmt.Errorf("uniswapv4: encodePermit2Permit: permitSingle must not be nil")
@@ -626,8 +594,7 @@ func EncodePermit2Permit(owner *types.Address, permitSingle *permit2.PermitSingl
 	return calldata, nil
 }
 
-// DecodePermit2Permit decodes the return data of Permit2Forwarder's permit: the revert reason
-// from a reverting inner permit2 call, empty if it succeeded.
+// DecodePermit2Permit decodes Permit2Forwarder's permit result: the inner permit2 revert data, empty on success.
 func DecodePermit2Permit(data []byte) ([]byte, error) {
 	errData, err := permit2PermitFn.DecodeSingleReturn[[]byte](data)
 	if err != nil {
@@ -636,8 +603,7 @@ func DecodePermit2Permit(data []byte) ([]byte, error) {
 	return errData, nil
 }
 
-// EncodePermit2PermitBatch returns the calldata for Permit2Forwarder's permitBatch(owner,
-// permitBatch, signature): forwards a batch permit2 approval on owner's behalf.
+// EncodePermit2PermitBatch returns the calldata for Permit2Forwarder's permitBatch(owner, permitBatch, signature).
 func EncodePermit2PermitBatch(owner *types.Address, permitBatch *permit2.PermitBatch, signature []byte) ([]byte, error) {
 	if permitBatch == nil {
 		return nil, fmt.Errorf("uniswapv4: encodePermit2PermitBatch: permitBatch must not be nil")
@@ -653,8 +619,7 @@ func EncodePermit2PermitBatch(owner *types.Address, permitBatch *permit2.PermitB
 	return calldata, nil
 }
 
-// DecodePermit2PermitBatch decodes the return data of Permit2Forwarder's permitBatch: the revert
-// reason from a reverting inner permit2 call, empty if it succeeded.
+// DecodePermit2PermitBatch decodes Permit2Forwarder's permitBatch result: the inner permit2 revert data, empty on success.
 func DecodePermit2PermitBatch(data []byte) ([]byte, error) {
 	errData, err := permit2PermitBatchFn.DecodeSingleReturn[[]byte](data)
 	if err != nil {
@@ -687,10 +652,7 @@ var (
 	}, false)
 )
 
-// mintPositionTypes mirrors CalldataDecoder.decodeMintParams' calldata layout: poolKey, tickLower,
-// tickUpper, liquidity, amount0Max, amount1Max, and owner as flat top-level words (poolKey
-// inlined, since it's static), followed by hookData's offset and tail -- NOT a single struct
-// argument with its own leading offset (that's the shape Router's swap params use instead).
+// mintPositionTypes mirrors CalldataDecoder.decodeMintParams: flat top-level words (poolKey inlined) then hookData, not one struct.
 var mintPositionTypes = abi.NewTypes(poolKeyTuple, abi.Int24, abi.Int24, abi.Uint256, abi.Uint128, abi.Uint128, abi.Address, abi.Bytes)
 
 // EncodeActionMintPosition returns the params blob for Actions.MINT_POSITION.
@@ -775,12 +737,10 @@ func DecodeActionMintPosition(data []byte) (*MintPositionParams, error) {
 	), nil
 }
 
-// mintPositionFromDeltasTypes mirrors CalldataDecoder.decodeMintFromDeltasParams' calldata
-// layout: flat top-level words like mintPositionTypes, minus liquidity.
+// mintPositionFromDeltasTypes mirrors CalldataDecoder.decodeMintFromDeltasParams: mintPositionTypes minus liquidity.
 var mintPositionFromDeltasTypes = abi.NewTypes(poolKeyTuple, abi.Int24, abi.Int24, abi.Uint128, abi.Uint128, abi.Address, abi.Bytes)
 
-// EncodeActionMintPositionFromDeltas returns the params blob for Actions.MINT_POSITION_FROM_DELTAS.
-// Deprecated upstream (sandwich-attack vulnerable); prefer EncodeActionMintPosition.
+// EncodeActionMintPositionFromDeltas returns the params blob for Actions.MINT_POSITION_FROM_DELTAS; deprecated upstream.
 func EncodeActionMintPositionFromDeltas(p *MintPositionFromDeltasParams) ([]byte, error) {
 	if p == nil {
 		return nil, fmt.Errorf("uniswapv4: encodeActionMintPositionFromDeltas: params must not be nil")
@@ -858,8 +818,7 @@ func DecodeActionMintPositionFromDeltas(data []byte) (*MintPositionFromDeltasPar
 	), nil
 }
 
-// EncodeActionIncreaseLiquidity returns the params blob for Actions.INCREASE_LIQUIDITY:
-// abi.encode(tokenId, liquidity, amount0Max, amount1Max, hookData).
+// EncodeActionIncreaseLiquidity returns the params blob for Actions.INCREASE_LIQUIDITY: abi.encode(tokenId, liquidity, amount0Max, amount1Max, hookData).
 func EncodeActionIncreaseLiquidity(tokenID, liquidity, amount0Max, amount1Max *big.Int, hookData []byte) ([]byte, error) {
 	data, err := abi.Pack(abi.NewTypes(abi.Uint256, abi.Uint256, abi.Uint128, abi.Uint128, abi.Bytes), tokenID, liquidity, amount0Max, amount1Max, hookData)
 	if err != nil {
@@ -897,9 +856,7 @@ func DecodeActionIncreaseLiquidity(data []byte) (*big.Int, *big.Int, *big.Int, *
 	return tokenID, liquidity, amount0Max, amount1Max, hookData, nil
 }
 
-// EncodeActionIncreaseLiquidityFromDeltas returns the params blob for
-// Actions.INCREASE_LIQUIDITY_FROM_DELTAS: abi.encode(tokenId, amount0Max, amount1Max, hookData).
-// Deprecated upstream (sandwich-attack vulnerable); prefer EncodeActionIncreaseLiquidity.
+// EncodeActionIncreaseLiquidityFromDeltas returns the params blob for Actions.INCREASE_LIQUIDITY_FROM_DELTAS; deprecated upstream.
 func EncodeActionIncreaseLiquidityFromDeltas(tokenID, amount0Max, amount1Max *big.Int, hookData []byte) ([]byte, error) {
 	data, err := abi.Pack(abi.NewTypes(abi.Uint256, abi.Uint128, abi.Uint128, abi.Bytes), tokenID, amount0Max, amount1Max, hookData)
 	if err != nil {
@@ -933,8 +890,7 @@ func DecodeActionIncreaseLiquidityFromDeltas(data []byte) (*big.Int, *big.Int, *
 	return tokenID, amount0Max, amount1Max, hookData, nil
 }
 
-// EncodeActionDecreaseLiquidity returns the params blob for Actions.DECREASE_LIQUIDITY:
-// abi.encode(tokenId, liquidity, amount0Min, amount1Min, hookData).
+// EncodeActionDecreaseLiquidity returns the params blob for Actions.DECREASE_LIQUIDITY: abi.encode(tokenId, liquidity, amount0Min, amount1Min, hookData).
 func EncodeActionDecreaseLiquidity(tokenID, liquidity, amount0Min, amount1Min *big.Int, hookData []byte) ([]byte, error) {
 	data, err := abi.Pack(abi.NewTypes(abi.Uint256, abi.Uint256, abi.Uint128, abi.Uint128, abi.Bytes), tokenID, liquidity, amount0Min, amount1Min, hookData)
 	if err != nil {
@@ -972,8 +928,7 @@ func DecodeActionDecreaseLiquidity(data []byte) (*big.Int, *big.Int, *big.Int, *
 	return tokenID, liquidity, amount0Min, amount1Min, hookData, nil
 }
 
-// EncodeActionBurnPosition returns the params blob for Actions.BURN_POSITION:
-// abi.encode(tokenId, amount0Min, amount1Min, hookData).
+// EncodeActionBurnPosition returns the params blob for Actions.BURN_POSITION: abi.encode(tokenId, amount0Min, amount1Min, hookData).
 func EncodeActionBurnPosition(tokenID, amount0Min, amount1Min *big.Int, hookData []byte) ([]byte, error) {
 	data, err := abi.Pack(abi.NewTypes(abi.Uint256, abi.Uint128, abi.Uint128, abi.Bytes), tokenID, amount0Min, amount1Min, hookData)
 	if err != nil {
