@@ -56,3 +56,8 @@ packages:
       IPool:
       IQuoter:
       IRouter:
+  github.com/ninja-protocol-labs/go-evmkit/protocols/uniswap/v4:
+    config:
+      filename: "{{.InterfaceName | lower}}.go"
+    interfaces:
+      IPoolManager:

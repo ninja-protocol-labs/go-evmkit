@@ -19,6 +19,7 @@ import (
 	"github.com/ninja-protocol-labs/go-evmkit/core"
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
+	"github.com/ninja-protocol-labs/go-evmkit/internal/testenv"
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
 	"github.com/ninja-protocol-labs/go-evmkit/tx"
 )
@@ -80,7 +81,7 @@ func TestRouterSuite(t *testing.T) {
 		NativeSymbol:               "",
 		Interval:                   1500,
 		Timeout:                    60,
-		ByteCode:                   erc20ByteCodeHex,
+		ByteCode:                   testenv.ERC20ByteCodeHex,
 		Constructor:                abi.NewFunction("constructor", abi.Types{abi.String, abi.String, abi.Uint8}, nil),
 		Salt:                       core.Keccak256([]byte("go-evmkit-v4-router")),
 		MintValue:                  new(big.Int).Exp(big.NewInt(10), big.NewInt(24), nil),
@@ -209,15 +210,11 @@ func (s *RouterSuite) SetupSuite() {
 	s.key = NewPoolKey(s.currency0, s.currency1, big.NewInt(3000), big.NewInt(60), types.ZeroAddress())
 	sqrtPriceX96 := new(big.Int).Lsh(big.NewInt(1), 96)
 
-	initUnsigned, err := s.poolManager.CreateInitialize(s.ctx, tx.NewDynamicFeeBuilder(), s.poolManagerContract, s.from, s.key, sqrtPriceX96)
+	initTx, initHash, err := s.poolManager.Initialize(s.ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewInitializeRequest(s.poolManagerContract, s.key, sqrtPriceX96))
 	s.Require().NoError(err)
-	s.Require().NoError(initUnsigned.Sign(s.signer))
 	s.mu.Lock()
-	s.totalFee.Add(s.totalFee, initUnsigned.MaxFee())
+	s.totalFee.Add(s.totalFee, initTx.MaxFee())
 	s.mu.Unlock()
-
-	initHash, err := s.poolManager.Initialize(s.ctx, initUnsigned)
-	s.Require().NoError(err)
 
 	initReceipt, err := tx.WaitForReceipt(s.ctx, s.client, initHash, time.Duration(s.Interval)*time.Millisecond, time.Duration(s.Timeout)*time.Second)
 	s.Require().NoError(err)
@@ -320,7 +317,7 @@ func (s *RouterSuite) Test02Swap() {
 	swaps, err := ExtractSwap(receipt.Logs)
 	s.Require().NoError(err)
 	s.Require().Len(swaps, 1)
-	s.Require().True(swaps[0].PoolManager.Equal(s.poolManagerContract))
+	s.Require().True(swaps[0].Contract.Equal(s.poolManagerContract))
 
 	s.T().Logf("RouterSuite Test02Swap Result")
 	s.T().Logf("\tPoolSwapTest: %s", s.poolSwapTest)
@@ -369,7 +366,7 @@ func (s *RouterSuite) Test03SwapOneForZero() {
 	swaps, err := ExtractSwap(receipt.Logs)
 	s.Require().NoError(err)
 	s.Require().Len(swaps, 1)
-	s.Require().True(swaps[0].PoolManager.Equal(s.poolManagerContract))
+	s.Require().True(swaps[0].Contract.Equal(s.poolManagerContract))
 	s.Require().Zero(amountSpecified.Cmp(swaps[0].Amount1), "amount1 should equal the exact input specified")
 
 	s.T().Logf("RouterSuite Test03SwapOneForZero Result")
@@ -417,7 +414,7 @@ func (s *RouterSuite) Test04SwapExactOutput() {
 	swaps, err := ExtractSwap(receipt.Logs)
 	s.Require().NoError(err)
 	s.Require().Len(swaps, 1)
-	s.Require().True(swaps[0].PoolManager.Equal(s.poolManagerContract))
+	s.Require().True(swaps[0].Contract.Equal(s.poolManagerContract))
 	s.Require().Zero(s.SwapAmountOut.Cmp(swaps[0].Amount1), "amount1 (the output currency's credit) should equal the exact output requested")
 
 	s.T().Logf("RouterSuite Test04SwapExactOutput Result")

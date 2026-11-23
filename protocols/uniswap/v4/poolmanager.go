@@ -8,12 +8,12 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core"
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
 	"github.com/ninja-protocol-labs/go-evmkit/standards/erc6909"
-	"github.com/ninja-protocol-labs/go-evmkit/tx"
 	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
@@ -22,56 +22,61 @@ type IERC6909Claims = erc6909.IERC6909
 
 // IProtocolFees mirrors IProtocolFees.sol.
 type IProtocolFees interface {
-	ProtocolFeesAccrued(ctx context.Context, contract *types.Address, currency Currency, block string) (*big.Int, error)
-	ProtocolFeeController(ctx context.Context, contract *types.Address, block string) (*types.Address, error)
+	ProtocolFeesAccrued(ctx context.Context, opts *bind.CallOptions, req *ProtocolFeesAccruedRequest) (*big.Int, error)
+	ProtocolFeeController(ctx context.Context, opts *bind.CallOptions, req *ProtocolFeeControllerRequest) (*types.Address, error)
+	CallCollectProtocolFees(ctx context.Context, opts *bind.CallOptions, req *CollectProtocolFeesRequest) (*big.Int, error)
 
-	SetProtocolFee(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	SetProtocolFeeController(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	CollectProtocolFees(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
+	SetProtocolFee(ctx context.Context, opts *bind.TransactOptions, req *SetProtocolFeeRequest) (core.Transaction, *types.Hash, error)
+	SetProtocolFeeController(ctx context.Context, opts *bind.TransactOptions, req *SetProtocolFeeControllerRequest) (core.Transaction, *types.Hash, error)
+	CollectProtocolFees(ctx context.Context, opts *bind.TransactOptions, req *CollectProtocolFeesRequest) (core.Transaction, *types.Hash, error)
 }
 
 // IExtsload mirrors IExtsload.sol; its 3 overloaded extsload(...) become distinctly-named methods.
 type IExtsload interface {
-	Extsload(ctx context.Context, contract *types.Address, slot [32]byte, block string) ([32]byte, error)
-	ExtsloadRange(ctx context.Context, contract *types.Address, startSlot [32]byte, nSlots *big.Int, block string) ([][32]byte, error)
-	ExtsloadSlots(ctx context.Context, contract *types.Address, slots [][32]byte, block string) ([][32]byte, error)
+	Extsload(ctx context.Context, opts *bind.CallOptions, req *ExtsloadRequest) ([32]byte, error)
+	ExtsloadRange(ctx context.Context, opts *bind.CallOptions, req *ExtsloadRangeRequest) ([][32]byte, error)
+	ExtsloadSlots(ctx context.Context, opts *bind.CallOptions, req *ExtsloadSlotsRequest) ([][32]byte, error)
 }
 
 // IExttload mirrors IExttload.sol; its 2 overloaded exttload(...) become distinctly-named methods.
 type IExttload interface {
-	Exttload(ctx context.Context, contract *types.Address, slot [32]byte, block string) ([32]byte, error)
-	ExttloadSlots(ctx context.Context, contract *types.Address, slots [][32]byte, block string) ([][32]byte, error)
+	Exttload(ctx context.Context, opts *bind.CallOptions, req *ExttloadRequest) ([32]byte, error)
+	ExttloadSlots(ctx context.Context, opts *bind.CallOptions, req *ExttloadSlotsRequest) ([][32]byte, error)
 }
 
-// IPoolManager mirrors IPoolManager.sol: its own action surface (all state-mutating, no view
-// functions of its own) plus IProtocolFees, IERC6909Claims, IExtsload, and IExttload.
+// IPoolManager mirrors IPoolManager.sol plus IProtocolFees, IERC6909Claims, IExtsload and IExttload; most actions revert with ManagerLocked outside unlock.
 type IPoolManager interface {
 	IProtocolFees
 	IERC6909Claims
 	IExtsload
 	IExttload
 
-	Initialize(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	ModifyLiquidity(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	Swap(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	Donate(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	Unlock(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	Sync(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	Take(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	Settle(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	SettleFor(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	Clear(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	Mint(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	Burn(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
-	UpdateDynamicLPFee(ctx context.Context, signedTx core.Transaction) (*types.Hash, error)
+	CallInitialize(ctx context.Context, opts *bind.CallOptions, req *InitializeRequest) (*big.Int, error)
+	CallModifyLiquidity(ctx context.Context, opts *bind.CallOptions, req *ModifyLiquidityRequest) (*BalanceDelta, *BalanceDelta, error)
+	CallSwap(ctx context.Context, opts *bind.CallOptions, req *SwapRequest) (*BalanceDelta, error)
+	CallDonate(ctx context.Context, opts *bind.CallOptions, req *DonateRequest) (*BalanceDelta, error)
+	CallUnlock(ctx context.Context, opts *bind.CallOptions, req *UnlockRequest) ([]byte, error)
+	CallSettle(ctx context.Context, opts *bind.CallOptions, req *SettleRequest) (*big.Int, error)
+	CallSettleFor(ctx context.Context, opts *bind.CallOptions, req *SettleForRequest) (*big.Int, error)
+
+	Initialize(ctx context.Context, opts *bind.TransactOptions, req *InitializeRequest) (core.Transaction, *types.Hash, error)
+	ModifyLiquidity(ctx context.Context, opts *bind.TransactOptions, req *ModifyLiquidityRequest) (core.Transaction, *types.Hash, error)
+	Swap(ctx context.Context, opts *bind.TransactOptions, req *SwapRequest) (core.Transaction, *types.Hash, error)
+	Donate(ctx context.Context, opts *bind.TransactOptions, req *DonateRequest) (core.Transaction, *types.Hash, error)
+	Unlock(ctx context.Context, opts *bind.TransactOptions, req *UnlockRequest) (core.Transaction, *types.Hash, error)
+	Sync(ctx context.Context, opts *bind.TransactOptions, req *SyncRequest) (core.Transaction, *types.Hash, error)
+	Take(ctx context.Context, opts *bind.TransactOptions, req *TakeRequest) (core.Transaction, *types.Hash, error)
+	Settle(ctx context.Context, opts *bind.TransactOptions, req *SettleRequest) (core.Transaction, *types.Hash, error)
+	SettleFor(ctx context.Context, opts *bind.TransactOptions, req *SettleForRequest) (core.Transaction, *types.Hash, error)
+	Clear(ctx context.Context, opts *bind.TransactOptions, req *ClearRequest) (core.Transaction, *types.Hash, error)
+	Mint(ctx context.Context, opts *bind.TransactOptions, req *MintRequest) (core.Transaction, *types.Hash, error)
+	Burn(ctx context.Context, opts *bind.TransactOptions, req *BurnRequest) (core.Transaction, *types.Hash, error)
+	UpdateDynamicLPFee(ctx context.Context, opts *bind.TransactOptions, req *UpdateDynamicLPFeeRequest) (core.Transaction, *types.Hash, error)
 }
 
 var _ IPoolManager = (*PoolManager)(nil)
 
-// PoolManager calls any PoolManager contract over a Client; it holds no contract address, so one
-// instance serves every deployment. The embedded *erc6909.ERC6909 promotes BalanceOf/Allowance/
-// IsOperator/Approve/SetOperator/Transfer/TransferFrom/SupportsInterface, satisfying
-// IERC6909Claims.
+// PoolManager calls any PoolManager contract over a Client; ERC-6909 claim methods are promoted from the embedded *erc6909.ERC6909.
 type PoolManager struct {
 	*erc6909.ERC6909
 
@@ -81,576 +86,721 @@ type PoolManager struct {
 // New returns a PoolManager calling deployments via cli.
 func New(cli rpc.Client) *PoolManager {
 	return &PoolManager{
-		c:       cli,
 		ERC6909: erc6909.New(cli),
+		c:       cli,
 	}
 }
 
-// ProtocolFeesAccrued returns the protocol fees accrued in currency on contract.
-func (m *PoolManager) ProtocolFeesAccrued(ctx context.Context, contract *types.Address, currency Currency, block string) (*big.Int, error) {
-	calldata, err := EncodeProtocolFeesAccrued(currency)
+// ProtocolFeesAccrued returns the protocol fees req.Contract has accrued in req.Currency.
+func (m *PoolManager) ProtocolFeesAccrued(ctx context.Context, opts *bind.CallOptions, req *ProtocolFeesAccruedRequest) (*big.Int, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv4: protocolFeesAccrued: %w", err)
+	}
+
+	calldata, err := EncodeProtocolFeesAccrued(req.Currency)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv4: protocolFeesAccrued: %w", err)
 	}
-	data, err := m.call(ctx, nil, contract, calldata, block)
+
+	data, err := bind.Call(ctx, m.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv4: protocolFeesAccrued: %w", m.wrapRevertError(err))
+	}
+
+	out, err := DecodeProtocolFeesAccrued(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv4: protocolFeesAccrued: %w", err)
 	}
-	amount, err := DecodeProtocolFeesAccrued(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: protocolFeesAccrued: %w", err)
-	}
-	return amount, nil
+
+	return out, nil
 }
 
-// ProtocolFeeController returns contract's current protocol fee controller address.
-func (m *PoolManager) ProtocolFeeController(ctx context.Context, contract *types.Address, block string) (*types.Address, error) {
+// ProtocolFeeController returns req.Contract's protocol fee controller, the only account allowed to SetProtocolFee/CollectProtocolFees.
+func (m *PoolManager) ProtocolFeeController(ctx context.Context, opts *bind.CallOptions, req *ProtocolFeeControllerRequest) (*types.Address, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv4: protocolFeeController: %w", err)
+	}
+
 	calldata, err := EncodeProtocolFeeController()
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv4: protocolFeeController: %w", err)
 	}
-	data, err := m.call(ctx, nil, contract, calldata, block)
+
+	data, err := bind.Call(ctx, m.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv4: protocolFeeController: %w", m.wrapRevertError(err))
+	}
+
+	out, err := DecodeProtocolFeeController(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv4: protocolFeeController: %w", err)
 	}
-	controller, err := DecodeProtocolFeeController(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: protocolFeeController: %w", err)
-	}
-	return controller, nil
+
+	return out, nil
 }
 
-// Extsload returns the raw value at slot on contract.
-func (m *PoolManager) Extsload(ctx context.Context, contract *types.Address, slot [32]byte, block string) ([32]byte, error) {
-	calldata, err := EncodeExtsload(slot)
+// Extsload returns the raw storage word at req.Slot on req.Contract.
+func (m *PoolManager) Extsload(ctx context.Context, opts *bind.CallOptions, req *ExtsloadRequest) ([32]byte, error) {
+	if err := req.Validate(); err != nil {
+		return [32]byte{}, fmt.Errorf("uniswapv4: extsload: %w", err)
+	}
+
+	calldata, err := EncodeExtsload(req.Slot)
 	if err != nil {
 		return [32]byte{}, fmt.Errorf("uniswapv4: extsload: %w", err)
 	}
-	data, err := m.call(ctx, nil, contract, calldata, block)
+
+	data, err := bind.Call(ctx, m.c, opts, req.Contract, calldata)
+	if err != nil {
+		return [32]byte{}, fmt.Errorf("uniswapv4: extsload: %w", m.wrapRevertError(err))
+	}
+
+	out, err := DecodeExtsload(data)
 	if err != nil {
 		return [32]byte{}, fmt.Errorf("uniswapv4: extsload: %w", err)
 	}
-	value, err := DecodeExtsload(data)
-	if err != nil {
-		return [32]byte{}, fmt.Errorf("uniswapv4: extsload: %w", err)
-	}
-	return value, nil
+
+	return out, nil
 }
 
-// ExtsloadRange returns the nSlots raw values starting at startSlot on contract.
-func (m *PoolManager) ExtsloadRange(ctx context.Context, contract *types.Address, startSlot [32]byte, nSlots *big.Int, block string) ([][32]byte, error) {
-	calldata, err := EncodeExtsloadRange(startSlot, nSlots)
+// ExtsloadRange returns the req.NSlots raw storage words starting at req.StartSlot on req.Contract.
+func (m *PoolManager) ExtsloadRange(ctx context.Context, opts *bind.CallOptions, req *ExtsloadRangeRequest) ([][32]byte, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv4: extsloadRange: %w", err)
+	}
+
+	calldata, err := EncodeExtsloadRange(req.StartSlot, req.NSlots)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv4: extsloadRange: %w", err)
 	}
-	data, err := m.call(ctx, nil, contract, calldata, block)
+
+	data, err := bind.Call(ctx, m.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv4: extsloadRange: %w", m.wrapRevertError(err))
+	}
+
+	out, err := DecodeExtsloadRange(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv4: extsloadRange: %w", err)
 	}
-	values, err := DecodeExtsloadRange(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: extsloadRange: %w", err)
-	}
-	return values, nil
+
+	return out, nil
 }
 
-// ExtsloadSlots returns the raw value at each of slots on contract.
-func (m *PoolManager) ExtsloadSlots(ctx context.Context, contract *types.Address, slots [][32]byte, block string) ([][32]byte, error) {
-	calldata, err := EncodeExtsloadSlots(slots)
+// ExtsloadSlots returns the raw storage word at each of req.Slots on req.Contract.
+func (m *PoolManager) ExtsloadSlots(ctx context.Context, opts *bind.CallOptions, req *ExtsloadSlotsRequest) ([][32]byte, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv4: extsloadSlots: %w", err)
+	}
+
+	calldata, err := EncodeExtsloadSlots(req.Slots)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv4: extsloadSlots: %w", err)
 	}
-	data, err := m.call(ctx, nil, contract, calldata, block)
+
+	data, err := bind.Call(ctx, m.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv4: extsloadSlots: %w", m.wrapRevertError(err))
+	}
+
+	out, err := DecodeExtsloadSlots(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv4: extsloadSlots: %w", err)
 	}
-	values, err := DecodeExtsloadSlots(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: extsloadSlots: %w", err)
-	}
-	return values, nil
+
+	return out, nil
 }
 
-// Exttload returns the raw transient-storage value at slot on contract.
-func (m *PoolManager) Exttload(ctx context.Context, contract *types.Address, slot [32]byte, block string) ([32]byte, error) {
-	calldata, err := EncodeExttload(slot)
+// Exttload returns the raw transient-storage word at req.Slot on req.Contract; outside a transaction it is always zero.
+func (m *PoolManager) Exttload(ctx context.Context, opts *bind.CallOptions, req *ExttloadRequest) ([32]byte, error) {
+	if err := req.Validate(); err != nil {
+		return [32]byte{}, fmt.Errorf("uniswapv4: exttload: %w", err)
+	}
+
+	calldata, err := EncodeExttload(req.Slot)
 	if err != nil {
 		return [32]byte{}, fmt.Errorf("uniswapv4: exttload: %w", err)
 	}
-	data, err := m.call(ctx, nil, contract, calldata, block)
+
+	data, err := bind.Call(ctx, m.c, opts, req.Contract, calldata)
+	if err != nil {
+		return [32]byte{}, fmt.Errorf("uniswapv4: exttload: %w", m.wrapRevertError(err))
+	}
+
+	out, err := DecodeExttload(data)
 	if err != nil {
 		return [32]byte{}, fmt.Errorf("uniswapv4: exttload: %w", err)
 	}
-	value, err := DecodeExttload(data)
-	if err != nil {
-		return [32]byte{}, fmt.Errorf("uniswapv4: exttload: %w", err)
-	}
-	return value, nil
+
+	return out, nil
 }
 
-// ExttloadSlots returns the raw transient-storage value at each of slots on contract.
-func (m *PoolManager) ExttloadSlots(ctx context.Context, contract *types.Address, slots [][32]byte, block string) ([][32]byte, error) {
-	calldata, err := EncodeExttloadSlots(slots)
+// ExttloadSlots returns the raw transient-storage word at each of req.Slots on req.Contract.
+func (m *PoolManager) ExttloadSlots(ctx context.Context, opts *bind.CallOptions, req *ExttloadSlotsRequest) ([][32]byte, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv4: exttloadSlots: %w", err)
+	}
+
+	calldata, err := EncodeExttloadSlots(req.Slots)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv4: exttloadSlots: %w", err)
 	}
-	data, err := m.call(ctx, nil, contract, calldata, block)
+
+	data, err := bind.Call(ctx, m.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv4: exttloadSlots: %w", m.wrapRevertError(err))
+	}
+
+	out, err := DecodeExttloadSlots(data)
 	if err != nil {
 		return nil, fmt.Errorf("uniswapv4: exttloadSlots: %w", err)
 	}
-	values, err := DecodeExttloadSlots(data)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: exttloadSlots: %w", err)
-	}
-	return values, nil
+
+	return out, nil
 }
 
-// CreateInitialize builds an unsigned initialize(key, sqrtPriceX96) transaction via b, sent by sender.
-func (m *PoolManager) CreateInitialize(ctx context.Context, b tx.Builder, contract, sender *types.Address, key *PoolKey, sqrtPriceX96 *big.Int) (core.Transaction, error) {
-	calldata, err := EncodeInitialize(key, sqrtPriceX96)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: createInitialize: %w", err)
+// CallInitialize runs initialize(key, sqrtPriceX96) via eth_call as opts.From, returning the pool's initial tick or the revert.
+func (m *PoolManager) CallInitialize(ctx context.Context, opts *bind.CallOptions, req *InitializeRequest) (*big.Int, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv4: callInitialize: %w", err)
 	}
-	unsigned, err := b.Build(sender, contract, nil, calldata).Pack(ctx, m.c)
+
+	calldata, err := EncodeInitialize(req.Key, req.SqrtPriceX96)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: createInitialize: %w", m.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv4: callInitialize: %w", err)
 	}
-	return unsigned, nil
+
+	data, err := bind.Call(ctx, m.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv4: callInitialize: %w", m.wrapRevertError(err))
+	}
+
+	out, err := DecodeInitialize(data)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv4: callInitialize: %w", err)
+	}
+
+	return out, nil
 }
 
-// Initialize broadcasts an already-signed initialize transaction.
-func (m *PoolManager) Initialize(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: initialize: %w", err)
+// CallModifyLiquidity runs modifyLiquidity via eth_call as opts.From, returning (callerDelta, feesAccrued) or the revert.
+func (m *PoolManager) CallModifyLiquidity(ctx context.Context, opts *bind.CallOptions, req *ModifyLiquidityRequest) (*BalanceDelta, *BalanceDelta, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv4: callModifyLiquidity: %w", err)
 	}
-	hash, err := tx.Broadcast(ctx, m.c, raw)
+
+	calldata, err := EncodeModifyLiquidity(req.Key, req.Params, req.HookData)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: initialize: %w", err)
+		return nil, nil, fmt.Errorf("uniswapv4: callModifyLiquidity: %w", err)
 	}
-	return hash, nil
+
+	data, err := bind.Call(ctx, m.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, nil, fmt.Errorf("uniswapv4: callModifyLiquidity: %w", m.wrapRevertError(err))
+	}
+
+	callerDelta, feesAccrued, err := DecodeModifyLiquidity(data)
+	if err != nil {
+		return nil, nil, fmt.Errorf("uniswapv4: callModifyLiquidity: %w", err)
+	}
+
+	return callerDelta, feesAccrued, nil
 }
 
-// CreateModifyLiquidity builds an unsigned modifyLiquidity(key, params, hookData) transaction via
-// b, sent by sender.
-func (m *PoolManager) CreateModifyLiquidity(ctx context.Context, b tx.Builder, contract, sender *types.Address, key *PoolKey, params *LiquidityParams, hookData []byte) (core.Transaction, error) {
-	calldata, err := EncodeModifyLiquidity(key, params, hookData)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: createModifyLiquidity: %w", err)
+// CallSwap runs swap via eth_call as opts.From, returning the swap's BalanceDelta or the revert.
+func (m *PoolManager) CallSwap(ctx context.Context, opts *bind.CallOptions, req *SwapRequest) (*BalanceDelta, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv4: callSwap: %w", err)
 	}
-	unsigned, err := b.Build(sender, contract, nil, calldata).Pack(ctx, m.c)
+
+	calldata, err := EncodeSwap(req.Key, req.Params, req.HookData)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: createModifyLiquidity: %w", m.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv4: callSwap: %w", err)
 	}
-	return unsigned, nil
+
+	data, err := bind.Call(ctx, m.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv4: callSwap: %w", m.wrapRevertError(err))
+	}
+
+	out, err := DecodeSwap(data)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv4: callSwap: %w", err)
+	}
+
+	return out, nil
 }
 
-// ModifyLiquidity broadcasts an already-signed modifyLiquidity transaction.
-func (m *PoolManager) ModifyLiquidity(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: modifyLiquidity: %w", err)
+// CallDonate runs donate via eth_call as opts.From, returning the donation's BalanceDelta or the revert.
+func (m *PoolManager) CallDonate(ctx context.Context, opts *bind.CallOptions, req *DonateRequest) (*BalanceDelta, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv4: callDonate: %w", err)
 	}
-	hash, err := tx.Broadcast(ctx, m.c, raw)
+
+	calldata, err := EncodeDonate(req.Key, req.Amount0, req.Amount1, req.HookData)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: modifyLiquidity: %w", err)
+		return nil, fmt.Errorf("uniswapv4: callDonate: %w", err)
 	}
-	return hash, nil
+
+	data, err := bind.Call(ctx, m.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv4: callDonate: %w", m.wrapRevertError(err))
+	}
+
+	out, err := DecodeDonate(data)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv4: callDonate: %w", err)
+	}
+
+	return out, nil
 }
 
-// CreateSwap builds an unsigned swap(key, params, hookData) transaction via b, sent by sender.
-func (m *PoolManager) CreateSwap(ctx context.Context, b tx.Builder, contract, sender *types.Address, key *PoolKey, params *SwapAmountParams, hookData []byte) (core.Transaction, error) {
-	calldata, err := EncodeSwap(key, params, hookData)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: createSwap: %w", err)
+// CallUnlock runs unlock(data) via eth_call as opts.From, returning what opts.From's unlockCallback returned or the revert.
+func (m *PoolManager) CallUnlock(ctx context.Context, opts *bind.CallOptions, req *UnlockRequest) ([]byte, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv4: callUnlock: %w", err)
 	}
-	unsigned, err := b.Build(sender, contract, nil, calldata).Pack(ctx, m.c)
+
+	calldata, err := EncodeUnlock(req.Data)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: createSwap: %w", m.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv4: callUnlock: %w", err)
 	}
-	return unsigned, nil
+
+	data, err := bind.Call(ctx, m.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv4: callUnlock: %w", m.wrapRevertError(err))
+	}
+
+	out, err := DecodeUnlock(data)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv4: callUnlock: %w", err)
+	}
+
+	return out, nil
 }
 
-// Swap broadcasts an already-signed swap transaction.
-func (m *PoolManager) Swap(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: swap: %w", err)
+// CallSettle runs settle() via eth_call as opts.From with req.NativeAmount as msg.value, returning the amount paid or the revert; opts.Value must be nil.
+func (m *PoolManager) CallSettle(ctx context.Context, opts *bind.CallOptions, req *SettleRequest) (*big.Int, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv4: callSettle: %w", err)
 	}
-	hash, err := tx.Broadcast(ctx, m.c, raw)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: swap: %w", err)
-	}
-	return hash, nil
-}
 
-// CreateDonate builds an unsigned donate(key, amount0, amount1, hookData) transaction via b, sent
-// by sender.
-func (m *PoolManager) CreateDonate(ctx context.Context, b tx.Builder, contract, sender *types.Address, key *PoolKey, amount0, amount1 *big.Int, hookData []byte) (core.Transaction, error) {
-	calldata, err := EncodeDonate(key, amount0, amount1, hookData)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: createDonate: %w", err)
+	if opts != nil && opts.Value != nil {
+		return nil, fmt.Errorf("uniswapv4: callSettle: %w: value must be nil", bind.ErrInvalidOptions)
 	}
-	unsigned, err := b.Build(sender, contract, nil, calldata).Pack(ctx, m.c)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: createDonate: %w", m.wrapRevertError(err))
-	}
-	return unsigned, nil
-}
 
-// Donate broadcasts an already-signed donate transaction.
-func (m *PoolManager) Donate(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: donate: %w", err)
-	}
-	hash, err := tx.Broadcast(ctx, m.c, raw)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: donate: %w", err)
-	}
-	return hash, nil
-}
-
-// CreateUnlock builds an unsigned unlock(data) transaction via b, sent by sender.
-func (m *PoolManager) CreateUnlock(ctx context.Context, b tx.Builder, contract, sender *types.Address, unlockData []byte) (core.Transaction, error) {
-	calldata, err := EncodeUnlock(unlockData)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: createUnlock: %w", err)
-	}
-	unsigned, err := b.Build(sender, contract, nil, calldata).Pack(ctx, m.c)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: createUnlock: %w", m.wrapRevertError(err))
-	}
-	return unsigned, nil
-}
-
-// Unlock broadcasts an already-signed unlock transaction.
-func (m *PoolManager) Unlock(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: unlock: %w", err)
-	}
-	hash, err := tx.Broadcast(ctx, m.c, raw)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: unlock: %w", err)
-	}
-	return hash, nil
-}
-
-// CreateSync builds an unsigned sync(currency) transaction via b, sent by sender.
-func (m *PoolManager) CreateSync(ctx context.Context, b tx.Builder, contract, sender *types.Address, currency Currency) (core.Transaction, error) {
-	calldata, err := EncodeSync(currency)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: createSync: %w", err)
-	}
-	unsigned, err := b.Build(sender, contract, nil, calldata).Pack(ctx, m.c)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: createSync: %w", m.wrapRevertError(err))
-	}
-	return unsigned, nil
-}
-
-// Sync broadcasts an already-signed sync transaction.
-func (m *PoolManager) Sync(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: sync: %w", err)
-	}
-	hash, err := tx.Broadcast(ctx, m.c, raw)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: sync: %w", err)
-	}
-	return hash, nil
-}
-
-// CreateTake builds an unsigned take(currency, to, amount) transaction via b, sent by sender.
-func (m *PoolManager) CreateTake(ctx context.Context, b tx.Builder, contract, sender *types.Address, currency Currency, to *types.Address, amount *big.Int) (core.Transaction, error) {
-	calldata, err := EncodeTake(currency, to, amount)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: createTake: %w", err)
-	}
-	unsigned, err := b.Build(sender, contract, nil, calldata).Pack(ctx, m.c)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: createTake: %w", m.wrapRevertError(err))
-	}
-	return unsigned, nil
-}
-
-// Take broadcasts an already-signed take transaction.
-func (m *PoolManager) Take(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: take: %w", err)
-	}
-	hash, err := tx.Broadcast(ctx, m.c, raw)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: take: %w", err)
-	}
-	return hash, nil
-}
-
-// CreateSettle builds an unsigned settle() transaction via b, sent by sender with value wei attached.
-func (m *PoolManager) CreateSettle(ctx context.Context, b tx.Builder, contract, sender *types.Address, value *big.Int) (core.Transaction, error) {
 	calldata, err := EncodeSettle()
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: createSettle: %w", err)
+		return nil, fmt.Errorf("uniswapv4: callSettle: %w", err)
 	}
-	unsigned, err := b.Build(sender, contract, value, calldata).Pack(ctx, m.c)
+
+	callOpts := bind.NewCallOptions()
+	if opts != nil {
+		*callOpts = *opts
+	}
+	callOpts.Value = req.NativeAmount
+
+	data, err := bind.Call(ctx, m.c, callOpts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: createSettle: %w", m.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv4: callSettle: %w", m.wrapRevertError(err))
 	}
-	return unsigned, nil
+
+	out, err := DecodeSettle(data)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv4: callSettle: %w", err)
+	}
+
+	return out, nil
 }
 
-// Settle broadcasts an already-signed settle transaction.
-func (m *PoolManager) Settle(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: settle: %w", err)
+// CallSettleFor runs settleFor(recipient) via eth_call as opts.From with req.NativeAmount as msg.value, returning the amount paid or the revert; opts.Value must be nil.
+func (m *PoolManager) CallSettleFor(ctx context.Context, opts *bind.CallOptions, req *SettleForRequest) (*big.Int, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv4: callSettleFor: %w", err)
 	}
-	hash, err := tx.Broadcast(ctx, m.c, raw)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: settle: %w", err)
+
+	if opts != nil && opts.Value != nil {
+		return nil, fmt.Errorf("uniswapv4: callSettleFor: %w: value must be nil", bind.ErrInvalidOptions)
 	}
-	return hash, nil
+
+	calldata, err := EncodeSettleFor(req.Recipient)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv4: callSettleFor: %w", err)
+	}
+
+	callOpts := bind.NewCallOptions()
+	if opts != nil {
+		*callOpts = *opts
+	}
+	callOpts.Value = req.NativeAmount
+
+	data, err := bind.Call(ctx, m.c, callOpts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv4: callSettleFor: %w", m.wrapRevertError(err))
+	}
+
+	out, err := DecodeSettleFor(data)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv4: callSettleFor: %w", err)
+	}
+
+	return out, nil
 }
 
-// CreateSettleFor builds an unsigned settleFor(recipient) transaction via b, sent by sender with
-// value wei attached.
-func (m *PoolManager) CreateSettleFor(ctx context.Context, b tx.Builder, contract, sender *types.Address, value *big.Int, recipient *types.Address) (core.Transaction, error) {
-	calldata, err := EncodeSettleFor(recipient)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: createSettleFor: %w", err)
+// CallCollectProtocolFees runs collectProtocolFees via eth_call as opts.From, returning the amount it would collect or the revert.
+func (m *PoolManager) CallCollectProtocolFees(ctx context.Context, opts *bind.CallOptions, req *CollectProtocolFeesRequest) (*big.Int, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("uniswapv4: callCollectProtocolFees: %w", err)
 	}
-	unsigned, err := b.Build(sender, contract, value, calldata).Pack(ctx, m.c)
+
+	calldata, err := EncodeCollectProtocolFees(req.Recipient, req.Currency, req.Amount)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: createSettleFor: %w", m.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv4: callCollectProtocolFees: %w", err)
 	}
-	return unsigned, nil
+
+	data, err := bind.Call(ctx, m.c, opts, req.Contract, calldata)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv4: callCollectProtocolFees: %w", m.wrapRevertError(err))
+	}
+
+	out, err := DecodeCollectProtocolFees(data)
+	if err != nil {
+		return nil, fmt.Errorf("uniswapv4: callCollectProtocolFees: %w", err)
+	}
+
+	return out, nil
 }
 
-// SettleFor broadcasts an already-signed settleFor transaction.
-func (m *PoolManager) SettleFor(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: settleFor: %w", err)
+// Initialize sends initialize(key, sqrtPriceX96) on req.Contract, signed by opts.Signer; the new pool comes back via ExtractInitialize.
+func (m *PoolManager) Initialize(ctx context.Context, opts *bind.TransactOptions, req *InitializeRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv4: initialize: %w", err)
 	}
-	hash, err := tx.Broadcast(ctx, m.c, raw)
+
+	calldata, err := EncodeInitialize(req.Key, req.SqrtPriceX96)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: settleFor: %w", err)
+		return nil, nil, fmt.Errorf("uniswapv4: initialize: %w", err)
 	}
-	return hash, nil
+
+	signed, hash, err := bind.Transact(ctx, m.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv4: initialize: %w", m.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
 }
 
-// CreateClear builds an unsigned clear(currency, amount) transaction via b, sent by sender.
-func (m *PoolManager) CreateClear(ctx context.Context, b tx.Builder, contract, sender *types.Address, currency Currency, amount *big.Int) (core.Transaction, error) {
-	calldata, err := EncodeClear(currency, amount)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: createClear: %w", err)
+// ModifyLiquidity sends modifyLiquidity(key, params, hookData) on req.Contract, signed by opts.Signer; from an EOA it reverts with ErrManagerLocked.
+func (m *PoolManager) ModifyLiquidity(ctx context.Context, opts *bind.TransactOptions, req *ModifyLiquidityRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv4: modifyLiquidity: %w", err)
 	}
-	unsigned, err := b.Build(sender, contract, nil, calldata).Pack(ctx, m.c)
+
+	calldata, err := EncodeModifyLiquidity(req.Key, req.Params, req.HookData)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: createClear: %w", m.wrapRevertError(err))
+		return nil, nil, fmt.Errorf("uniswapv4: modifyLiquidity: %w", err)
 	}
-	return unsigned, nil
+
+	signed, hash, err := bind.Transact(ctx, m.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv4: modifyLiquidity: %w", m.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
 }
 
-// Clear broadcasts an already-signed clear transaction.
-func (m *PoolManager) Clear(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: clear: %w", err)
+// Swap sends swap(key, params, hookData) on req.Contract, signed by opts.Signer; from an EOA it reverts with ErrManagerLocked.
+func (m *PoolManager) Swap(ctx context.Context, opts *bind.TransactOptions, req *SwapRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv4: swap: %w", err)
 	}
-	hash, err := tx.Broadcast(ctx, m.c, raw)
+
+	calldata, err := EncodeSwap(req.Key, req.Params, req.HookData)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: clear: %w", err)
+		return nil, nil, fmt.Errorf("uniswapv4: swap: %w", err)
 	}
-	return hash, nil
+
+	signed, hash, err := bind.Transact(ctx, m.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv4: swap: %w", m.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
 }
 
-// CreateMint builds an unsigned mint(to, id, amount) transaction via b, sent by sender -- the
-// ERC6909 claim-token mint, not a liquidity position.
-func (m *PoolManager) CreateMint(ctx context.Context, b tx.Builder, contract, sender, to *types.Address, id, amount *big.Int) (core.Transaction, error) {
-	calldata, err := EncodeMint(to, id, amount)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: createMint: %w", err)
+// Donate sends donate(key, amount0, amount1, hookData) on req.Contract, signed by opts.Signer; from an EOA it reverts with ErrManagerLocked.
+func (m *PoolManager) Donate(ctx context.Context, opts *bind.TransactOptions, req *DonateRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv4: donate: %w", err)
 	}
-	unsigned, err := b.Build(sender, contract, nil, calldata).Pack(ctx, m.c)
+
+	calldata, err := EncodeDonate(req.Key, req.Amount0, req.Amount1, req.HookData)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: createMint: %w", m.wrapRevertError(err))
+		return nil, nil, fmt.Errorf("uniswapv4: donate: %w", err)
 	}
-	return unsigned, nil
+
+	signed, hash, err := bind.Transact(ctx, m.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv4: donate: %w", m.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
 }
 
-// Mint broadcasts an already-signed mint transaction.
-func (m *PoolManager) Mint(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: mint: %w", err)
+// Unlock sends unlock(data) on req.Contract, signed by opts.Signer; PoolManager calls back into the sender, so an EOA sender reverts.
+func (m *PoolManager) Unlock(ctx context.Context, opts *bind.TransactOptions, req *UnlockRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv4: unlock: %w", err)
 	}
-	hash, err := tx.Broadcast(ctx, m.c, raw)
+
+	calldata, err := EncodeUnlock(req.Data)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: mint: %w", err)
+		return nil, nil, fmt.Errorf("uniswapv4: unlock: %w", err)
 	}
-	return hash, nil
+
+	signed, hash, err := bind.Transact(ctx, m.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv4: unlock: %w", m.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
 }
 
-// CreateBurn builds an unsigned burn(from, id, amount) transaction via b, sent by sender.
-func (m *PoolManager) CreateBurn(ctx context.Context, b tx.Builder, contract, sender, from *types.Address, id, amount *big.Int) (core.Transaction, error) {
-	calldata, err := EncodeBurn(from, id, amount)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: createBurn: %w", err)
+// Sync sends sync(currency) on req.Contract, signed by opts.Signer, checkpointing its reserves of req.Currency before a settle.
+func (m *PoolManager) Sync(ctx context.Context, opts *bind.TransactOptions, req *SyncRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv4: sync: %w", err)
 	}
-	unsigned, err := b.Build(sender, contract, nil, calldata).Pack(ctx, m.c)
+
+	calldata, err := EncodeSync(req.Currency)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: createBurn: %w", m.wrapRevertError(err))
+		return nil, nil, fmt.Errorf("uniswapv4: sync: %w", err)
 	}
-	return unsigned, nil
+
+	signed, hash, err := bind.Transact(ctx, m.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv4: sync: %w", m.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
 }
 
-// Burn broadcasts an already-signed burn transaction.
-func (m *PoolManager) Burn(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: burn: %w", err)
+// Take sends take(currency, to, amount) on req.Contract, signed by opts.Signer; from an EOA it reverts with ErrManagerLocked.
+func (m *PoolManager) Take(ctx context.Context, opts *bind.TransactOptions, req *TakeRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv4: take: %w", err)
 	}
-	hash, err := tx.Broadcast(ctx, m.c, raw)
+
+	calldata, err := EncodeTake(req.Currency, req.To, req.Amount)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: burn: %w", err)
+		return nil, nil, fmt.Errorf("uniswapv4: take: %w", err)
 	}
-	return hash, nil
+
+	signed, hash, err := bind.Transact(ctx, m.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv4: take: %w", m.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
 }
 
-// CreateUpdateDynamicLPFee builds an unsigned updateDynamicLPFee(key, newDynamicLPFee) transaction
-// via b, sent by sender.
-func (m *PoolManager) CreateUpdateDynamicLPFee(ctx context.Context, b tx.Builder, contract, sender *types.Address, key *PoolKey, newDynamicLPFee *big.Int) (core.Transaction, error) {
-	calldata, err := EncodeUpdateDynamicLPFee(key, newDynamicLPFee)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: createUpdateDynamicLPFee: %w", err)
+// Settle sends settle() on req.Contract, signed by opts.Signer with req.NativeAmount (nil sends none) as msg.value; opts.Value must be nil.
+func (m *PoolManager) Settle(ctx context.Context, opts *bind.TransactOptions, req *SettleRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv4: settle: %w", err)
 	}
-	unsigned, err := b.Build(sender, contract, nil, calldata).Pack(ctx, m.c)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: createUpdateDynamicLPFee: %w", m.wrapRevertError(err))
+
+	if opts != nil && opts.Value != nil {
+		return nil, nil, fmt.Errorf("uniswapv4: settle: %w: value must be nil", bind.ErrInvalidOptions)
 	}
-	return unsigned, nil
+
+	calldata, err := EncodeSettle()
+	if err != nil {
+		return nil, nil, fmt.Errorf("uniswapv4: settle: %w", err)
+	}
+
+	var txOpts *bind.TransactOptions
+	if opts != nil {
+		o := *opts
+		o.Value = req.NativeAmount
+		txOpts = &o
+	}
+
+	signed, hash, err := bind.Transact(ctx, m.c, txOpts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv4: settle: %w", m.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
 }
 
-// UpdateDynamicLPFee broadcasts an already-signed updateDynamicLPFee transaction.
-func (m *PoolManager) UpdateDynamicLPFee(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: updateDynamicLPFee: %w", err)
+// SettleFor sends settleFor(recipient) on req.Contract, signed by opts.Signer with req.NativeAmount (nil sends none) as msg.value; opts.Value must be nil.
+func (m *PoolManager) SettleFor(ctx context.Context, opts *bind.TransactOptions, req *SettleForRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv4: settleFor: %w", err)
 	}
-	hash, err := tx.Broadcast(ctx, m.c, raw)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: updateDynamicLPFee: %w", err)
+
+	if opts != nil && opts.Value != nil {
+		return nil, nil, fmt.Errorf("uniswapv4: settleFor: %w: value must be nil", bind.ErrInvalidOptions)
 	}
-	return hash, nil
+
+	calldata, err := EncodeSettleFor(req.Recipient)
+	if err != nil {
+		return nil, nil, fmt.Errorf("uniswapv4: settleFor: %w", err)
+	}
+
+	var txOpts *bind.TransactOptions
+	if opts != nil {
+		o := *opts
+		o.Value = req.NativeAmount
+		txOpts = &o
+	}
+
+	signed, hash, err := bind.Transact(ctx, m.c, txOpts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv4: settleFor: %w", m.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
 }
 
-// CreateSetProtocolFee builds an unsigned setProtocolFee(key, newProtocolFee) transaction via b,
-// sent by sender.
-func (m *PoolManager) CreateSetProtocolFee(ctx context.Context, b tx.Builder, contract, sender *types.Address, key *PoolKey, newProtocolFee *big.Int) (core.Transaction, error) {
-	calldata, err := EncodeSetProtocolFee(key, newProtocolFee)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: createSetProtocolFee: %w", err)
+// Clear sends clear(currency, amount) on req.Contract, signed by opts.Signer; from an EOA it reverts with ErrManagerLocked.
+func (m *PoolManager) Clear(ctx context.Context, opts *bind.TransactOptions, req *ClearRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv4: clear: %w", err)
 	}
-	unsigned, err := b.Build(sender, contract, nil, calldata).Pack(ctx, m.c)
+
+	calldata, err := EncodeClear(req.Currency, req.Amount)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: createSetProtocolFee: %w", m.wrapRevertError(err))
+		return nil, nil, fmt.Errorf("uniswapv4: clear: %w", err)
 	}
-	return unsigned, nil
+
+	signed, hash, err := bind.Transact(ctx, m.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv4: clear: %w", m.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
 }
 
-// SetProtocolFee broadcasts an already-signed setProtocolFee transaction.
-func (m *PoolManager) SetProtocolFee(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: setProtocolFee: %w", err)
+// Mint sends mint(to, id, amount) on req.Contract, signed by opts.Signer -- the ERC6909 claim-token mint; from an EOA it reverts with ErrManagerLocked.
+func (m *PoolManager) Mint(ctx context.Context, opts *bind.TransactOptions, req *MintRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv4: mint: %w", err)
 	}
-	hash, err := tx.Broadcast(ctx, m.c, raw)
+
+	calldata, err := EncodeMint(req.To, req.ID, req.Amount)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: setProtocolFee: %w", err)
+		return nil, nil, fmt.Errorf("uniswapv4: mint: %w", err)
 	}
-	return hash, nil
+
+	signed, hash, err := bind.Transact(ctx, m.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv4: mint: %w", m.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
 }
 
-// CreateSetProtocolFeeController builds an unsigned setProtocolFeeController(controller)
-// transaction via b, sent by sender.
-func (m *PoolManager) CreateSetProtocolFeeController(ctx context.Context, b tx.Builder, contract, sender, controller *types.Address) (core.Transaction, error) {
-	calldata, err := EncodeSetProtocolFeeController(controller)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: createSetProtocolFeeController: %w", err)
+// Burn sends burn(from, id, amount) on req.Contract, signed by opts.Signer -- the ERC6909 claim-token burn; from an EOA it reverts with ErrManagerLocked.
+func (m *PoolManager) Burn(ctx context.Context, opts *bind.TransactOptions, req *BurnRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv4: burn: %w", err)
 	}
-	unsigned, err := b.Build(sender, contract, nil, calldata).Pack(ctx, m.c)
+
+	calldata, err := EncodeBurn(req.From, req.ID, req.Amount)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: createSetProtocolFeeController: %w", m.wrapRevertError(err))
+		return nil, nil, fmt.Errorf("uniswapv4: burn: %w", err)
 	}
-	return unsigned, nil
+
+	signed, hash, err := bind.Transact(ctx, m.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv4: burn: %w", m.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
 }
 
-// SetProtocolFeeController broadcasts an already-signed setProtocolFeeController transaction.
-func (m *PoolManager) SetProtocolFeeController(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: setProtocolFeeController: %w", err)
+// UpdateDynamicLPFee sends updateDynamicLPFee(key, newDynamicLPFee) on req.Contract, signed by opts.Signer, which must be key.Hooks or it reverts with ErrUnauthorizedDynamicLPFeeUpdate.
+func (m *PoolManager) UpdateDynamicLPFee(ctx context.Context, opts *bind.TransactOptions, req *UpdateDynamicLPFeeRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv4: updateDynamicLPFee: %w", err)
 	}
-	hash, err := tx.Broadcast(ctx, m.c, raw)
+
+	calldata, err := EncodeUpdateDynamicLPFee(req.Key, req.NewDynamicLPFee)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: setProtocolFeeController: %w", err)
+		return nil, nil, fmt.Errorf("uniswapv4: updateDynamicLPFee: %w", err)
 	}
-	return hash, nil
+
+	signed, hash, err := bind.Transact(ctx, m.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv4: updateDynamicLPFee: %w", m.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
 }
 
-// CreateCollectProtocolFees builds an unsigned collectProtocolFees(recipient, currency, amount)
-// transaction via b, sent by sender.
-func (m *PoolManager) CreateCollectProtocolFees(ctx context.Context, b tx.Builder, contract, sender, recipient *types.Address, currency Currency, amount *big.Int) (core.Transaction, error) {
-	calldata, err := EncodeCollectProtocolFees(recipient, currency, amount)
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: createCollectProtocolFees: %w", err)
+// SetProtocolFee sends setProtocolFee(key, newProtocolFee) on req.Contract, signed by opts.Signer, which must be the protocol fee controller or it reverts with ErrInvalidCaller.
+func (m *PoolManager) SetProtocolFee(ctx context.Context, opts *bind.TransactOptions, req *SetProtocolFeeRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv4: setProtocolFee: %w", err)
 	}
-	unsigned, err := b.Build(sender, contract, nil, calldata).Pack(ctx, m.c)
+
+	calldata, err := EncodeSetProtocolFee(req.Key, req.NewProtocolFee)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: createCollectProtocolFees: %w", m.wrapRevertError(err))
+		return nil, nil, fmt.Errorf("uniswapv4: setProtocolFee: %w", err)
 	}
-	return unsigned, nil
+
+	signed, hash, err := bind.Transact(ctx, m.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv4: setProtocolFee: %w", m.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
 }
 
-// CollectProtocolFees broadcasts an already-signed collectProtocolFees transaction.
-func (m *PoolManager) CollectProtocolFees(ctx context.Context, signedTx core.Transaction) (*types.Hash, error) {
-	raw, err := signedTx.EncodeRLP()
-	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: collectProtocolFees: %w", err)
+// SetProtocolFeeController sends setProtocolFeeController(controller) on req.Contract, signed by opts.Signer, which must be the owner or it reverts.
+func (m *PoolManager) SetProtocolFeeController(ctx context.Context, opts *bind.TransactOptions, req *SetProtocolFeeControllerRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv4: setProtocolFeeController: %w", err)
 	}
-	hash, err := tx.Broadcast(ctx, m.c, raw)
+
+	calldata, err := EncodeSetProtocolFeeController(req.Controller)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: collectProtocolFees: %w", err)
+		return nil, nil, fmt.Errorf("uniswapv4: setProtocolFeeController: %w", err)
 	}
-	return hash, nil
+
+	signed, hash, err := bind.Transact(ctx, m.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv4: setProtocolFeeController: %w", m.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
 }
 
-// call eth_calls contract with calldata (from msg.sender from, if non-nil), decoding a reverted
-// custom error to its sentinel.
-func (m *PoolManager) call(ctx context.Context, from, contract *types.Address, calldata []byte, block string) ([]byte, error) {
-	params := map[string]any{
-		"to":   contract.String(),
-		"data": encoding.Hex.EncodePrefixed(calldata),
-	}
-	if from != nil {
-		params["from"] = from.String()
+// CollectProtocolFees sends collectProtocolFees(recipient, currency, amount) on req.Contract, signed by opts.Signer, which must be the protocol fee controller or it reverts with ErrInvalidCaller.
+func (m *PoolManager) CollectProtocolFees(ctx context.Context, opts *bind.TransactOptions, req *CollectProtocolFeesRequest) (core.Transaction, *types.Hash, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("uniswapv4: collectProtocolFees: %w", err)
 	}
 
-	var raw string
-	if err := m.c.Call(ctx, rpc.ETHCall("call", params, block, &raw)); err != nil {
-		return nil, m.wrapRevertError(err)
+	calldata, err := EncodeCollectProtocolFees(req.Recipient, req.Currency, req.Amount)
+	if err != nil {
+		return nil, nil, fmt.Errorf("uniswapv4: collectProtocolFees: %w", err)
 	}
-	return encoding.Hex.Decode(raw)
+
+	signed, hash, err := bind.Transact(ctx, m.c, opts, req.Contract, calldata)
+	if err != nil {
+		return signed, nil, fmt.Errorf("uniswapv4: collectProtocolFees: %w", m.wrapRevertError(err))
+	}
+
+	return signed, hash, nil
 }
 
-// wrapRevertError maps a known IPoolManager/IProtocolFees custom error in err to its sentinel.
+// wrapRevertError maps a known PoolManager or v4-core custom error to its sentinel, an unknown selector to ErrUnknown, and passes data-less errors through.
 func (_ *PoolManager) wrapRevertError(err error) error {
-	var rpcErr *rpc.ResponseError
-	if !errors.As(err, &rpcErr) || len(rpcErr.Data) == 0 {
+	rpcErr, ok := errors.AsType[*rpc.ResponseError](err)
+	if !ok || len(rpcErr.Data) == 0 {
 		return err
 	}
 
@@ -696,6 +846,71 @@ func (_ *PoolManager) wrapRevertError(err error) error {
 		return fmt.Errorf("%w: %w", ErrInvalidCaller, err)
 	case errProtocolFeeCurrencySynced.Selector():
 		return fmt.Errorf("%w: %w", ErrProtocolFeeCurrencySynced, err)
+	case errPoolAlreadyInitialized.Selector():
+		return fmt.Errorf("%w: %w", ErrPoolAlreadyInitialized, err)
+	case errTicksMisordered.Selector():
+		return fmt.Errorf("%w: %w", ErrTicksMisordered, err)
+	case errTickLowerOutOfBounds.Selector():
+		return fmt.Errorf("%w: %w", ErrTickLowerOutOfBounds, err)
+	case errTickUpperOutOfBounds.Selector():
+		return fmt.Errorf("%w: %w", ErrTickUpperOutOfBounds, err)
+	case errTickLiquidityOverflow.Selector():
+		return fmt.Errorf("%w: %w", ErrTickLiquidityOverflow, err)
+	case errNoLiquidityToReceiveFees.Selector():
+		return fmt.Errorf("%w: %w", ErrNoLiquidityToReceiveFees, err)
+	case errTickMisaligned.Selector():
+		return fmt.Errorf("%w: %w", ErrTickMisaligned, err)
+	case errInvalidTick.Selector():
+		return fmt.Errorf("%w: %w", ErrInvalidTick, err)
+	case errInvalidSqrtPrice.Selector():
+		return fmt.Errorf("%w: %w", ErrInvalidSqrtPrice, err)
+	case errHookAddressNotValid.Selector():
+		return fmt.Errorf("%w: %w", ErrHookAddressNotValid, err)
+	case errCannotUpdateEmptyPosition.Selector():
+		return fmt.Errorf("%w: %w", ErrCannotUpdateEmptyPosition, err)
+	case errDelegateCallNotAllowed.Selector():
+		return fmt.Errorf("%w: %w", ErrDelegateCallNotAllowed, err)
+	case errNativeTransferFailed.Selector():
+		return fmt.Errorf("%w: %w", ErrNativeTransferFailed, err)
+	case errERC20TransferFailed.Selector():
+		return fmt.Errorf("%w: %w", ErrERC20TransferFailed, err)
+	case errSafeCastOverflow.Selector():
+		return fmt.Errorf("%w: %w", ErrSafeCastOverflow, err)
+	case errPriceLimitAlreadyExceeded.Selector():
+		return fmt.Errorf("%w: %w", ErrPriceLimitAlreadyExceeded, err)
+	case errPriceLimitOutOfBounds.Selector():
+		return fmt.Errorf("%w: %w", ErrPriceLimitOutOfBounds, err)
+	case errInvalidFeeForExactOut.Selector():
+		return fmt.Errorf("%w: %w", ErrInvalidFeeForExactOut, err)
+	case errInvalidHookResponse.Selector():
+		return fmt.Errorf("%w: %w", ErrInvalidHookResponse, err)
+	case errHookDeltaExceedsSwapAmount.Selector():
+		return fmt.Errorf("%w: %w", ErrHookDeltaExceedsSwapAmount, err)
+	case errLPFeeTooLarge.Selector():
+		return fmt.Errorf("%w: %w", ErrLPFeeTooLarge, err)
+	case errInvalidPriceOrLiquidity.Selector():
+		return fmt.Errorf("%w: %w", ErrInvalidPriceOrLiquidity, err)
+	case errInvalidPrice.Selector():
+		return fmt.Errorf("%w: %w", ErrInvalidPrice, err)
+	case errPriceOverflow.Selector():
+		return fmt.Errorf("%w: %w", ErrPriceOverflow, err)
+	case errSqrtPriceMathNotEnoughLiquidity.Selector():
+		return fmt.Errorf("%w: %w", ErrNotEnoughLiquidity, err)
+	case errWrappedError.Selector():
+		vals, wrappedErr := errWrappedError.Decode(data)
+		if wrappedErr != nil || len(vals) != 4 {
+			return fmt.Errorf("%w: %w", ErrWrappedError, err)
+		}
+		details, ok := vals[3].([]byte)
+		if !ok || len(details) < 4 {
+			return fmt.Errorf("%w: %w", ErrWrappedError, err)
+		}
+		var detailsSel abi.Selector
+		copy(detailsSel[:], details[:4])
+		if detailsSel == errHookCallFailed.Selector() {
+			return fmt.Errorf("%w: %w: %w", ErrWrappedError, ErrHookCallFailed, err)
+		}
+		return fmt.Errorf("%w: %w", ErrWrappedError, err)
 	default:
 		return fmt.Errorf("%w: %w", ErrUnknown, err)
 	}
