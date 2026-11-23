@@ -43,7 +43,7 @@ func TestExtractInitializeSampleReceipt(t *testing.T) {
 	inits, err := ExtractInitialize(logs)
 	require.NoError(t, err)
 	require.Len(t, inits, 1)
-	require.True(t, inits[0].PoolManager.Equal(testPoolManager))
+	require.True(t, inits[0].Contract.Equal(testPoolManager))
 	require.True(t, inits[0].Currency0.Equal(testCurrency0))
 	require.True(t, inits[0].Currency1.Equal(testCurrency1))
 	require.Zero(t, big.NewInt(3000).Cmp(inits[0].Fee))
@@ -77,7 +77,7 @@ func TestExtractModifyLiquiditySampleReceipt(t *testing.T) {
 	mods, err := ExtractModifyLiquidity(logs)
 	require.NoError(t, err)
 	require.Len(t, mods, 1)
-	require.True(t, mods[0].PoolManager.Equal(testPoolManager))
+	require.True(t, mods[0].Contract.Equal(testPoolManager))
 	require.True(t, mods[0].Sender.Equal(testSender))
 	require.Zero(t, big.NewInt(-100).Cmp(mods[0].TickLower))
 	require.Zero(t, big.NewInt(100).Cmp(mods[0].TickUpper))
@@ -107,7 +107,7 @@ func TestExtractSwapSampleReceipt(t *testing.T) {
 	swaps, err := ExtractSwap(logs)
 	require.NoError(t, err)
 	require.Len(t, swaps, 1)
-	require.True(t, swaps[0].PoolManager.Equal(testPoolManager))
+	require.True(t, swaps[0].Contract.Equal(testPoolManager))
 	require.True(t, swaps[0].Sender.Equal(testSender))
 	require.Zero(t, big.NewInt(100).Cmp(swaps[0].Amount0))
 	require.Zero(t, big.NewInt(-50).Cmp(swaps[0].Amount1))
@@ -138,7 +138,7 @@ func TestExtractDonateSampleReceipt(t *testing.T) {
 	donates, err := ExtractDonate(logs)
 	require.NoError(t, err)
 	require.Len(t, donates, 1)
-	require.True(t, donates[0].PoolManager.Equal(testPoolManager))
+	require.True(t, donates[0].Contract.Equal(testPoolManager))
 	require.True(t, donates[0].Sender.Equal(testSender))
 	require.Zero(t, big.NewInt(100).Cmp(donates[0].Amount0))
 	require.Zero(t, big.NewInt(200).Cmp(donates[0].Amount1))
@@ -275,7 +275,7 @@ func TestExtractProtocolFeeControllerUpdatedSampleReceipt(t *testing.T) {
 	updates, err := ExtractProtocolFeeControllerUpdated(logs)
 	require.NoError(t, err)
 	require.Len(t, updates, 1)
-	require.True(t, updates[0].PoolManager.Equal(testPoolManager))
+	require.True(t, updates[0].Contract.Equal(testPoolManager))
 	require.True(t, updates[0].ProtocolFeeController.Equal(testSender))
 }
 
@@ -333,7 +333,7 @@ func TestExtractProtocolFeeUpdatedSampleReceipt(t *testing.T) {
 	updates, err := ExtractProtocolFeeUpdated(logs)
 	require.NoError(t, err)
 	require.Len(t, updates, 1)
-	require.True(t, updates[0].PoolManager.Equal(testPoolManager))
+	require.True(t, updates[0].Contract.Equal(testPoolManager))
 	require.Zero(t, big.NewInt(500).Cmp(updates[0].ProtocolFee))
 }
 

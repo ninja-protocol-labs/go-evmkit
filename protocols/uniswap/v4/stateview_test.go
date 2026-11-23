@@ -15,6 +15,7 @@ import (
 	"github.com/ninja-protocol-labs/go-evmkit/core"
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
+	"github.com/ninja-protocol-labs/go-evmkit/internal/testenv"
 	"github.com/ninja-protocol-labs/go-evmkit/protocols/permit2"
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
 	"github.com/ninja-protocol-labs/go-evmkit/standards/deploy"
@@ -99,7 +100,7 @@ func TestStateViewSuite(t *testing.T) {
 		NativeSymbol:           "",
 		Interval:               1500,
 		Timeout:                60,
-		ByteCode:               erc20ByteCodeHex,
+		ByteCode:               testenv.ERC20ByteCodeHex,
 		Constructor:            abi.NewFunction("constructor", abi.Types{abi.String, abi.String, abi.Uint8}, nil),
 		Salt:                   core.Keccak256([]byte("go-evmkit-v4-stateview")),
 		MintValue:              new(big.Int).Exp(big.NewInt(10), big.NewInt(24), nil),

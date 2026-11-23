@@ -9,22 +9,16 @@ import (
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 )
 
-// poolKeyTuple mirrors types/PoolKey.sol's PoolKey struct: (currency0, currency1, fee,
-// tickSpacing, hooks), all static fields.
+// poolKeyTuple mirrors PoolKey: (currency0, currency1, fee, tickSpacing, hooks).
 var poolKeyTuple = abi.Tuple(abi.Address, abi.Address, abi.Uint24, abi.Int24, abi.Address)
 
-// liquidityParamsTuple mirrors IPoolManager's own ModifyLiquidityParams tuple: (tickLower,
-// tickUpper, liquidityDelta, salt).
+// liquidityParamsTuple mirrors ModifyLiquidityParams: (tickLower, tickUpper, liquidityDelta, salt).
 var liquidityParamsTuple = abi.Tuple(abi.Int24, abi.Int24, abi.Int256, abi.Bytes32)
 
-// swapAmountParamsTuple mirrors IPoolManager's own SwapParams tuple: (zeroForOne,
-// amountSpecified, sqrtPriceLimitX96).
+// swapAmountParamsTuple mirrors SwapParams: (zeroForOne, amountSpecified, sqrtPriceLimitX96).
 var swapAmountParamsTuple = abi.Tuple(abi.Bool, abi.Int256, abi.Uint160)
 
-// Function signatures from IPoolManager, for encoding calls and decoding results. BalanceDelta
-// return slots are declared Bytes32, not Int256: BalanceDelta is a packed pair of int128s, and
-// each Decode* function below unpacks that pair out of the raw word itself, rather than relying
-// on Int256's single signed-256-bit decode.
+// Function signatures from IPoolManager; BalanceDelta returns are Bytes32 since each packs two int128s.
 var (
 	initializeFn         = abi.NewFunction("initialize", abi.NewTypes(poolKeyTuple, abi.Uint160), abi.NewTypes(abi.Int24))
 	modifyLiquidityFn    = abi.NewFunction("modifyLiquidity", abi.NewTypes(poolKeyTuple, liquidityParamsTuple, abi.Bytes), abi.NewTypes(abi.Bytes32, abi.Bytes32))
@@ -58,18 +52,54 @@ var (
 
 // ErrCurrencyNotSettled, etc. mirror IPoolManager's own custom errors, for errors.Is.
 var (
-	ErrCurrencyNotSettled             = errors.New("uniswapv4: currency not settled")
-	ErrPoolNotInitialized             = errors.New("uniswapv4: pool not initialized")
-	ErrAlreadyUnlocked                = errors.New("uniswapv4: already unlocked")
-	ErrManagerLocked                  = errors.New("uniswapv4: manager locked")
-	ErrTickSpacingTooLarge            = errors.New("uniswapv4: tick spacing too large")
-	ErrTickSpacingTooSmall            = errors.New("uniswapv4: tick spacing too small")
-	ErrCurrenciesOutOfOrderOrEqual    = errors.New("uniswapv4: currencies out of order or equal")
-	ErrUnauthorizedDynamicLPFeeUpdate = errors.New("uniswapv4: unauthorized dynamic lp fee update")
-	ErrSwapAmountCannotBeZero         = errors.New("uniswapv4: swap amount cannot be zero")
-	ErrNonzeroNativeValue             = errors.New("uniswapv4: nonzero native value")
-	ErrMustClearExactPositiveDelta    = errors.New("uniswapv4: must clear exact positive delta")
-	ErrUnknown                        = errors.New("uniswapv4: unknown revert")
+	ErrCurrencyNotSettled             = errors.New("currency not settled")
+	ErrPoolNotInitialized             = errors.New("pool not initialized")
+	ErrAlreadyUnlocked                = errors.New("already unlocked")
+	ErrManagerLocked                  = errors.New("manager locked")
+	ErrTickSpacingTooLarge            = errors.New("tick spacing too large")
+	ErrTickSpacingTooSmall            = errors.New("tick spacing too small")
+	ErrCurrenciesOutOfOrderOrEqual    = errors.New("currencies out of order or equal")
+	ErrUnauthorizedDynamicLPFeeUpdate = errors.New("unauthorized dynamic lp fee update")
+	ErrSwapAmountCannotBeZero         = errors.New("swap amount cannot be zero")
+	ErrNonzeroNativeValue             = errors.New("nonzero native value")
+	ErrMustClearExactPositiveDelta    = errors.New("must clear exact positive delta")
+	ErrUnknown                        = errors.New("unknown revert")
+)
+
+// v4-core library errors PoolManager reverts with; the swap-path ones shared with V4Quoter live in quoter_abi.go.
+var (
+	errPoolAlreadyInitialized    = abi.NewError("PoolAlreadyInitialized", abi.NewTypes())
+	errTicksMisordered           = abi.NewError("TicksMisordered", abi.NewTypes(abi.Int24, abi.Int24))
+	errTickLowerOutOfBounds      = abi.NewError("TickLowerOutOfBounds", abi.NewTypes(abi.Int24))
+	errTickUpperOutOfBounds      = abi.NewError("TickUpperOutOfBounds", abi.NewTypes(abi.Int24))
+	errTickLiquidityOverflow     = abi.NewError("TickLiquidityOverflow", abi.NewTypes(abi.Int24))
+	errNoLiquidityToReceiveFees  = abi.NewError("NoLiquidityToReceiveFees", abi.NewTypes())
+	errTickMisaligned            = abi.NewError("TickMisaligned", abi.NewTypes(abi.Int24, abi.Int24))
+	errInvalidTick               = abi.NewError("InvalidTick", abi.NewTypes(abi.Int24))
+	errInvalidSqrtPrice          = abi.NewError("InvalidSqrtPrice", abi.NewTypes(abi.Uint160))
+	errHookAddressNotValid       = abi.NewError("HookAddressNotValid", abi.NewTypes(abi.Address))
+	errCannotUpdateEmptyPosition = abi.NewError("CannotUpdateEmptyPosition", abi.NewTypes())
+	errDelegateCallNotAllowed    = abi.NewError("DelegateCallNotAllowed", abi.NewTypes())
+	errNativeTransferFailed      = abi.NewError("NativeTransferFailed", abi.NewTypes())
+	errERC20TransferFailed       = abi.NewError("ERC20TransferFailed", abi.NewTypes())
+)
+
+// ErrPoolAlreadyInitialized, etc. mirror the v4-core library errors above, for errors.Is.
+var (
+	ErrPoolAlreadyInitialized    = errors.New("pool already initialized")
+	ErrTicksMisordered           = errors.New("ticks misordered")
+	ErrTickLowerOutOfBounds      = errors.New("tick lower out of bounds")
+	ErrTickUpperOutOfBounds      = errors.New("tick upper out of bounds")
+	ErrTickLiquidityOverflow     = errors.New("tick liquidity overflow")
+	ErrNoLiquidityToReceiveFees  = errors.New("no liquidity to receive fees")
+	ErrTickMisaligned            = errors.New("tick misaligned")
+	ErrInvalidTick               = errors.New("invalid tick")
+	ErrInvalidSqrtPrice          = errors.New("invalid sqrt price")
+	ErrHookAddressNotValid       = errors.New("hook address not valid")
+	ErrCannotUpdateEmptyPosition = errors.New("cannot update empty position")
+	ErrDelegateCallNotAllowed    = errors.New("delegate call not allowed")
+	ErrNativeTransferFailed      = errors.New("native transfer failed")
+	ErrERC20TransferFailed       = errors.New("erc20 transfer failed")
 )
 
 // Function signatures from IProtocolFees, for encoding calls and decoding results.
@@ -90,13 +120,12 @@ var (
 
 // ErrProtocolFeeTooLarge, etc. mirror IProtocolFees' custom errors, for errors.Is.
 var (
-	ErrProtocolFeeTooLarge       = errors.New("uniswapv4: protocol fee too large")
-	ErrInvalidCaller             = errors.New("uniswapv4: invalid caller")
-	ErrProtocolFeeCurrencySynced = errors.New("uniswapv4: protocol fee currency synced")
+	ErrProtocolFeeTooLarge       = errors.New("protocol fee too large")
+	ErrInvalidCaller             = errors.New("invalid caller")
+	ErrProtocolFeeCurrencySynced = errors.New("protocol fee currency synced")
 )
 
-// Function signatures from IExtsload/IExttload. Each Solidity overload gets its own Function var
-// since Go can't express overloading by argument type alone.
+// Function signatures from IExtsload/IExttload, one var per Solidity overload.
 var (
 	extsloadFn      = abi.NewFunction("extsload", abi.NewTypes(abi.Bytes32), abi.NewTypes(abi.Bytes32))
 	extsloadRangeFn = abi.NewFunction("extsload", abi.NewTypes(abi.Bytes32, abi.Uint256), abi.NewTypes(abi.Slice(abi.Bytes32)))
@@ -194,8 +223,7 @@ func EncodeModifyLiquidity(key *PoolKey, params *LiquidityParams, hookData []byt
 	return data, nil
 }
 
-// DecodeModifyLiquidity decodes the return data of modifyLiquidity: the caller's own delta and
-// the fees accrued in the liquidity range.
+// DecodeModifyLiquidity decodes the return data of modifyLiquidity: (callerDelta, feesAccrued).
 func DecodeModifyLiquidity(data []byte) (*BalanceDelta, *BalanceDelta, error) {
 	vals, err := modifyLiquidityFn.DecodeReturn(data)
 	if err != nil {
@@ -390,8 +418,7 @@ func EncodeClear(currency Currency, amount *big.Int) ([]byte, error) {
 	return data, nil
 }
 
-// EncodeMint returns the calldata for mint(to, id, amount) -- the ERC6909 claim-token mint, not a
-// liquidity position.
+// EncodeMint returns the calldata for mint(to, id, amount), the ERC6909 claim-token mint.
 func EncodeMint(to *types.Address, id, amount *big.Int) ([]byte, error) {
 	data, err := mintFn.EncodeCall(to, id, amount)
 	if err != nil {

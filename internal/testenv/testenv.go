@@ -123,6 +123,7 @@ type ProtocolAddressBook struct {
 type UniswapAddressBook struct {
 	V2 UniswapV2AddressBook
 	V3 UniswapV3AddressBook
+	V4 UniswapV4AddressBook
 }
 
 type UniswapV2AddressBook struct {
@@ -135,6 +136,15 @@ type UniswapV3AddressBook struct {
 	Router  string
 	Quoter  string
 	NFPM    string
+}
+
+type UniswapV4AddressBook struct {
+	PoolManager             string
+	PositionManager         string
+	StateView               string
+	Quoter                  string
+	PoolSwapTest            string
+	PoolModifyLiquidityTest string
 }
 
 // MustLoad returns n's config on nt with the API key and actor key filled in.

@@ -9,9 +9,9 @@ import (
 	"github.com/ninja-protocol-labs/go-evmkit/tx"
 )
 
-// ExtractInitialize pulls every Initialize-shaped log out of logs, from any contract; filter by PoolManager afterward.
-func ExtractInitialize(logs []tx.Log) ([]Initialize, error) {
-	var inits []Initialize
+// ExtractInitialize pulls every Initialize-shaped log out of logs, from any contract; filter by Contract afterward.
+func ExtractInitialize(logs []tx.Log) ([]InitializeEvent, error) {
+	var inits []InitializeEvent
 	for i, log := range logs {
 		if len(log.Topics) == 0 || log.Topics[0] == nil {
 			continue
@@ -64,14 +64,14 @@ func ExtractInitialize(logs []tx.Log) ([]Initialize, error) {
 		if !ok {
 			return nil, fmt.Errorf("uniswapv4: extractInitialize: logs[%d]: unexpected decoded type for tick: %T", i, vals[7])
 		}
-		inits = append(inits, *NewInitialize(log.Address, id, currency0, currency1, fee, tickSpacing, hooks, sqrtPriceX96, tick))
+		inits = append(inits, *NewInitializeEvent(log.Address, id, currency0, currency1, fee, tickSpacing, hooks, sqrtPriceX96, tick))
 	}
 	return inits, nil
 }
 
 // ExtractModifyLiquidity pulls every ModifyLiquidity-shaped log out of logs; see ExtractInitialize.
-func ExtractModifyLiquidity(logs []tx.Log) ([]ModifyLiquidity, error) {
-	var mods []ModifyLiquidity
+func ExtractModifyLiquidity(logs []tx.Log) ([]ModifyLiquidityEvent, error) {
+	var mods []ModifyLiquidityEvent
 	for i, log := range logs {
 		if len(log.Topics) == 0 || log.Topics[0] == nil {
 			continue
@@ -118,14 +118,14 @@ func ExtractModifyLiquidity(logs []tx.Log) ([]ModifyLiquidity, error) {
 		}
 		var salt [32]byte
 		copy(salt[:], saltBytes)
-		mods = append(mods, *NewModifyLiquidity(log.Address, id, sender, tickLower, tickUpper, liquidityDelta, salt))
+		mods = append(mods, *NewModifyLiquidityEvent(log.Address, id, sender, tickLower, tickUpper, liquidityDelta, salt))
 	}
 	return mods, nil
 }
 
 // ExtractSwap pulls every Swap-shaped log out of logs; see ExtractInitialize.
-func ExtractSwap(logs []tx.Log) ([]Swap, error) {
-	var swaps []Swap
+func ExtractSwap(logs []tx.Log) ([]SwapEvent, error) {
+	var swaps []SwapEvent
 	for i, log := range logs {
 		if len(log.Topics) == 0 || log.Topics[0] == nil {
 			continue
@@ -178,14 +178,14 @@ func ExtractSwap(logs []tx.Log) ([]Swap, error) {
 		if !ok {
 			return nil, fmt.Errorf("uniswapv4: extractSwap: logs[%d]: unexpected decoded type for fee: %T", i, vals[7])
 		}
-		swaps = append(swaps, *NewSwap(log.Address, id, sender, amount0, amount1, sqrtPriceX96, liquidity, tick, fee))
+		swaps = append(swaps, *NewSwapEvent(log.Address, id, sender, amount0, amount1, sqrtPriceX96, liquidity, tick, fee))
 	}
 	return swaps, nil
 }
 
 // ExtractDonate pulls every Donate-shaped log out of logs; see ExtractInitialize.
-func ExtractDonate(logs []tx.Log) ([]Donate, error) {
-	var donates []Donate
+func ExtractDonate(logs []tx.Log) ([]DonateEvent, error) {
+	var donates []DonateEvent
 	for i, log := range logs {
 		if len(log.Topics) == 0 || log.Topics[0] == nil {
 			continue
@@ -222,14 +222,14 @@ func ExtractDonate(logs []tx.Log) ([]Donate, error) {
 		if !ok {
 			return nil, fmt.Errorf("uniswapv4: extractDonate: logs[%d]: unexpected decoded type for amount1: %T", i, vals[3])
 		}
-		donates = append(donates, *NewDonate(log.Address, id, sender, amount0, amount1))
+		donates = append(donates, *NewDonateEvent(log.Address, id, sender, amount0, amount1))
 	}
 	return donates, nil
 }
 
 // ExtractProtocolFeeControllerUpdated pulls every ProtocolFeeControllerUpdated-shaped log out of logs; see ExtractInitialize.
-func ExtractProtocolFeeControllerUpdated(logs []tx.Log) ([]ProtocolFeeControllerUpdated, error) {
-	var updates []ProtocolFeeControllerUpdated
+func ExtractProtocolFeeControllerUpdated(logs []tx.Log) ([]ProtocolFeeControllerUpdatedEvent, error) {
+	var updates []ProtocolFeeControllerUpdatedEvent
 	for i, log := range logs {
 		if len(log.Topics) == 0 || log.Topics[0] == nil {
 			continue
@@ -252,14 +252,14 @@ func ExtractProtocolFeeControllerUpdated(logs []tx.Log) ([]ProtocolFeeController
 		if !ok {
 			return nil, fmt.Errorf("uniswapv4: extractProtocolFeeControllerUpdated: logs[%d]: unexpected decoded type for protocolFeeController: %T", i, vals[0])
 		}
-		updates = append(updates, *NewProtocolFeeControllerUpdated(log.Address, controller))
+		updates = append(updates, *NewProtocolFeeControllerUpdatedEvent(log.Address, controller))
 	}
 	return updates, nil
 }
 
 // ExtractProtocolFeeUpdated pulls every ProtocolFeeUpdated-shaped log out of logs; see ExtractInitialize.
-func ExtractProtocolFeeUpdated(logs []tx.Log) ([]ProtocolFeeUpdated, error) {
-	var updates []ProtocolFeeUpdated
+func ExtractProtocolFeeUpdated(logs []tx.Log) ([]ProtocolFeeUpdatedEvent, error) {
+	var updates []ProtocolFeeUpdatedEvent
 	for i, log := range logs {
 		if len(log.Topics) == 0 || log.Topics[0] == nil {
 			continue
@@ -288,7 +288,7 @@ func ExtractProtocolFeeUpdated(logs []tx.Log) ([]ProtocolFeeUpdated, error) {
 		if !ok {
 			return nil, fmt.Errorf("uniswapv4: extractProtocolFeeUpdated: logs[%d]: unexpected decoded type for protocolFee: %T", i, vals[1])
 		}
-		updates = append(updates, *NewProtocolFeeUpdated(log.Address, id, protocolFee))
+		updates = append(updates, *NewProtocolFeeUpdatedEvent(log.Address, id, protocolFee))
 	}
 	return updates, nil
 }
