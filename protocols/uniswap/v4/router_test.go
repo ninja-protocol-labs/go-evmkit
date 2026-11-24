@@ -2,6 +2,8 @@ package v4
 
 import (
 	"context"
+	"encoding/json/v2"
+	"errors"
 	"fmt"
 	"math/big"
 	"strings"
@@ -554,4 +556,111 @@ func (s *RouterSuite) Test08SwapUpdatesBalances() {
 	s.T().Logf("\tBalance1: %s -> %s (latest before send %s)", pinnedBefore.Tokens[1].Amount, after.Tokens[1].Amount, before.Tokens[1].Amount)
 	s.T().Logf("\tAmount0/Amount1: %s / %s", swaps[0].Amount0, swaps[0].Amount1)
 	s.T().Logf("\tTx: %s (block %d, gas %d)", hash, receipt.BlockNumber, receipt.GasUsed)
+}
+
+func (s *RouterSuite) Test09SwapFromEmptyAccountNeedsOverrides() {
+	ghost := types.NewAddressFromBytes(core.Keccak256([]byte("go-evmkit-v4-router-ghost")).Bytes())
+
+	balanceKey, err := abi.Pack(abi.NewTypes(abi.Address, abi.Uint256), ghost, big.NewInt(0))
+	s.Require().NoError(err)
+	var balanceSlot [32]byte
+	copy(balanceSlot[:], core.Keccak256(balanceKey).Bytes())
+	ownerKey, err := abi.Pack(abi.NewTypes(abi.Address, abi.Uint256), ghost, big.NewInt(1))
+	s.Require().NoError(err)
+	allowanceKey, err := abi.Pack(
+		abi.NewTypes(abi.Address, abi.Uint256),
+		s.poolSwapTest,
+		new(big.Int).SetBytes(core.Keccak256(ownerKey).Bytes()),
+	)
+	s.Require().NoError(err)
+	var allowanceSlot, amountWord [32]byte
+	copy(allowanceSlot[:], core.Keccak256(allowanceKey).Bytes())
+	s.SwapAmountIn.FillBytes(amountWord[:])
+
+	poolSwapTestFn := abi.NewFunction(
+		"swap",
+		abi.NewTypes(poolKeyTuple, swapAmountParamsTuple, abi.Tuple(abi.Bool, abi.Bool), abi.Bytes),
+		abi.NewTypes(abi.Bytes32),
+	)
+	calldata, err := poolSwapTestFn.EncodeCall(
+		[]any{s.key.Currency0, s.key.Currency1, s.key.Fee, s.key.TickSpacing, s.key.Hooks},
+		[]any{true, new(big.Int).Neg(s.SwapAmountIn), big.NewInt(4295128740)},
+		[]any{false, false},
+		[]byte{},
+	)
+	s.Require().NoError(err)
+
+	insufficientArgs, err := abi.Pack(
+		abi.NewTypes(abi.Address, abi.Uint256, abi.Uint256),
+		s.poolSwapTest,
+		big.NewInt(0),
+		s.SwapAmountIn,
+	)
+	s.Require().NoError(err)
+	wantRevert := "0xfb8f41b2" + encoding.Hex.Encode(insufficientArgs)
+
+	_, plainErr := bind.Call(s.T().Context(), s.client, bind.NewCallOptions().WithFrom(ghost), s.poolSwapTest, calldata)
+	plainRPCErr, ok := errors.AsType[*rpc.ResponseError](plainErr)
+	s.Require().True(ok, "%v", plainErr)
+	var plainRevert string
+	s.Require().NoError(json.Unmarshal(plainRPCErr.Data, &plainRevert))
+	s.Require().Equal(wantRevert, strings.ToLower(plainRevert), "expected ERC20InsufficientAllowance")
+
+	balanceOnly := rpc.NewStateOverride().WithStateDiff(s.currency0, balanceSlot, amountWord)
+	opts := bind.NewCallOptions().WithFrom(ghost).WithStateOverride(balanceOnly)
+	_, balanceOnlyErr := bind.Call(s.T().Context(), s.client, opts, s.poolSwapTest, calldata)
+	balanceOnlyRPCErr, ok := errors.AsType[*rpc.ResponseError](balanceOnlyErr)
+	s.Require().True(ok, "%v", balanceOnlyErr)
+	var balanceOnlyRevert string
+	s.Require().NoError(json.Unmarshal(balanceOnlyRPCErr.Data, &balanceOnlyRevert))
+	s.Require().Equal(wantRevert, strings.ToLower(balanceOnlyRevert), "balance alone must still fail on allowance")
+
+	override := rpc.NewStateOverride().
+		WithStateDiff(s.currency0, balanceSlot, amountWord).
+		WithStateDiff(s.currency0, allowanceSlot, amountWord)
+	opts = bind.NewCallOptions().WithFrom(ghost).WithStateOverride(override)
+	out, err := bind.Call(s.T().Context(), s.client, opts, s.poolSwapTest, calldata)
+	s.Require().NoError(err)
+	s.Require().Len(out, 32)
+
+	balance, err := s.erc20.BalanceOf(
+		s.T().Context(),
+		bind.NewCallOptions().WithStateOverride(override),
+		erc20.NewBalanceOfRequest(s.currency0, ghost),
+	)
+	s.Require().NoError(err)
+	s.Require().Zero(s.SwapAmountIn.Cmp(balance))
+	allowance, err := s.erc20.Allowance(
+		s.T().Context(),
+		bind.NewCallOptions().WithStateOverride(override),
+		erc20.NewAllowanceRequest(s.currency0, ghost, s.poolSwapTest),
+	)
+	s.Require().NoError(err)
+	s.Require().Zero(s.SwapAmountIn.Cmp(allowance))
+
+	_, packErr := tx.NewDynamicFeeBuilder().
+		Build(ghost, s.poolSwapTest, big.NewInt(0), calldata).
+		Pack(s.T().Context(), s.client)
+	s.Require().Error(packErr)
+	builder := tx.NewDynamicFeeBuilder()
+	builder.StateOverride(override)
+	packed, err := builder.Build(ghost, s.poolSwapTest, big.NewInt(0), calldata).Pack(s.T().Context(), s.client)
+	s.Require().NoError(err)
+	s.Require().Greater(packed.Gas(), uint64(21_000))
+
+	delta, err := DecodeSwap(out)
+	s.Require().NoError(err)
+	s.Require().Zero(new(big.Int).Neg(s.SwapAmountIn).Cmp(delta.Amount0))
+	s.Require().Positive(delta.Amount1.Sign())
+
+	overrideJSON, err := override.MarshalJSON()
+	s.Require().NoError(err)
+	s.T().Logf("Router Test09SwapFromEmptyAccountNeedsOverrides Result")
+	s.T().Logf("\tghost %s swaps %s of %s via PoolSwapTest %s", ghost, s.SwapAmountIn, s.currency0, s.poolSwapTest)
+	s.T().Logf("\tno override: %v", plainErr)
+	s.T().Logf("\tbalance only: %v", balanceOnlyErr)
+	s.T().Logf("\toverride: %s", overrideJSON)
+	s.T().Logf("\tbalance + allowance: BalanceDelta amount0 %s, amount1 %s", delta.Amount0, delta.Amount1)
+	s.T().Logf("\tPack without override: %v", packErr)
+	s.T().Logf("\tPack with override: %d gas", packed.Gas())
 }
