@@ -209,22 +209,30 @@ func ETHGetCode(id string, address, block string, result *string) Element {
 	}
 }
 
-// ETHCall builds the eth_call element.
-func ETHCall(id string, params any, block string, result *string) Element {
+// ETHCall builds the eth_call element; a nil override omits the third argument.
+func ETHCall(id string, params any, block string, override *StateOverride, result *string) Element {
+	args := []any{params, block}
+	if override != nil {
+		args = append(args, override)
+	}
 	return Element{
 		ID:     id,
 		Method: MethodETHCall,
-		Params: []any{params, block},
+		Params: args,
 		Result: result,
 	}
 }
 
-// ETHEstimateGas builds the eth_estimateGas element.
-func ETHEstimateGas(id string, params any, block string, result *string) Element {
+// ETHEstimateGas builds the eth_estimateGas element; a nil override omits the third argument.
+func ETHEstimateGas(id string, params any, block string, override *StateOverride, result *string) Element {
+	args := []any{params, block}
+	if override != nil {
+		args = append(args, override)
+	}
 	return Element{
 		ID:     id,
 		Method: MethodETHEstimateGas,
-		Params: []any{params, block},
+		Params: args,
 		Result: result,
 	}
 }

@@ -166,8 +166,13 @@ func (c *DefaultClient) doOnce(ctx context.Context, body []byte) ([]byte, bool, 
 	if err != nil {
 		return nil, true, fmt.Errorf("rpc: read http response: %w", err)
 	}
-	if httpResp.StatusCode < 200 || httpResp.StatusCode >= 300 {
-		retryable := httpResp.StatusCode == http.StatusTooManyRequests || httpResp.StatusCode >= 500
+	if c.isError(httpResp.StatusCode) {
+		retryable := c.isRetryable(httpResp.StatusCode)
+		var resp response
+		if err = json.Unmarshal(respBytes, &resp); err == nil && resp.Error != nil {
+			return nil, retryable, fmt.Errorf("rpc: http status %d: %w", httpResp.StatusCode, resp.Error)
+		}
+
 		return nil, retryable, fmt.Errorf("rpc: http status %d: %s", httpResp.StatusCode, string(respBytes))
 	}
 	return respBytes, false, nil
@@ -251,4 +256,14 @@ func (c *DefaultClient) Batch(ctx context.Context, elems Elements) error {
 		}
 	}
 	return nil
+}
+
+// isError reports whether statusCode is outside the 2xx range.
+func (*DefaultClient) isError(statusCode int) bool {
+	return statusCode < http.StatusOK || statusCode >= http.StatusMultipleChoices
+}
+
+// isRetryable reports whether a failed status is worth retrying: 429 and 5xx.
+func (*DefaultClient) isRetryable(statusCode int) bool {
+	return statusCode == http.StatusTooManyRequests || statusCode >= http.StatusInternalServerError
 }

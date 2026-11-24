@@ -117,7 +117,7 @@ func Call(ctx context.Context, c rpc.Client, opts *CallOptions, to *types.Addres
 	}
 
 	var raw string
-	if err := c.Call(ctx, rpc.ETHCall("call", params, block, &raw)); err != nil {
+	if err := c.Call(ctx, rpc.ETHCall("call", params, block, nil, &raw)); err != nil {
 		return nil, err
 	}
 	data, err := encoding.Hex.Decode(raw)
