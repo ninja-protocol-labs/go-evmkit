@@ -107,23 +107,129 @@ type SimulateResult struct {
 	Error error
 }
 
-// Simulate runs calls in order in one eth_simulateV1 block, returning one result per call; RPC errors are returned unwrapped.
-func Simulate(ctx context.Context, c rpc.Client, opts *SimulateOptions, calls []SimulateCall) ([]SimulateResult, error) {
+// SimulateResults decodes an eth_simulateV1 response into one SimulateResult per call; SimulateElement sets how many calls to expect.
+type SimulateResults struct {
+	Calls []SimulateResult
+
+	expected int
+}
+
+// UnmarshalJSON decodes the single simulated block, failing if its call count differs from the one SimulateElement recorded.
+func (r *SimulateResults) UnmarshalJSON(data []byte) error {
+	var blocks []map[string]any
+	if err := json.Unmarshal(data, &blocks); err != nil {
+		return fmt.Errorf("bind: simulate: %w", err)
+	}
+
+	if len(blocks) != 1 {
+		return fmt.Errorf("bind: simulate: expected 1 block, got %d", len(blocks))
+	}
+	rawCalls, ok := blocks[0]["calls"].([]any)
+	if !ok {
+		return fmt.Errorf("bind: simulate: block has no calls array")
+	}
+	if r.expected > 0 && len(rawCalls) != r.expected {
+		return fmt.Errorf("bind: simulate: expected %d call results, got %d", r.expected, len(rawCalls))
+	}
+
+	results := make([]SimulateResult, len(rawCalls))
+	for i, rawCall := range rawCalls {
+		raw, ok := rawCall.(map[string]any)
+		if !ok {
+			return fmt.Errorf("bind: simulate: calls[%d]: unexpected type %T", i, rawCall)
+		}
+
+		status, ok := raw["status"].(string)
+		if !ok || (status != "0x0" && status != "0x1") {
+			return fmt.Errorf("bind: simulate: calls[%d]: invalid status %v", i, raw["status"])
+		}
+
+		gasUsedHex, ok := raw["gasUsed"].(string)
+		if !ok {
+			return fmt.Errorf("bind: simulate: calls[%d]: missing gasUsed", i)
+		}
+		gasUsed, err := strconv.ParseUint(strings.TrimPrefix(gasUsedHex, "0x"), 16, 64)
+		if err != nil {
+			return fmt.Errorf("bind: simulate: calls[%d]: gasUsed: %w", i, err)
+		}
+
+		returnDataHex, ok := raw["returnData"].(string)
+		if !ok {
+			return fmt.Errorf("bind: simulate: calls[%d]: missing returnData", i)
+		}
+		returnData, err := encoding.Hex.Decode(returnDataHex)
+		if err != nil {
+			return fmt.Errorf("bind: simulate: calls[%d]: returnData: %w", i, err)
+		}
+
+		var logs []tx.Log
+		if rawLogs, ok := raw["logs"].([]any); ok {
+			logs = make([]tx.Log, len(rawLogs))
+			for j, rawLog := range rawLogs {
+				logMap, ok := rawLog.(map[string]any)
+				if !ok {
+					return fmt.Errorf("bind: simulate: calls[%d]: logs[%d]: unexpected type %T", i, j, rawLog)
+				}
+				logs[j], err = tx.ParseLog(logMap)
+				if err != nil {
+					return fmt.Errorf("bind: simulate: calls[%d]: logs[%d]: %w", i, j, err)
+				}
+			}
+		}
+
+		var callErr *rpc.ResponseError
+		if rawErr, ok := raw["error"].(map[string]any); ok {
+			code, ok := rawErr["code"].(float64)
+			if !ok {
+				return fmt.Errorf("bind: simulate: calls[%d]: error: missing code", i)
+			}
+			message, _ := rawErr["message"].(string)
+			callErr = &rpc.ResponseError{Code: int(code), Message: message}
+			if data, ok := rawErr["data"]; ok {
+				encoded, err := json.Marshal(data)
+				if err != nil {
+					return fmt.Errorf("bind: simulate: calls[%d]: error data: %w", i, err)
+				}
+				callErr.Data = encoded
+			}
+		}
+
+		results[i] = SimulateResult{
+			Success:    status == "0x1",
+			GasUsed:    gasUsed,
+			ReturnData: returnData,
+			Logs:       logs,
+		}
+		if callErr != nil {
+			results[i].Error = callErr
+		}
+	}
+
+	r.Calls = results
+	return nil
+}
+
+// SimulateElement validates opts and calls and builds the eth_simulateV1 element decoding into result, for sending in an rpc batch.
+func SimulateElement(id string, opts *SimulateOptions, calls []SimulateCall, result *SimulateResults) (rpc.Element, error) {
+	if result == nil {
+		return rpc.Element{}, fmt.Errorf("bind: simulate: %w: result is nil", ErrInvalidRequest)
+	}
+
 	if opts == nil {
 		opts = NewSimulateOptions()
 	}
 	if err := opts.StateOverride.Validate(); err != nil {
-		return nil, fmt.Errorf("bind: simulate: %w: %w", ErrInvalidOptions, err)
+		return rpc.Element{}, fmt.Errorf("bind: simulate: %w: %w", ErrInvalidOptions, err)
 	}
 
 	if len(calls) == 0 {
-		return nil, fmt.Errorf("bind: simulate: %w: calls is empty", ErrInvalidRequest)
+		return rpc.Element{}, fmt.Errorf("bind: simulate: %w: calls is empty", ErrInvalidRequest)
 	}
 
 	params := make([]map[string]any, len(calls))
 	for i, call := range calls {
 		if err := call.Validate(); err != nil {
-			return nil, fmt.Errorf("bind: simulate: calls[%d]: %w", i, err)
+			return rpc.Element{}, fmt.Errorf("bind: simulate: calls[%d]: %w", i, err)
 		}
 
 		param := map[string]any{
@@ -154,93 +260,25 @@ func Simulate(ctx context.Context, c rpc.Client, opts *SimulateOptions, calls []
 		block = rpc.BlockTagLatest
 	}
 
-	var blocks []map[string]any
-	if err := c.Call(ctx, rpc.ETHSimulateV1("simulate", payload, block, &blocks)); err != nil {
+	result.Calls = nil
+	result.expected = len(calls)
+	return rpc.NewElement(id, rpc.MethodETHSimulateV1, []any{payload, block}, result), nil
+}
+
+// Simulate runs calls in order in one eth_simulateV1 block, returning one result per call; RPC errors are returned unwrapped.
+func Simulate(ctx context.Context, c rpc.Client, opts *SimulateOptions, calls []SimulateCall) ([]SimulateResult, error) {
+	var results SimulateResults
+	e, err := SimulateElement("simulate", opts, calls, &results)
+	if err != nil {
 		return nil, err
 	}
 
-	if len(blocks) != 1 {
-		return nil, fmt.Errorf("bind: simulate: expected 1 block, got %d", len(blocks))
-	}
-	rawCalls, ok := blocks[0]["calls"].([]any)
-	if !ok {
-		return nil, fmt.Errorf("bind: simulate: block has no calls array")
-	}
-	if len(rawCalls) != len(calls) {
-		return nil, fmt.Errorf("bind: simulate: expected %d call results, got %d", len(calls), len(rawCalls))
+	if err = c.Call(ctx, e); err != nil {
+		return nil, err
 	}
 
-	results := make([]SimulateResult, len(rawCalls))
-	for i, rawCall := range rawCalls {
-		raw, ok := rawCall.(map[string]any)
-		if !ok {
-			return nil, fmt.Errorf("bind: simulate: calls[%d]: unexpected type %T", i, rawCall)
-		}
-
-		status, ok := raw["status"].(string)
-		if !ok || (status != "0x0" && status != "0x1") {
-			return nil, fmt.Errorf("bind: simulate: calls[%d]: invalid status %v", i, raw["status"])
-		}
-
-		gasUsedHex, ok := raw["gasUsed"].(string)
-		if !ok {
-			return nil, fmt.Errorf("bind: simulate: calls[%d]: missing gasUsed", i)
-		}
-		gasUsed, err := strconv.ParseUint(strings.TrimPrefix(gasUsedHex, "0x"), 16, 64)
-		if err != nil {
-			return nil, fmt.Errorf("bind: simulate: calls[%d]: gasUsed: %w", i, err)
-		}
-
-		returnDataHex, ok := raw["returnData"].(string)
-		if !ok {
-			return nil, fmt.Errorf("bind: simulate: calls[%d]: missing returnData", i)
-		}
-		returnData, err := encoding.Hex.Decode(returnDataHex)
-		if err != nil {
-			return nil, fmt.Errorf("bind: simulate: calls[%d]: returnData: %w", i, err)
-		}
-
-		var logs []tx.Log
-		if rawLogs, ok := raw["logs"].([]any); ok {
-			logs = make([]tx.Log, len(rawLogs))
-			for j, rawLog := range rawLogs {
-				logMap, ok := rawLog.(map[string]any)
-				if !ok {
-					return nil, fmt.Errorf("bind: simulate: calls[%d]: logs[%d]: unexpected type %T", i, j, rawLog)
-				}
-				logs[j], err = tx.ParseLog(logMap)
-				if err != nil {
-					return nil, fmt.Errorf("bind: simulate: calls[%d]: logs[%d]: %w", i, j, err)
-				}
-			}
-		}
-
-		var callErr *rpc.ResponseError
-		if rawErr, ok := raw["error"].(map[string]any); ok {
-			code, ok := rawErr["code"].(float64)
-			if !ok {
-				return nil, fmt.Errorf("bind: simulate: calls[%d]: error: missing code", i)
-			}
-			message, _ := rawErr["message"].(string)
-			callErr = &rpc.ResponseError{Code: int(code), Message: message}
-			if data, ok := rawErr["data"]; ok {
-				encoded, err := json.Marshal(data)
-				if err != nil {
-					return nil, fmt.Errorf("bind: simulate: calls[%d]: error data: %w", i, err)
-				}
-				callErr.Data = encoded
-			}
-		}
-
-		results[i] = SimulateResult{
-			Success:    status == "0x1",
-			GasUsed:    gasUsed,
-			ReturnData: returnData,
-			Logs:       logs,
-		}
-		if callErr != nil {
-			results[i].Error = callErr
-		}
+	if len(results.Calls) != len(calls) {
+		return nil, fmt.Errorf("bind: simulate: expected %d call results, got %d", len(calls), len(results.Calls))
 	}
-	return results, nil
+	return results.Calls, nil
 }
