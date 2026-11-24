@@ -21,6 +21,7 @@ type SetCodeBuilder struct {
 	gasFeeCap            *big.Int
 	gasTipCap            *big.Int
 	gasLimitBufferPct    uint64
+	stateOverride        *rpc.StateOverride
 	baseFeeMultiplierPct uint64
 }
 
@@ -71,6 +72,11 @@ func (b *SetCodeBuilder) LimitBuffer(percent uint64) {
 	b.gasLimitBufferPct = percent
 }
 
+// StateOverride carries override onto every SetCodeTxConfig produced by Build as the eth_estimateGas state override.
+func (b *SetCodeBuilder) StateOverride(override *rpc.StateOverride) {
+	b.stateOverride = override
+}
+
 // PriceBuffer carries percent onto every SetCodeTxConfig produced by Build
 // as its base fee multiplier (see SetCodeTxConfig.WithBaseFeeMultiplier).
 func (b *SetCodeBuilder) PriceBuffer(percent uint64) {
@@ -82,6 +88,7 @@ func (b *SetCodeBuilder) Build(from, to *types.Address, value *big.Int, data []b
 		WithChainID(b.chainid).
 		WithAccessList(b.accessList).
 		WithGasLimitBuffer(b.gasLimitBufferPct).
+		WithStateOverride(b.stateOverride).
 		WithBaseFeeMultiplier(b.baseFeeMultiplierPct)
 
 	if b.nonce != nil {
@@ -137,6 +144,7 @@ type SetCodeTxConfig struct {
 	nonceBlockTag        string
 	baseFeeMultiplierPct uint64
 	gasLimitBufferPct    uint64
+	stateOverride        *rpc.StateOverride
 }
 
 // NewSetCodeTxConfig returns a SetCodeTxConfig sending value and data from
@@ -216,9 +224,21 @@ func (c *SetCodeTxConfig) WithGasLimitBuffer(percent uint64) *SetCodeTxConfig {
 	return c
 }
 
+// WithStateOverride passes override to eth_estimateGas when GasLimit isn't set explicitly.
+func (c *SetCodeTxConfig) WithStateOverride(override *rpc.StateOverride) *SetCodeTxConfig {
+	c.stateOverride = override
+	return c
+}
+
 // Pack resolves every field not already set via a With* method against
 // client, in a single batch, and returns the unsigned transaction.
 func (c *SetCodeTxConfig) Pack(ctx context.Context, client rpc.Client) (core.Transaction, error) {
+	if c.gasLimit == nil {
+		if err := c.stateOverride.Validate(); err != nil {
+			return nil, fmt.Errorf("tx: gasLimit: %w", err)
+		}
+	}
+
 	if c.to == nil {
 		return nil, fmt.Errorf("tx: pack set code tx: to is required")
 	}
@@ -265,7 +285,7 @@ func (c *SetCodeTxConfig) Pack(ctx context.Context, client rpc.Client) (core.Tra
 		if len(c.accessList) > 0 {
 			callParams["accessList"] = accessListToRPC(c.accessList)
 		}
-		elems.With(rpc.ETHEstimateGas("gasLimit", callParams, rpc.BlockTagLatest, nil, &gasLimitHex))
+		elems.With(rpc.ETHEstimateGas("gasLimit", callParams, rpc.BlockTagLatest, c.stateOverride, &gasLimitHex))
 	}
 
 	if elems.Len() > 0 {

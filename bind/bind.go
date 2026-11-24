@@ -29,6 +29,8 @@ type CallOptions struct {
 	Block string
 	// Value is the simulated msg.value for payable functions; nil omits it.
 	Value *big.Int
+	// StateOverride is the eth_call state override; nil omits it.
+	StateOverride *rpc.StateOverride
 }
 
 // NewCallOptions returns empty CallOptions: no from, latest block, no value.
@@ -51,6 +53,12 @@ func (o *CallOptions) WithBlock(tag string) *CallOptions {
 // WithValue sets Value in place and returns o.
 func (o *CallOptions) WithValue(value *big.Int) *CallOptions {
 	o.Value = value
+	return o
+}
+
+// WithStateOverride sets StateOverride in place and returns o.
+func (o *CallOptions) WithStateOverride(override *rpc.StateOverride) *CallOptions {
+	o.StateOverride = override
 	return o
 }
 
@@ -99,6 +107,9 @@ func Call(ctx context.Context, c rpc.Client, opts *CallOptions, to *types.Addres
 	if opts == nil {
 		opts = NewCallOptions()
 	}
+	if err := opts.StateOverride.Validate(); err != nil {
+		return nil, fmt.Errorf("bind: call: %w: %w", ErrInvalidOptions, err)
+	}
 
 	params := map[string]any{
 		"to":   to.String(),
@@ -117,7 +128,7 @@ func Call(ctx context.Context, c rpc.Client, opts *CallOptions, to *types.Addres
 	}
 
 	var raw string
-	if err := c.Call(ctx, rpc.ETHCall("call", params, block, nil, &raw)); err != nil {
+	if err := c.Call(ctx, rpc.ETHCall("call", params, block, opts.StateOverride, &raw)); err != nil {
 		return nil, err
 	}
 	data, err := encoding.Hex.Decode(raw)
