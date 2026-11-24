@@ -2277,7 +2277,7 @@ func (s *UniversalRouterSuite) Test34SimulateKeylessSwapNeedsOverrides() {
 	s.Require().Len(plain, 2)
 	s.Require().False(plain[0].Success)
 	s.Require().NotNil(plain[0].Error)
-	plainErr := s.universalRouter.wrapRevertError(plain[0].Error)
+	plainErr := MapRevertError(plain[0].Error)
 	s.Require().ErrorIs(plainErr, permit2.ErrAllowanceExpired)
 	s.Require().True(plain[1].Success)
 	s.Require().Equal(make([]byte, 32), plain[1].ReturnData)

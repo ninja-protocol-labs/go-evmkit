@@ -182,7 +182,7 @@ func TestSimulateDecodesResults(t *testing.T) {
 	require.True(t, results[0].Success)
 	require.Equal(t, uint64(0xb4a8), results[0].GasUsed)
 	require.Equal(t, append(make([]byte, 31), 0x01), results[0].ReturnData)
-	require.Nil(t, results[0].Error)
+	require.NoError(t, results[0].Error)
 	require.Len(t, results[0].Logs, 1)
 	log := results[0].Logs[0]
 	require.Equal(t, to.String(), log.Address.String())
@@ -196,14 +196,12 @@ func TestSimulateDecodesResults(t *testing.T) {
 	require.Equal(t, uint64(0x5f6a), results[1].GasUsed)
 	require.Equal(t, []byte{0xfb, 0x8f, 0x41, 0xb2}, results[1].ReturnData)
 	require.Empty(t, results[1].Logs)
-	require.NotNil(t, results[1].Error)
-	require.Equal(t, 3, results[1].Error.Code)
-	require.Equal(t, "execution reverted", results[1].Error.Message)
-	require.JSONEq(t, `"0xfb8f41b2"`, string(results[1].Error.Data))
-	var wrapped error = results[1].Error
-	got, ok := errors.AsType[*rpc.ResponseError](wrapped)
+	callErr, ok := errors.AsType[*rpc.ResponseError](results[1].Error)
 	require.True(t, ok)
-	require.Same(t, results[1].Error, got)
+	require.Equal(t, 3, callErr.Code)
+	require.Equal(t, "execution reverted", callErr.Message)
+	require.JSONEq(t, `"0xfb8f41b2"`, string(callErr.Data))
+	require.EqualError(t, results[1].Error, `rpc error 3: execution reverted: "0xfb8f41b2"`)
 }
 
 func TestSimulateRejectsInvalidInputWithoutRPC(t *testing.T) {

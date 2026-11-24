@@ -519,6 +519,54 @@ func TestWrapRevertErrorMapsV3AndV2Reasons(t *testing.T) {
 	}
 }
 
+func TestMapRevertErrorMatchesRouterMapping(t *testing.T) {
+	failedSel := errExecutionFailed.Selector()
+	invalidNonce := abi.NewError("InvalidNonce", abi.NewTypes()).Selector()
+	poolAlreadyInitialized := abi.NewError("PoolAlreadyInitialized", abi.NewTypes()).Selector()
+	deadlinePassed := errTransactionDeadlinePassed.Selector()
+	lok, err := abi.Pack(abi.NewTypes(abi.String), "LOK")
+	require.NoError(t, err)
+	k, err := abi.Pack(abi.NewTypes(abi.String), "UniswapV2: K")
+	require.NoError(t, err)
+	wrappedNonce, err := abi.Pack(errExecutionFailed.Inputs, big.NewInt(2), invalidNonce[:])
+	require.NoError(t, err)
+
+	for _, tc := range []struct {
+		name string
+		data []byte
+		want []error
+	}{
+		{"router TransactionDeadlinePassed", deadlinePassed[:], []error{ErrTransactionDeadlinePassed}},
+		{"permit2 InvalidNonce", invalidNonce[:], []error{permit2.ErrInvalidNonce}},
+		{"v4 PoolAlreadyInitialized", poolAlreadyInitialized[:], []error{v4.ErrPoolAlreadyInitialized}},
+		{"v3 LOK", append([]byte{0x08, 0xc3, 0x79, 0xa0}, lok...), []error{v3.ErrLocked}},
+		{"v2 K", append([]byte{0x08, 0xc3, 0x79, 0xa0}, k...), []error{v2.ErrK}},
+		{"ExecutionFailed wrapping InvalidNonce", append(failedSel[:], wrappedNonce...), []error{ErrExecutionFailed, permit2.ErrInvalidNonce}},
+		{"unknown", []byte{0xde, 0xad, 0xbe, 0xef}, []error{ErrUnknown}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rpcErr := &rpc.ResponseError{Code: 3, Message: "execution reverted", Data: jsontext.Value(`"` + encoding.Hex.EncodePrefixed(tc.data) + `"`)}
+
+			mapped := MapRevertError(rpcErr)
+			for _, w := range tc.want {
+				require.ErrorIs(t, mapped, w)
+			}
+			got, ok := errors.AsType[*rpc.ResponseError](mapped)
+			require.True(t, ok)
+			require.Same(t, rpcErr, got)
+			require.Equal(t, (&UniversalRouter{}).wrapRevertError(rpcErr).Error(), mapped.Error())
+		})
+	}
+
+	plain := errors.New("dial tcp: connection refused")
+	require.Same(t, plain, MapRevertError(plain))
+	empty := &rpc.ResponseError{Code: 3, Message: "execution reverted"}
+	require.Same(t, empty, MapRevertError(empty))
+	require.NoError(t, MapRevertError(nil))
+	var success *rpc.ResponseError
+	require.NoError(t, MapRevertError(success))
+}
+
 func TestWrapRevertErrorPassesThroughUndecodable(t *testing.T) {
 	u := &UniversalRouter{}
 	plain := errors.New("dial tcp: connection refused")
