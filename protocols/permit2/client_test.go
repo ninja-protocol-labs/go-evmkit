@@ -498,7 +498,7 @@ func TestCallsPropagateContext(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestMapRevertErrorMatchesClientMapper(t *testing.T) {
+func TestMapRevertErrorMapsPermit2Errors(t *testing.T) {
 	for _, tc := range []struct {
 		name string
 		err  *abi.Error
@@ -520,7 +520,6 @@ func TestMapRevertErrorMatchesClientMapper(t *testing.T) {
 			require.ErrorIs(t, mapped, tc.want)
 			require.NotErrorIs(t, mapped, ErrUnknown)
 			require.ErrorIs(t, mapped, rpcErr)
-			require.Equal(t, (*Permit2)(nil).wrapRevertError(rpcErr).Error(), mapped.Error())
 		})
 	}
 
@@ -531,4 +530,7 @@ func TestMapRevertErrorMatchesClientMapper(t *testing.T) {
 	require.Same(t, plain, MapRevertError(plain))
 	empty := &rpc.ResponseError{Code: 3, Message: "execution reverted"}
 	require.Same(t, empty, MapRevertError(empty))
+	require.NoError(t, MapRevertError(nil))
+	var success *rpc.ResponseError
+	require.NoError(t, MapRevertError(success))
 }

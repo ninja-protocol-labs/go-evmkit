@@ -1,12 +1,15 @@
 package v2
 
 import (
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"math/big"
 
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
+	"github.com/ninja-protocol-labs/go-evmkit/rpc"
+	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
 // Function signatures from IUniswapV2Router01/IUniswapV2Router02.
@@ -692,4 +695,68 @@ func decodeAmountPair(fn *abi.Function, data []byte) (*big.Int, *big.Int, error)
 		return nil, nil, fmt.Errorf("unexpected decoded type for second: %T", vals[1])
 	}
 	return first, second, nil
+}
+
+// mapRouterRevertError maps a known UniswapV2Router/UniswapV2Library revert reason in err to its sentinel.
+func mapRouterRevertError(err error) error {
+	if rpcErr, ok := errors.AsType[*rpc.ResponseError](err); ok && rpcErr == nil {
+		return nil
+	}
+
+	var rpcErr *rpc.ResponseError
+	if !errors.As(err, &rpcErr) || len(rpcErr.Data) == 0 {
+		return err
+	}
+
+	var hexData string
+	if jsonErr := json.Unmarshal(rpcErr.Data, &hexData); jsonErr != nil {
+		return err
+	}
+
+	data, decErr := encoding.Hex.Decode(hexData)
+	if decErr != nil {
+		return err
+	}
+
+	reason, decErr := abi.DecodeRevert(data)
+	if decErr != nil {
+		return err
+	}
+
+	switch reason {
+	case reasonExpired:
+		return fmt.Errorf("%w: %w", ErrExpired, err)
+	case reasonInsufficientAAmount:
+		return fmt.Errorf("%w: %w", ErrInsufficientAAmount, err)
+	case reasonInsufficientBAmount:
+		return fmt.Errorf("%w: %w", ErrInsufficientBAmount, err)
+	case reasonRouterInsufficientOutput, reasonLibraryInsufficientOutputOld, reasonLibraryInsufficientOutputNew:
+		return fmt.Errorf("%w: %w", ErrInsufficientOutputAmount, err)
+	case reasonExcessiveInputAmount:
+		return fmt.Errorf("%w: %w", ErrExcessiveInputAmount, err)
+	case reasonRouterInvalidPath, reasonLibraryInvalidPathOld, reasonLibraryInvalidPathNew:
+		return fmt.Errorf("%w: %w", ErrInvalidPath, err)
+	case reasonLibraryIdenticalAddressesOld, reasonLibraryIdenticalAddressesNew:
+		return fmt.Errorf("%w: %w", ErrIdenticalAddresses, err)
+	case reasonLibraryZeroAddressOld, reasonLibraryZeroAddressNew:
+		return fmt.Errorf("%w: %w", ErrZeroAddress, err)
+	case reasonLibraryInsufficientAmountOld, reasonLibraryInsufficientAmountNew:
+		return fmt.Errorf("%w: %w", ErrInsufficientAmount, err)
+	case reasonLibraryInsufficientLiquidityOld, reasonLibraryInsufficientLiquidityNew:
+		return fmt.Errorf("%w: %w", ErrInsufficientLiquidity, err)
+	case reasonLibraryInsufficientInputOld, reasonLibraryInsufficientInputNew:
+		return fmt.Errorf("%w: %w", ErrInsufficientInputAmount, err)
+	default:
+		return fmt.Errorf("%w: %w", ErrUnknown, err)
+	}
+}
+
+// MapRevertError maps a v2 Router, Library or Pair revert reason in err to its sentinel, else ErrUnknown.
+func MapRevertError(err error) error {
+	wrapped := mapRouterRevertError(err)
+	if !errors.Is(wrapped, ErrUnknown) {
+		return wrapped
+	}
+
+	return mapPairRevertError(err)
 }

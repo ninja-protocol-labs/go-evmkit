@@ -2,7 +2,6 @@ package v3
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math/big"
 
@@ -46,7 +45,7 @@ func (f *Factory) Owner(ctx context.Context, opts *bind.CallOptions, req *OwnerR
 
 	data, err := bind.Call(ctx, f.c, opts, req.Contract, EncodeOwner())
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: owner: %w", f.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv3: owner: %w", mapFactoryRevertError(err))
 	}
 
 	out, err := DecodeOwner(data)
@@ -70,7 +69,7 @@ func (f *Factory) FeeAmountTickSpacing(ctx context.Context, opts *bind.CallOptio
 
 	data, err := bind.Call(ctx, f.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: feeAmountTickSpacing: %w", f.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv3: feeAmountTickSpacing: %w", mapFactoryRevertError(err))
 	}
 
 	out, err := DecodeFeeAmountTickSpacing(data)
@@ -94,7 +93,7 @@ func (f *Factory) GetPool(ctx context.Context, opts *bind.CallOptions, req *GetP
 
 	data, err := bind.Call(ctx, f.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: getPool: %w", f.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv3: getPool: %w", mapFactoryRevertError(err))
 	}
 
 	out, err := DecodeGetPool(data)
@@ -118,7 +117,7 @@ func (f *Factory) CallCreatePool(ctx context.Context, opts *bind.CallOptions, re
 
 	data, err := bind.Call(ctx, f.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: callCreatePool: %w", f.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv3: callCreatePool: %w", mapFactoryRevertError(err))
 	}
 
 	out, err := DecodeCreatePool(data)
@@ -142,7 +141,7 @@ func (f *Factory) CreatePool(ctx context.Context, opts *bind.TransactOptions, re
 
 	signed, hash, err := bind.Transact(ctx, f.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv3: createPool: %w", f.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv3: createPool: %w", mapFactoryRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -161,7 +160,7 @@ func (f *Factory) SetOwner(ctx context.Context, opts *bind.TransactOptions, req 
 
 	signed, hash, err := bind.Transact(ctx, f.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv3: setOwner: %w", f.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv3: setOwner: %w", mapFactoryRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -180,16 +179,8 @@ func (f *Factory) EnableFeeAmount(ctx context.Context, opts *bind.TransactOption
 
 	signed, hash, err := bind.Transact(ctx, f.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv3: enableFeeAmount: %w", f.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv3: enableFeeAmount: %w", mapFactoryRevertError(err))
 	}
 
 	return signed, hash, nil
-}
-
-// wrapRevertError maps any UniswapV3Factory revert to ErrReverted; its requires carry no reason string or selector to switch on.
-func (_ *Factory) wrapRevertError(err error) error {
-	if _, ok := errors.AsType[*rpc.ResponseError](err); !ok {
-		return err
-	}
-	return fmt.Errorf("%w: %w", ErrReverted, err)
 }

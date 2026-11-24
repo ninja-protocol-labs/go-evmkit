@@ -1,12 +1,15 @@
 package v3
 
 import (
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"math/big"
 
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
+	"github.com/ninja-protocol-labs/go-evmkit/rpc"
+	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
 // Tuple types for INonfungiblePositionManager's struct parameters.
@@ -641,4 +644,71 @@ func EncodeNFTPermit(spender *types.Address, tokenId, deadline *big.Int, sig *ty
 		return nil, fmt.Errorf("uniswapv3: encodeNFTPermit: %w", err)
 	}
 	return data, nil
+}
+
+// mapNFPMRevertError maps a known NonfungiblePositionManager revert reason in err to its sentinel.
+func mapNFPMRevertError(err error) error {
+	if rpcErr, ok := errors.AsType[*rpc.ResponseError](err); ok && rpcErr == nil {
+		return nil
+	}
+
+	var rpcErr *rpc.ResponseError
+	if !errors.As(err, &rpcErr) {
+		return err
+	}
+	if len(rpcErr.Data) == 0 {
+		return fmt.Errorf("%w: %w", ErrReverted, err)
+	}
+
+	var hexData string
+	if jsonErr := json.Unmarshal(rpcErr.Data, &hexData); jsonErr != nil {
+		return fmt.Errorf("%w: %w", ErrReverted, err)
+	}
+
+	data, decErr := encoding.Hex.Decode(hexData)
+	if decErr != nil {
+		return fmt.Errorf("%w: %w", ErrReverted, err)
+	}
+
+	reason, decErr := abi.DecodeRevert(data)
+	if decErr != nil {
+		return fmt.Errorf("%w: %w", ErrReverted, err)
+	}
+
+	switch reason {
+	case reasonTransactionTooOld:
+		return fmt.Errorf("%w: %w", ErrTransactionTooOld, err)
+	case reasonInsufficientWETH9:
+		return fmt.Errorf("%w: %w", ErrInsufficientWETH9, err)
+	case reasonInsufficientToken:
+		return fmt.Errorf("%w: %w", ErrInsufficientToken, err)
+	case reasonNotWETH9:
+		return fmt.Errorf("%w: %w", ErrNotWETH9, err)
+	case reasonTransferFromFailed:
+		return fmt.Errorf("%w: %w", ErrTransferFromFailed, err)
+	case reasonTokenTransferFailed:
+		return fmt.Errorf("%w: %w", ErrTokenTransferFailed, err)
+	case reasonApproveFailed:
+		return fmt.Errorf("%w: %w", ErrApproveFailed, err)
+	case reasonTransferETHFailed:
+		return fmt.Errorf("%w: %w", ErrTransferETHFailed, err)
+	case reasonInvalidTokenID:
+		return fmt.Errorf("%w: %w", ErrInvalidTokenID, err)
+	case reasonNotApproved:
+		return fmt.Errorf("%w: %w", ErrNotApproved, err)
+	case reasonPriceSlippageCheck:
+		return fmt.Errorf("%w: %w", ErrPriceSlippageCheck, err)
+	case reasonNotCleared:
+		return fmt.Errorf("%w: %w", ErrNotCleared, err)
+	case reasonPermitExpired:
+		return fmt.Errorf("%w: %w", ErrPermitExpired, err)
+	case reasonApprovalToCurrentOwner:
+		return fmt.Errorf("%w: %w", ErrApprovalToCurrentOwner, err)
+	case reasonUnauthorized:
+		return fmt.Errorf("%w: %w", ErrUnauthorized, err)
+	case reasonInvalidSignature:
+		return fmt.Errorf("%w: %w", ErrInvalidSignature, err)
+	default:
+		return fmt.Errorf("%w: %w", ErrReverted, err)
+	}
 }

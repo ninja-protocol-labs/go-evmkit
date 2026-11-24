@@ -967,4 +967,7 @@ func TestMapRevertErrorCoversRouterAndPair(t *testing.T) {
 	require.Same(t, custom, MapRevertError(custom))
 	plain := errors.New("dial tcp: connection refused")
 	require.Same(t, plain, MapRevertError(plain))
+	require.NoError(t, MapRevertError(nil))
+	var success *rpc.ResponseError
+	require.NoError(t, MapRevertError(success))
 }

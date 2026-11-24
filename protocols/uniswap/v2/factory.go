@@ -2,17 +2,13 @@ package v2
 
 import (
 	"context"
-	"encoding/json/v2"
-	"errors"
 	"fmt"
 	"math/big"
 
 	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core"
-	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
-	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
 // IFactory mirrors IUniswapV2Factory.
@@ -51,7 +47,7 @@ func (f *Factory) FeeTo(ctx context.Context, opts *bind.CallOptions, req *FeeToR
 
 	data, err := bind.Call(ctx, f.c, opts, req.Contract, EncodeFeeTo())
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: feeTo: %w", f.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv2: feeTo: %w", mapFactoryRevertError(err))
 	}
 
 	out, err := DecodeFeeTo(data)
@@ -70,7 +66,7 @@ func (f *Factory) FeeToSetter(ctx context.Context, opts *bind.CallOptions, req *
 
 	data, err := bind.Call(ctx, f.c, opts, req.Contract, EncodeFeeToSetter())
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: feeToSetter: %w", f.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv2: feeToSetter: %w", mapFactoryRevertError(err))
 	}
 
 	out, err := DecodeFeeToSetter(data)
@@ -94,7 +90,7 @@ func (f *Factory) GetPair(ctx context.Context, opts *bind.CallOptions, req *GetP
 
 	data, err := bind.Call(ctx, f.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: getPair: %w", f.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv2: getPair: %w", mapFactoryRevertError(err))
 	}
 
 	out, err := DecodeGetPair(data)
@@ -118,7 +114,7 @@ func (f *Factory) AllPairs(ctx context.Context, opts *bind.CallOptions, req *All
 
 	data, err := bind.Call(ctx, f.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: allPairs: %w", f.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv2: allPairs: %w", mapFactoryRevertError(err))
 	}
 
 	out, err := DecodeAllPairs(data)
@@ -137,7 +133,7 @@ func (f *Factory) AllPairsLength(ctx context.Context, opts *bind.CallOptions, re
 
 	data, err := bind.Call(ctx, f.c, opts, req.Contract, EncodeAllPairsLength())
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: allPairsLength: %w", f.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv2: allPairsLength: %w", mapFactoryRevertError(err))
 	}
 
 	out, err := DecodeAllPairsLength(data)
@@ -161,7 +157,7 @@ func (f *Factory) CallCreatePair(ctx context.Context, opts *bind.CallOptions, re
 
 	data, err := bind.Call(ctx, f.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: callCreatePair: %w", f.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv2: callCreatePair: %w", mapFactoryRevertError(err))
 	}
 
 	out, err := DecodeCreatePair(data)
@@ -185,7 +181,7 @@ func (f *Factory) CreatePair(ctx context.Context, opts *bind.TransactOptions, re
 
 	signed, hash, err := bind.Transact(ctx, f.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv2: createPair: %w", f.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv2: createPair: %w", mapFactoryRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -204,7 +200,7 @@ func (f *Factory) SetFeeTo(ctx context.Context, opts *bind.TransactOptions, req 
 
 	signed, hash, err := bind.Transact(ctx, f.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv2: setFeeTo: %w", f.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv2: setFeeTo: %w", mapFactoryRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -223,46 +219,8 @@ func (f *Factory) SetFeeToSetter(ctx context.Context, opts *bind.TransactOptions
 
 	signed, hash, err := bind.Transact(ctx, f.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv2: setFeeToSetter: %w", f.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv2: setFeeToSetter: %w", mapFactoryRevertError(err))
 	}
 
 	return signed, hash, nil
-}
-
-// wrapRevertError maps a known UniswapV2Factory require(cond, reason) string in err to its sentinel.
-// UniswapV2Factory predates Solidity custom errors, so there's no 4-byte selector to switch on --
-// just the plain Error(string) reason, decoded via abi.DecodeRevert.
-func (_ *Factory) wrapRevertError(err error) error {
-	var rpcErr *rpc.ResponseError
-	if !errors.As(err, &rpcErr) || len(rpcErr.Data) == 0 {
-		return err
-	}
-
-	var hexData string
-	if jsonErr := json.Unmarshal(rpcErr.Data, &hexData); jsonErr != nil {
-		return err
-	}
-
-	data, decErr := encoding.Hex.Decode(hexData)
-	if decErr != nil {
-		return err
-	}
-
-	reason, decErr := abi.DecodeRevert(data)
-	if decErr != nil {
-		return err
-	}
-
-	switch reason {
-	case reasonIdenticalAddresses:
-		return fmt.Errorf("%w: %w", ErrIdenticalAddresses, err)
-	case reasonZeroAddress:
-		return fmt.Errorf("%w: %w", ErrZeroAddress, err)
-	case reasonPairExists:
-		return fmt.Errorf("%w: %w", ErrPairExists, err)
-	case reasonForbidden:
-		return fmt.Errorf("%w: %w", ErrForbidden, err)
-	default:
-		return fmt.Errorf("%w: %w", ErrUnknown, err)
-	}
 }

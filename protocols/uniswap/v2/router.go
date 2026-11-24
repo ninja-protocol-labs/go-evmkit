@@ -2,17 +2,13 @@ package v2
 
 import (
 	"context"
-	"encoding/json/v2"
-	"errors"
 	"fmt"
 	"math/big"
 
 	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core"
-	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
-	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
 // IRouter mirrors IUniswapV2Router02 (which embeds IUniswapV2Router01).
@@ -81,7 +77,7 @@ func (r *Router) Factory(ctx context.Context, opts *bind.CallOptions, req *Facto
 
 	data, err := bind.Call(ctx, r.c, opts, req.Contract, EncodeRouterFactory())
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: factory: %w", r.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv2: factory: %w", mapRouterRevertError(err))
 	}
 
 	out, err := DecodeRouterFactory(data)
@@ -100,7 +96,7 @@ func (r *Router) WETH(ctx context.Context, opts *bind.CallOptions, req *WETHRequ
 
 	data, err := bind.Call(ctx, r.c, opts, req.Contract, EncodeWETH())
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: weth: %w", r.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv2: weth: %w", mapRouterRevertError(err))
 	}
 
 	out, err := DecodeWETH(data)
@@ -124,7 +120,7 @@ func (r *Router) Quote(ctx context.Context, opts *bind.CallOptions, req *QuoteRe
 
 	data, err := bind.Call(ctx, r.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: quote: %w", r.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv2: quote: %w", mapRouterRevertError(err))
 	}
 
 	out, err := DecodeQuote(data)
@@ -148,7 +144,7 @@ func (r *Router) GetAmountOut(ctx context.Context, opts *bind.CallOptions, req *
 
 	data, err := bind.Call(ctx, r.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: getAmountOut: %w", r.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv2: getAmountOut: %w", mapRouterRevertError(err))
 	}
 
 	out, err := DecodeGetAmountOut(data)
@@ -172,7 +168,7 @@ func (r *Router) GetAmountIn(ctx context.Context, opts *bind.CallOptions, req *G
 
 	data, err := bind.Call(ctx, r.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: getAmountIn: %w", r.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv2: getAmountIn: %w", mapRouterRevertError(err))
 	}
 
 	out, err := DecodeGetAmountIn(data)
@@ -196,7 +192,7 @@ func (r *Router) GetAmountsOut(ctx context.Context, opts *bind.CallOptions, req 
 
 	data, err := bind.Call(ctx, r.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: getAmountsOut: %w", r.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv2: getAmountsOut: %w", mapRouterRevertError(err))
 	}
 
 	out, err := DecodeGetAmountsOut(data)
@@ -220,7 +216,7 @@ func (r *Router) GetAmountsIn(ctx context.Context, opts *bind.CallOptions, req *
 
 	data, err := bind.Call(ctx, r.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: getAmountsIn: %w", r.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv2: getAmountsIn: %w", mapRouterRevertError(err))
 	}
 
 	out, err := DecodeGetAmountsIn(data)
@@ -244,7 +240,7 @@ func (r *Router) CallAddLiquidity(ctx context.Context, opts *bind.CallOptions, r
 
 	data, err := bind.Call(ctx, r.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: callAddLiquidity: %w", r.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv2: callAddLiquidity: %w", mapRouterRevertError(err))
 	}
 
 	out, err := DecodeAddLiquidity(data)
@@ -278,7 +274,7 @@ func (r *Router) CallAddLiquidityETH(ctx context.Context, opts *bind.CallOptions
 
 	data, err := bind.Call(ctx, r.c, callOpts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: callAddLiquidityETH: %w", r.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv2: callAddLiquidityETH: %w", mapRouterRevertError(err))
 	}
 
 	out, err := DecodeAddLiquidityETH(data)
@@ -302,7 +298,7 @@ func (r *Router) CallRemoveLiquidity(ctx context.Context, opts *bind.CallOptions
 
 	data, err := bind.Call(ctx, r.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: callRemoveLiquidity: %w", r.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv2: callRemoveLiquidity: %w", mapRouterRevertError(err))
 	}
 
 	out, err := DecodeRemoveLiquidity(data)
@@ -326,7 +322,7 @@ func (r *Router) CallRemoveLiquidityETH(ctx context.Context, opts *bind.CallOpti
 
 	data, err := bind.Call(ctx, r.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: callRemoveLiquidityETH: %w", r.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv2: callRemoveLiquidityETH: %w", mapRouterRevertError(err))
 	}
 
 	out, err := DecodeRemoveLiquidityETH(data)
@@ -350,7 +346,7 @@ func (r *Router) CallRemoveLiquidityWithPermit(ctx context.Context, opts *bind.C
 
 	data, err := bind.Call(ctx, r.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: callRemoveLiquidityWithPermit: %w", r.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv2: callRemoveLiquidityWithPermit: %w", mapRouterRevertError(err))
 	}
 
 	out, err := DecodeRemoveLiquidityWithPermit(data)
@@ -374,7 +370,7 @@ func (r *Router) CallRemoveLiquidityETHWithPermit(ctx context.Context, opts *bin
 
 	data, err := bind.Call(ctx, r.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: callRemoveLiquidityETHWithPermit: %w", r.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv2: callRemoveLiquidityETHWithPermit: %w", mapRouterRevertError(err))
 	}
 
 	out, err := DecodeRemoveLiquidityETHWithPermit(data)
@@ -398,7 +394,7 @@ func (r *Router) CallSwapExactTokensForTokens(ctx context.Context, opts *bind.Ca
 
 	data, err := bind.Call(ctx, r.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: callSwapExactTokensForTokens: %w", r.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv2: callSwapExactTokensForTokens: %w", mapRouterRevertError(err))
 	}
 
 	out, err := DecodeSwapExactTokensForTokens(data)
@@ -422,7 +418,7 @@ func (r *Router) CallSwapTokensForExactTokens(ctx context.Context, opts *bind.Ca
 
 	data, err := bind.Call(ctx, r.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: callSwapTokensForExactTokens: %w", r.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv2: callSwapTokensForExactTokens: %w", mapRouterRevertError(err))
 	}
 
 	out, err := DecodeSwapTokensForExactTokens(data)
@@ -456,7 +452,7 @@ func (r *Router) CallSwapExactETHForTokens(ctx context.Context, opts *bind.CallO
 
 	data, err := bind.Call(ctx, r.c, callOpts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: callSwapExactETHForTokens: %w", r.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv2: callSwapExactETHForTokens: %w", mapRouterRevertError(err))
 	}
 
 	out, err := DecodeSwapExactETHForTokens(data)
@@ -480,7 +476,7 @@ func (r *Router) CallSwapTokensForExactETH(ctx context.Context, opts *bind.CallO
 
 	data, err := bind.Call(ctx, r.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: callSwapTokensForExactETH: %w", r.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv2: callSwapTokensForExactETH: %w", mapRouterRevertError(err))
 	}
 
 	out, err := DecodeSwapTokensForExactETH(data)
@@ -504,7 +500,7 @@ func (r *Router) CallSwapExactTokensForETH(ctx context.Context, opts *bind.CallO
 
 	data, err := bind.Call(ctx, r.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: callSwapExactTokensForETH: %w", r.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv2: callSwapExactTokensForETH: %w", mapRouterRevertError(err))
 	}
 
 	out, err := DecodeSwapExactTokensForETH(data)
@@ -538,7 +534,7 @@ func (r *Router) CallSwapETHForExactTokens(ctx context.Context, opts *bind.CallO
 
 	data, err := bind.Call(ctx, r.c, callOpts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: callSwapETHForExactTokens: %w", r.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv2: callSwapETHForExactTokens: %w", mapRouterRevertError(err))
 	}
 
 	out, err := DecodeSwapETHForExactTokens(data)
@@ -562,7 +558,7 @@ func (r *Router) CallRemoveLiquidityETHSupportingFeeOnTransferTokens(ctx context
 
 	data, err := bind.Call(ctx, r.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: callRemoveLiquidityETHSupportingFeeOnTransferTokens: %w", r.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv2: callRemoveLiquidityETHSupportingFeeOnTransferTokens: %w", mapRouterRevertError(err))
 	}
 
 	out, err := DecodeRemoveLiquidityETHSupportingFeeOnTransferTokens(data)
@@ -586,7 +582,7 @@ func (r *Router) CallRemoveLiquidityETHWithPermitSupportingFeeOnTransferTokens(c
 
 	data, err := bind.Call(ctx, r.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: callRemoveLiquidityETHWithPermitSupportingFeeOnTransferTokens: %w", r.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv2: callRemoveLiquidityETHWithPermitSupportingFeeOnTransferTokens: %w", mapRouterRevertError(err))
 	}
 
 	out, err := DecodeRemoveLiquidityETHWithPermitSupportingFeeOnTransferTokens(data)
@@ -610,7 +606,7 @@ func (r *Router) AddLiquidity(ctx context.Context, opts *bind.TransactOptions, r
 
 	signed, hash, err := bind.Transact(ctx, r.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv2: addLiquidity: %w", r.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv2: addLiquidity: %w", mapRouterRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -640,7 +636,7 @@ func (r *Router) AddLiquidityETH(ctx context.Context, opts *bind.TransactOptions
 
 	signed, hash, err := bind.Transact(ctx, r.c, txOpts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv2: addLiquidityETH: %w", r.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv2: addLiquidityETH: %w", mapRouterRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -659,7 +655,7 @@ func (r *Router) RemoveLiquidity(ctx context.Context, opts *bind.TransactOptions
 
 	signed, hash, err := bind.Transact(ctx, r.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv2: removeLiquidity: %w", r.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv2: removeLiquidity: %w", mapRouterRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -678,7 +674,7 @@ func (r *Router) RemoveLiquidityETH(ctx context.Context, opts *bind.TransactOpti
 
 	signed, hash, err := bind.Transact(ctx, r.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv2: removeLiquidityETH: %w", r.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv2: removeLiquidityETH: %w", mapRouterRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -697,7 +693,7 @@ func (r *Router) RemoveLiquidityWithPermit(ctx context.Context, opts *bind.Trans
 
 	signed, hash, err := bind.Transact(ctx, r.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv2: removeLiquidityWithPermit: %w", r.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv2: removeLiquidityWithPermit: %w", mapRouterRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -716,7 +712,7 @@ func (r *Router) RemoveLiquidityETHWithPermit(ctx context.Context, opts *bind.Tr
 
 	signed, hash, err := bind.Transact(ctx, r.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv2: removeLiquidityETHWithPermit: %w", r.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv2: removeLiquidityETHWithPermit: %w", mapRouterRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -735,7 +731,7 @@ func (r *Router) SwapExactTokensForTokens(ctx context.Context, opts *bind.Transa
 
 	signed, hash, err := bind.Transact(ctx, r.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv2: swapExactTokensForTokens: %w", r.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv2: swapExactTokensForTokens: %w", mapRouterRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -754,7 +750,7 @@ func (r *Router) SwapTokensForExactTokens(ctx context.Context, opts *bind.Transa
 
 	signed, hash, err := bind.Transact(ctx, r.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv2: swapTokensForExactTokens: %w", r.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv2: swapTokensForExactTokens: %w", mapRouterRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -784,7 +780,7 @@ func (r *Router) SwapExactETHForTokens(ctx context.Context, opts *bind.TransactO
 
 	signed, hash, err := bind.Transact(ctx, r.c, txOpts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv2: swapExactETHForTokens: %w", r.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv2: swapExactETHForTokens: %w", mapRouterRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -803,7 +799,7 @@ func (r *Router) SwapTokensForExactETH(ctx context.Context, opts *bind.TransactO
 
 	signed, hash, err := bind.Transact(ctx, r.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv2: swapTokensForExactETH: %w", r.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv2: swapTokensForExactETH: %w", mapRouterRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -822,7 +818,7 @@ func (r *Router) SwapExactTokensForETH(ctx context.Context, opts *bind.TransactO
 
 	signed, hash, err := bind.Transact(ctx, r.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv2: swapExactTokensForETH: %w", r.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv2: swapExactTokensForETH: %w", mapRouterRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -852,7 +848,7 @@ func (r *Router) SwapETHForExactTokens(ctx context.Context, opts *bind.TransactO
 
 	signed, hash, err := bind.Transact(ctx, r.c, txOpts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv2: swapETHForExactTokens: %w", r.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv2: swapETHForExactTokens: %w", mapRouterRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -871,7 +867,7 @@ func (r *Router) RemoveLiquidityETHSupportingFeeOnTransferTokens(ctx context.Con
 
 	signed, hash, err := bind.Transact(ctx, r.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv2: removeLiquidityETHSupportingFeeOnTransferTokens: %w", r.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv2: removeLiquidityETHSupportingFeeOnTransferTokens: %w", mapRouterRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -890,7 +886,7 @@ func (r *Router) RemoveLiquidityETHWithPermitSupportingFeeOnTransferTokens(ctx c
 
 	signed, hash, err := bind.Transact(ctx, r.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv2: removeLiquidityETHWithPermitSupportingFeeOnTransferTokens: %w", r.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv2: removeLiquidityETHWithPermitSupportingFeeOnTransferTokens: %w", mapRouterRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -909,7 +905,7 @@ func (r *Router) SwapExactTokensForTokensSupportingFeeOnTransferTokens(ctx conte
 
 	signed, hash, err := bind.Transact(ctx, r.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv2: swapExactTokensForTokensSupportingFeeOnTransferTokens: %w", r.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv2: swapExactTokensForTokensSupportingFeeOnTransferTokens: %w", mapRouterRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -939,7 +935,7 @@ func (r *Router) SwapExactETHForTokensSupportingFeeOnTransferTokens(ctx context.
 
 	signed, hash, err := bind.Transact(ctx, r.c, txOpts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv2: swapExactETHForTokensSupportingFeeOnTransferTokens: %w", r.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv2: swapExactETHForTokensSupportingFeeOnTransferTokens: %w", mapRouterRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -958,68 +954,8 @@ func (r *Router) SwapExactTokensForETHSupportingFeeOnTransferTokens(ctx context.
 
 	signed, hash, err := bind.Transact(ctx, r.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv2: swapExactTokensForETHSupportingFeeOnTransferTokens: %w", r.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv2: swapExactTokensForETHSupportingFeeOnTransferTokens: %w", mapRouterRevertError(err))
 	}
 
 	return signed, hash, nil
-}
-
-// wrapRevertError maps a known UniswapV2Router/UniswapV2Library revert reason in err to its sentinel.
-func (_ *Router) wrapRevertError(err error) error {
-	var rpcErr *rpc.ResponseError
-	if !errors.As(err, &rpcErr) || len(rpcErr.Data) == 0 {
-		return err
-	}
-
-	var hexData string
-	if jsonErr := json.Unmarshal(rpcErr.Data, &hexData); jsonErr != nil {
-		return err
-	}
-
-	data, decErr := encoding.Hex.Decode(hexData)
-	if decErr != nil {
-		return err
-	}
-
-	reason, decErr := abi.DecodeRevert(data)
-	if decErr != nil {
-		return err
-	}
-
-	switch reason {
-	case reasonExpired:
-		return fmt.Errorf("%w: %w", ErrExpired, err)
-	case reasonInsufficientAAmount:
-		return fmt.Errorf("%w: %w", ErrInsufficientAAmount, err)
-	case reasonInsufficientBAmount:
-		return fmt.Errorf("%w: %w", ErrInsufficientBAmount, err)
-	case reasonRouterInsufficientOutput, reasonLibraryInsufficientOutputOld, reasonLibraryInsufficientOutputNew:
-		return fmt.Errorf("%w: %w", ErrInsufficientOutputAmount, err)
-	case reasonExcessiveInputAmount:
-		return fmt.Errorf("%w: %w", ErrExcessiveInputAmount, err)
-	case reasonRouterInvalidPath, reasonLibraryInvalidPathOld, reasonLibraryInvalidPathNew:
-		return fmt.Errorf("%w: %w", ErrInvalidPath, err)
-	case reasonLibraryIdenticalAddressesOld, reasonLibraryIdenticalAddressesNew:
-		return fmt.Errorf("%w: %w", ErrIdenticalAddresses, err)
-	case reasonLibraryZeroAddressOld, reasonLibraryZeroAddressNew:
-		return fmt.Errorf("%w: %w", ErrZeroAddress, err)
-	case reasonLibraryInsufficientAmountOld, reasonLibraryInsufficientAmountNew:
-		return fmt.Errorf("%w: %w", ErrInsufficientAmount, err)
-	case reasonLibraryInsufficientLiquidityOld, reasonLibraryInsufficientLiquidityNew:
-		return fmt.Errorf("%w: %w", ErrInsufficientLiquidity, err)
-	case reasonLibraryInsufficientInputOld, reasonLibraryInsufficientInputNew:
-		return fmt.Errorf("%w: %w", ErrInsufficientInputAmount, err)
-	default:
-		return fmt.Errorf("%w: %w", ErrUnknown, err)
-	}
-}
-
-// MapRevertError maps a v2 Router, Library or Pair revert reason in err to its sentinel, else ErrUnknown.
-func MapRevertError(err error) error {
-	wrapped := (*Router)(nil).wrapRevertError(err)
-	if !errors.Is(wrapped, ErrUnknown) {
-		return wrapped
-	}
-
-	return (*Pair)(nil).wrapRevertError(err)
 }

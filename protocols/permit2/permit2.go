@@ -4,16 +4,11 @@ package permit2
 
 import (
 	"context"
-	"encoding/json/v2"
-	"errors"
 	"fmt"
 	"math/big"
 
-	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
-
 	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core"
-	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
 )
@@ -82,7 +77,7 @@ func (p2 *Permit2) DomainSeparator(ctx context.Context, opts *bind.CallOptions, 
 
 	data, err := bind.Call(ctx, p2.c, opts, req.Contract, EncodeDomainSeparator())
 	if err != nil {
-		return nil, fmt.Errorf("permit2: domainSeparator: %w", p2.wrapRevertError(err))
+		return nil, fmt.Errorf("permit2: domainSeparator: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeDomainSeparator(data)
@@ -106,7 +101,7 @@ func (p2 *Permit2) Allowance(ctx context.Context, opts *bind.CallOptions, req *A
 
 	data, err := bind.Call(ctx, p2.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("permit2: allowance: %w", p2.wrapRevertError(err))
+		return nil, fmt.Errorf("permit2: allowance: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeAllowance(data)
@@ -130,7 +125,7 @@ func (p2 *Permit2) NonceBitmap(ctx context.Context, opts *bind.CallOptions, req 
 
 	data, err := bind.Call(ctx, p2.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("permit2: nonceBitmap: %w", p2.wrapRevertError(err))
+		return nil, fmt.Errorf("permit2: nonceBitmap: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeNonceBitmap(data)
@@ -154,7 +149,7 @@ func (p2 *Permit2) Approve(ctx context.Context, opts *bind.TransactOptions, req 
 
 	signed, hash, err := bind.Transact(ctx, p2.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("permit2: approve: %w", p2.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("permit2: approve: %w", MapRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -173,7 +168,7 @@ func (p2 *Permit2) PermitSingle(ctx context.Context, opts *bind.TransactOptions,
 
 	signed, hash, err := bind.Transact(ctx, p2.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("permit2: permitSingle: %w", p2.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("permit2: permitSingle: %w", MapRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -192,7 +187,7 @@ func (p2 *Permit2) PermitBatch(ctx context.Context, opts *bind.TransactOptions, 
 
 	signed, hash, err := bind.Transact(ctx, p2.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("permit2: permitBatch: %w", p2.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("permit2: permitBatch: %w", MapRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -211,7 +206,7 @@ func (p2 *Permit2) TransferFrom(ctx context.Context, opts *bind.TransactOptions,
 
 	signed, hash, err := bind.Transact(ctx, p2.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("permit2: transferFrom: %w", p2.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("permit2: transferFrom: %w", MapRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -230,7 +225,7 @@ func (p2 *Permit2) TransferFromBatch(ctx context.Context, opts *bind.TransactOpt
 
 	signed, hash, err := bind.Transact(ctx, p2.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("permit2: transferFromBatch: %w", p2.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("permit2: transferFromBatch: %w", MapRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -249,7 +244,7 @@ func (p2 *Permit2) Lockdown(ctx context.Context, opts *bind.TransactOptions, req
 
 	signed, hash, err := bind.Transact(ctx, p2.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("permit2: lockdown: %w", p2.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("permit2: lockdown: %w", MapRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -268,7 +263,7 @@ func (p2 *Permit2) InvalidateNonces(ctx context.Context, opts *bind.TransactOpti
 
 	signed, hash, err := bind.Transact(ctx, p2.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("permit2: invalidateNonces: %w", p2.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("permit2: invalidateNonces: %w", MapRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -287,7 +282,7 @@ func (p2 *Permit2) PermitTransferFrom(ctx context.Context, opts *bind.TransactOp
 
 	signed, hash, err := bind.Transact(ctx, p2.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("permit2: permitTransferFrom: %w", p2.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("permit2: permitTransferFrom: %w", MapRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -306,7 +301,7 @@ func (p2 *Permit2) PermitWitnessTransferFrom(ctx context.Context, opts *bind.Tra
 
 	signed, hash, err := bind.Transact(ctx, p2.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("permit2: permitWitnessTransferFrom: %w", p2.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("permit2: permitWitnessTransferFrom: %w", MapRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -325,7 +320,7 @@ func (p2 *Permit2) PermitTransferFromBatch(ctx context.Context, opts *bind.Trans
 
 	signed, hash, err := bind.Transact(ctx, p2.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("permit2: permitTransferFromBatch: %w", p2.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("permit2: permitTransferFromBatch: %w", MapRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -344,7 +339,7 @@ func (p2 *Permit2) PermitWitnessTransferFromBatch(ctx context.Context, opts *bin
 
 	signed, hash, err := bind.Transact(ctx, p2.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("permit2: permitWitnessTransferFromBatch: %w", p2.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("permit2: permitWitnessTransferFromBatch: %w", MapRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -363,63 +358,8 @@ func (p2 *Permit2) InvalidateUnorderedNonces(ctx context.Context, opts *bind.Tra
 
 	signed, hash, err := bind.Transact(ctx, p2.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("permit2: invalidateUnorderedNonces: %w", p2.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("permit2: invalidateUnorderedNonces: %w", MapRevertError(err))
 	}
 
 	return signed, hash, nil
-}
-
-// wrapRevertError maps a known Permit2 custom error in err to its sentinel.
-func (_ *Permit2) wrapRevertError(err error) error {
-	var rpcErr *rpc.ResponseError
-	if !errors.As(err, &rpcErr) || len(rpcErr.Data) == 0 {
-		return err
-	}
-
-	var hexData string
-	if jsonErr := json.Unmarshal(rpcErr.Data, &hexData); jsonErr != nil {
-		return err
-	}
-
-	data, decErr := encoding.Hex.Decode(hexData)
-	if decErr != nil || len(data) < 4 {
-		return err
-	}
-
-	var sel abi.Selector
-	copy(sel[:], data[:4])
-
-	switch sel {
-	case errAllowanceExpired.Selector():
-		return fmt.Errorf("%w: %w", ErrAllowanceExpired, err)
-	case errInsufficientAllowance.Selector():
-		return fmt.Errorf("%w: %w", ErrInsufficientAllowance, err)
-	case errExcessiveInvalidation.Selector():
-		return fmt.Errorf("%w: %w", ErrExcessiveInvalidation, err)
-	case errSignatureExpired.Selector():
-		return fmt.Errorf("%w: %w", ErrSignatureExpired, err)
-	case errInvalidNonce.Selector():
-		return fmt.Errorf("%w: %w", ErrInvalidNonce, err)
-	case errInvalidSignatureLength.Selector():
-		return fmt.Errorf("%w: %w", ErrInvalidSignatureLength, err)
-	case errInvalidSignature.Selector():
-		return fmt.Errorf("%w: %w", ErrInvalidSignature, err)
-	case errInvalidSigner.Selector():
-		return fmt.Errorf("%w: %w", ErrInvalidSigner, err)
-	case errInvalidContractSignature.Selector():
-		return fmt.Errorf("%w: %w", ErrInvalidContractSignature, err)
-	case errUnsafeCast.Selector():
-		return fmt.Errorf("%w: %w", ErrUnsafeCast, err)
-	case errInvalidAmount.Selector():
-		return fmt.Errorf("%w: %w", ErrInvalidAmount, err)
-	case errLengthMismatch.Selector():
-		return fmt.Errorf("%w: %w", ErrLengthMismatch, err)
-	default:
-		return fmt.Errorf("%w: %w", ErrUnknown, err)
-	}
-}
-
-// MapRevertError maps a Permit2 custom error in err to its sentinel, else ErrUnknown.
-func MapRevertError(err error) error {
-	return (*Permit2)(nil).wrapRevertError(err)
 }

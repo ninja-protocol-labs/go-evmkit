@@ -557,7 +557,7 @@ func FuzzWrapRevertErrorKeepsCause(f *testing.F) {
 		rpcErr := &rpc.ResponseError{Code: 3, Message: "execution reverted", Data: jsontext.Value(`"` + encoding.Hex.EncodePrefixed(data) + `"`)}
 
 		var wrapped error
-		require.NotPanics(t, func() { wrapped = (&UniversalRouter{}).wrapRevertError(rpcErr) })
+		require.NotPanics(t, func() { wrapped = MapRevertError(rpcErr) })
 		got, ok := errors.AsType[*rpc.ResponseError](wrapped)
 		require.True(t, ok)
 		require.Same(t, rpcErr, got)
@@ -594,7 +594,7 @@ func FuzzExecutionFailedNestingUnwraps(f *testing.F) {
 
 		rpcErr := &rpc.ResponseError{Code: 3, Message: "execution reverted", Data: jsontext.Value(`"` + encoding.Hex.EncodePrefixed(message) + `"`)}
 		var wrapped error
-		require.NotPanics(t, func() { wrapped = (&UniversalRouter{}).wrapRevertError(rpcErr) })
+		require.NotPanics(t, func() { wrapped = MapRevertError(rpcErr) })
 		require.ErrorIs(t, wrapped, ErrExecutionFailed)
 
 		outer, ok := errors.AsType[*ExecutionFailedError](wrapped)

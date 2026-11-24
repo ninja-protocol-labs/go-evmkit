@@ -1,12 +1,15 @@
 package v3
 
 import (
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"math/big"
 
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
+	"github.com/ninja-protocol-labs/go-evmkit/rpc"
+	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
 // Function signatures from IUniswapV3PoolImmutables/State/DerivedState/Actions/OwnerActions,
@@ -820,4 +823,83 @@ func DecodeCollectProtocol(data []byte) (*big.Int, *big.Int, error) {
 		return nil, nil, fmt.Errorf("uniswapv3: decodeCollectProtocol: unexpected decoded type for amount1: %T", vals[1])
 	}
 	return amount0, amount1, nil
+}
+
+// mapPoolRevertError maps a known UniswapV3Pool require(cond, reason) string in err to its sentinel.
+func mapPoolRevertError(err error) error {
+	if rpcErr, ok := errors.AsType[*rpc.ResponseError](err); ok && rpcErr == nil {
+		return nil
+	}
+
+	var rpcErr *rpc.ResponseError
+	if !errors.As(err, &rpcErr) {
+		return err
+	}
+	if len(rpcErr.Data) == 0 {
+		return fmt.Errorf("%w: %w", ErrReverted, err)
+	}
+
+	var hexData string
+	if jsonErr := json.Unmarshal(rpcErr.Data, &hexData); jsonErr != nil {
+		return fmt.Errorf("%w: %w", ErrReverted, err)
+	}
+
+	data, decErr := encoding.Hex.Decode(hexData)
+	if decErr != nil {
+		return fmt.Errorf("%w: %w", ErrReverted, err)
+	}
+
+	reason, decErr := abi.DecodeRevert(data)
+	if decErr != nil {
+		return fmt.Errorf("%w: %w", ErrReverted, err)
+	}
+
+	switch reason {
+	case reasonLocked:
+		return fmt.Errorf("%w: %w", ErrLocked, err)
+	case reasonTickLowerGreaterThanOrEqualUpper:
+		return fmt.Errorf("%w: %w", ErrTickLowerGreaterThanOrEqual, err)
+	case reasonTickLowerTooLow:
+		return fmt.Errorf("%w: %w", ErrTickLowerTooLow, err)
+	case reasonTickUpperTooHigh:
+		return fmt.Errorf("%w: %w", ErrTickUpperTooHigh, err)
+	case reasonAlreadyInitialized:
+		return fmt.Errorf("%w: %w", ErrAlreadyInitialized, err)
+	case reasonMintToken0Underpaid:
+		return fmt.Errorf("%w: %w", ErrMintToken0Underpaid, err)
+	case reasonMintToken1Underpaid:
+		return fmt.Errorf("%w: %w", ErrMintToken1Underpaid, err)
+	case reasonAmountSpecifiedZero:
+		return fmt.Errorf("%w: %w", ErrAmountSpecifiedZero, err)
+	case reasonInvalidSqrtPriceLimit:
+		return fmt.Errorf("%w: %w", ErrInvalidSqrtPriceLimit, err)
+	case reasonSwapUnderpaid:
+		return fmt.Errorf("%w: %w", ErrSwapUnderpaid, err)
+	case reasonNoLiquidity:
+		return fmt.Errorf("%w: %w", ErrNoLiquidity, err)
+	case reasonFlashToken0Underpaid:
+		return fmt.Errorf("%w: %w", ErrFlashToken0Underpaid, err)
+	case reasonFlashToken1Underpaid:
+		return fmt.Errorf("%w: %w", ErrFlashToken1Underpaid, err)
+	case reasonLiquiditySubUnderflow:
+		return fmt.Errorf("%w: %w", ErrLiquiditySubUnderflow, err)
+	case reasonLiquidityAddOverflow:
+		return fmt.Errorf("%w: %w", ErrLiquidityAddOverflow, err)
+	case reasonOracleNotInitialized:
+		return fmt.Errorf("%w: %w", ErrOracleNotInitialized, err)
+	case reasonOracleObservationTooOld:
+		return fmt.Errorf("%w: %w", ErrOracleObservationTooOld, err)
+	case reasonNoPosition:
+		return fmt.Errorf("%w: %w", ErrNoPosition, err)
+	case reasonLiquidityOverflow:
+		return fmt.Errorf("%w: %w", ErrLiquidityOverflow, err)
+	case reasonTickOutOfBounds:
+		return fmt.Errorf("%w: %w", ErrTickOutOfBounds, err)
+	case reasonSqrtRatioOutOfBounds:
+		return fmt.Errorf("%w: %w", ErrSqrtRatioOutOfBounds, err)
+	case reasonTransferFailed:
+		return fmt.Errorf("%w: %w", ErrTransferFailed, err)
+	default:
+		return fmt.Errorf("%w: %w", ErrReverted, err)
+	}
 }

@@ -956,7 +956,7 @@ func (s *PoolManagerSuite) Test36SwapRejectsBadPriceLimit() {
 
 	_, err = tx.NewDynamicFeeBuilder().Build(s.from, s.poolSwapTest, big.NewInt(0), calldata).Pack(s.T().Context(), s.client)
 	s.Require().Error(err)
-	wrapped := s.poolManager.wrapRevertError(err)
+	wrapped := mapPoolManagerRevertError(err)
 	s.Require().ErrorIs(wrapped, ErrPriceLimitAlreadyExceeded)
 
 	s.T().Logf("PoolManager %s Test36SwapRejectsBadPriceLimit Result", s.contract)

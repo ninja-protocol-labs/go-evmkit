@@ -54,7 +54,7 @@ func FuzzQuoterWrapRevertErrorDoesNotPanic(f *testing.F) {
 	f.Fuzz(func(t *testing.T, data []byte) {
 		rpcErr := &rpc.ResponseError{Code: 3, Message: "execution reverted", Data: jsontext.Value(`"` + encoding.Hex.EncodePrefixed(data) + `"`)}
 		require.NotPanics(t, func() {
-			wrapped := (&Quoter{}).wrapRevertError(rpcErr)
+			wrapped := mapQuoterRevertError(rpcErr)
 			if len(data) < 4 {
 				require.Same(t, rpcErr, wrapped)
 				return
@@ -81,7 +81,7 @@ func FuzzQuoterWrapRevertErrorUnexpectedRevertBytesRoundTrip(f *testing.F) {
 		revertData := append(outerSel[:], outerArgs...)
 		rpcErr := &rpc.ResponseError{Code: 3, Message: "execution reverted", Data: jsontext.Value(`"` + encoding.Hex.EncodePrefixed(revertData) + `"`)}
 
-		wrapped := (&Quoter{}).wrapRevertError(rpcErr)
+		wrapped := mapQuoterRevertError(rpcErr)
 		require.ErrorIs(t, wrapped, ErrUnexpectedRevertBytes)
 		require.NotErrorIs(t, wrapped, ErrUnknown)
 		var got *rpc.ResponseError

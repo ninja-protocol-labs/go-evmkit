@@ -7,6 +7,7 @@ import (
 
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
+	"github.com/ninja-protocol-labs/go-evmkit/rpc"
 )
 
 // Default fee tiers baked into UniswapV3Factory's constructor; the owner can enableFeeAmount
@@ -138,4 +139,16 @@ func EncodeEnableFeeAmount(fee, tickSpacing *big.Int) ([]byte, error) {
 		return nil, fmt.Errorf("uniswapv3: encodeEnableFeeAmount: %w", err)
 	}
 	return data, nil
+}
+
+// mapFactoryRevertError maps any UniswapV3Factory revert to ErrReverted; its requires carry no reason string or selector to switch on.
+func mapFactoryRevertError(err error) error {
+	if rpcErr, ok := errors.AsType[*rpc.ResponseError](err); ok && rpcErr == nil {
+		return nil
+	}
+
+	if _, ok := errors.AsType[*rpc.ResponseError](err); !ok {
+		return err
+	}
+	return fmt.Errorf("%w: %w", ErrReverted, err)
 }

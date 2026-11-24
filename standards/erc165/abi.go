@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
+	"github.com/ninja-protocol-labs/go-evmkit/rpc"
 )
 
 // Function signatures from IERC165, for encoding calls and decoding results.
@@ -30,4 +31,16 @@ func DecodeSupportsInterface(data []byte) (bool, error) {
 		return false, fmt.Errorf("erc165: decodeSupportsInterface: %w", err)
 	}
 	return ok, nil
+}
+
+// MapRevertError maps an on-chain revert to ErrNotImplementedERC165; a transport failure says nothing about the contract and is returned unchanged.
+func MapRevertError(err error) error {
+	if rpcErr, ok := errors.AsType[*rpc.ResponseError](err); ok && rpcErr == nil {
+		return nil
+	}
+
+	if _, ok := errors.AsType[*rpc.ResponseError](err); !ok {
+		return err
+	}
+	return fmt.Errorf("%w: %w", ErrNotImplementedERC165, err)
 }

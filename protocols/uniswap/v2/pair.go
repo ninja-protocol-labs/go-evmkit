@@ -2,19 +2,15 @@ package v2
 
 import (
 	"context"
-	"encoding/json/v2"
-	"errors"
 	"fmt"
 	"math/big"
 
 	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core"
-	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
 	"github.com/ninja-protocol-labs/go-evmkit/standards/erc20"
 	"github.com/ninja-protocol-labs/go-evmkit/standards/erc2612"
-	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
 // IPair mirrors IUniswapV2Pair, embedding erc20/erc2612 for the ERC20+Permit surface they share byte-for-byte.
@@ -69,7 +65,7 @@ func (pr *Pair) MinimumLiquidity(ctx context.Context, opts *bind.CallOptions, re
 
 	data, err := bind.Call(ctx, pr.c, opts, req.Contract, EncodeMinimumLiquidity())
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: minimumLiquidity: %w", pr.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv2: minimumLiquidity: %w", mapPairRevertError(err))
 	}
 
 	out, err := DecodeMinimumLiquidity(data)
@@ -88,7 +84,7 @@ func (pr *Pair) Factory(ctx context.Context, opts *bind.CallOptions, req *Factor
 
 	data, err := bind.Call(ctx, pr.c, opts, req.Contract, EncodeFactory())
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: factory: %w", pr.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv2: factory: %w", mapPairRevertError(err))
 	}
 
 	out, err := DecodeFactory(data)
@@ -107,7 +103,7 @@ func (pr *Pair) Token0(ctx context.Context, opts *bind.CallOptions, req *Token0R
 
 	data, err := bind.Call(ctx, pr.c, opts, req.Contract, EncodeToken0())
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: token0: %w", pr.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv2: token0: %w", mapPairRevertError(err))
 	}
 
 	out, err := DecodeToken0(data)
@@ -126,7 +122,7 @@ func (pr *Pair) Token1(ctx context.Context, opts *bind.CallOptions, req *Token1R
 
 	data, err := bind.Call(ctx, pr.c, opts, req.Contract, EncodeToken1())
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: token1: %w", pr.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv2: token1: %w", mapPairRevertError(err))
 	}
 
 	out, err := DecodeToken1(data)
@@ -145,7 +141,7 @@ func (pr *Pair) GetReserves(ctx context.Context, opts *bind.CallOptions, req *Ge
 
 	data, err := bind.Call(ctx, pr.c, opts, req.Contract, EncodeGetReserves())
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: getReserves: %w", pr.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv2: getReserves: %w", mapPairRevertError(err))
 	}
 
 	out, err := DecodeGetReserves(data)
@@ -164,7 +160,7 @@ func (pr *Pair) Price0CumulativeLast(ctx context.Context, opts *bind.CallOptions
 
 	data, err := bind.Call(ctx, pr.c, opts, req.Contract, EncodePrice0CumulativeLast())
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: price0CumulativeLast: %w", pr.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv2: price0CumulativeLast: %w", mapPairRevertError(err))
 	}
 
 	out, err := DecodePrice0CumulativeLast(data)
@@ -183,7 +179,7 @@ func (pr *Pair) Price1CumulativeLast(ctx context.Context, opts *bind.CallOptions
 
 	data, err := bind.Call(ctx, pr.c, opts, req.Contract, EncodePrice1CumulativeLast())
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: price1CumulativeLast: %w", pr.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv2: price1CumulativeLast: %w", mapPairRevertError(err))
 	}
 
 	out, err := DecodePrice1CumulativeLast(data)
@@ -202,7 +198,7 @@ func (pr *Pair) KLast(ctx context.Context, opts *bind.CallOptions, req *KLastReq
 
 	data, err := bind.Call(ctx, pr.c, opts, req.Contract, EncodeKLast())
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: kLast: %w", pr.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv2: kLast: %w", mapPairRevertError(err))
 	}
 
 	out, err := DecodeKLast(data)
@@ -221,7 +217,7 @@ func (pr *Pair) PermitTypehash(ctx context.Context, opts *bind.CallOptions, req 
 
 	data, err := bind.Call(ctx, pr.c, opts, req.Contract, EncodePermitTypehash())
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: permitTypehash: %w", pr.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv2: permitTypehash: %w", mapPairRevertError(err))
 	}
 
 	out, err := DecodePermitTypehash(data)
@@ -245,7 +241,7 @@ func (pr *Pair) CallMint(ctx context.Context, opts *bind.CallOptions, req *MintR
 
 	data, err := bind.Call(ctx, pr.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv2: callMint: %w", pr.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv2: callMint: %w", mapPairRevertError(err))
 	}
 
 	liquidity, err := DecodeMint(data)
@@ -269,7 +265,7 @@ func (pr *Pair) CallBurn(ctx context.Context, opts *bind.CallOptions, req *BurnR
 
 	data, err := bind.Call(ctx, pr.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, nil, fmt.Errorf("uniswapv2: callBurn: %w", pr.wrapRevertError(err))
+		return nil, nil, fmt.Errorf("uniswapv2: callBurn: %w", mapPairRevertError(err))
 	}
 
 	amount0, amount1, err := DecodeBurn(data)
@@ -293,7 +289,7 @@ func (pr *Pair) Initialize(ctx context.Context, opts *bind.TransactOptions, req 
 
 	signed, hash, err := bind.Transact(ctx, pr.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv2: initialize: %w", pr.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv2: initialize: %w", mapPairRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -312,7 +308,7 @@ func (pr *Pair) Mint(ctx context.Context, opts *bind.TransactOptions, req *MintR
 
 	signed, hash, err := bind.Transact(ctx, pr.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv2: mint: %w", pr.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv2: mint: %w", mapPairRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -331,7 +327,7 @@ func (pr *Pair) Burn(ctx context.Context, opts *bind.TransactOptions, req *BurnR
 
 	signed, hash, err := bind.Transact(ctx, pr.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv2: burn: %w", pr.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv2: burn: %w", mapPairRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -350,7 +346,7 @@ func (pr *Pair) Swap(ctx context.Context, opts *bind.TransactOptions, req *SwapR
 
 	signed, hash, err := bind.Transact(ctx, pr.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv2: swap: %w", pr.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv2: swap: %w", mapPairRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -369,7 +365,7 @@ func (pr *Pair) Skim(ctx context.Context, opts *bind.TransactOptions, req *SkimR
 
 	signed, hash, err := bind.Transact(ctx, pr.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv2: skim: %w", pr.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv2: skim: %w", mapPairRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -383,64 +379,8 @@ func (pr *Pair) Sync(ctx context.Context, opts *bind.TransactOptions, req *SyncR
 
 	signed, hash, err := bind.Transact(ctx, pr.c, opts, req.Contract, EncodeSync())
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv2: sync: %w", pr.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv2: sync: %w", mapPairRevertError(err))
 	}
 
 	return signed, hash, nil
-}
-
-// wrapRevertError maps a known revert reason in err to its sentinel.
-func (_ *Pair) wrapRevertError(err error) error {
-	var rpcErr *rpc.ResponseError
-	if !errors.As(err, &rpcErr) || len(rpcErr.Data) == 0 {
-		return err
-	}
-
-	var hexData string
-	if jsonErr := json.Unmarshal(rpcErr.Data, &hexData); jsonErr != nil {
-		return err
-	}
-
-	data, decErr := encoding.Hex.Decode(hexData)
-	if decErr != nil {
-		return err
-	}
-
-	reason, decErr := abi.DecodeRevert(data)
-	if decErr != nil {
-		return err
-	}
-
-	switch reason {
-	case reasonLocked:
-		return fmt.Errorf("%w: %w", ErrLocked, err)
-	case reasonTransferFailed:
-		return fmt.Errorf("%w: %w", ErrTransferFailed, err)
-	case reasonForbidden:
-		return fmt.Errorf("%w: %w", ErrForbidden, err)
-	case reasonOverflow:
-		return fmt.Errorf("%w: %w", ErrOverflow, err)
-	case reasonInsufficientLiquidityMinted:
-		return fmt.Errorf("%w: %w", ErrInsufficientLiquidityMinted, err)
-	case reasonInsufficientLiquidityBurned:
-		return fmt.Errorf("%w: %w", ErrInsufficientLiquidityBurned, err)
-	case reasonInsufficientOutputAmount:
-		return fmt.Errorf("%w: %w", ErrInsufficientOutputAmount, err)
-	case reasonInsufficientLiquidity:
-		return fmt.Errorf("%w: %w", ErrInsufficientLiquidity, err)
-	case reasonInvalidTo:
-		return fmt.Errorf("%w: %w", ErrInvalidTo, err)
-	case reasonInsufficientInputAmount:
-		return fmt.Errorf("%w: %w", ErrInsufficientInputAmount, err)
-	case reasonK:
-		return fmt.Errorf("%w: %w", ErrK, err)
-	case reasonAddOverflow:
-		return fmt.Errorf("%w: %w", ErrAddOverflow, err)
-	case reasonSubUnderflow:
-		return fmt.Errorf("%w: %w", ErrSubUnderflow, err)
-	case reasonMulOverflow:
-		return fmt.Errorf("%w: %w", ErrMulOverflow, err)
-	default:
-		return fmt.Errorf("%w: %w", ErrUnknown, err)
-	}
 }

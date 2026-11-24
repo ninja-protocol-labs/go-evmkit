@@ -4,17 +4,13 @@ package erc2612
 
 import (
 	"context"
-	"encoding/json/v2"
-	"errors"
 	"fmt"
 	"math/big"
 
 	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core"
-	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
-	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
 // IERC2612 mirrors IERC20Permit.sol.
@@ -52,7 +48,7 @@ func (e *ERC2612) Nonces(ctx context.Context, opts *bind.CallOptions, req *Nonce
 
 	data, err := bind.Call(ctx, e.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("erc2612: nonces: %w", e.wrapRevertError(err))
+		return nil, fmt.Errorf("erc2612: nonces: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeNonces(data)
@@ -71,7 +67,7 @@ func (e *ERC2612) DomainSeparator(ctx context.Context, opts *bind.CallOptions, r
 
 	data, err := bind.Call(ctx, e.c, opts, req.Contract, EncodeDomainSeparator())
 	if err != nil {
-		return nil, fmt.Errorf("erc2612: domainSeparator: %w", e.wrapRevertError(err))
+		return nil, fmt.Errorf("erc2612: domainSeparator: %w", MapRevertError(err))
 	}
 
 	b, err := DecodeDomainSeparator(data)
@@ -96,38 +92,8 @@ func (e *ERC2612) Permit(ctx context.Context, opts *bind.TransactOptions, req *P
 
 	signed, hash, err := bind.Transact(ctx, e.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("erc2612: permit: %w", e.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("erc2612: permit: %w", MapRevertError(err))
 	}
 
 	return signed, hash, nil
-}
-
-// wrapRevertError maps a known ERC20Permit custom error in err to its sentinel.
-func (_ *ERC2612) wrapRevertError(err error) error {
-	var rpcErr *rpc.ResponseError
-	if !errors.As(err, &rpcErr) || len(rpcErr.Data) == 0 {
-		return err
-	}
-
-	var hexData string
-	if jsonErr := json.Unmarshal(rpcErr.Data, &hexData); jsonErr != nil {
-		return err
-	}
-
-	data, decErr := encoding.Hex.Decode(hexData)
-	if decErr != nil || len(data) < 4 {
-		return err
-	}
-
-	var sel abi.Selector
-	copy(sel[:], data[:4])
-
-	switch sel {
-	case errExpiredSignature.Selector():
-		return fmt.Errorf("%w: %w", ErrExpiredSignature, err)
-	case errInvalidSigner.Selector():
-		return fmt.Errorf("%w: %w", ErrInvalidSigner, err)
-	default:
-		return fmt.Errorf("%w: %w", ErrUnknown, err)
-	}
 }

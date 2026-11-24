@@ -2,17 +2,13 @@ package v3
 
 import (
 	"context"
-	"encoding/json/v2"
-	"errors"
 	"fmt"
 	"math/big"
 
 	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core"
-	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
-	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
 // IPoolImmutables mirrors IUniswapV3PoolImmutables.
@@ -99,7 +95,7 @@ func (pl *Pool) Factory(ctx context.Context, opts *bind.CallOptions, req *Factor
 
 	data, err := bind.Call(ctx, pl.c, opts, req.Contract, EncodeFactory())
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: factory: %w", pl.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv3: factory: %w", mapPoolRevertError(err))
 	}
 
 	out, err := DecodeFactory(data)
@@ -118,7 +114,7 @@ func (pl *Pool) Token0(ctx context.Context, opts *bind.CallOptions, req *Token0R
 
 	data, err := bind.Call(ctx, pl.c, opts, req.Contract, EncodeToken0())
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: token0: %w", pl.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv3: token0: %w", mapPoolRevertError(err))
 	}
 
 	out, err := DecodeToken0(data)
@@ -137,7 +133,7 @@ func (pl *Pool) Token1(ctx context.Context, opts *bind.CallOptions, req *Token1R
 
 	data, err := bind.Call(ctx, pl.c, opts, req.Contract, EncodeToken1())
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: token1: %w", pl.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv3: token1: %w", mapPoolRevertError(err))
 	}
 
 	out, err := DecodeToken1(data)
@@ -156,7 +152,7 @@ func (pl *Pool) Fee(ctx context.Context, opts *bind.CallOptions, req *FeeRequest
 
 	data, err := bind.Call(ctx, pl.c, opts, req.Contract, EncodePoolFee())
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: fee: %w", pl.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv3: fee: %w", mapPoolRevertError(err))
 	}
 
 	out, err := DecodePoolFee(data)
@@ -175,7 +171,7 @@ func (pl *Pool) TickSpacing(ctx context.Context, opts *bind.CallOptions, req *Ti
 
 	data, err := bind.Call(ctx, pl.c, opts, req.Contract, EncodePoolTickSpacing())
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: tickSpacing: %w", pl.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv3: tickSpacing: %w", mapPoolRevertError(err))
 	}
 
 	out, err := DecodePoolTickSpacing(data)
@@ -194,7 +190,7 @@ func (pl *Pool) MaxLiquidityPerTick(ctx context.Context, opts *bind.CallOptions,
 
 	data, err := bind.Call(ctx, pl.c, opts, req.Contract, EncodeMaxLiquidityPerTick())
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: maxLiquidityPerTick: %w", pl.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv3: maxLiquidityPerTick: %w", mapPoolRevertError(err))
 	}
 
 	out, err := DecodeMaxLiquidityPerTick(data)
@@ -213,7 +209,7 @@ func (pl *Pool) Slot0(ctx context.Context, opts *bind.CallOptions, req *Slot0Req
 
 	data, err := bind.Call(ctx, pl.c, opts, req.Contract, EncodeSlot0())
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: slot0: %w", pl.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv3: slot0: %w", mapPoolRevertError(err))
 	}
 
 	out, err := DecodeSlot0(data)
@@ -232,7 +228,7 @@ func (pl *Pool) FeeGrowthGlobal0X128(ctx context.Context, opts *bind.CallOptions
 
 	data, err := bind.Call(ctx, pl.c, opts, req.Contract, EncodeFeeGrowthGlobal0X128())
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: feeGrowthGlobal0X128: %w", pl.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv3: feeGrowthGlobal0X128: %w", mapPoolRevertError(err))
 	}
 
 	out, err := DecodeFeeGrowthGlobal0X128(data)
@@ -251,7 +247,7 @@ func (pl *Pool) FeeGrowthGlobal1X128(ctx context.Context, opts *bind.CallOptions
 
 	data, err := bind.Call(ctx, pl.c, opts, req.Contract, EncodeFeeGrowthGlobal1X128())
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: feeGrowthGlobal1X128: %w", pl.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv3: feeGrowthGlobal1X128: %w", mapPoolRevertError(err))
 	}
 
 	out, err := DecodeFeeGrowthGlobal1X128(data)
@@ -270,7 +266,7 @@ func (pl *Pool) ProtocolFees(ctx context.Context, opts *bind.CallOptions, req *P
 
 	data, err := bind.Call(ctx, pl.c, opts, req.Contract, EncodeProtocolFees())
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: protocolFees: %w", pl.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv3: protocolFees: %w", mapPoolRevertError(err))
 	}
 
 	out, err := DecodeProtocolFees(data)
@@ -289,7 +285,7 @@ func (pl *Pool) Liquidity(ctx context.Context, opts *bind.CallOptions, req *Liqu
 
 	data, err := bind.Call(ctx, pl.c, opts, req.Contract, EncodePoolLiquidity())
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: liquidity: %w", pl.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv3: liquidity: %w", mapPoolRevertError(err))
 	}
 
 	out, err := DecodePoolLiquidity(data)
@@ -313,7 +309,7 @@ func (pl *Pool) Ticks(ctx context.Context, opts *bind.CallOptions, req *TicksReq
 
 	data, err := bind.Call(ctx, pl.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: ticks: %w", pl.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv3: ticks: %w", mapPoolRevertError(err))
 	}
 
 	out, err := DecodeTicks(data)
@@ -337,7 +333,7 @@ func (pl *Pool) TickBitmap(ctx context.Context, opts *bind.CallOptions, req *Tic
 
 	data, err := bind.Call(ctx, pl.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: tickBitmap: %w", pl.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv3: tickBitmap: %w", mapPoolRevertError(err))
 	}
 
 	out, err := DecodeTickBitmap(data)
@@ -361,7 +357,7 @@ func (pl *Pool) Positions(ctx context.Context, opts *bind.CallOptions, req *Posi
 
 	data, err := bind.Call(ctx, pl.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: positions: %w", pl.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv3: positions: %w", mapPoolRevertError(err))
 	}
 
 	out, err := DecodePositions(data)
@@ -385,7 +381,7 @@ func (pl *Pool) Observations(ctx context.Context, opts *bind.CallOptions, req *O
 
 	data, err := bind.Call(ctx, pl.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: observations: %w", pl.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv3: observations: %w", mapPoolRevertError(err))
 	}
 
 	out, err := DecodePoolObservations(data)
@@ -409,7 +405,7 @@ func (pl *Pool) Observe(ctx context.Context, opts *bind.CallOptions, req *Observ
 
 	data, err := bind.Call(ctx, pl.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: observe: %w", pl.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv3: observe: %w", mapPoolRevertError(err))
 	}
 
 	out, err := DecodeObserve(data)
@@ -433,7 +429,7 @@ func (pl *Pool) SnapshotCumulativesInside(ctx context.Context, opts *bind.CallOp
 
 	data, err := bind.Call(ctx, pl.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: snapshotCumulativesInside: %w", pl.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv3: snapshotCumulativesInside: %w", mapPoolRevertError(err))
 	}
 
 	out, err := DecodeSnapshotCumulativesInside(data)
@@ -457,7 +453,7 @@ func (pl *Pool) CallMint(ctx context.Context, opts *bind.CallOptions, req *PoolM
 
 	data, err := bind.Call(ctx, pl.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, nil, fmt.Errorf("uniswapv3: callMint: %w", pl.wrapRevertError(err))
+		return nil, nil, fmt.Errorf("uniswapv3: callMint: %w", mapPoolRevertError(err))
 	}
 
 	amount0, amount1, err := DecodeMint(data)
@@ -481,7 +477,7 @@ func (pl *Pool) CallCollect(ctx context.Context, opts *bind.CallOptions, req *Po
 
 	data, err := bind.Call(ctx, pl.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, nil, fmt.Errorf("uniswapv3: callCollect: %w", pl.wrapRevertError(err))
+		return nil, nil, fmt.Errorf("uniswapv3: callCollect: %w", mapPoolRevertError(err))
 	}
 
 	amount0, amount1, err := DecodeCollect(data)
@@ -505,7 +501,7 @@ func (pl *Pool) CallBurn(ctx context.Context, opts *bind.CallOptions, req *BurnR
 
 	data, err := bind.Call(ctx, pl.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, nil, fmt.Errorf("uniswapv3: callBurn: %w", pl.wrapRevertError(err))
+		return nil, nil, fmt.Errorf("uniswapv3: callBurn: %w", mapPoolRevertError(err))
 	}
 
 	amount0, amount1, err := DecodeBurn(data)
@@ -529,7 +525,7 @@ func (pl *Pool) CallSwap(ctx context.Context, opts *bind.CallOptions, req *SwapR
 
 	data, err := bind.Call(ctx, pl.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, nil, fmt.Errorf("uniswapv3: callSwap: %w", pl.wrapRevertError(err))
+		return nil, nil, fmt.Errorf("uniswapv3: callSwap: %w", mapPoolRevertError(err))
 	}
 
 	amount0, amount1, err := DecodeSwap(data)
@@ -553,7 +549,7 @@ func (pl *Pool) CallCollectProtocol(ctx context.Context, opts *bind.CallOptions,
 
 	data, err := bind.Call(ctx, pl.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, nil, fmt.Errorf("uniswapv3: callCollectProtocol: %w", pl.wrapRevertError(err))
+		return nil, nil, fmt.Errorf("uniswapv3: callCollectProtocol: %w", mapPoolRevertError(err))
 	}
 
 	amount0, amount1, err := DecodeCollectProtocol(data)
@@ -577,7 +573,7 @@ func (pl *Pool) Initialize(ctx context.Context, opts *bind.TransactOptions, req 
 
 	signed, hash, err := bind.Transact(ctx, pl.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv3: initialize: %w", pl.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv3: initialize: %w", mapPoolRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -596,7 +592,7 @@ func (pl *Pool) Mint(ctx context.Context, opts *bind.TransactOptions, req *PoolM
 
 	signed, hash, err := bind.Transact(ctx, pl.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv3: mint: %w", pl.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv3: mint: %w", mapPoolRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -615,7 +611,7 @@ func (pl *Pool) Collect(ctx context.Context, opts *bind.TransactOptions, req *Po
 
 	signed, hash, err := bind.Transact(ctx, pl.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv3: collect: %w", pl.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv3: collect: %w", mapPoolRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -634,7 +630,7 @@ func (pl *Pool) Burn(ctx context.Context, opts *bind.TransactOptions, req *BurnR
 
 	signed, hash, err := bind.Transact(ctx, pl.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv3: burn: %w", pl.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv3: burn: %w", mapPoolRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -653,7 +649,7 @@ func (pl *Pool) Swap(ctx context.Context, opts *bind.TransactOptions, req *SwapR
 
 	signed, hash, err := bind.Transact(ctx, pl.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv3: swap: %w", pl.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv3: swap: %w", mapPoolRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -672,7 +668,7 @@ func (pl *Pool) Flash(ctx context.Context, opts *bind.TransactOptions, req *Flas
 
 	signed, hash, err := bind.Transact(ctx, pl.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv3: flash: %w", pl.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv3: flash: %w", mapPoolRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -691,7 +687,7 @@ func (pl *Pool) IncreaseObservationCardinalityNext(ctx context.Context, opts *bi
 
 	signed, hash, err := bind.Transact(ctx, pl.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv3: increaseObservationCardinalityNext: %w", pl.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv3: increaseObservationCardinalityNext: %w", mapPoolRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -710,7 +706,7 @@ func (pl *Pool) SetFeeProtocol(ctx context.Context, opts *bind.TransactOptions, 
 
 	signed, hash, err := bind.Transact(ctx, pl.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv3: setFeeProtocol: %w", pl.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv3: setFeeProtocol: %w", mapPoolRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -729,85 +725,8 @@ func (pl *Pool) CollectProtocol(ctx context.Context, opts *bind.TransactOptions,
 
 	signed, hash, err := bind.Transact(ctx, pl.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv3: collectProtocol: %w", pl.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv3: collectProtocol: %w", mapPoolRevertError(err))
 	}
 
 	return signed, hash, nil
-}
-
-// wrapRevertError maps a known UniswapV3Pool require(cond, reason) string in err to its
-// sentinel. Many of Pool's requires carry no reason string at all (the onlyFactoryOwner check,
-// a couple of internal invariants); those fall back to ErrReverted, same as UniswapV3Factory.
-func (_ *Pool) wrapRevertError(err error) error {
-	var rpcErr *rpc.ResponseError
-	if !errors.As(err, &rpcErr) {
-		return err
-	}
-	if len(rpcErr.Data) == 0 {
-		return fmt.Errorf("%w: %w", ErrReverted, err)
-	}
-
-	var hexData string
-	if jsonErr := json.Unmarshal(rpcErr.Data, &hexData); jsonErr != nil {
-		return fmt.Errorf("%w: %w", ErrReverted, err)
-	}
-
-	data, decErr := encoding.Hex.Decode(hexData)
-	if decErr != nil {
-		return fmt.Errorf("%w: %w", ErrReverted, err)
-	}
-
-	reason, decErr := abi.DecodeRevert(data)
-	if decErr != nil {
-		return fmt.Errorf("%w: %w", ErrReverted, err)
-	}
-
-	switch reason {
-	case reasonLocked:
-		return fmt.Errorf("%w: %w", ErrLocked, err)
-	case reasonTickLowerGreaterThanOrEqualUpper:
-		return fmt.Errorf("%w: %w", ErrTickLowerGreaterThanOrEqual, err)
-	case reasonTickLowerTooLow:
-		return fmt.Errorf("%w: %w", ErrTickLowerTooLow, err)
-	case reasonTickUpperTooHigh:
-		return fmt.Errorf("%w: %w", ErrTickUpperTooHigh, err)
-	case reasonAlreadyInitialized:
-		return fmt.Errorf("%w: %w", ErrAlreadyInitialized, err)
-	case reasonMintToken0Underpaid:
-		return fmt.Errorf("%w: %w", ErrMintToken0Underpaid, err)
-	case reasonMintToken1Underpaid:
-		return fmt.Errorf("%w: %w", ErrMintToken1Underpaid, err)
-	case reasonAmountSpecifiedZero:
-		return fmt.Errorf("%w: %w", ErrAmountSpecifiedZero, err)
-	case reasonInvalidSqrtPriceLimit:
-		return fmt.Errorf("%w: %w", ErrInvalidSqrtPriceLimit, err)
-	case reasonSwapUnderpaid:
-		return fmt.Errorf("%w: %w", ErrSwapUnderpaid, err)
-	case reasonNoLiquidity:
-		return fmt.Errorf("%w: %w", ErrNoLiquidity, err)
-	case reasonFlashToken0Underpaid:
-		return fmt.Errorf("%w: %w", ErrFlashToken0Underpaid, err)
-	case reasonFlashToken1Underpaid:
-		return fmt.Errorf("%w: %w", ErrFlashToken1Underpaid, err)
-	case reasonLiquiditySubUnderflow:
-		return fmt.Errorf("%w: %w", ErrLiquiditySubUnderflow, err)
-	case reasonLiquidityAddOverflow:
-		return fmt.Errorf("%w: %w", ErrLiquidityAddOverflow, err)
-	case reasonOracleNotInitialized:
-		return fmt.Errorf("%w: %w", ErrOracleNotInitialized, err)
-	case reasonOracleObservationTooOld:
-		return fmt.Errorf("%w: %w", ErrOracleObservationTooOld, err)
-	case reasonNoPosition:
-		return fmt.Errorf("%w: %w", ErrNoPosition, err)
-	case reasonLiquidityOverflow:
-		return fmt.Errorf("%w: %w", ErrLiquidityOverflow, err)
-	case reasonTickOutOfBounds:
-		return fmt.Errorf("%w: %w", ErrTickOutOfBounds, err)
-	case reasonSqrtRatioOutOfBounds:
-		return fmt.Errorf("%w: %w", ErrSqrtRatioOutOfBounds, err)
-	case reasonTransferFailed:
-		return fmt.Errorf("%w: %w", ErrTransferFailed, err)
-	default:
-		return fmt.Errorf("%w: %w", ErrReverted, err)
-	}
 }

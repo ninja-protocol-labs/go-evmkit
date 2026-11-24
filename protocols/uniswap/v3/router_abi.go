@@ -1,12 +1,15 @@
 package v3
 
 import (
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"math/big"
 
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
+	"github.com/ninja-protocol-labs/go-evmkit/rpc"
+	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
 // Tuple types for IV3SwapRouter's struct parameters (SwapRouter02 -- no deadline field;
@@ -333,4 +336,69 @@ func EncodeSelfPermitAllowedIfNecessary(
 		return nil, fmt.Errorf("uniswapv3: encodeSelfPermitAllowedIfNecessary: %w", err)
 	}
 	return data, nil
+}
+
+// mapRouterRevertError maps a known SwapRouter revert reason in err to its sentinel.
+func mapRouterRevertError(err error) error {
+	if rpcErr, ok := errors.AsType[*rpc.ResponseError](err); ok && rpcErr == nil {
+		return nil
+	}
+
+	var rpcErr *rpc.ResponseError
+	if !errors.As(err, &rpcErr) {
+		return err
+	}
+	if len(rpcErr.Data) == 0 {
+		return fmt.Errorf("%w: %w", ErrReverted, err)
+	}
+
+	var hexData string
+	if jsonErr := json.Unmarshal(rpcErr.Data, &hexData); jsonErr != nil {
+		return fmt.Errorf("%w: %w", ErrReverted, err)
+	}
+
+	data, decErr := encoding.Hex.Decode(hexData)
+	if decErr != nil {
+		return fmt.Errorf("%w: %w", ErrReverted, err)
+	}
+
+	reason, decErr := abi.DecodeRevert(data)
+	if decErr != nil {
+		return fmt.Errorf("%w: %w", ErrReverted, err)
+	}
+
+	switch reason {
+	case reasonTransactionTooOld:
+		return fmt.Errorf("%w: %w", ErrTransactionTooOld, err)
+	case reasonTooLittleReceived:
+		return fmt.Errorf("%w: %w", ErrTooLittleReceived, err)
+	case reasonTooMuchRequested:
+		return fmt.Errorf("%w: %w", ErrTooMuchRequested, err)
+	case reasonInsufficientWETH9:
+		return fmt.Errorf("%w: %w", ErrInsufficientWETH9, err)
+	case reasonInsufficientToken:
+		return fmt.Errorf("%w: %w", ErrInsufficientToken, err)
+	case reasonNotWETH9:
+		return fmt.Errorf("%w: %w", ErrNotWETH9, err)
+	case reasonTransferFromFailed:
+		return fmt.Errorf("%w: %w", ErrTransferFromFailed, err)
+	case reasonTokenTransferFailed:
+		return fmt.Errorf("%w: %w", ErrTokenTransferFailed, err)
+	case reasonApproveFailed:
+		return fmt.Errorf("%w: %w", ErrApproveFailed, err)
+	case reasonTransferETHFailed:
+		return fmt.Errorf("%w: %w", ErrTransferETHFailed, err)
+	default:
+		return mapPoolRevertError(err)
+	}
+}
+
+// MapRevertError maps a v3 Router, Pool or NFPM revert reason in err to its sentinel, else ErrReverted.
+func MapRevertError(err error) error {
+	wrapped := mapRouterRevertError(err)
+	if !errors.Is(wrapped, ErrReverted) {
+		return wrapped
+	}
+
+	return mapNFPMRevertError(err)
 }

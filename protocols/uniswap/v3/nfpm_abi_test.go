@@ -523,32 +523,28 @@ func TestNfpmRevertReasons(t *testing.T) {
 }
 
 func TestNfpmWrapRevertErrorZeroLengthDataFallsBackToErrReverted(t *testing.T) {
-	n := &NFPM{}
 	rpcErr := &rpc.ResponseError{Code: 3, Message: "execution reverted"}
-	err := n.wrapRevertError(rpcErr)
+	err := mapNFPMRevertError(rpcErr)
 	require.ErrorIs(t, err, ErrReverted)
 }
 
 func TestNfpmWrapRevertErrorEmptyHexDataFallsBackToErrReverted(t *testing.T) {
-	n := &NFPM{}
 	rpcErr := &rpc.ResponseError{Code: 3, Message: "execution reverted", Data: jsontext.Value(`"0x"`)}
-	err := n.wrapRevertError(rpcErr)
+	err := mapNFPMRevertError(rpcErr)
 	require.ErrorIs(t, err, ErrReverted)
 }
 
 func TestNfpmWrapRevertErrorKnownReasonMapsToSentinel(t *testing.T) {
-	n := &NFPM{}
 	revertData, err := abi.NewFunction("Error", abi.Types{abi.String}, nil).EncodeCall(reasonNotApproved)
 	require.NoError(t, err)
 	hexData := `"` + encoding.Hex.EncodePrefixed(revertData) + `"`
 	rpcErr := &rpc.ResponseError{Code: 3, Message: "execution reverted", Data: jsontext.Value(hexData)}
-	wrapped := n.wrapRevertError(rpcErr)
+	wrapped := mapNFPMRevertError(rpcErr)
 	require.ErrorIs(t, wrapped, ErrNotApproved)
 }
 
 func TestNfpmWrapRevertErrorNonRPCErrorPassesThrough(t *testing.T) {
-	n := &NFPM{}
 	plain := errors.New("boom")
-	err := n.wrapRevertError(plain)
+	err := mapNFPMRevertError(plain)
 	require.Same(t, plain, err)
 }

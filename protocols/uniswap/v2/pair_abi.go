@@ -1,12 +1,15 @@
 package v2
 
 import (
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"math/big"
 
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
+	"github.com/ninja-protocol-labs/go-evmkit/rpc"
+	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
 // Function signatures from IUniswapV2Pair's own surface -- name/symbol/decimals/totalSupply/
@@ -309,4 +312,64 @@ func DecodePermitTypehash(data []byte) ([]byte, error) {
 		return nil, fmt.Errorf("uniswapv2: decodePermitTypehash: %w", err)
 	}
 	return b, nil
+}
+
+// mapPairRevertError maps a known revert reason in err to its sentinel.
+func mapPairRevertError(err error) error {
+	if rpcErr, ok := errors.AsType[*rpc.ResponseError](err); ok && rpcErr == nil {
+		return nil
+	}
+
+	var rpcErr *rpc.ResponseError
+	if !errors.As(err, &rpcErr) || len(rpcErr.Data) == 0 {
+		return err
+	}
+
+	var hexData string
+	if jsonErr := json.Unmarshal(rpcErr.Data, &hexData); jsonErr != nil {
+		return err
+	}
+
+	data, decErr := encoding.Hex.Decode(hexData)
+	if decErr != nil {
+		return err
+	}
+
+	reason, decErr := abi.DecodeRevert(data)
+	if decErr != nil {
+		return err
+	}
+
+	switch reason {
+	case reasonLocked:
+		return fmt.Errorf("%w: %w", ErrLocked, err)
+	case reasonTransferFailed:
+		return fmt.Errorf("%w: %w", ErrTransferFailed, err)
+	case reasonForbidden:
+		return fmt.Errorf("%w: %w", ErrForbidden, err)
+	case reasonOverflow:
+		return fmt.Errorf("%w: %w", ErrOverflow, err)
+	case reasonInsufficientLiquidityMinted:
+		return fmt.Errorf("%w: %w", ErrInsufficientLiquidityMinted, err)
+	case reasonInsufficientLiquidityBurned:
+		return fmt.Errorf("%w: %w", ErrInsufficientLiquidityBurned, err)
+	case reasonInsufficientOutputAmount:
+		return fmt.Errorf("%w: %w", ErrInsufficientOutputAmount, err)
+	case reasonInsufficientLiquidity:
+		return fmt.Errorf("%w: %w", ErrInsufficientLiquidity, err)
+	case reasonInvalidTo:
+		return fmt.Errorf("%w: %w", ErrInvalidTo, err)
+	case reasonInsufficientInputAmount:
+		return fmt.Errorf("%w: %w", ErrInsufficientInputAmount, err)
+	case reasonK:
+		return fmt.Errorf("%w: %w", ErrK, err)
+	case reasonAddOverflow:
+		return fmt.Errorf("%w: %w", ErrAddOverflow, err)
+	case reasonSubUnderflow:
+		return fmt.Errorf("%w: %w", ErrSubUnderflow, err)
+	case reasonMulOverflow:
+		return fmt.Errorf("%w: %w", ErrMulOverflow, err)
+	default:
+		return fmt.Errorf("%w: %w", ErrUnknown, err)
+	}
 }

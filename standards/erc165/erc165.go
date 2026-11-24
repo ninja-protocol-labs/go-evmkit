@@ -4,7 +4,6 @@ package erc165
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/ninja-protocol-labs/go-evmkit/bind"
@@ -44,7 +43,7 @@ func (e *ERC165) SupportsInterface(ctx context.Context, opts *bind.CallOptions, 
 
 	data, err := bind.Call(ctx, e.c, opts, req.Contract, calldata)
 	if err != nil {
-		return false, fmt.Errorf("erc165: supportsInterface: %w", e.wrapRevertError(err))
+		return false, fmt.Errorf("erc165: supportsInterface: %w", MapRevertError(err))
 	}
 
 	ok, err := DecodeSupportsInterface(data)
@@ -53,13 +52,4 @@ func (e *ERC165) SupportsInterface(ctx context.Context, opts *bind.CallOptions, 
 	}
 
 	return ok, nil
-}
-
-// wrapRevertError maps an on-chain revert to ErrNotImplementedERC165; a
-// transport failure says nothing about the contract and is returned unchanged.
-func (_ *ERC165) wrapRevertError(err error) error {
-	if _, ok := errors.AsType[*rpc.ResponseError](err); !ok {
-		return err
-	}
-	return fmt.Errorf("%w: %w", ErrNotImplementedERC165, err)
 }

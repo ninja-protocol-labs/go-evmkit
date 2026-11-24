@@ -4,17 +4,13 @@ package erc20
 
 import (
 	"context"
-	"encoding/json/v2"
-	"errors"
 	"fmt"
 	"math/big"
 
 	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core"
-	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
-	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
 // IERC20 is implemented by *ERC20.
@@ -79,7 +75,7 @@ func (e *ERC20) TotalSupply(ctx context.Context, opts *bind.CallOptions, req *To
 
 	data, err := bind.Call(ctx, e.c, opts, req.Contract, EncodeTotalSupply())
 	if err != nil {
-		return nil, fmt.Errorf("erc20: totalSupply: %w", e.wrapRevertError(err))
+		return nil, fmt.Errorf("erc20: totalSupply: %w", MapRevertError(err))
 	}
 
 	n, err := DecodeTotalSupply(data)
@@ -103,7 +99,7 @@ func (e *ERC20) BalanceOf(ctx context.Context, opts *bind.CallOptions, req *Bala
 
 	data, err := bind.Call(ctx, e.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("erc20: balanceOf: %w", e.wrapRevertError(err))
+		return nil, fmt.Errorf("erc20: balanceOf: %w", MapRevertError(err))
 	}
 
 	n, err := DecodeBalanceOf(data)
@@ -127,7 +123,7 @@ func (e *ERC20) Allowance(ctx context.Context, opts *bind.CallOptions, req *Allo
 
 	data, err := bind.Call(ctx, e.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("erc20: allowance: %w", e.wrapRevertError(err))
+		return nil, fmt.Errorf("erc20: allowance: %w", MapRevertError(err))
 	}
 
 	n, err := DecodeAllowance(data)
@@ -152,7 +148,7 @@ func (e *ERC20) CallTransfer(ctx context.Context, opts *bind.CallOptions, req *T
 
 	data, err := bind.Call(ctx, e.c, opts, req.Contract, calldata)
 	if err != nil {
-		return false, fmt.Errorf("erc20: callTransfer: %w", e.wrapRevertError(err))
+		return false, fmt.Errorf("erc20: callTransfer: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeTransfer(data)
@@ -177,7 +173,7 @@ func (e *ERC20) CallApprove(ctx context.Context, opts *bind.CallOptions, req *Ap
 
 	data, err := bind.Call(ctx, e.c, opts, req.Contract, calldata)
 	if err != nil {
-		return false, fmt.Errorf("erc20: callApprove: %w", e.wrapRevertError(err))
+		return false, fmt.Errorf("erc20: callApprove: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeApprove(data)
@@ -202,7 +198,7 @@ func (e *ERC20) CallTransferFrom(ctx context.Context, opts *bind.CallOptions, re
 
 	data, err := bind.Call(ctx, e.c, opts, req.Contract, calldata)
 	if err != nil {
-		return false, fmt.Errorf("erc20: callTransferFrom: %w", e.wrapRevertError(err))
+		return false, fmt.Errorf("erc20: callTransferFrom: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeTransferFrom(data)
@@ -226,7 +222,7 @@ func (e *ERC20) Transfer(ctx context.Context, opts *bind.TransactOptions, req *T
 
 	signed, hash, err := bind.Transact(ctx, e.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("erc20: transfer: %w", e.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("erc20: transfer: %w", MapRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -245,7 +241,7 @@ func (e *ERC20) Approve(ctx context.Context, opts *bind.TransactOptions, req *Ap
 
 	signed, hash, err := bind.Transact(ctx, e.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("erc20: approve: %w", e.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("erc20: approve: %w", MapRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -265,7 +261,7 @@ func (e *ERC20) TransferFrom(ctx context.Context, opts *bind.TransactOptions, re
 
 	signed, hash, err := bind.Transact(ctx, e.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("erc20: transferFrom: %w", e.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("erc20: transferFrom: %w", MapRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -279,7 +275,7 @@ func (e *ERC20) Name(ctx context.Context, opts *bind.CallOptions, req *NameReque
 
 	data, err := bind.Call(ctx, e.c, opts, req.Contract, EncodeName())
 	if err != nil {
-		return "", fmt.Errorf("erc20: name: %w", e.wrapRevertError(err))
+		return "", fmt.Errorf("erc20: name: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeName(data)
@@ -298,7 +294,7 @@ func (e *ERC20) Symbol(ctx context.Context, opts *bind.CallOptions, req *SymbolR
 
 	data, err := bind.Call(ctx, e.c, opts, req.Contract, EncodeSymbol())
 	if err != nil {
-		return "", fmt.Errorf("erc20: symbol: %w", e.wrapRevertError(err))
+		return "", fmt.Errorf("erc20: symbol: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeSymbol(data)
@@ -317,7 +313,7 @@ func (e *ERC20) Decimals(ctx context.Context, opts *bind.CallOptions, req *Decim
 
 	data, err := bind.Call(ctx, e.c, opts, req.Contract, EncodeDecimals())
 	if err != nil {
-		return 0, fmt.Errorf("erc20: decimals: %w", e.wrapRevertError(err))
+		return 0, fmt.Errorf("erc20: decimals: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeDecimals(data)
@@ -341,7 +337,7 @@ func (e *ERC20) Metadata(ctx context.Context, opts *bind.CallOptions, req *Metad
 
 	data, err := bind.Call(ctx, e.c, opts, req.Multicall, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("erc20: metadata: %w", e.wrapRevertError(err))
+		return nil, fmt.Errorf("erc20: metadata: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeMetadata(data)
@@ -365,7 +361,7 @@ func (e *ERC20) MetadataWithBalance(ctx context.Context, opts *bind.CallOptions,
 
 	data, err := bind.Call(ctx, e.c, opts, req.Multicall, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("erc20: metadataWithBalance: %w", e.wrapRevertError(err))
+		return nil, fmt.Errorf("erc20: metadataWithBalance: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeMetadataWithBalance(data)
@@ -389,7 +385,7 @@ func (e *ERC20) AllowanceWithBalance(ctx context.Context, opts *bind.CallOptions
 
 	data, err := bind.Call(ctx, e.c, opts, req.Multicall, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("erc20: allowanceWithBalance: %w", e.wrapRevertError(err))
+		return nil, fmt.Errorf("erc20: allowanceWithBalance: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeAllowanceWithBalance(data)
@@ -413,7 +409,7 @@ func (e *ERC20) TokenBalances(ctx context.Context, opts *bind.CallOptions, req *
 
 	data, err := bind.Call(ctx, e.c, opts, req.Multicall, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("erc20: tokenBalances: %w", e.wrapRevertError(err))
+		return nil, fmt.Errorf("erc20: tokenBalances: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeTokenBalances(req.Token, req.Accounts, data)
@@ -437,7 +433,7 @@ func (e *ERC20) AddressBalances(ctx context.Context, opts *bind.CallOptions, req
 
 	data, err := bind.Call(ctx, e.c, opts, req.Multicall, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("erc20: addressBalances: %w", e.wrapRevertError(err))
+		return nil, fmt.Errorf("erc20: addressBalances: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeAddressBalances(req.Account, req.Tokens, data)
@@ -461,7 +457,7 @@ func (e *ERC20) BalancePairs(ctx context.Context, opts *bind.CallOptions, req *B
 
 	data, err := bind.Call(ctx, e.c, opts, req.Multicall, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("erc20: balancePairs: %w", e.wrapRevertError(err))
+		return nil, fmt.Errorf("erc20: balancePairs: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeBalancePairs(req.Tokens, req.Accounts, data)
@@ -470,42 +466,4 @@ func (e *ERC20) BalancePairs(ctx context.Context, opts *bind.CallOptions, req *B
 	}
 
 	return out, nil
-}
-
-// wrapRevertError maps a known IERC20Errors custom error in err to its sentinel.
-func (_ *ERC20) wrapRevertError(err error) error {
-	var rpcErr *rpc.ResponseError
-	if !errors.As(err, &rpcErr) || len(rpcErr.Data) == 0 {
-		return err
-	}
-
-	var hexData string
-	if jsonErr := json.Unmarshal(rpcErr.Data, &hexData); jsonErr != nil {
-		return err
-	}
-
-	data, decErr := encoding.Hex.Decode(hexData)
-	if decErr != nil || len(data) < 4 {
-		return err
-	}
-
-	var sel abi.Selector
-	copy(sel[:], data[:4])
-
-	switch sel {
-	case errInsufficientBalance.Selector():
-		return fmt.Errorf("%w: %w", ErrInsufficientBalance, err)
-	case errInvalidSender.Selector():
-		return fmt.Errorf("%w: %w", ErrInvalidSender, err)
-	case errInvalidReceiver.Selector():
-		return fmt.Errorf("%w: %w", ErrInvalidReceiver, err)
-	case errInsufficientAllowance.Selector():
-		return fmt.Errorf("%w: %w", ErrInsufficientAllowance, err)
-	case errInvalidApprover.Selector():
-		return fmt.Errorf("%w: %w", ErrInvalidApprover, err)
-	case errInvalidSpender.Selector():
-		return fmt.Errorf("%w: %w", ErrInvalidSpender, err)
-	default:
-		return fmt.Errorf("%w: %w", ErrUnknown, err)
-	}
 }

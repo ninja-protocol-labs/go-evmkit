@@ -2,19 +2,14 @@ package v4
 
 import (
 	"context"
-	"encoding/json/v2"
-	"errors"
 	"fmt"
 	"math/big"
 
 	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core"
-	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
-	"github.com/ninja-protocol-labs/go-evmkit/protocols/permit2"
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
 	"github.com/ninja-protocol-labs/go-evmkit/standards/erc721"
-	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
 // IPositionManagerImmutables mirrors IImmutableState plus NativeWrapper's and Permit2Forwarder's immutable getters.
@@ -119,7 +114,7 @@ func (p *PositionManager) PoolManager(ctx context.Context, opts *bind.CallOption
 
 	data, err := bind.Call(ctx, p.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: poolManager: %w", p.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv4: poolManager: %w", mapPositionManagerRevertError(err))
 	}
 
 	out, err := DecodePoolManager(data)
@@ -143,7 +138,7 @@ func (p *PositionManager) WETH9(ctx context.Context, opts *bind.CallOptions, req
 
 	data, err := bind.Call(ctx, p.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: weth9: %w", p.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv4: weth9: %w", mapPositionManagerRevertError(err))
 	}
 
 	out, err := DecodeWETH9(data)
@@ -167,7 +162,7 @@ func (p *PositionManager) Permit2(ctx context.Context, opts *bind.CallOptions, r
 
 	data, err := bind.Call(ctx, p.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: permit2: %w", p.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv4: permit2: %w", mapPositionManagerRevertError(err))
 	}
 
 	out, err := DecodePermit2Contract(data)
@@ -191,7 +186,7 @@ func (p *PositionManager) NextTokenID(ctx context.Context, opts *bind.CallOption
 
 	data, err := bind.Call(ctx, p.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: nextTokenId: %w", p.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv4: nextTokenId: %w", mapPositionManagerRevertError(err))
 	}
 
 	out, err := DecodeNextTokenID(data)
@@ -215,7 +210,7 @@ func (p *PositionManager) GetPositionLiquidity(ctx context.Context, opts *bind.C
 
 	data, err := bind.Call(ctx, p.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: getPositionLiquidity: %w", p.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv4: getPositionLiquidity: %w", mapPositionManagerRevertError(err))
 	}
 
 	out, err := DecodeGetPositionLiquidity(data)
@@ -239,7 +234,7 @@ func (p *PositionManager) GetPoolAndPositionInfo(ctx context.Context, opts *bind
 
 	data, err := bind.Call(ctx, p.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, nil, fmt.Errorf("uniswapv4: getPoolAndPositionInfo: %w", p.wrapRevertError(err))
+		return nil, nil, fmt.Errorf("uniswapv4: getPoolAndPositionInfo: %w", mapPositionManagerRevertError(err))
 	}
 
 	key, info, err := DecodeGetPoolAndPositionInfo(data)
@@ -263,7 +258,7 @@ func (p *PositionManager) PositionInfo(ctx context.Context, opts *bind.CallOptio
 
 	data, err := bind.Call(ctx, p.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: positionInfo: %w", p.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv4: positionInfo: %w", mapPositionManagerRevertError(err))
 	}
 
 	out, err := DecodePositionInfo(data)
@@ -287,7 +282,7 @@ func (p *PositionManager) PoolKeys(ctx context.Context, opts *bind.CallOptions, 
 
 	data, err := bind.Call(ctx, p.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: poolKeys: %w", p.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv4: poolKeys: %w", mapPositionManagerRevertError(err))
 	}
 
 	out, err := DecodePoolKeys(data)
@@ -311,7 +306,7 @@ func (p *PositionManager) Subscriber(ctx context.Context, opts *bind.CallOptions
 
 	data, err := bind.Call(ctx, p.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: subscriber: %w", p.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv4: subscriber: %w", mapPositionManagerRevertError(err))
 	}
 
 	out, err := DecodeSubscriber(data)
@@ -335,7 +330,7 @@ func (p *PositionManager) UnsubscribeGasLimit(ctx context.Context, opts *bind.Ca
 
 	data, err := bind.Call(ctx, p.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: unsubscribeGasLimit: %w", p.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv4: unsubscribeGasLimit: %w", mapPositionManagerRevertError(err))
 	}
 
 	out, err := DecodeUnsubscribeGasLimit(data)
@@ -359,7 +354,7 @@ func (p *PositionManager) Nonces(ctx context.Context, opts *bind.CallOptions, re
 
 	data, err := bind.Call(ctx, p.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: nonces: %w", p.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv4: nonces: %w", mapPositionManagerRevertError(err))
 	}
 
 	out, err := DecodeNonces(data)
@@ -383,7 +378,7 @@ func (p *PositionManager) CallInitializePool(ctx context.Context, opts *bind.Cal
 
 	data, err := bind.Call(ctx, p.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: callInitializePool: %w", p.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv4: callInitializePool: %w", mapPositionManagerRevertError(err))
 	}
 
 	tick, err := DecodeInitializePool(data)
@@ -417,7 +412,7 @@ func (p *PositionManager) CallMulticall(ctx context.Context, opts *bind.CallOpti
 
 	data, err := bind.Call(ctx, p.c, callOpts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: callMulticall: %w", p.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv4: callMulticall: %w", mapPositionManagerRevertError(err))
 	}
 
 	results, err := DecodeMulticall(data)
@@ -441,7 +436,7 @@ func (p *PositionManager) CallPermit2Permit(ctx context.Context, opts *bind.Call
 
 	data, err := bind.Call(ctx, p.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: callPermit2Permit: %w", p.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv4: callPermit2Permit: %w", mapPositionManagerRevertError(err))
 	}
 
 	out, err := DecodePermit2Permit(data)
@@ -465,7 +460,7 @@ func (p *PositionManager) CallPermit2PermitBatch(ctx context.Context, opts *bind
 
 	data, err := bind.Call(ctx, p.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: callPermit2PermitBatch: %w", p.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv4: callPermit2PermitBatch: %w", mapPositionManagerRevertError(err))
 	}
 
 	out, err := DecodePermit2PermitBatch(data)
@@ -500,7 +495,7 @@ func (p *PositionManager) ModifyLiquidities(ctx context.Context, opts *bind.Tran
 
 	signed, hash, err := bind.Transact(ctx, p.c, txOpts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv4: modifyLiquidities: %w", p.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv4: modifyLiquidities: %w", mapPositionManagerRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -530,7 +525,7 @@ func (p *PositionManager) ModifyLiquiditiesWithoutUnlock(ctx context.Context, op
 
 	signed, hash, err := bind.Transact(ctx, p.c, txOpts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv4: modifyLiquiditiesWithoutUnlock: %w", p.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv4: modifyLiquiditiesWithoutUnlock: %w", mapPositionManagerRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -549,7 +544,7 @@ func (p *PositionManager) InitializePool(ctx context.Context, opts *bind.Transac
 
 	signed, hash, err := bind.Transact(ctx, p.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv4: initializePool: %w", p.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv4: initializePool: %w", mapPositionManagerRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -579,7 +574,7 @@ func (p *PositionManager) Multicall(ctx context.Context, opts *bind.TransactOpti
 
 	signed, hash, err := bind.Transact(ctx, p.c, txOpts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv4: multicall: %w", p.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv4: multicall: %w", mapPositionManagerRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -598,7 +593,7 @@ func (p *PositionManager) Subscribe(ctx context.Context, opts *bind.TransactOpti
 
 	signed, hash, err := bind.Transact(ctx, p.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv4: subscribe: %w", p.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv4: subscribe: %w", mapPositionManagerRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -617,7 +612,7 @@ func (p *PositionManager) Unsubscribe(ctx context.Context, opts *bind.TransactOp
 
 	signed, hash, err := bind.Transact(ctx, p.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv4: unsubscribe: %w", p.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv4: unsubscribe: %w", mapPositionManagerRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -636,7 +631,7 @@ func (p *PositionManager) RevokeNonce(ctx context.Context, opts *bind.TransactOp
 
 	signed, hash, err := bind.Transact(ctx, p.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv4: revokeNonce: %w", p.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv4: revokeNonce: %w", mapPositionManagerRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -655,7 +650,7 @@ func (p *PositionManager) ERC721Permit(ctx context.Context, opts *bind.TransactO
 
 	signed, hash, err := bind.Transact(ctx, p.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv4: erc721Permit: %w", p.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv4: erc721Permit: %w", mapPositionManagerRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -674,7 +669,7 @@ func (p *PositionManager) ERC721PermitForAll(ctx context.Context, opts *bind.Tra
 
 	signed, hash, err := bind.Transact(ctx, p.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv4: erc721PermitForAll: %w", p.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv4: erc721PermitForAll: %w", mapPositionManagerRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -693,7 +688,7 @@ func (p *PositionManager) Permit2Permit(ctx context.Context, opts *bind.Transact
 
 	signed, hash, err := bind.Transact(ctx, p.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv4: permit2Permit: %w", p.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv4: permit2Permit: %w", mapPositionManagerRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -712,84 +707,8 @@ func (p *PositionManager) Permit2PermitBatch(ctx context.Context, opts *bind.Tra
 
 	signed, hash, err := bind.Transact(ctx, p.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv4: permit2PermitBatch: %w", p.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv4: permit2PermitBatch: %w", mapPositionManagerRevertError(err))
 	}
 
 	return signed, hash, nil
-}
-
-// wrapRevertError maps a PositionManager custom error in err to its sentinel; anything else (PoolManager reverts bubbling out of unlock) falls through to PoolManager's mapper.
-func (_ *PositionManager) wrapRevertError(err error) error {
-	rpcErr, ok := errors.AsType[*rpc.ResponseError](err)
-	if !ok || len(rpcErr.Data) == 0 {
-		return err
-	}
-
-	var hexData string
-	if jsonErr := json.Unmarshal(rpcErr.Data, &hexData); jsonErr != nil {
-		return err
-	}
-
-	data, decErr := encoding.Hex.Decode(hexData)
-	if decErr != nil || len(data) < 4 {
-		return err
-	}
-
-	var sel abi.Selector
-	copy(sel[:], data[:4])
-
-	switch sel {
-	case errNotApproved.Selector():
-		return fmt.Errorf("%w: %w", ErrNotApproved, err)
-	case errDeadlinePassed.Selector():
-		return fmt.Errorf("%w: %w", ErrDeadlinePassed, err)
-	case errPoolManagerMustBeLocked.Selector():
-		return fmt.Errorf("%w: %w", ErrPoolManagerMustBeLocked, err)
-	case errSignatureDeadlineExpired.Selector():
-		return fmt.Errorf("%w: %w", ErrSignatureDeadlineExpired, err)
-	case errNoSelfPermit.Selector():
-		return fmt.Errorf("%w: %w", ErrNoSelfPermit, err)
-	case errUnauthorized.Selector():
-		return fmt.Errorf("%w: %w", ErrUnauthorized, err)
-	case errNotSubscribed.Selector():
-		return fmt.Errorf("%w: %w", ErrNotSubscribed, err)
-	case errNoCodeSubscriber.Selector():
-		return fmt.Errorf("%w: %w", ErrNoCodeSubscriber, err)
-	case errGasLimitTooLow.Selector():
-		return fmt.Errorf("%w: %w", ErrGasLimitTooLow, err)
-	case errSubscriptionReverted.Selector():
-		return fmt.Errorf("%w: %w", ErrSubscriptionReverted, err)
-	case errModifyLiquidityNotificationReverted.Selector():
-		return fmt.Errorf("%w: %w", ErrModifyLiquidityNotificationReverted, err)
-	case errBurnNotificationReverted.Selector():
-		return fmt.Errorf("%w: %w", ErrBurnNotificationReverted, err)
-	case errAlreadySubscribed.Selector():
-		return fmt.Errorf("%w: %w", ErrAlreadySubscribed, err)
-	case errNonceAlreadyUsed.Selector():
-		return fmt.Errorf("%w: %w", ErrNonceAlreadyUsed, err)
-	case errContractLocked.Selector():
-		return fmt.Errorf("%w: %w", ErrContractLocked, err)
-	case errInvalidEthSender.Selector():
-		return fmt.Errorf("%w: %w", ErrInvalidEthSender, err)
-	case errDeltaNotPositive.Selector():
-		return fmt.Errorf("%w: %w", ErrDeltaNotPositive, err)
-	case errDeltaNotNegative.Selector():
-		return fmt.Errorf("%w: %w", ErrDeltaNotNegative, err)
-	case errInsufficientBalance.Selector():
-		return fmt.Errorf("%w: %w", ErrInsufficientBalance, err)
-	case errMaximumAmountExceeded.Selector():
-		return fmt.Errorf("%w: %w", ErrMaximumAmountExceeded, err)
-	case errMinimumAmountInsufficient.Selector():
-		return fmt.Errorf("%w: %w", ErrMinimumAmountInsufficient, err)
-	case errInvalidSignatureLength.Selector():
-		return fmt.Errorf("%w: %w", permit2.ErrInvalidSignatureLength, err)
-	case errInvalidSignature.Selector():
-		return fmt.Errorf("%w: %w", permit2.ErrInvalidSignature, err)
-	case errInvalidSigner.Selector():
-		return fmt.Errorf("%w: %w", permit2.ErrInvalidSigner, err)
-	case errInvalidContractSignature.Selector():
-		return fmt.Errorf("%w: %w", permit2.ErrInvalidContractSignature, err)
-	default:
-		return (*PoolManager)(nil).wrapRevertError(err)
-	}
 }
