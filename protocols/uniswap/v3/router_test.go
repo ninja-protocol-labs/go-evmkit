@@ -2928,3 +2928,89 @@ func (s *RouterLifeCycleSuite) Test29Multicall() {
 	s.Require().Zero(expectedRefund.Cmp(actualRefund))
 	s.Require().Zero(routerNativeAfter.Sign(), "router must not retain any native balance after the bundled refund")
 }
+
+func (s *RouterLifeCycleSuite) Test30ExactInputSingleFromEmptyAccountNeedsOverrides() {
+	ghost := types.NewAddressFromBytes(core.Keccak256([]byte("go-evmkit-v3-router-ghost")).Bytes())
+	amountIn := new(big.Int).Div(s.mintValue, big.NewInt(10_000))
+
+	balanceKey, err := abi.Pack(abi.NewTypes(abi.Address, abi.Uint256), ghost, big.NewInt(0))
+	s.Require().NoError(err)
+	var balanceSlot [32]byte
+	copy(balanceSlot[:], core.Keccak256(balanceKey).Bytes())
+	ownerKey, err := abi.Pack(abi.NewTypes(abi.Address, abi.Uint256), ghost, big.NewInt(1))
+	s.Require().NoError(err)
+	allowanceKey, err := abi.Pack(
+		abi.NewTypes(abi.Address, abi.Uint256),
+		s.router,
+		new(big.Int).SetBytes(core.Keccak256(ownerKey).Bytes()),
+	)
+	s.Require().NoError(err)
+	var allowanceSlot, amountWord [32]byte
+	copy(allowanceSlot[:], core.Keccak256(allowanceKey).Bytes())
+	amountIn.FillBytes(amountWord[:])
+
+	params := NewExactInputSingleParams(s.tokenA, s.tokenB, s.Fee, ghost, amountIn, big.NewInt(0), big.NewInt(0))
+	req := NewExactInputSingleRequest(s.router, params, nil)
+
+	_, plainErr := s.v3Router.CallExactInputSingle(s.T().Context(), bind.NewCallOptions().WithFrom(ghost), req)
+	s.Require().ErrorIs(plainErr, ErrTransferFromFailed)
+
+	balanceOnly := rpc.NewStateOverride().WithStateDiff(s.tokenA, balanceSlot, amountWord)
+	opts := bind.NewCallOptions().WithFrom(ghost).WithStateOverride(balanceOnly)
+	_, balanceOnlyErr := s.v3Router.CallExactInputSingle(s.T().Context(), opts, req)
+	s.Require().ErrorIs(balanceOnlyErr, ErrTransferFromFailed)
+
+	override := rpc.NewStateOverride().
+		WithStateDiff(s.tokenA, balanceSlot, amountWord).
+		WithStateDiff(s.tokenA, allowanceSlot, amountWord)
+	opts = bind.NewCallOptions().WithFrom(ghost).WithStateOverride(override)
+	amountOut, err := s.v3Router.CallExactInputSingle(s.T().Context(), opts, req)
+	s.Require().NoError(err)
+	s.Require().Positive(amountOut.Sign())
+
+	balance, err := s.erc20.BalanceOf(
+		s.T().Context(),
+		bind.NewCallOptions().WithStateOverride(override),
+		erc20.NewBalanceOfRequest(s.tokenA, ghost),
+	)
+	s.Require().NoError(err)
+	s.Require().Zero(amountIn.Cmp(balance))
+	allowance, err := s.erc20.Allowance(
+		s.T().Context(),
+		bind.NewCallOptions().WithStateOverride(override),
+		erc20.NewAllowanceRequest(s.tokenA, ghost, s.router),
+	)
+	s.Require().NoError(err)
+	s.Require().Zero(amountIn.Cmp(allowance))
+
+	calldata, err := EncodeExactInputSingle(
+		params.TokenIn,
+		params.TokenOut,
+		params.Fee,
+		params.Recipient,
+		params.AmountIn,
+		params.AmountOutMinimum,
+		params.SqrtPriceLimitX96,
+	)
+	s.Require().NoError(err)
+	_, packErr := tx.NewDynamicFeeBuilder().
+		Build(ghost, s.router, big.NewInt(0), calldata).
+		Pack(s.T().Context(), s.client)
+	s.Require().Error(packErr)
+	builder := tx.NewDynamicFeeBuilder()
+	builder.StateOverride(override)
+	packed, err := builder.Build(ghost, s.router, big.NewInt(0), calldata).Pack(s.T().Context(), s.client)
+	s.Require().NoError(err)
+	s.Require().Greater(packed.Gas(), uint64(21_000))
+
+	overrideJSON, err := override.MarshalJSON()
+	s.Require().NoError(err)
+	s.T().Logf("Router Test30ExactInputSingleFromEmptyAccountNeedsOverrides Result")
+	s.T().Logf("\tghost %s swaps %s of %s for %s via SwapRouter02 %s", ghost, amountIn, s.tokenA, s.tokenB, s.router)
+	s.T().Logf("\tno override: %v", plainErr)
+	s.T().Logf("\tbalance only: %v", balanceOnlyErr)
+	s.T().Logf("\toverride: %s", overrideJSON)
+	s.T().Logf("\tbalance + allowance: amountOut %s", amountOut)
+	s.T().Logf("\tPack without override: %v", packErr)
+	s.T().Logf("\tPack with override: %d gas", packed.Gas())
+}

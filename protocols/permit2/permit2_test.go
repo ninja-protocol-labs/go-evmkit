@@ -1456,3 +1456,113 @@ func (s *Permit2Suite) Test22InsufficientAllowance() {
 	s.Require().ErrorIs(err, ErrInsufficientAllowance)
 	s.T().Logf("Test22InsufficientAllowance: over-amount transferFrom correctly rejected: %v", err)
 }
+
+func (s *Permit2Suite) Test23TransferFromFromEmptyAccountNeedsOverrides() {
+	owner := types.NewAddressFromBytes(core.Keccak256([]byte("go-evmkit-permit2-ghost-owner")).Bytes())
+	spender := types.NewAddressFromBytes(core.Keccak256([]byte("go-evmkit-permit2-ghost-spender")).Bytes())
+	amount := new(big.Int).Set(s.approveAmount)
+	expiration := big.NewInt(time.Now().Add(time.Hour).Unix())
+
+	balanceKey, err := abi.Pack(abi.NewTypes(abi.Address, abi.Uint256), owner, big.NewInt(0))
+	s.Require().NoError(err)
+	var balanceSlot [32]byte
+	copy(balanceSlot[:], core.Keccak256(balanceKey).Bytes())
+
+	tokenOwnerKey, err := abi.Pack(abi.NewTypes(abi.Address, abi.Uint256), owner, big.NewInt(1))
+	s.Require().NoError(err)
+	tokenAllowanceKey, err := abi.Pack(
+		abi.NewTypes(abi.Address, abi.Uint256),
+		s.contract,
+		new(big.Int).SetBytes(core.Keccak256(tokenOwnerKey).Bytes()),
+	)
+	s.Require().NoError(err)
+	var tokenAllowanceSlot [32]byte
+	copy(tokenAllowanceSlot[:], core.Keccak256(tokenAllowanceKey).Bytes())
+
+	permitOwnerKey, err := abi.Pack(abi.NewTypes(abi.Address, abi.Uint256), owner, big.NewInt(1))
+	s.Require().NoError(err)
+	permitTokenKey, err := abi.Pack(
+		abi.NewTypes(abi.Address, abi.Uint256),
+		s.token,
+		new(big.Int).SetBytes(core.Keccak256(permitOwnerKey).Bytes()),
+	)
+	s.Require().NoError(err)
+	permitSpenderKey, err := abi.Pack(
+		abi.NewTypes(abi.Address, abi.Uint256),
+		spender,
+		new(big.Int).SetBytes(core.Keccak256(permitTokenKey).Bytes()),
+	)
+	s.Require().NoError(err)
+	var permitAllowanceSlot [32]byte
+	copy(permitAllowanceSlot[:], core.Keccak256(permitSpenderKey).Bytes())
+
+	var amountWord, permitWord, shortPermitWord [32]byte
+	amount.FillBytes(amountWord[:])
+	new(big.Int).Or(new(big.Int).Lsh(expiration, 160), amount).FillBytes(permitWord[:])
+	shortAmount := new(big.Int).Sub(amount, big.NewInt(1))
+	new(big.Int).Or(new(big.Int).Lsh(expiration, 160), shortAmount).FillBytes(shortPermitWord[:])
+
+	calldata, err := EncodeTransferFrom(owner, spender, amount, s.token)
+	s.Require().NoError(err)
+
+	_, plainErr := bind.Call(s.T().Context(), s.client, bind.NewCallOptions().WithFrom(spender), s.contract, calldata)
+	plainErr = MapRevertError(plainErr)
+	s.Require().ErrorIs(plainErr, ErrAllowanceExpired)
+
+	short := rpc.NewStateOverride().WithStateDiff(s.contract, permitAllowanceSlot, shortPermitWord)
+	opts := bind.NewCallOptions().WithFrom(spender).WithStateOverride(short)
+	_, shortErr := bind.Call(s.T().Context(), s.client, opts, s.contract, calldata)
+	shortErr = MapRevertError(shortErr)
+	s.Require().ErrorIs(shortErr, ErrInsufficientAllowance)
+
+	permitOnly := rpc.NewStateOverride().WithStateDiff(s.contract, permitAllowanceSlot, permitWord)
+	opts = bind.NewCallOptions().WithFrom(spender).WithStateOverride(permitOnly)
+	_, permitOnlyErr := bind.Call(s.T().Context(), s.client, opts, s.contract, calldata)
+	s.Require().Error(permitOnlyErr)
+	s.Require().NotErrorIs(MapRevertError(permitOnlyErr), ErrAllowanceExpired)
+	s.Require().NotErrorIs(MapRevertError(permitOnlyErr), ErrInsufficientAllowance)
+
+	full := rpc.NewStateOverride().
+		WithStateDiff(s.contract, permitAllowanceSlot, permitWord).
+		WithStateDiff(s.token, tokenAllowanceSlot, amountWord).
+		WithStateDiff(s.token, balanceSlot, amountWord)
+	opts = bind.NewCallOptions().WithFrom(spender).WithStateOverride(full)
+	_, err = bind.Call(s.T().Context(), s.client, opts, s.contract, calldata)
+	s.Require().NoError(err)
+
+	allowance, err := s.p.Allowance(
+		s.T().Context(),
+		bind.NewCallOptions().WithStateOverride(full),
+		NewAllowanceRequest(s.contract, owner, s.token, spender),
+	)
+	s.Require().NoError(err)
+	s.Require().Zero(amount.Cmp(allowance.Amount))
+	s.Require().Zero(expiration.Cmp(allowance.Expiration))
+	s.Require().Zero(allowance.Nonce.Sign())
+
+	_, packErr := tx.NewDynamicFeeBuilder().
+		Build(spender, s.contract, big.NewInt(0), calldata).
+		Pack(s.T().Context(), s.client)
+	s.Require().Error(packErr)
+	builder := tx.NewDynamicFeeBuilder()
+	builder.StateOverride(full)
+	packed, err := builder.Build(spender, s.contract, big.NewInt(0), calldata).Pack(s.T().Context(), s.client)
+	s.Require().NoError(err)
+	s.Require().Greater(packed.Gas(), uint64(21_000))
+
+	overrideJSON, err := full.MarshalJSON()
+	s.Require().NoError(err)
+	s.T().Logf("Permit2 %s Test23TransferFromFromEmptyAccountNeedsOverrides Result", s.contract)
+	s.T().Logf("\tspender %s pulls %s of %s from owner %s", spender, amount, s.token, owner)
+	s.T().Logf("\tPermit2 allowance(owner, token, spender) slot %x", permitAllowanceSlot)
+	s.T().Logf("\tPermit2 packed word %x", permitWord)
+	s.T().Logf("\tno override: %v", plainErr)
+	s.T().Logf("\tPermit2 allowance %s (one short): %v", shortAmount, shortErr)
+	s.T().Logf("\tPermit2 allowance only: %v", permitOnlyErr)
+	s.T().Logf("\toverride: %s", overrideJSON)
+	s.T().Logf("\tPermit2 + token allowance + balance: success")
+	s.T().Logf("\tPermit2.allowance under override: amount %s", allowance.Amount)
+	s.T().Logf("\t\texpiration %s, nonce %s", allowance.Expiration, allowance.Nonce)
+	s.T().Logf("\tPack without override: %v", packErr)
+	s.T().Logf("\tPack with override: %d gas", packed.Gas())
+}
