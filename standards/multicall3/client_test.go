@@ -705,7 +705,7 @@ func TestWritesReturnSignedTxOnBroadcastFailure(t *testing.T) {
 	builder.Price(big.NewInt(30_000_000_000), big.NewInt(1_000_000_000))
 
 	c := mocks.NewClient(t)
-	c.EXPECT().Call(mock.Anything, mock.Anything).Return(&rpc.ResponseError{Code: -32000, Message: "insufficient funds for gas * price + value"}).Once()
+	c.EXPECT().Call(mock.Anything, mock.Anything).Return(&rpc.ResponseError{Code: -32000, Message: "insufficient funds for gas * price + value"}).Twice()
 
 	signed, hash, err := New(c).Aggregate3Value(t.Context(), bind.NewTransactOptions(key, builder), NewAggregate3ValueRequest(contract, []Call3Value{NewCall3Value(target, true, big.NewInt(77), nil)}))
 	require.ErrorContains(t, err, "multicall3: aggregate3Value: ")

@@ -318,9 +318,14 @@ func TestTransactBroadcastErrorReturnsSignedTx(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			ID     string   `json:"id"`
+			Method string   `json:"method"`
 			Params []string `json:"params"`
 		}
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+		if req.Method == rpc.MethodETHGetTransactionByHash {
+			_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":"` + req.ID + `","result":null}`))
+			return
+		}
 		decoded, err := encoding.Hex.Decode(req.Params[0])
 		require.NoError(t, err)
 		raw = decoded

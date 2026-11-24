@@ -337,7 +337,7 @@ func TestFactoryWritesReturnSignedTxOnBroadcastFailure(t *testing.T) {
 	builder.Price(big.NewInt(30_000_000_000), big.NewInt(1_000_000_000))
 
 	c := mocks.NewClient(t)
-	c.EXPECT().Call(mock.Anything, mock.Anything).Return(errors.New("dial tcp: connection refused")).Once()
+	c.EXPECT().Call(mock.Anything, mock.Anything).Return(errors.New("dial tcp: connection refused")).Twice()
 
 	signed, hash, err := NewFactory(c).CreatePool(t.Context(), bind.NewTransactOptions(key, builder), NewCreatePoolRequest(factory, a, b, big.NewInt(3000)))
 	require.ErrorContains(t, err, "uniswapv3: createPool: ")

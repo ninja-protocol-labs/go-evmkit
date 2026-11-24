@@ -429,10 +429,13 @@ func TestWritesReturnSignedTxOnBroadcastFailure(t *testing.T) {
 	var raw []byte
 	c := mocks.NewClient(t)
 	c.EXPECT().Call(mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, e rpc.Element) error {
+		if e.Method == rpc.MethodETHGetTransactionByHash {
+			return nil
+		}
 		raw, err = encoding.Hex.Decode(e.Params.([]any)[0].(string))
 		require.NoError(t, err)
 		return &rpc.ResponseError{Code: -32000, Message: "already known"}
-	}).Once()
+	}).Twice()
 
 	signed, hash, err := New(c).Approve(t.Context(), bind.NewTransactOptions(key, builder), NewApproveRequest(contract, to, big.NewInt(3)))
 	require.Error(t, err)

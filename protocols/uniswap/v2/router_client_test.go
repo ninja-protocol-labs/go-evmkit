@@ -885,7 +885,7 @@ func TestRouterWritesReturnSignedTxOnBroadcastFailure(t *testing.T) {
 	builder.Price(big.NewInt(30_000_000_000), big.NewInt(1_000_000_000))
 
 	c := mocks.NewClient(t)
-	c.EXPECT().Call(mock.Anything, mock.Anything).Return(&rpc.ResponseError{Code: -32000, Message: "nonce too low"}).Once()
+	c.EXPECT().Call(mock.Anything, mock.Anything).Return(&rpc.ResponseError{Code: -32000, Message: "nonce too low"}).Twice()
 
 	signed, hash, err := NewRouter(c).AddLiquidityETH(t.Context(), bind.NewTransactOptions(key, builder), NewAddLiquidityETHRequest(router, a, big.NewInt(1000), big.NewInt(0), big.NewInt(0), to, big.NewInt(1), big.NewInt(777)))
 	require.ErrorContains(t, err, "uniswapv2: addLiquidityETH: ")

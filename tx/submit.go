@@ -23,11 +23,7 @@ type Builder interface {
 	NonceBlockTag(tag string)
 	// Limit sets GasLimit explicitly on every Packer Build produces, skipping eth_estimateGas in Pack.
 	Limit(limit uint64)
-	// Price sets the gas price knobs explicitly on every Packer Build
-	// produces, skipping Pack's own fee-discovery calls (eth_gasPrice, or
-	// eth_maxPriorityFeePerGas and a base fee lookup). feeCap sets GasPrice
-	// for a Legacy transaction, or GasFeeCap for a DynamicFee/SetCode one;
-	// tipCap sets GasTipCap and is ignored for Legacy (nil is fine there).
+	// Price sets feeCap (Legacy GasPrice or 1559 GasFeeCap) and tipCap (ignored for Legacy), skipping Pack's fee lookups.
 	Price(feeCap, tipCap *big.Int)
 	// LimitBuffer scales a GasLimit fetched via eth_estimateGas by
 	// percent/100 on every Packer Build produces. It has no effect on an
@@ -85,14 +81,21 @@ func Submit(ctx context.Context, c rpc.Client, p Packer, s core.Signer) (*types.
 	return Broadcast(ctx, c, raw)
 }
 
-// Broadcast sends a signed, RLP-encoded transaction via
-// eth_sendRawTransaction and returns its hash, keccak256(raw).
+// Broadcast sends raw via eth_sendRawTransaction and returns keccak256(raw); a failed send still succeeds if the node already knows that hash.
 func Broadcast(ctx context.Context, c rpc.Client, raw []byte) (*types.Hash, error) {
+	hash := core.Keccak256(raw)
+
 	var result string
-	if err := c.Call(ctx, rpc.ETHSendRawTransaction("send", encoding.Hex.EncodePrefixed(raw), &result)); err != nil {
-		return nil, fmt.Errorf("tx: broadcast: %w", err)
+	sendErr := c.Call(ctx, rpc.ETHSendRawTransaction("send", encoding.Hex.EncodePrefixed(raw), &result))
+	if sendErr == nil {
+		return hash, nil
 	}
-	return core.Keccak256(raw), nil
+
+	var known map[string]any
+	if err := c.Call(ctx, rpc.ETHGetTransactionByHash("known", hash.String(), &known)); err == nil && known != nil {
+		return hash, nil
+	}
+	return nil, fmt.Errorf("tx: broadcast: %w", sendErr)
 }
 
 // parseQuantity parses a JSON-RPC quantity (a "0x"-prefixed hex integer,

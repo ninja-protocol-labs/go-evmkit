@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -481,4 +482,83 @@ func (s *DynamicFeeTxSuite) Test06AccessListIsMined() {
 	s.T().Logf("DynamicFee Test06AccessListIsMined Result")
 	s.T().Logf("\tAccess list %s [%s]", s.token, storageKey)
 	s.T().Logf("\tTx: %s (block %d, gas %d / limit %d)", hash, receipt.BlockNumber, receipt.GasUsed, txn.Gas())
+}
+
+func (s *DynamicFeeTxSuite) Test07TipPercentileReadsFeeHistory() {
+	var before map[string]any
+	var minTipBefore string
+	s.Require().NoError(s.client.Batch(s.T().Context(), rpc.Elements{
+		rpc.ETHFeeHistory("before", "0xa", rpc.BlockTagLatest, []float64{50}, &before),
+		rpc.ETHMaxPriorityFeePerGas("minTipBefore", &minTipBefore),
+	}))
+
+	builder := NewDynamicFeeBuilder()
+	builder.TipPercentile(50, 10)
+	builder.LimitBuffer(s.LimitBuffer)
+	txn, err := builder.Build(s.from, s.recipient, big.NewInt(1), nil).Pack(s.T().Context(), s.client)
+	s.Require().NoError(err)
+
+	var after map[string]any
+	var minTipAfter string
+	s.Require().NoError(s.client.Batch(s.T().Context(), rpc.Elements{
+		rpc.ETHFeeHistory("after", "0xa", rpc.BlockTagLatest, []float64{50}, &after),
+		rpc.ETHMaxPriorityFeePerGas("minTipAfter", &minTipAfter),
+	}))
+
+	var tips []*big.Int
+	var baseFees []string
+	for _, history := range []map[string]any{before, after} {
+		for _, reward := range history["reward"].([]any) {
+			tip, ok := new(big.Int).SetString(strings.TrimPrefix(reward.([]any)[0].(string), "0x"), 16)
+			s.Require().True(ok)
+			tips = append(tips, tip)
+		}
+		for _, baseFee := range history["baseFeePerGas"].([]any) {
+			baseFees = append(baseFees, baseFee.(string))
+		}
+	}
+	s.Require().NotEmpty(tips, "eth_feeHistory reported no rewards")
+	slices.SortFunc(tips, func(a, b *big.Int) int { return a.Cmp(b) })
+	low, high := tips[0], tips[len(tips)-1]
+
+	packed := txn.(*core.DynamicFeeTx)
+	raisedToNodeMinimum := fmt.Sprintf("0x%x", packed.GasTipCap) == minTipBefore || fmt.Sprintf("0x%x", packed.GasTipCap) == minTipAfter
+	if !raisedToNodeMinimum {
+		s.Require().GreaterOrEqual(packed.GasTipCap.Cmp(low), 0, "tip %s below the window's lowest %s", packed.GasTipCap, low)
+		s.Require().LessOrEqual(packed.GasTipCap.Cmp(high), 0, "tip %s above the window's highest %s", packed.GasTipCap, high)
+	}
+	scaled := new(big.Int).Sub(packed.GasFeeCap, packed.GasTipCap)
+	s.Require().Zero(new(big.Int).Mod(scaled, big.NewInt(2)).Sign(), "fee cap minus tip must be a 2x base fee")
+	impliedBase := new(big.Int).Div(scaled, big.NewInt(2))
+	s.Require().Contains(baseFees, fmt.Sprintf("0x%x", impliedBase), "implied base fee %s is not a base fee feeHistory reported", impliedBase)
+
+	s.Require().NoError(txn.Sign(s.key))
+	raw, err := txn.EncodeRLP()
+	s.Require().NoError(err)
+	hash, err := Broadcast(s.T().Context(), s.client, raw)
+	s.Require().NoError(err)
+
+	receipt, err := WaitForReceipt(s.T().Context(), s.client, hash, s.ReceiptPollInterval, s.ReceiptTimeout)
+	s.Require().NoError(err)
+	s.Require().True(receipt.Status, "dynamic fee transfer reverted")
+	price, ok := new(big.Int).SetString(strings.TrimPrefix(receipt.Raw["effectiveGasPrice"].(string), "0x"), 16)
+	s.Require().True(ok)
+	s.Require().LessOrEqual(price.Cmp(packed.GasFeeCap), 0)
+	s.mu.Lock()
+	s.totalFee.Add(s.totalFee, new(big.Int).Mul(price, new(big.Int).SetUint64(receipt.GasUsed)))
+	s.mu.Unlock()
+
+	var mined map[string]any
+	s.Require().Eventually(func() bool {
+		return s.client.Call(s.T().Context(), rpc.ETHGetTransactionByHash("tx", hash.String(), &mined)) == nil && mined != nil
+	}, 20*time.Second, s.ReceiptPollInterval, "mined transaction not readable")
+	s.Require().Equal(fmt.Sprintf("0x%x", packed.GasTipCap), mined["maxPriorityFeePerGas"])
+	s.Require().Equal(fmt.Sprintf("0x%x", packed.GasFeeCap), mined["maxFeePerGas"])
+
+	s.T().Logf("DynamicFee Test07TipPercentileReadsFeeHistory Result")
+	s.T().Logf("\t50th percentile tips over 10 blocks: %s..%s, node minimum %s..%s", low, high, minTipBefore, minTipAfter)
+	s.T().Logf("\tpacked tip %s (raised to node minimum: %t)", packed.GasTipCap, raisedToNodeMinimum)
+	s.T().Logf("\timplied next base fee %s, fee cap %s", impliedBase, packed.GasFeeCap)
+	s.T().Logf("\teffective gas price %s, gasUsed %d", price, receipt.GasUsed)
+	s.T().Logf("\tTx: %s (block %d)", hash, receipt.BlockNumber)
 }
