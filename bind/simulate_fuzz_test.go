@@ -2,6 +2,7 @@ package bind
 
 import (
 	"encoding/json"
+	"errors"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
@@ -75,7 +76,10 @@ func FuzzSimulateParams(f *testing.F) {
 		require.True(t, results[0].Success)
 		require.Equal(t, uint64(21000), results[0].GasUsed)
 		require.False(t, results[1].Success)
-		require.Equal(t, 3, results[1].Error.Code)
+		require.NoError(t, results[0].Error)
+		callErr, ok := errors.AsType[*rpc.ResponseError](results[1].Error)
+		require.True(t, ok)
+		require.Equal(t, 3, callErr.Code)
 
 		require.Equal(t, traceTransfers, payload["traceTransfers"])
 		require.Equal(t, validation, payload["validation"])

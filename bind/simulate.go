@@ -103,8 +103,8 @@ type SimulateResult struct {
 	ReturnData []byte
 	// Logs are decoded like receipt logs, so event extractors accept them directly.
 	Logs []tx.Log
-	// Error is the call's revert, ready for the protocol MapRevertError functions; nil on success.
-	Error *rpc.ResponseError
+	// Error is the call's revert as an *rpc.ResponseError, ready for the protocol MapRevertError functions; nil on success.
+	Error error
 }
 
 // Simulate runs calls in order in one eth_simulateV1 block, returning one result per call; RPC errors are returned unwrapped.
@@ -237,7 +237,9 @@ func Simulate(ctx context.Context, c rpc.Client, opts *SimulateOptions, calls []
 			GasUsed:    gasUsed,
 			ReturnData: returnData,
 			Logs:       logs,
-			Error:      callErr,
+		}
+		if callErr != nil {
+			results[i].Error = callErr
 		}
 	}
 	return results, nil

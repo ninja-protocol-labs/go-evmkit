@@ -243,6 +243,9 @@ func (u *UniversalRouter) ExecuteSigned(ctx context.Context, opts *bind.Transact
 // wrapRevertError maps a revert in err to its UR, Permit2, v4, v3 or v2 sentinel, else ErrUnknown.
 func (u *UniversalRouter) wrapRevertError(err error) error {
 	rpcErr, ok := errors.AsType[*rpc.ResponseError](err)
+	if ok && rpcErr == nil {
+		return nil
+	}
 	if !ok || len(rpcErr.Data) == 0 {
 		return err
 	}
@@ -381,4 +384,9 @@ func (u *UniversalRouter) wrapRevertError(err error) error {
 	}
 
 	return fmt.Errorf("%w: %w", ErrUnknown, err)
+}
+
+// MapRevertError maps a revert in err to its UR, Permit2, v4, v3 or v2 sentinel, else ErrUnknown; for callers such as bind.Simulate results.
+func MapRevertError(err error) error {
+	return (*UniversalRouter)(nil).wrapRevertError(err)
 }
