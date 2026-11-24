@@ -65,7 +65,11 @@ func TestBuildersPassStateOverrideToEstimateGas(t *testing.T) {
 	}))
 	defer srv.Close()
 	cli := rpc.NewClient(srv.URL)
-	authorizations := []core.Authorization{{ChainID: big.NewInt(1), Address: to}}
+	key, err := types.NewPrivateKeyFromBig(big.NewInt(0xa11ce))
+	require.NoError(t, err)
+	authorization := core.Authorization{ChainID: big.NewInt(1), Address: to}
+	require.NoError(t, authorization.Sign(key))
+	authorizations := []core.Authorization{authorization}
 
 	for kind := range 3 {
 		for scenario := range 3 {

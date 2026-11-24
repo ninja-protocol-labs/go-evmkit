@@ -6,6 +6,7 @@ import (
 	"math/big"
 
 	"github.com/ninja-protocol-labs/go-evmkit/core"
+	"github.com/ninja-protocol-labs/go-evmkit/core/rlp"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
 	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
@@ -32,9 +33,7 @@ func NewSetCodeBuilder(authorizationList []core.Authorization) *SetCodeBuilder {
 	}
 }
 
-// AccessList carries list onto every SetCodeTxConfig produced by Build.
-// Not part of the Builder interface: LegacyTxConfig has no equivalent, so
-// this is only reachable while holding a *SetCodeBuilder directly.
+// AccessList carries list onto every SetCodeTxConfig produced by Build (not part of the Builder interface).
 func (b *SetCodeBuilder) AccessList(list core.AccessList) {
 	b.accessList = list
 }
@@ -59,15 +58,13 @@ func (b *SetCodeBuilder) Limit(limit uint64) {
 	b.gasLimit = &limit
 }
 
-// Price carries feeCap and tipCap onto every SetCodeTxConfig produced by
-// Build as GasFeeCap and GasTipCap.
+// Price carries feeCap and tipCap onto every SetCodeTxConfig produced by Build as GasFeeCap and GasTipCap.
 func (b *SetCodeBuilder) Price(feeCap, tipCap *big.Int) {
 	b.gasFeeCap = feeCap
 	b.gasTipCap = tipCap
 }
 
-// LimitBuffer carries percent onto every SetCodeTxConfig produced by Build
-// as its gas limit buffer (see SetCodeTxConfig.WithGasLimitBuffer).
+// LimitBuffer carries percent onto every SetCodeTxConfig produced by Build as its gas limit buffer.
 func (b *SetCodeBuilder) LimitBuffer(percent uint64) {
 	b.gasLimitBufferPct = percent
 }
@@ -77,8 +74,7 @@ func (b *SetCodeBuilder) StateOverride(override *rpc.StateOverride) {
 	b.stateOverride = override
 }
 
-// PriceBuffer carries percent onto every SetCodeTxConfig produced by Build
-// as its base fee multiplier (see SetCodeTxConfig.WithBaseFeeMultiplier).
+// PriceBuffer carries percent onto every SetCodeTxConfig produced by Build as its base fee multiplier.
 func (b *SetCodeBuilder) PriceBuffer(percent uint64) {
 	b.baseFeeMultiplierPct = percent
 }
@@ -114,19 +110,7 @@ func (b *SetCodeBuilder) Build(from, to *types.Address, value *big.Int, data []b
 	return c
 }
 
-// perEmptyAccountCost is EIP-7702's PER_EMPTY_ACCOUNT_COST: the upfront
-// intrinsic gas charged per authorization tuple, regardless of whether the
-// authority account turns out to be empty (a partial refund applies after
-// execution, but the upfront charge — what eth_estimateGas must clear — is
-// always this). Most nodes' eth_estimateGas does not yet account for it,
-// so Pack adds it on top of the estimate itself.
-const perEmptyAccountCost = 25000
-
-// SetCodeTxConfig builds a type-4 (EIP-7702) transaction. From, To, Value,
-// Data and AuthorizationList are fixed at construction (To and
-// AuthorizationList are required, per EIP-7702); AccessList, ChainID,
-// Nonce, GasTipCap, GasFeeCap and GasLimit are resolved by Pack unless set
-// explicitly via the With* methods.
+// SetCodeTxConfig builds a type-4 (EIP-7702) transaction; fields not set via With* are resolved by Pack.
 type SetCodeTxConfig struct {
 	from          *types.Address
 	to            *types.Address
@@ -147,10 +131,7 @@ type SetCodeTxConfig struct {
 	stateOverride        *rpc.StateOverride
 }
 
-// NewSetCodeTxConfig returns a SetCodeTxConfig sending value and data from
-// from to to, delegating per authorizationList. to and authorizationList
-// must not be nil/empty: EIP-7702 has no contract creation and requires at
-// least one authorization.
+// NewSetCodeTxConfig returns a SetCodeTxConfig from from to to; to and a non-empty authorizationList are required.
 func NewSetCodeTxConfig(from, to *types.Address, value *big.Int, data []byte, authorizationList []core.Authorization) *SetCodeTxConfig {
 	return &SetCodeTxConfig{
 		from:          from,
@@ -179,32 +160,25 @@ func (c *SetCodeTxConfig) WithNonce(nonce uint64) *SetCodeTxConfig {
 	return c
 }
 
-// WithNonceBlockTag sets the block parameter Pack passes to
-// eth_getTransactionCount when Nonce is not set explicitly (default
-// rpc.BlockTagPending).
+// WithNonceBlockTag sets the eth_getTransactionCount block tag used when Nonce is unset (default pending).
 func (c *SetCodeTxConfig) WithNonceBlockTag(tag string) *SetCodeTxConfig {
 	c.nonceBlockTag = tag
 	return c
 }
 
-// WithGasTipCap sets GasTipCap (maxPriorityFeePerGas) explicitly, skipping
-// eth_maxPriorityFeePerGas in Pack.
+// WithGasTipCap sets GasTipCap explicitly, skipping eth_maxPriorityFeePerGas in Pack.
 func (c *SetCodeTxConfig) WithGasTipCap(gasTipCap *big.Int) *SetCodeTxConfig {
 	c.gasTipCap = gasTipCap
 	return c
 }
 
-// WithGasFeeCap sets GasFeeCap (maxFeePerGas) explicitly, skipping the base
-// fee lookup in Pack.
+// WithGasFeeCap sets GasFeeCap explicitly, skipping the base fee lookup in Pack.
 func (c *SetCodeTxConfig) WithGasFeeCap(gasFeeCap *big.Int) *SetCodeTxConfig {
 	c.gasFeeCap = gasFeeCap
 	return c
 }
 
-// WithBaseFeeMultiplier scales the latest block's base fee by percent/100
-// when computing a fetched GasFeeCap, as GasFeeCap = baseFee*percent/100 +
-// GasTipCap. It has no effect on a GasFeeCap set via WithGasFeeCap. The
-// default, 0, applies 200 (2x).
+// WithBaseFeeMultiplier sets GasFeeCap = baseFee*percent/100 + GasTipCap when fetched (default 200).
 func (c *SetCodeTxConfig) WithBaseFeeMultiplier(percent uint64) *SetCodeTxConfig {
 	c.baseFeeMultiplierPct = percent
 	return c
@@ -216,9 +190,7 @@ func (c *SetCodeTxConfig) WithGasLimit(gasLimit uint64) *SetCodeTxConfig {
 	return c
 }
 
-// WithGasLimitBuffer scales a GasLimit fetched via eth_estimateGas by
-// percent/100 (e.g. 120 for 1.2x). It has no effect on a GasLimit set via
-// WithGasLimit. The default, 0, applies no buffer.
+// WithGasLimitBuffer scales an estimated GasLimit by percent/100 (0 = no buffer).
 func (c *SetCodeTxConfig) WithGasLimitBuffer(percent uint64) *SetCodeTxConfig {
 	c.gasLimitBufferPct = percent
 	return c
@@ -230,12 +202,33 @@ func (c *SetCodeTxConfig) WithStateOverride(override *rpc.StateOverride) *SetCod
 	return c
 }
 
-// Pack resolves every field not already set via a With* method against
-// client, in a single batch, and returns the unsigned transaction.
+// Pack resolves unset fields in one batch, estimating gas with the signed authorizationList, and returns the unsigned tx.
 func (c *SetCodeTxConfig) Pack(ctx context.Context, client rpc.Client) (core.Transaction, error) {
+	var authorizationList []map[string]any
 	if c.gasLimit == nil {
 		if err := c.stateOverride.Validate(); err != nil {
 			return nil, fmt.Errorf("tx: gasLimit: %w", err)
+		}
+		authorizationList = make([]map[string]any, len(c.authorization))
+		for i, auth := range c.authorization {
+			if auth.Address == nil {
+				return nil, fmt.Errorf("tx: gasLimit: authorization %d: address is required", i)
+			}
+			if auth.Signature.IsZero() {
+				return nil, fmt.Errorf("tx: gasLimit: authorization %d: %w", i, core.ErrUnsigned)
+			}
+			yParity, err := rlp.RecoveryID(auth.Signature)
+			if err != nil {
+				return nil, fmt.Errorf("tx: gasLimit: authorization %d: %w", i, err)
+			}
+			authorizationList[i] = map[string]any{
+				"chainId": quantityHex(auth.ChainID),
+				"address": auth.Address.String(),
+				"nonce":   quantityHex(new(big.Int).SetUint64(auth.Nonce)),
+				"yParity": quantityHex(new(big.Int).SetUint64(uint64(yParity))),
+				"r":       quantityHex(auth.Signature.R()),
+				"s":       quantityHex(auth.Signature.S()),
+			}
 		}
 	}
 
@@ -285,6 +278,7 @@ func (c *SetCodeTxConfig) Pack(ctx context.Context, client rpc.Client) (core.Tra
 		if len(c.accessList) > 0 {
 			callParams["accessList"] = accessListToRPC(c.accessList)
 		}
+		callParams["authorizationList"] = authorizationList
 		elems.With(rpc.ETHEstimateGas("gasLimit", callParams, rpc.BlockTagLatest, c.stateOverride, &gasLimitHex))
 	}
 
@@ -344,7 +338,7 @@ func (c *SetCodeTxConfig) Pack(ctx context.Context, client rpc.Client) (core.Tra
 		if err != nil {
 			return nil, fmt.Errorf("tx: gasLimit: %w", err)
 		}
-		v := bufferUint64(n.Uint64(), c.gasLimitBufferPct) + perEmptyAccountCost*uint64(len(c.authorization))
+		v := bufferUint64(n.Uint64(), c.gasLimitBufferPct)
 		gasLimit = &v
 	}
 

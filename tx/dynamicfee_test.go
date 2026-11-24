@@ -2,7 +2,10 @@ package tx
 
 import (
 	"context"
+	"fmt"
 	"math/big"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -11,116 +14,471 @@ import (
 	"github.com/ninja-protocol-labs/go-evmkit/core"
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
+	"github.com/ninja-protocol-labs/go-evmkit/internal/testenv"
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
+	"github.com/ninja-protocol-labs/go-evmkit/standards/eip1014"
+	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
 type DynamicFeeTxSuite struct {
 	suite.Suite
 
-	Enable        bool
-	RPCURL        string
-	FromHex       string
-	ToHex         string
-	PrivateKeyHex string
-	TokenHex      string
+	RPCURL              string
+	PrivateKeyHex       string
+	ChainID             *big.Int
+	NicksFactoryHex     string
+	NativeSymbol        string
+	NativeDecimals      int
+	Timeout             time.Duration
+	ReceiptPollInterval time.Duration
+	ReceiptTimeout      time.Duration
+	LimitBuffer         uint64
+	ByteCode            string
+	Constructor         *abi.Function
+	Salt                *types.Hash
+	MintValue           *big.Int
+	TransferValue       *big.Int
+	NativeValue         *big.Int
 
-	ctx    context.Context
-	cancel context.CancelFunc
-	client rpc.Client
+	client    rpc.Client
+	key       *types.PrivateKey
+	from      *types.Address
+	nicks     *types.Address
+	token     *types.Address
+	recipient *types.Address
 
-	from  *types.Address
-	to    *types.Address
-	token *types.Address
-	key   *types.PrivateKey
+	mu       *sync.Mutex
+	totalFee *big.Int
 }
 
 func TestDynamicFeeTxSuite(t *testing.T) {
+	c := testenv.MustLoad(t, testenv.Testnet, testenv.UnknownNetwork)
+	if c.Addresses.Standard.NicksFactory == "" {
+		t.Skip("testenv: no Nick's factory configured for this network")
+	}
+
 	suite.Run(t, &DynamicFeeTxSuite{
-		Enable:        false,
-		RPCURL:        "",
-		FromHex:       "",
-		ToHex:         "",
-		PrivateKeyHex: "",
-		TokenHex:      "",
+		RPCURL:              c.RPCURL,
+		PrivateKeyHex:       c.ActorPrivateKeyHex,
+		ChainID:             big.NewInt(int64(c.Constant.ChainID)),
+		NicksFactoryHex:     c.Addresses.Standard.NicksFactory,
+		NativeSymbol:        c.Constant.NativeSymbol,
+		NativeDecimals:      c.Constant.NativeDecimals,
+		Timeout:             10 * time.Minute,
+		ReceiptPollInterval: c.Constant.ReceiptPollInterval,
+		ReceiptTimeout:      c.Constant.ReceiptTimeout,
+		LimitBuffer:         130,
+		ByteCode:            testenv.ERC20ByteCodeHex,
+		Constructor:         abi.NewFunction("constructor", abi.Types{abi.String, abi.String, abi.Uint8}, nil),
+		Salt:                core.Keccak256([]byte("go-evmkit-tx-dynamicfee")),
+		MintValue:           new(big.Int).Exp(big.NewInt(10), big.NewInt(21), nil),
+		TransferValue:       new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil),
+		NativeValue:         big.NewInt(1_000_000_000_000),
 	})
 }
 
 func (s *DynamicFeeTxSuite) SetupSuite() {
-	if !s.Enable {
-		s.T().Skip("disabled")
-	}
-
-	s.ctx, s.cancel = context.WithTimeout(context.Background(), 120*time.Second)
-	s.client = rpc.NewClient(s.RPCURL, rpc.WithTimeout(15*time.Second))
+	s.client = rpc.NewClient(s.RPCURL, rpc.WithRetry(5, rpc.ExponentialBackoff(500*time.Millisecond, 10*time.Second)))
+	s.mu = &sync.Mutex{}
+	s.totalFee = big.NewInt(0)
 
 	var err error
-	s.from, err = types.NewAddressFromHex(s.FromHex)
-	s.Require().NoError(err)
-	s.to, err = types.NewAddressFromHex(s.ToHex)
-	s.Require().NoError(err)
-	s.token, err = types.NewAddressFromHex(s.TokenHex)
-	s.Require().NoError(err)
 	s.key, err = types.NewPrivateKeyFromHex(s.PrivateKeyHex)
 	s.Require().NoError(err)
+	s.from = core.PubkeyToAddress(s.key.PublicKey())
+	s.nicks, err = types.NewAddressFromHex(s.NicksFactoryHex)
+	s.Require().NoError(err)
+	s.T().Logf("SetupSuite: signing as %s, Nick's factory %s", s.from, s.nicks)
+
+	runtime := fmt.Appendf(nil, "%s-%d", s.Salt, time.Now().UnixNano())
+	s.recipient = types.NewAddressFromBytes(core.Keccak256(fmt.Appendf(nil, "%s-recipient", runtime)).Bytes()[12:])
+
+	bytecode, err := encoding.Hex.Decode(s.ByteCode)
+	s.Require().NoError(err)
+	args, err := abi.Pack(s.Constructor.Inputs, "evmkit dynamic fee test token", "EVDFT", uint8(18))
+	s.Require().NoError(err)
+	initCode := append(append([]byte{}, bytecode...), args...)
+	var salt [32]byte
+	copy(salt[:], core.Keccak256(runtime).Bytes())
+
+	deployTx, err := NewDynamicFeeTxConfig(s.from, s.nicks, big.NewInt(0), append(append([]byte{}, salt[:]...), initCode...)).
+		WithGasLimitBuffer(s.LimitBuffer).
+		Pack(s.T().Context(), s.client)
+	s.Require().NoError(err)
+	s.Require().NoError(deployTx.Sign(s.key))
+	deployRaw, err := deployTx.EncodeRLP()
+	s.Require().NoError(err)
+	deployHash, err := Broadcast(s.T().Context(), s.client, deployRaw)
+	s.Require().NoError(err)
+	deployReceipt, err := WaitForReceipt(s.T().Context(), s.client, deployHash, s.ReceiptPollInterval, s.ReceiptTimeout)
+	s.Require().NoError(err)
+	s.Require().True(deployReceipt.Status, "deploy transaction reverted")
+	deployPrice, ok := new(big.Int).SetString(strings.TrimPrefix(deployReceipt.Raw["effectiveGasPrice"].(string), "0x"), 16)
+	s.Require().True(ok)
+	s.mu.Lock()
+	s.totalFee.Add(s.totalFee, new(big.Int).Mul(deployPrice, new(big.Int).SetUint64(deployReceipt.GasUsed)))
+	s.mu.Unlock()
+
+	s.token = eip1014.Address(s.nicks, salt, initCode)
+	s.Require().Eventually(func() bool {
+		var codeHex string
+		if err := s.client.Call(s.T().Context(), rpc.ETHGetCode("code", s.token.String(), rpc.BlockTagLatest, &codeHex)); err != nil {
+			return false
+		}
+		code, err := encoding.Hex.Decode(codeHex)
+		return err == nil && len(code) > 0
+	}, 20*time.Second, s.ReceiptPollInterval, "no code visible at deployed token %s", s.token)
+	s.T().Logf("SetupSuite: deployed token %s (tx %s, block %d)", s.token, deployHash, deployReceipt.BlockNumber)
+
+	mintData, err := abi.NewFunction("mint", abi.NewTypes(abi.Address, abi.Uint256), nil).EncodeCall(s.from, s.MintValue)
+	s.Require().NoError(err)
+	var mintTx core.Transaction
+	s.Require().Eventually(func() bool {
+		mintTx, err = NewDynamicFeeTxConfig(s.from, s.token, big.NewInt(0), mintData).
+			WithGasLimitBuffer(s.LimitBuffer).
+			Pack(s.T().Context(), s.client)
+		return err == nil
+	}, 20*time.Second, s.ReceiptPollInterval, "token not callable on the estimating node")
+	s.Require().NoError(mintTx.Sign(s.key))
+	mintRaw, err := mintTx.EncodeRLP()
+	s.Require().NoError(err)
+	mintHash, err := Broadcast(s.T().Context(), s.client, mintRaw)
+	s.Require().NoError(err)
+	mintReceipt, err := WaitForReceipt(s.T().Context(), s.client, mintHash, s.ReceiptPollInterval, s.ReceiptTimeout)
+	s.Require().NoError(err)
+	s.Require().True(mintReceipt.Status, "mint transaction reverted")
+	mintPrice, ok := new(big.Int).SetString(strings.TrimPrefix(mintReceipt.Raw["effectiveGasPrice"].(string), "0x"), 16)
+	s.Require().True(ok)
+	s.mu.Lock()
+	s.totalFee.Add(s.totalFee, new(big.Int).Mul(mintPrice, new(big.Int).SetUint64(mintReceipt.GasUsed)))
+	s.mu.Unlock()
+	s.T().Logf("SetupSuite: minted %s to %s (tx %s)", s.MintValue, s.from, mintHash)
 }
 
 func (s *DynamicFeeTxSuite) TearDownSuite() {
-	if s.cancel != nil {
-		s.cancel()
+	ctx, cancel := context.WithTimeout(context.Background(), s.Timeout)
+	defer cancel()
+
+	if s.token != nil {
+		balanceOfFn := abi.NewFunction("balanceOf", abi.NewTypes(abi.Address), abi.NewTypes(abi.Uint256))
+		burnFn := abi.NewFunction("burn", abi.NewTypes(abi.Address, abi.Uint256), nil)
+
+		for _, holder := range []*types.Address{s.from, s.recipient} {
+			callData, err := balanceOfFn.EncodeCall(holder)
+			s.Require().NoError(err)
+			var balanceHex string
+			s.Require().NoError(s.client.Call(ctx, rpc.ETHCall("balance", map[string]any{"to": s.token.String(), "data": encoding.Hex.EncodePrefixed(callData)}, rpc.BlockTagLatest, nil, &balanceHex)))
+			balanceRaw, err := encoding.Hex.Decode(balanceHex)
+			s.Require().NoError(err)
+			balance := new(big.Int).SetBytes(balanceRaw)
+			if balance.Sign() == 0 {
+				continue
+			}
+
+			burnData, err := burnFn.EncodeCall(holder, balance)
+			s.Require().NoError(err)
+			burnTx, err := NewDynamicFeeTxConfig(s.from, s.token, big.NewInt(0), burnData).
+				WithGasLimitBuffer(s.LimitBuffer).
+				Pack(ctx, s.client)
+			s.Require().NoError(err)
+			s.Require().NoError(burnTx.Sign(s.key))
+			burnRaw, err := burnTx.EncodeRLP()
+			s.Require().NoError(err)
+			burnHash, err := Broadcast(ctx, s.client, burnRaw)
+			s.Require().NoError(err)
+			burnReceipt, err := WaitForReceipt(ctx, s.client, burnHash, s.ReceiptPollInterval, s.ReceiptTimeout)
+			s.Require().NoError(err)
+			s.Require().True(burnReceipt.Status, "burn transaction reverted")
+			burnPrice, ok := new(big.Int).SetString(strings.TrimPrefix(burnReceipt.Raw["effectiveGasPrice"].(string), "0x"), 16)
+			s.Require().True(ok)
+			s.mu.Lock()
+			s.totalFee.Add(s.totalFee, new(big.Int).Mul(burnPrice, new(big.Int).SetUint64(burnReceipt.GasUsed)))
+			s.mu.Unlock()
+			s.T().Logf("TearDownSuite: burned %s of %s from %s (tx %s)", balance, s.token, holder, burnHash)
+		}
+	}
+
+	if s.totalFee != nil {
+		base := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(s.NativeDecimals)), nil)
+		whole, frac := new(big.Int), new(big.Int)
+		whole.DivMod(s.totalFee, base, frac)
+		fracStr := strings.TrimRight(fmt.Sprintf("%0*s", s.NativeDecimals, frac.String()), "0")
+		decimal := whole.String()
+		if fracStr != "" {
+			decimal += "." + fracStr
+		}
+		s.T().Logf("DynamicFeeTxSuite total fee spent: %s %s", decimal, s.NativeSymbol)
 	}
 }
 
-func (s *DynamicFeeTxSuite) TestSubmitETHTransfer() {
-	weiValue := new(big.Int).Mul(big.NewInt(1), big.NewInt(1_000_000_000_000)) // 0.000001 ETH
-	cfg := NewDynamicFeeTxConfig(s.from, s.to, weiValue, nil)
-
-	hash, err := Submit(s.ctx, s.client, cfg, s.key)
+func (s *DynamicFeeTxSuite) Test01SubmitETHTransfer() {
+	hash, err := Submit(s.T().Context(), s.client, NewDynamicFeeTxConfig(s.from, s.recipient, s.NativeValue, nil).WithGasLimitBuffer(s.LimitBuffer), s.key)
 	s.Require().NoError(err)
-	s.T().Logf("tx hash: %s", hash)
+	s.T().Logf("Test01SubmitETHTransfer: sent dynamic fee transfer, tx %s", hash)
+
+	receipt, err := WaitForReceipt(s.T().Context(), s.client, hash, s.ReceiptPollInterval, s.ReceiptTimeout)
+	s.Require().NoError(err)
+	s.Require().True(receipt.Status, "dynamic fee transfer reverted")
+	s.Require().Equal("0x2", receipt.Raw["type"])
+	price, ok := new(big.Int).SetString(strings.TrimPrefix(receipt.Raw["effectiveGasPrice"].(string), "0x"), 16)
+	s.Require().True(ok)
+	s.mu.Lock()
+	s.totalFee.Add(s.totalFee, new(big.Int).Mul(price, new(big.Int).SetUint64(receipt.GasUsed)))
+	s.mu.Unlock()
+
+	var afterHex, beforeHex string
+	s.Require().Eventually(func() bool {
+		return s.client.Call(s.T().Context(), rpc.ETHGetBalance("after", s.recipient.String(), fmt.Sprintf("0x%x", receipt.BlockNumber), &afterHex)) == nil
+	}, 20*time.Second, s.ReceiptPollInterval, "balance not readable at the receipt block")
+	s.Require().NoError(s.client.Call(s.T().Context(), rpc.ETHGetBalance("before", s.recipient.String(), fmt.Sprintf("0x%x", receipt.BlockNumber-1), &beforeHex)))
+	after, ok := new(big.Int).SetString(strings.TrimPrefix(afterHex, "0x"), 16)
+	s.Require().True(ok)
+	before, ok := new(big.Int).SetString(strings.TrimPrefix(beforeHex, "0x"), 16)
+	s.Require().True(ok)
+	s.Require().Zero(s.NativeValue.Cmp(new(big.Int).Sub(after, before)), "recipient did not receive exactly the native value")
+
+	s.T().Logf("DynamicFee Test01SubmitETHTransfer Result")
+	s.T().Logf("\tRecipient %s: %s -> %s", s.recipient, before, after)
+	s.T().Logf("\tTx: %s (block %d, gas %d)", hash, receipt.BlockNumber, receipt.GasUsed)
 }
 
-func (s *DynamicFeeTxSuite) TestPackSignBroadcastTokenTransfer() {
-	fn, err := abi.ParseFunction("transfer(address,uint256) returns (bool)", nil)
+func (s *DynamicFeeTxSuite) Test02PackSignBroadcastTokenTransfer() {
+	data, err := abi.NewFunction("transfer", abi.NewTypes(abi.Address, abi.Uint256), abi.NewTypes(abi.Bool)).EncodeCall(s.recipient, s.TransferValue)
 	s.Require().NoError(err)
 
-	amount := new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil) // 1 token (18 decimals)
-	data, err := fn.EncodeCall(s.to, amount)
+	txn, err := NewDynamicFeeTxConfig(s.from, s.token, big.NewInt(0), data).
+		WithGasLimitBuffer(s.LimitBuffer).
+		Pack(s.T().Context(), s.client)
 	s.Require().NoError(err)
-
-	cfg := NewDynamicFeeTxConfig(s.from, s.token, big.NewInt(0), data)
-
-	txn, err := cfg.Pack(s.ctx, s.client)
-	s.Require().NoError(err)
-
+	s.Require().Equal(core.DynamicFeeTxType, txn.Type())
 	s.Require().NoError(txn.Sign(s.key))
-
 	raw, err := txn.EncodeRLP()
 	s.Require().NoError(err)
-
-	hash, err := Broadcast(s.ctx, s.client, raw)
+	hash, err := Broadcast(s.T().Context(), s.client, raw)
 	s.Require().NoError(err)
-	s.T().Logf("tx hash: %s", hash)
+	s.T().Logf("Test02PackSignBroadcastTokenTransfer: sent dynamic fee token transfer (gas limit %d), tx %s", txn.Gas(), hash)
 
-	receipt, err := WaitForReceipt(s.ctx, s.client, hash, time.Second, 60*time.Second)
+	receipt, err := WaitForReceipt(s.T().Context(), s.client, hash, s.ReceiptPollInterval, s.ReceiptTimeout)
 	s.Require().NoError(err)
-	s.Require().True(receipt.Status)
+	s.Require().True(receipt.Status, "dynamic fee token transfer reverted")
 	s.Require().True(hash.Equal(receipt.TxHash))
-	s.Require().Len(receipt.Logs, 1)
+	s.Require().LessOrEqual(receipt.GasUsed, txn.Gas())
+	price, ok := new(big.Int).SetString(strings.TrimPrefix(receipt.Raw["effectiveGasPrice"].(string), "0x"), 16)
+	s.Require().True(ok)
+	s.mu.Lock()
+	s.totalFee.Add(s.totalFee, new(big.Int).Mul(price, new(big.Int).SetUint64(receipt.GasUsed)))
+	s.mu.Unlock()
 
+	s.Require().Len(receipt.Logs, 1)
 	log := receipt.Logs[0]
 	s.Require().True(s.token.Equal(log.Address))
 	s.Require().Len(log.Topics, 3)
-
-	transferTopic := core.Keccak256([]byte("Transfer(address,address,uint256)"))
-	s.Require().True(transferTopic.Equal(log.Topics[0]))
-
-	wantFrom := types.NewHashFromBytes(append(make([]byte, 12), s.from.Bytes()...))
-	s.Require().True(wantFrom.Equal(log.Topics[1]))
-
-	wantTo := types.NewHashFromBytes(append(make([]byte, 12), s.to.Bytes()...))
-	s.Require().True(wantTo.Equal(log.Topics[2]))
-
+	s.Require().True(core.Keccak256([]byte("Transfer(address,address,uint256)")).Equal(log.Topics[0]))
+	s.Require().True(types.NewHashFromBytes(append(make([]byte, 12), s.from.Bytes()...)).Equal(log.Topics[1]))
+	s.Require().True(types.NewHashFromBytes(append(make([]byte, 12), s.recipient.Bytes()...)).Equal(log.Topics[2]))
 	wantData := make([]byte, 32)
-	amount.FillBytes(wantData)
+	s.TransferValue.FillBytes(wantData)
 	s.Require().Equal(wantData, log.Data)
+
+	s.T().Logf("DynamicFee Test02PackSignBroadcastTokenTransfer Result")
+	s.T().Logf("\tTransferred %s of %s to %s", s.TransferValue, s.token, s.recipient)
+	s.T().Logf("\tTx: %s (block %d, gas %d / limit %d)", hash, receipt.BlockNumber, receipt.GasUsed, txn.Gas())
+}
+
+func (s *DynamicFeeTxSuite) Test03ExplicitFieldsAreMinedAsSet() {
+	var nonceHex, tipHex string
+	var block map[string]any
+	s.Require().NoError(s.client.Batch(s.T().Context(), rpc.Elements{
+		rpc.ETHGetTransactionCount("nonce", s.from.String(), rpc.BlockTagPending, &nonceHex),
+		rpc.ETHMaxPriorityFeePerGas("tip", &tipHex),
+		rpc.ETHGetBlockByNumber("block", rpc.BlockTagLatest, false, &block),
+	}))
+	nonce, ok := new(big.Int).SetString(strings.TrimPrefix(nonceHex, "0x"), 16)
+	s.Require().True(ok)
+	tip, ok := new(big.Int).SetString(strings.TrimPrefix(tipHex, "0x"), 16)
+	s.Require().True(ok)
+	tip.Add(tip, big.NewInt(1))
+	baseFee, ok := new(big.Int).SetString(strings.TrimPrefix(block["baseFeePerGas"].(string), "0x"), 16)
+	s.Require().True(ok)
+	feeCap := new(big.Int).Add(new(big.Int).Mul(baseFee, big.NewInt(3)), tip)
+	gasLimit := uint64(150_000)
+
+	txn, err := NewDynamicFeeTxConfig(s.from, s.recipient, big.NewInt(1), nil).
+		WithChainID(s.ChainID).
+		WithNonce(nonce.Uint64()).
+		WithGasTipCap(tip).
+		WithGasFeeCap(feeCap).
+		WithGasLimit(gasLimit).
+		Pack(s.T().Context(), s.client)
+	s.Require().NoError(err)
+	s.Require().Equal(nonce.Uint64(), txn.AddressNonce())
+	s.Require().Equal(gasLimit, txn.Gas())
+	s.Require().Zero(new(big.Int).Mul(feeCap, new(big.Int).SetUint64(gasLimit)).Cmp(txn.MaxFee()))
+	s.Require().NoError(txn.Sign(s.key))
+	sender, err := txn.Sender()
+	s.Require().NoError(err)
+	s.Require().True(sender.Equal(s.from))
+	raw, err := txn.EncodeRLP()
+	s.Require().NoError(err)
+	hash, err := Broadcast(s.T().Context(), s.client, raw)
+	s.Require().NoError(err)
+	s.T().Logf("Test03ExplicitFieldsAreMinedAsSet: sent dynamic fee tx with explicit fields, tx %s", hash)
+
+	receipt, err := WaitForReceipt(s.T().Context(), s.client, hash, s.ReceiptPollInterval, s.ReceiptTimeout)
+	s.Require().NoError(err)
+	s.Require().True(receipt.Status, "dynamic fee transfer reverted")
+	price, ok := new(big.Int).SetString(strings.TrimPrefix(receipt.Raw["effectiveGasPrice"].(string), "0x"), 16)
+	s.Require().True(ok)
+	s.Require().LessOrEqual(price.Cmp(feeCap), 0, "effective gas price exceeds maxFeePerGas")
+	s.mu.Lock()
+	s.totalFee.Add(s.totalFee, new(big.Int).Mul(price, new(big.Int).SetUint64(receipt.GasUsed)))
+	s.mu.Unlock()
+
+	var mined map[string]any
+	s.Require().Eventually(func() bool {
+		return s.client.Call(s.T().Context(), rpc.ETHGetTransactionByHash("tx", hash.String(), &mined)) == nil && mined != nil
+	}, 20*time.Second, s.ReceiptPollInterval, "mined transaction not readable")
+	s.Require().Equal("0x2", mined["type"])
+	s.Require().Equal("0x"+s.ChainID.Text(16), mined["chainId"])
+	s.Require().Equal(fmt.Sprintf("0x%x", nonce.Uint64()), mined["nonce"])
+	s.Require().Equal(fmt.Sprintf("0x%x", gasLimit), mined["gas"])
+	s.Require().Equal("0x"+feeCap.Text(16), mined["maxFeePerGas"])
+	s.Require().Equal("0x"+tip.Text(16), mined["maxPriorityFeePerGas"])
+
+	s.T().Logf("DynamicFee Test03ExplicitFieldsAreMinedAsSet Result")
+	s.T().Logf("\tNonce %d, gas %d, maxFee %s, tip %s, effective %s", nonce.Uint64(), gasLimit, feeCap, tip, price)
+	s.T().Logf("\tTx: %s (block %d, gas used %d)", hash, receipt.BlockNumber, receipt.GasUsed)
+}
+
+func (s *DynamicFeeTxSuite) Test04BaseFeeMultiplierSetsFeeCap() {
+	var before map[string]any
+	s.Require().NoError(s.client.Call(s.T().Context(), rpc.ETHGetBlockByNumber("block", rpc.BlockTagLatest, false, &before)))
+	tip := big.NewInt(1_000_000)
+
+	txn, err := NewDynamicFeeTxConfig(s.from, s.recipient, big.NewInt(1), nil).
+		WithGasTipCap(tip).
+		WithBaseFeeMultiplier(300).
+		WithGasLimitBuffer(s.LimitBuffer).
+		Pack(s.T().Context(), s.client)
+	s.Require().NoError(err)
+
+	var after map[string]any
+	s.Require().NoError(s.client.Call(s.T().Context(), rpc.ETHGetBlockByNumber("block", rpc.BlockTagLatest, false, &after)))
+	baseBefore, ok := new(big.Int).SetString(strings.TrimPrefix(before["baseFeePerGas"].(string), "0x"), 16)
+	s.Require().True(ok)
+	baseAfter, ok := new(big.Int).SetString(strings.TrimPrefix(after["baseFeePerGas"].(string), "0x"), 16)
+	s.Require().True(ok)
+	low, high := baseBefore, baseAfter
+	if low.Cmp(high) > 0 {
+		low, high = high, low
+	}
+
+	feeCap := new(big.Int).Div(txn.MaxFee(), new(big.Int).SetUint64(txn.Gas()))
+	scaled := new(big.Int).Sub(feeCap, tip)
+	s.Require().Zero(new(big.Int).Mod(scaled, big.NewInt(3)).Sign(), "fee cap minus tip must be a 3x base fee")
+	impliedBase := new(big.Int).Div(scaled, big.NewInt(3))
+	s.Require().GreaterOrEqual(impliedBase.Cmp(new(big.Int).Div(new(big.Int).Mul(low, big.NewInt(7)), big.NewInt(8))), 0)
+	s.Require().LessOrEqual(impliedBase.Cmp(new(big.Int).Div(new(big.Int).Mul(high, big.NewInt(9)), big.NewInt(8))), 0)
+
+	s.Require().NoError(txn.Sign(s.key))
+	raw, err := txn.EncodeRLP()
+	s.Require().NoError(err)
+	hash, err := Broadcast(s.T().Context(), s.client, raw)
+	s.Require().NoError(err)
+	s.T().Logf("Test04BaseFeeMultiplierSetsFeeCap: sent tx with 3x base fee cap, tx %s", hash)
+
+	receipt, err := WaitForReceipt(s.T().Context(), s.client, hash, s.ReceiptPollInterval, s.ReceiptTimeout)
+	s.Require().NoError(err)
+	s.Require().True(receipt.Status, "dynamic fee transfer reverted")
+	price, ok := new(big.Int).SetString(strings.TrimPrefix(receipt.Raw["effectiveGasPrice"].(string), "0x"), 16)
+	s.Require().True(ok)
+	s.Require().LessOrEqual(price.Cmp(feeCap), 0)
+	s.mu.Lock()
+	s.totalFee.Add(s.totalFee, new(big.Int).Mul(price, new(big.Int).SetUint64(receipt.GasUsed)))
+	s.mu.Unlock()
+
+	s.T().Logf("DynamicFee Test04BaseFeeMultiplierSetsFeeCap Result")
+	s.T().Logf("\tBase fee %s..%s, implied base %s, fee cap %s, tip %s, effective %s", low, high, impliedBase, feeCap, tip, price)
+	s.T().Logf("\tTx: %s (block %d)", hash, receipt.BlockNumber)
+}
+
+func (s *DynamicFeeTxSuite) Test05GasLimitBufferScalesEstimate() {
+	data, err := abi.NewFunction("transfer", abi.NewTypes(abi.Address, abi.Uint256), abi.NewTypes(abi.Bool)).EncodeCall(s.recipient, big.NewInt(1))
+	s.Require().NoError(err)
+
+	plain, err := NewDynamicFeeTxConfig(s.from, s.token, big.NewInt(0), data).Pack(s.T().Context(), s.client)
+	s.Require().NoError(err)
+	buffered, err := NewDynamicFeeTxConfig(s.from, s.token, big.NewInt(0), data).WithGasLimitBuffer(200).Pack(s.T().Context(), s.client)
+	s.Require().NoError(err)
+	s.Require().GreaterOrEqual(buffered.Gas(), plain.Gas()*19/10)
+	s.Require().LessOrEqual(buffered.Gas(), plain.Gas()*21/10)
+
+	s.Require().NoError(buffered.Sign(s.key))
+	raw, err := buffered.EncodeRLP()
+	s.Require().NoError(err)
+	hash, err := Broadcast(s.T().Context(), s.client, raw)
+	s.Require().NoError(err)
+	s.T().Logf("Test05GasLimitBufferScalesEstimate: sent buffered dynamic fee tx, tx %s", hash)
+
+	receipt, err := WaitForReceipt(s.T().Context(), s.client, hash, s.ReceiptPollInterval, s.ReceiptTimeout)
+	s.Require().NoError(err)
+	s.Require().True(receipt.Status, "buffered dynamic fee transfer reverted")
+	s.Require().LessOrEqual(receipt.GasUsed, buffered.Gas())
+	price, ok := new(big.Int).SetString(strings.TrimPrefix(receipt.Raw["effectiveGasPrice"].(string), "0x"), 16)
+	s.Require().True(ok)
+	s.mu.Lock()
+	s.totalFee.Add(s.totalFee, new(big.Int).Mul(price, new(big.Int).SetUint64(receipt.GasUsed)))
+	s.mu.Unlock()
+
+	s.T().Logf("DynamicFee Test05GasLimitBufferScalesEstimate Result")
+	s.T().Logf("\tEstimate %d, buffered limit %d, used %d", plain.Gas(), buffered.Gas(), receipt.GasUsed)
+	s.T().Logf("\tTx: %s (block %d)", hash, receipt.BlockNumber)
+}
+
+func (s *DynamicFeeTxSuite) Test06AccessListIsMined() {
+	data, err := abi.NewFunction("transfer", abi.NewTypes(abi.Address, abi.Uint256), abi.NewTypes(abi.Bool)).EncodeCall(s.recipient, big.NewInt(1))
+	s.Require().NoError(err)
+	storageKey := core.Keccak256([]byte("go-evmkit-access-list-key"))
+	accessList := core.AccessList{{Address: s.token, StorageKeys: []*types.Hash{storageKey}}}
+
+	txn, err := NewDynamicFeeTxConfig(s.from, s.token, big.NewInt(0), data).
+		WithAccessList(accessList).
+		WithGasLimitBuffer(s.LimitBuffer).
+		Pack(s.T().Context(), s.client)
+	s.Require().NoError(err)
+	s.Require().NoError(txn.Sign(s.key))
+	raw, err := txn.EncodeRLP()
+	s.Require().NoError(err)
+	hash, err := Broadcast(s.T().Context(), s.client, raw)
+	s.Require().NoError(err)
+	s.T().Logf("Test06AccessListIsMined: sent dynamic fee tx with an access list, tx %s", hash)
+
+	receipt, err := WaitForReceipt(s.T().Context(), s.client, hash, s.ReceiptPollInterval, s.ReceiptTimeout)
+	s.Require().NoError(err)
+	s.Require().True(receipt.Status, "dynamic fee transfer with access list reverted")
+	s.Require().LessOrEqual(receipt.GasUsed, txn.Gas())
+	price, ok := new(big.Int).SetString(strings.TrimPrefix(receipt.Raw["effectiveGasPrice"].(string), "0x"), 16)
+	s.Require().True(ok)
+	s.mu.Lock()
+	s.totalFee.Add(s.totalFee, new(big.Int).Mul(price, new(big.Int).SetUint64(receipt.GasUsed)))
+	s.mu.Unlock()
+
+	var mined map[string]any
+	s.Require().Eventually(func() bool {
+		return s.client.Call(s.T().Context(), rpc.ETHGetTransactionByHash("tx", hash.String(), &mined)) == nil && mined != nil
+	}, 20*time.Second, s.ReceiptPollInterval, "mined transaction not readable")
+	minedList, ok := mined["accessList"].([]any)
+	s.Require().True(ok)
+	s.Require().Len(minedList, 1)
+	tuple, ok := minedList[0].(map[string]any)
+	s.Require().True(ok)
+	s.Require().Equal(strings.ToLower(s.token.String()), strings.ToLower(tuple["address"].(string)))
+	keys, ok := tuple["storageKeys"].([]any)
+	s.Require().True(ok)
+	s.Require().Len(keys, 1)
+	s.Require().Equal(strings.ToLower(storageKey.String()), strings.ToLower(keys[0].(string)))
+
+	s.T().Logf("DynamicFee Test06AccessListIsMined Result")
+	s.T().Logf("\tAccess list %s [%s]", s.token, storageKey)
+	s.T().Logf("\tTx: %s (block %d, gas %d / limit %d)", hash, receipt.BlockNumber, receipt.GasUsed, txn.Gas())
 }
