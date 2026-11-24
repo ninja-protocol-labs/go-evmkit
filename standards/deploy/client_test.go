@@ -333,7 +333,7 @@ func TestDeployReturnsSignedTxOnBroadcastFailure(t *testing.T) {
 
 	broadcast := errors.New("connection reset")
 	c := mocks.NewClient(t)
-	c.EXPECT().Call(mock.Anything, mock.Anything).Return(broadcast).Once()
+	c.EXPECT().Call(mock.Anything, mock.Anything).Return(broadcast).Twice()
 
 	d := NewCreateDeployer(c)
 	signed, hash, err := d.Deploy(t.Context(), bind.NewTransactOptions(key, builder), NewCreateRequest(NewContractDeployment([]byte{0x60, 0x80}, nil, nil)))

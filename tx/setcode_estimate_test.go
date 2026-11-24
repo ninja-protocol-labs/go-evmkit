@@ -70,8 +70,8 @@ func TestSetCodeBuilderSendsAuthorizationListToEstimateGas(t *testing.T) {
 				result = "0x5"
 			case rpc.MethodETHMaxPriorityFeePerGas:
 				result = "0x1"
-			case rpc.MethodETHGetBlockByNumber:
-				result = map[string]any{"baseFeePerGas": "0x7"}
+			case rpc.MethodETHFeeHistory:
+				result = map[string]any{"baseFeePerGas": []any{"0x7", "0x7"}, "reward": []any{[]any{"0x1"}}}
 			case rpc.MethodETHEstimateGas:
 				estimateParams = req.Params
 				result = "0x186a0"

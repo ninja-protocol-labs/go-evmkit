@@ -456,7 +456,7 @@ func TestWritesReturnSignedTxOnBroadcastFailure(t *testing.T) {
 	builder.Price(big.NewInt(30_000_000_000), big.NewInt(1_000_000_000))
 
 	c := mocks.NewClient(t)
-	c.EXPECT().Call(mock.Anything, mock.Anything).Return(&rpc.ResponseError{Code: -32000, Message: "nonce too low"}).Once()
+	c.EXPECT().Call(mock.Anything, mock.Anything).Return(&rpc.ResponseError{Code: -32000, Message: "nonce too low"}).Twice()
 
 	signed, hash, err := New(c).InvalidateUnorderedNonces(t.Context(), bind.NewTransactOptions(key, builder), NewInvalidateUnorderedNoncesRequest(contract, big.NewInt(0), big.NewInt(1)))
 	require.ErrorContains(t, err, "permit2: invalidateUnorderedNonces: ")

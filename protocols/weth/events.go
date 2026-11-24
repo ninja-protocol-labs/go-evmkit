@@ -6,6 +6,7 @@ import (
 
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
+	"github.com/ninja-protocol-labs/go-evmkit/standards/erc20"
 	"github.com/ninja-protocol-labs/go-evmkit/tx"
 )
 
@@ -77,4 +78,13 @@ func ExtractWithdrawals(logs []tx.Log) ([]WithdrawalEvent, error) {
 		withdrawals = append(withdrawals, *NewWithdrawalEvent(log.Address, src, wad))
 	}
 	return withdrawals, nil
+}
+
+// ExtractTransfers pulls every ERC-20 Transfer log out of logs; WETH without Deposit/Withdrawal (e.g. Arbitrum's aeWETH) wraps as a mint from and unwraps as a burn to the zero address.
+func ExtractTransfers(logs []tx.Log) ([]erc20.TransferEvent, error) {
+	transfers, err := erc20.ExtractTransfers(logs)
+	if err != nil {
+		return nil, fmt.Errorf("weth: extractTransfers: %w", err)
+	}
+	return transfers, nil
 }

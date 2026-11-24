@@ -56,7 +56,7 @@ var configs = map[NetworkType]map[Network]Config{
 			Constant: ChainConstants{
 				ChainID:             5042,
 				NativeSymbol:        "USDC",
-				NativeDecimals:      6,
+				NativeDecimals:      18,
 				ReceiptPollInterval: 500 * time.Millisecond,
 				ReceiptTimeout:      10 * time.Second,
 			},
@@ -591,7 +591,7 @@ var configs = map[NetworkType]map[Network]Config{
 			Constant: ChainConstants{
 				ChainID:             5042002,
 				NativeSymbol:        "USDC",
-				NativeDecimals:      6,
+				NativeDecimals:      18,
 				ReceiptPollInterval: 500 * time.Millisecond,
 				ReceiptTimeout:      10 * time.Second,
 			},

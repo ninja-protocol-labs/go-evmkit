@@ -362,7 +362,7 @@ func TestFactoryWritesReturnSignedTxOnBroadcastFailure(t *testing.T) {
 	builder.Price(big.NewInt(30_000_000_000), big.NewInt(1_000_000_000))
 
 	c := mocks.NewClient(t)
-	c.EXPECT().Call(mock.Anything, mock.Anything).Return(&rpc.ResponseError{Code: -32000, Message: "nonce too low"}).Once()
+	c.EXPECT().Call(mock.Anything, mock.Anything).Return(&rpc.ResponseError{Code: -32000, Message: "nonce too low"}).Twice()
 
 	signed, hash, err := NewFactory(c).CreatePair(t.Context(), bind.NewTransactOptions(key, builder), NewCreatePairRequest(factory, a, b))
 	require.ErrorContains(t, err, "uniswapv2: createPair: ")

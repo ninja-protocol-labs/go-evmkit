@@ -750,7 +750,7 @@ func TestPositionManagerWritesReturnSignedTxOnBroadcastFailure(t *testing.T) {
 	builder.Price(big.NewInt(30_000_000_000), big.NewInt(1_000_000_000))
 
 	c := mocks.NewClient(t)
-	c.EXPECT().Call(mock.Anything, mock.Anything).Return(errors.New("dial tcp: connection refused")).Once()
+	c.EXPECT().Call(mock.Anything, mock.Anything).Return(errors.New("dial tcp: connection refused")).Twice()
 
 	signed, hash, err := NewPositionManager(c).ModifyLiquidities(t.Context(), bind.NewTransactOptions(key, builder), NewModifyLiquiditiesRequest(testPositionManager, []byte{ActionSettlePair}, [][]byte{{0x01}}, big.NewInt(1), big.NewInt(5)))
 	require.ErrorContains(t, err, "uniswapv4: modifyLiquidities: ")

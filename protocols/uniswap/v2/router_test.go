@@ -960,9 +960,20 @@ func (s *RouterLifeCycleSuite) Test06AddLiquidityETH() {
 
 	deposits, err := weth.ExtractDeposits(receipt.Logs)
 	s.Require().NoError(err)
-	s.Require().Len(deposits, 1, "addLiquidityETH should have wrapped the attached native value into WETH")
-	s.Require().Zero(s.nativeValue.Cmp(deposits[0].Wad))
-	s.T().Logf("Test06AddLiquidityETH: Deposit dst=%s wad=%s", deposits[0].Dst, deposits[0].Wad)
+	wethTransfers, err := weth.ExtractTransfers(receipt.Logs)
+	s.Require().NoError(err)
+	var wrapped []*big.Int
+	for _, d := range deposits {
+		wrapped = append(wrapped, d.Wad)
+	}
+	for _, tr := range wethTransfers {
+		if tr.Contract.Equal(s.wethAddr) && tr.From.IsZero() {
+			wrapped = append(wrapped, tr.Value)
+		}
+	}
+	s.Require().Len(wrapped, 1, "addLiquidityETH should have wrapped the attached native value into WETH")
+	s.Require().Zero(s.nativeValue.Cmp(wrapped[0]))
+	s.T().Logf("Test06AddLiquidityETH: wrapped %s", wrapped[0])
 
 	var reserves *Reserves
 	s.Require().Eventually(func() bool {
@@ -1017,9 +1028,20 @@ func (s *RouterLifeCycleSuite) Test07SwapExactETHForTokens() {
 
 	deposits, err := weth.ExtractDeposits(receipt.Logs)
 	s.Require().NoError(err)
-	s.Require().Len(deposits, 1, "swapExactETHForTokens should have wrapped the attached native value into WETH before swapping")
-	s.Require().Zero(amountIn.Cmp(deposits[0].Wad))
-	s.T().Logf("Test07SwapExactETHForTokens: Deposit dst=%s wad=%s", deposits[0].Dst, deposits[0].Wad)
+	wethTransfers, err := weth.ExtractTransfers(receipt.Logs)
+	s.Require().NoError(err)
+	var wrapped []*big.Int
+	for _, d := range deposits {
+		wrapped = append(wrapped, d.Wad)
+	}
+	for _, tr := range wethTransfers {
+		if tr.Contract.Equal(s.wethAddr) && tr.From.IsZero() {
+			wrapped = append(wrapped, tr.Value)
+		}
+	}
+	s.Require().Len(wrapped, 1, "swapExactETHForTokens should have wrapped the attached native value into WETH before swapping")
+	s.Require().Zero(amountIn.Cmp(wrapped[0]))
+	s.T().Logf("Test07SwapExactETHForTokens: wrapped %s", wrapped[0])
 
 	swaps, err := ExtractSwap(receipt.Logs)
 	s.Require().NoError(err)
@@ -1094,9 +1116,20 @@ func (s *RouterLifeCycleSuite) Test08SwapExactTokensForETH() {
 
 	withdrawals, err := weth.ExtractWithdrawals(receipt.Logs)
 	s.Require().NoError(err)
-	s.Require().Len(withdrawals, 1, "swapExactTokensForETH should have unwrapped WETH back to native before sending it out")
-	s.Require().Zero(predicted[1].Cmp(withdrawals[0].Wad))
-	s.T().Logf("Test08SwapExactTokensForETH: Withdrawal src=%s wad=%s", withdrawals[0].Src, withdrawals[0].Wad)
+	wethTransfers, err := weth.ExtractTransfers(receipt.Logs)
+	s.Require().NoError(err)
+	var unwrapped []*big.Int
+	for _, w := range withdrawals {
+		unwrapped = append(unwrapped, w.Wad)
+	}
+	for _, tr := range wethTransfers {
+		if tr.Contract.Equal(s.wethAddr) && tr.To.IsZero() {
+			unwrapped = append(unwrapped, tr.Value)
+		}
+	}
+	s.Require().Len(unwrapped, 1, "swapExactTokensForETH should have unwrapped WETH back to native before sending it out")
+	s.Require().Zero(predicted[1].Cmp(unwrapped[0]))
+	s.T().Logf("Test08SwapExactTokensForETH: unwrapped %s", unwrapped[0])
 
 	var nativeAfterHex string
 	s.Require().NoError(s.client.Call(s.ctx, rpc.ETHGetBalance("balance", s.from.String(), rpc.BlockTagLatest, &nativeAfterHex)))
@@ -1162,9 +1195,20 @@ func (s *RouterLifeCycleSuite) Test09SwapETHForExactTokens() {
 
 	deposits, err := weth.ExtractDeposits(receipt.Logs)
 	s.Require().NoError(err)
-	s.Require().Len(deposits, 1, "swapETHForExactTokens should only wrap the needed amount, not the full overpaid value")
-	s.Require().Zero(actualIn.Cmp(deposits[0].Wad))
-	s.T().Logf("Test09SwapETHForExactTokens: Deposit dst=%s wad=%s (value sent was %s, confirming the excess %s was never wrapped)", deposits[0].Dst, deposits[0].Wad, value, new(big.Int).Sub(value, deposits[0].Wad))
+	wethTransfers, err := weth.ExtractTransfers(receipt.Logs)
+	s.Require().NoError(err)
+	var wrapped []*big.Int
+	for _, d := range deposits {
+		wrapped = append(wrapped, d.Wad)
+	}
+	for _, tr := range wethTransfers {
+		if tr.Contract.Equal(s.wethAddr) && tr.From.IsZero() {
+			wrapped = append(wrapped, tr.Value)
+		}
+	}
+	s.Require().Len(wrapped, 1, "swapETHForExactTokens should only wrap the needed amount, not the full overpaid value")
+	s.Require().Zero(actualIn.Cmp(wrapped[0]))
+	s.T().Logf("Test09SwapETHForExactTokens: wrapped %s (value sent was %s, confirming the excess %s was never wrapped)", wrapped[0], value, new(big.Int).Sub(value, wrapped[0]))
 
 	var nativeAfterHex string
 	s.Require().NoError(s.client.Call(s.ctx, rpc.ETHGetBalance("balance", s.from.String(), rpc.BlockTagLatest, &nativeAfterHex)))
@@ -1425,9 +1469,20 @@ func (s *RouterLifeCycleSuite) Test13SwapTokensForExactETH() {
 
 	withdrawals, err := weth.ExtractWithdrawals(receipt.Logs)
 	s.Require().NoError(err)
-	s.Require().Len(withdrawals, 1, "swapTokensForExactETH should have unwrapped WETH back to native before sending it out")
-	s.Require().Zero(amountOut.Cmp(withdrawals[0].Wad))
-	s.T().Logf("Test13SwapTokensForExactETH: Withdrawal src=%s wad=%s", withdrawals[0].Src, withdrawals[0].Wad)
+	wethTransfers, err := weth.ExtractTransfers(receipt.Logs)
+	s.Require().NoError(err)
+	var unwrapped []*big.Int
+	for _, w := range withdrawals {
+		unwrapped = append(unwrapped, w.Wad)
+	}
+	for _, tr := range wethTransfers {
+		if tr.Contract.Equal(s.wethAddr) && tr.To.IsZero() {
+			unwrapped = append(unwrapped, tr.Value)
+		}
+	}
+	s.Require().Len(unwrapped, 1, "swapTokensForExactETH should have unwrapped WETH back to native before sending it out")
+	s.Require().Zero(amountOut.Cmp(unwrapped[0]))
+	s.T().Logf("Test13SwapTokensForExactETH: unwrapped %s", unwrapped[0])
 
 	var tokenAfter *big.Int
 	s.Require().Eventually(func() bool {
@@ -1496,9 +1551,20 @@ func (s *RouterLifeCycleSuite) Test14RemoveLiquidityETH() {
 
 	withdrawals, err := weth.ExtractWithdrawals(receipt.Logs)
 	s.Require().NoError(err)
-	s.Require().Len(withdrawals, 1, "removeLiquidityETH should have unwrapped WETH back to native before sending it out")
-	s.Require().Zero(predicted.AmountETH.Cmp(withdrawals[0].Wad))
-	s.T().Logf("Test14RemoveLiquidityETH: Withdrawal src=%s wad=%s", withdrawals[0].Src, withdrawals[0].Wad)
+	wethTransfers, err := weth.ExtractTransfers(receipt.Logs)
+	s.Require().NoError(err)
+	var unwrapped []*big.Int
+	for _, w := range withdrawals {
+		unwrapped = append(unwrapped, w.Wad)
+	}
+	for _, tr := range wethTransfers {
+		if tr.Contract.Equal(s.wethAddr) && tr.To.IsZero() {
+			unwrapped = append(unwrapped, tr.Value)
+		}
+	}
+	s.Require().Len(unwrapped, 1, "removeLiquidityETH should have unwrapped WETH back to native before sending it out")
+	s.Require().Zero(predicted.AmountETH.Cmp(unwrapped[0]))
+	s.T().Logf("Test14RemoveLiquidityETH: unwrapped %s", unwrapped[0])
 
 	var tokenAfter, remainingLiquidity *big.Int
 	s.Require().Eventually(func() bool {
@@ -1666,9 +1732,20 @@ func (s *RouterLifeCycleSuite) Test16RemoveLiquidityETHWithPermit() {
 
 	withdrawals, err := weth.ExtractWithdrawals(receipt.Logs)
 	s.Require().NoError(err)
-	s.Require().Len(withdrawals, 1, "removeLiquidityETHWithPermit should have unwrapped WETH back to native before sending it out")
-	s.Require().Zero(predicted.AmountETH.Cmp(withdrawals[0].Wad))
-	s.T().Logf("Test16RemoveLiquidityETHWithPermit: Withdrawal src=%s wad=%s", withdrawals[0].Src, withdrawals[0].Wad)
+	wethTransfers, err := weth.ExtractTransfers(receipt.Logs)
+	s.Require().NoError(err)
+	var unwrapped []*big.Int
+	for _, w := range withdrawals {
+		unwrapped = append(unwrapped, w.Wad)
+	}
+	for _, tr := range wethTransfers {
+		if tr.Contract.Equal(s.wethAddr) && tr.To.IsZero() {
+			unwrapped = append(unwrapped, tr.Value)
+		}
+	}
+	s.Require().Len(unwrapped, 1, "removeLiquidityETHWithPermit should have unwrapped WETH back to native before sending it out")
+	s.Require().Zero(predicted.AmountETH.Cmp(unwrapped[0]))
+	s.T().Logf("Test16RemoveLiquidityETHWithPermit: unwrapped %s", unwrapped[0])
 
 	var tokenAfter, nonceAfter, remainingLiquidity *big.Int
 	s.Require().Eventually(func() bool {
@@ -1860,7 +1937,15 @@ func (s *RouterLifeCycleSuite) Test18SwapExactETHForTokensSupportingFeeOnTransfe
 	s.Require().True(addReceipt.Status, "addLiquidityETH transaction reverted")
 	s.T().Logf("Test18SwapExactETHForTokensSupportingFeeOnTransferTokens: re-add liquidity confirmed in block %d", addReceipt.BlockNumber)
 
-	wantWethReserve := new(big.Int).Add(wethReserve, s.nativeValue)
+	addMints, err := ExtractMint(addReceipt.Logs)
+	s.Require().NoError(err)
+	s.Require().Len(addMints, 1)
+	addedWeth := addMints[0].Amount1
+	if pairToken0.Equal(s.wethAddr) {
+		addedWeth = addMints[0].Amount0
+	}
+	s.Require().LessOrEqual(addedWeth.Cmp(s.nativeValue), 0, "addLiquidityETH added %s WETH, more than the %s sent", addedWeth, s.nativeValue)
+	wantWethReserve := new(big.Int).Add(wethReserve, addedWeth)
 	var reserves *Reserves
 	s.Require().Eventually(func() bool {
 		reserves, err = s.v2Pair.GetReserves(s.ctx, nil, NewGetReservesRequest(s.pairETH))
@@ -1904,8 +1989,19 @@ func (s *RouterLifeCycleSuite) Test18SwapExactETHForTokensSupportingFeeOnTransfe
 
 	deposits, err := weth.ExtractDeposits(receipt.Logs)
 	s.Require().NoError(err)
-	s.Require().Len(deposits, 1, "swapExactETHForTokensSupportingFeeOnTransferTokens should have wrapped the attached native value into WETH before swapping")
-	s.Require().Zero(amountIn.Cmp(deposits[0].Wad))
+	wethTransfers, err := weth.ExtractTransfers(receipt.Logs)
+	s.Require().NoError(err)
+	var wrapped []*big.Int
+	for _, d := range deposits {
+		wrapped = append(wrapped, d.Wad)
+	}
+	for _, tr := range wethTransfers {
+		if tr.Contract.Equal(s.wethAddr) && tr.From.IsZero() {
+			wrapped = append(wrapped, tr.Value)
+		}
+	}
+	s.Require().Len(wrapped, 1, "swapExactETHForTokensSupportingFeeOnTransferTokens should have wrapped the attached native value into WETH before swapping")
+	s.Require().Zero(amountIn.Cmp(wrapped[0]))
 
 	swaps, err := ExtractSwap(receipt.Logs)
 	s.Require().NoError(err)
@@ -1986,9 +2082,20 @@ func (s *RouterLifeCycleSuite) Test19SwapExactTokensForETHSupportingFeeOnTransfe
 
 	withdrawals, err := weth.ExtractWithdrawals(receipt.Logs)
 	s.Require().NoError(err)
-	s.Require().Len(withdrawals, 1, "swapExactTokensForETHSupportingFeeOnTransferTokens should have unwrapped WETH back to native before sending it out")
-	s.Require().Zero(amountsOut[1].Cmp(withdrawals[0].Wad))
-	s.T().Logf("Test19SwapExactTokensForETHSupportingFeeOnTransferTokens: Withdrawal src=%s wad=%s", withdrawals[0].Src, withdrawals[0].Wad)
+	wethTransfers, err := weth.ExtractTransfers(receipt.Logs)
+	s.Require().NoError(err)
+	var unwrapped []*big.Int
+	for _, w := range withdrawals {
+		unwrapped = append(unwrapped, w.Wad)
+	}
+	for _, tr := range wethTransfers {
+		if tr.Contract.Equal(s.wethAddr) && tr.To.IsZero() {
+			unwrapped = append(unwrapped, tr.Value)
+		}
+	}
+	s.Require().Len(unwrapped, 1, "swapExactTokensForETHSupportingFeeOnTransferTokens should have unwrapped WETH back to native before sending it out")
+	s.Require().Zero(amountsOut[1].Cmp(unwrapped[0]))
+	s.T().Logf("Test19SwapExactTokensForETHSupportingFeeOnTransferTokens: unwrapped %s", unwrapped[0])
 
 	var nativeAfterHex string
 	s.Require().NoError(s.client.Call(s.ctx, rpc.ETHGetBalance("balance", s.from.String(), rpc.BlockTagLatest, &nativeAfterHex)))
@@ -2049,9 +2156,20 @@ func (s *RouterLifeCycleSuite) Test20RemoveLiquidityETHSupportingFeeOnTransferTo
 
 	withdrawals, err := weth.ExtractWithdrawals(receipt.Logs)
 	s.Require().NoError(err)
-	s.Require().Len(withdrawals, 1, "removeLiquidityETHSupportingFeeOnTransferTokens should have unwrapped WETH back to native before sending it out")
-	s.Require().Zero(predictedAmountETH.Cmp(withdrawals[0].Wad))
-	s.T().Logf("Test20RemoveLiquidityETHSupportingFeeOnTransferTokens: Withdrawal src=%s wad=%s", withdrawals[0].Src, withdrawals[0].Wad)
+	wethTransfers, err := weth.ExtractTransfers(receipt.Logs)
+	s.Require().NoError(err)
+	var unwrapped []*big.Int
+	for _, w := range withdrawals {
+		unwrapped = append(unwrapped, w.Wad)
+	}
+	for _, tr := range wethTransfers {
+		if tr.Contract.Equal(s.wethAddr) && tr.To.IsZero() {
+			unwrapped = append(unwrapped, tr.Value)
+		}
+	}
+	s.Require().Len(unwrapped, 1, "removeLiquidityETHSupportingFeeOnTransferTokens should have unwrapped WETH back to native before sending it out")
+	s.Require().Zero(predictedAmountETH.Cmp(unwrapped[0]))
+	s.T().Logf("Test20RemoveLiquidityETHSupportingFeeOnTransferTokens: unwrapped %s", unwrapped[0])
 
 	var tokenAfter, remainingLiquidity *big.Int
 	s.Require().Eventually(func() bool {
@@ -2159,9 +2277,20 @@ func (s *RouterLifeCycleSuite) Test21RemoveLiquidityETHWithPermitSupportingFeeOn
 
 	withdrawals, err := weth.ExtractWithdrawals(receipt.Logs)
 	s.Require().NoError(err)
-	s.Require().Len(withdrawals, 1, "removeLiquidityETHWithPermitSupportingFeeOnTransferTokens should have unwrapped WETH back to native before sending it out")
-	s.Require().Zero(predictedAmountETH.Cmp(withdrawals[0].Wad))
-	s.T().Logf("Test21RemoveLiquidityETHWithPermitSupportingFeeOnTransferTokens: Withdrawal src=%s wad=%s", withdrawals[0].Src, withdrawals[0].Wad)
+	wethTransfers, err := weth.ExtractTransfers(receipt.Logs)
+	s.Require().NoError(err)
+	var unwrapped []*big.Int
+	for _, w := range withdrawals {
+		unwrapped = append(unwrapped, w.Wad)
+	}
+	for _, tr := range wethTransfers {
+		if tr.Contract.Equal(s.wethAddr) && tr.To.IsZero() {
+			unwrapped = append(unwrapped, tr.Value)
+		}
+	}
+	s.Require().Len(unwrapped, 1, "removeLiquidityETHWithPermitSupportingFeeOnTransferTokens should have unwrapped WETH back to native before sending it out")
+	s.Require().Zero(predictedAmountETH.Cmp(unwrapped[0]))
+	s.T().Logf("Test21RemoveLiquidityETHWithPermitSupportingFeeOnTransferTokens: unwrapped %s", unwrapped[0])
 
 	var tokenAfter, nonceAfter, remainingLiquidity *big.Int
 	s.Require().Eventually(func() bool {

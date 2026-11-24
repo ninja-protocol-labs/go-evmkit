@@ -961,7 +961,7 @@ func TestPoolManagerWritesReturnSignedTxOnBroadcastFailure(t *testing.T) {
 	builder.Price(big.NewInt(30_000_000_000), big.NewInt(1_000_000_000))
 
 	c := mocks.NewClient(t)
-	c.EXPECT().Call(mock.Anything, mock.Anything).Return(errors.New("dial tcp: connection refused")).Once()
+	c.EXPECT().Call(mock.Anything, mock.Anything).Return(errors.New("dial tcp: connection refused")).Twice()
 
 	signed, hash, err := New(c).Initialize(t.Context(), bind.NewTransactOptions(key, builder), NewInitializeRequest(pm, poolKey, big.NewInt(1)))
 	require.ErrorContains(t, err, "uniswapv4: initialize: ")

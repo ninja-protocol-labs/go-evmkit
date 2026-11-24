@@ -684,7 +684,7 @@ func TestWritesReturnSignedTxOnBroadcastFailure(t *testing.T) {
 	builder.Price(big.NewInt(30_000_000_000), big.NewInt(1_000_000_000))
 
 	c := mocks.NewClient(t)
-	c.EXPECT().Call(mock.Anything, mock.Anything).Return(errors.New("dial tcp: connection refused")).Once()
+	c.EXPECT().Call(mock.Anything, mock.Anything).Return(errors.New("dial tcp: connection refused")).Twice()
 
 	signed, hash, err := New(c).Execute(t.Context(), bind.NewTransactOptions(key, builder), NewExecuteRequest(testRouter, NewPlanner().Append(NewWrapETHInput(AddressThis(), ContractBalance())), big.NewInt(1), big.NewInt(5)))
 	require.ErrorContains(t, err, "universalrouter: execute: ")

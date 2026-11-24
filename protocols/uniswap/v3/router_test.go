@@ -460,6 +460,9 @@ func TestRouterLifeCycleSuite(t *testing.T) {
 	if c.Addresses.Protocol.Uniswap.V3.Router == "" || c.Addresses.Protocol.Uniswap.V3.NFPM == "" {
 		t.Skip("testenv: no Uniswap V3 router/NFPM configured for this network")
 	}
+	if c.Addresses.Standard.WETH == "" {
+		t.Skip("testenv: no WETH configured for this network")
+	}
 
 	suite.Run(t, &RouterLifeCycleSuite{
 		RPCURL:              c.RPCURL,

@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/ninja-protocol-labs/go-evmkit/core"
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 	"github.com/ninja-protocol-labs/go-evmkit/tx"
@@ -117,4 +118,40 @@ func TestExtractWithdrawalsRejectsMalformedData(t *testing.T) {
 	}}
 	_, err := ExtractWithdrawals(logs)
 	require.Error(t, err)
+}
+
+func TestExtractTransfersMintAndBurn(t *testing.T) {
+	topic0 := core.Keccak256([]byte("Transfer(address,address,uint256)"))
+	zero := types.NewHashFromBytes(make([]byte, 32))
+	user := types.NewHashFromBytes(append(make([]byte, 12), testUser.Bytes()...))
+	minted, err := abi.Pack(abi.NewTypes(abi.Uint256), big.NewInt(1000))
+	require.NoError(t, err)
+	burned, err := abi.Pack(abi.NewTypes(abi.Uint256), big.NewInt(400))
+	require.NoError(t, err)
+	depositTopic, ok := depositEvent.Topic0()
+	require.True(t, ok)
+
+	logs := []tx.Log{
+		{Address: testWETH, Topics: []*types.Hash{topic0, zero, user}, Data: minted},
+		{Address: testWETH, Topics: []*types.Hash{types.NewHashFromBytes(depositTopic[:]), user}, Data: minted},
+		{Address: testWETH, Topics: []*types.Hash{topic0, user, zero}, Data: burned},
+	}
+
+	transfers, err := ExtractTransfers(logs)
+	require.NoError(t, err)
+	require.Len(t, transfers, 2)
+	require.True(t, transfers[0].Contract.Equal(testWETH))
+	require.True(t, transfers[0].From.IsZero())
+	require.True(t, transfers[0].To.Equal(testUser))
+	require.Zero(t, big.NewInt(1000).Cmp(transfers[0].Value))
+	require.True(t, transfers[1].From.Equal(testUser))
+	require.True(t, transfers[1].To.IsZero())
+	require.Zero(t, big.NewInt(400).Cmp(transfers[1].Value))
+
+	empty, err := ExtractTransfers(nil)
+	require.NoError(t, err)
+	require.Empty(t, empty)
+
+	_, err = ExtractTransfers([]tx.Log{{Address: testWETH, Topics: []*types.Hash{topic0, zero}, Data: minted}})
+	require.ErrorContains(t, err, "weth: extractTransfers: ")
 }

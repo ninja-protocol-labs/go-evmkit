@@ -588,17 +588,33 @@ func (s *UniversalRouterSuite) Test02WrapUnwrapRoundTrip() {
 
 	deposits, err := weth.ExtractDeposits(receipt.Logs)
 	s.Require().NoError(err)
-	s.Require().Len(deposits, 1)
-	s.Require().True(deposits[0].Contract.Equal(s.wethContract))
-	s.Require().True(deposits[0].Dst.Equal(s.router))
-	s.Require().Zero(s.WrapAmount.Cmp(deposits[0].Wad))
-
 	withdrawals, err := weth.ExtractWithdrawals(receipt.Logs)
 	s.Require().NoError(err)
-	s.Require().Len(withdrawals, 1)
-	s.Require().True(withdrawals[0].Contract.Equal(s.wethContract))
-	s.Require().True(withdrawals[0].Src.Equal(s.router))
-	s.Require().GreaterOrEqual(withdrawals[0].Wad.Cmp(s.WrapAmount), 0)
+	wethTransfers, err := weth.ExtractTransfers(receipt.Logs)
+	s.Require().NoError(err)
+	var wrapped, unwrapped []*big.Int
+	for _, d := range deposits {
+		if d.Contract.Equal(s.wethContract) && d.Dst.Equal(s.router) {
+			wrapped = append(wrapped, d.Wad)
+		}
+	}
+	for _, w := range withdrawals {
+		if w.Contract.Equal(s.wethContract) && w.Src.Equal(s.router) {
+			unwrapped = append(unwrapped, w.Wad)
+		}
+	}
+	for _, tr := range wethTransfers {
+		if tr.Contract.Equal(s.wethContract) && tr.From.IsZero() && tr.To.Equal(s.router) {
+			wrapped = append(wrapped, tr.Value)
+		}
+		if tr.Contract.Equal(s.wethContract) && tr.From.Equal(s.router) && tr.To.IsZero() {
+			unwrapped = append(unwrapped, tr.Value)
+		}
+	}
+	s.Require().Len(wrapped, 1)
+	s.Require().Zero(s.WrapAmount.Cmp(wrapped[0]))
+	s.Require().Len(unwrapped, 1)
+	s.Require().GreaterOrEqual(unwrapped[0].Cmp(s.WrapAmount), 0)
 
 	atBlock := bind.NewCallOptions().WithBlock(fmt.Sprintf("0x%x", receipt.BlockNumber))
 	var routerWETH *big.Int
@@ -609,7 +625,7 @@ func (s *UniversalRouterSuite) Test02WrapUnwrapRoundTrip() {
 	s.Require().Zero(routerWETH.Sign(), "router kept WETH after the round trip")
 
 	s.T().Logf("UniversalRouter Test02WrapUnwrapRoundTrip Result")
-	s.T().Logf("\tWrapped/Unwrapped: %s / %s", deposits[0].Wad, withdrawals[0].Wad)
+	s.T().Logf("\tWrapped/Unwrapped: %s / %s", wrapped[0], unwrapped[0])
 	s.T().Logf("\tTx: %s (block %d, gas %d)", hash, receipt.BlockNumber, receipt.GasUsed)
 }
 
@@ -929,8 +945,21 @@ func (s *UniversalRouterSuite) Test09ExecuteSignedConsumesNonce() {
 
 	deposits, err := weth.ExtractDeposits(receipt.Logs)
 	s.Require().NoError(err)
-	s.Require().Len(deposits, 1)
-	s.Require().Zero(s.WrapAmount.Cmp(deposits[0].Wad))
+	wethTransfers, err := weth.ExtractTransfers(receipt.Logs)
+	s.Require().NoError(err)
+	var wrapped []*big.Int
+	for _, d := range deposits {
+		if d.Contract.Equal(s.wethContract) {
+			wrapped = append(wrapped, d.Wad)
+		}
+	}
+	for _, tr := range wethTransfers {
+		if tr.Contract.Equal(s.wethContract) && tr.From.IsZero() {
+			wrapped = append(wrapped, tr.Value)
+		}
+	}
+	s.Require().Len(wrapped, 1)
+	s.Require().Zero(s.WrapAmount.Cmp(wrapped[0]))
 
 	atBlock := bind.NewCallOptions().WithBlock(fmt.Sprintf("0x%x", receipt.BlockNumber))
 	beforeAt := bind.NewCallOptions().WithBlock(fmt.Sprintf("0x%x", receipt.BlockNumber-1))

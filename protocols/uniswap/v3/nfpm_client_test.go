@@ -701,7 +701,7 @@ func TestNFPMWritesReturnSignedTxOnBroadcastFailure(t *testing.T) {
 	builder.Price(big.NewInt(30_000_000_000), big.NewInt(1_000_000_000))
 
 	c := mocks.NewClient(t)
-	c.EXPECT().Call(mock.Anything, mock.Anything).Return(errors.New("dial tcp: connection refused")).Once()
+	c.EXPECT().Call(mock.Anything, mock.Anything).Return(errors.New("dial tcp: connection refused")).Twice()
 
 	signed, hash, err := NewNFPM(c).Mint(t.Context(), bind.NewTransactOptions(key, builder), NewNFPMMintRequest(nfpm, NewMintParams(a, b, big.NewInt(3000), big.NewInt(-60), big.NewInt(60), big.NewInt(1), big.NewInt(1), big.NewInt(0), big.NewInt(0), b, big.NewInt(1)), big.NewInt(777)))
 	require.ErrorContains(t, err, "uniswapv3: mint: ")

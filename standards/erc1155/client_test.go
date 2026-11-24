@@ -388,10 +388,13 @@ func TestWritesReturnSignedTxOnBroadcastFailure(t *testing.T) {
 	var raw []byte
 	c := mocks.NewClient(t)
 	c.EXPECT().Call(mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, e rpc.Element) error {
+		if e.Method == rpc.MethodETHGetTransactionByHash {
+			return nil
+		}
 		raw, err = encoding.Hex.Decode(e.Params.([]any)[0].(string))
 		require.NoError(t, err)
 		return &rpc.ResponseError{Code: -32000, Message: "nonce too low"}
-	}).Once()
+	}).Twice()
 
 	signed, hash, err := New(c).SafeBatchTransferFrom(t.Context(), bind.NewTransactOptions(key, builder), NewSafeBatchTransferFromRequest(contract, from, to, []*big.Int{big.NewInt(1)}, []*big.Int{big.NewInt(2)}, nil))
 	require.Error(t, err)

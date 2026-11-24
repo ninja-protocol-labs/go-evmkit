@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"strconv"
 
 	"github.com/ninja-protocol-labs/go-evmkit/core"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
@@ -22,6 +23,8 @@ type DynamicFeeBuilder struct {
 	gasLimitBufferPct    uint64
 	stateOverride        *rpc.StateOverride
 	baseFeeMultiplierPct uint64
+	tipPercentile        float64
+	tipBlocks            uint64
 }
 
 // NewDynamicFeeBuilder returns a Builder producing a DynamicFeeTxConfig.
@@ -80,13 +83,20 @@ func (b *DynamicFeeBuilder) PriceBuffer(percent uint64) {
 	b.baseFeeMultiplierPct = percent
 }
 
+// TipPercentile sets the eth_feeHistory window Pack reads GasTipCap from: the median of the last blocks' tips at percentile (0 means 50 and 10).
+func (b *DynamicFeeBuilder) TipPercentile(percentile float64, blocks uint64) {
+	b.tipPercentile = percentile
+	b.tipBlocks = blocks
+}
+
 func (b *DynamicFeeBuilder) Build(from, to *types.Address, value *big.Int, data []byte) Packer {
 	c := NewDynamicFeeTxConfig(from, to, value, data).
 		WithChainID(b.chainid).
 		WithAccessList(b.accessList).
 		WithGasLimitBuffer(b.gasLimitBufferPct).
 		WithStateOverride(b.stateOverride).
-		WithBaseFeeMultiplier(b.baseFeeMultiplierPct)
+		WithBaseFeeMultiplier(b.baseFeeMultiplierPct).
+		WithTipPercentile(b.tipPercentile, b.tipBlocks)
 
 	if b.nonce != nil {
 		c = c.WithNonce(*b.nonce)
@@ -135,6 +145,8 @@ type DynamicFeeTxConfig struct {
 
 	nonceBlockTag        string
 	baseFeeMultiplierPct uint64
+	tipPercentile        float64
+	tipBlocks            uint64
 	gasLimitBufferPct    uint64
 	stateOverride        *rpc.StateOverride
 }
@@ -190,12 +202,16 @@ func (c *DynamicFeeTxConfig) WithGasFeeCap(gasFeeCap *big.Int) *DynamicFeeTxConf
 	return c
 }
 
-// WithBaseFeeMultiplier scales the latest block's base fee by percent/100
-// when computing a fetched GasFeeCap, as GasFeeCap = baseFee*percent/100 +
-// GasTipCap. It has no effect on a GasFeeCap set via WithGasFeeCap. The
-// default, 0, applies 200 (2x).
+// WithBaseFeeMultiplier sets a fetched GasFeeCap to nextBaseFee*percent/100 + GasTipCap (default 200); no effect with WithGasFeeCap.
 func (c *DynamicFeeTxConfig) WithBaseFeeMultiplier(percent uint64) *DynamicFeeTxConfig {
 	c.baseFeeMultiplierPct = percent
+	return c
+}
+
+// WithTipPercentile sets the eth_feeHistory window: GasTipCap is the median of the last blocks' tips at percentile, at least eth_maxPriorityFeePerGas; zero values default to 50 and 10.
+func (c *DynamicFeeTxConfig) WithTipPercentile(percentile float64, blocks uint64) *DynamicFeeTxConfig {
+	c.tipPercentile = percentile
+	c.tipBlocks = blocks
 	return c
 }
 
@@ -233,15 +249,19 @@ func (c *DynamicFeeTxConfig) Pack(ctx context.Context, client rpc.Client) (core.
 		nonceBlockTag = rpc.BlockTagPending
 	}
 
-	needsBaseFee := c.gasFeeCap == nil
+	percentile, blocks, err := resolveTipPercentile(c.tipPercentile, c.tipBlocks)
+	if err != nil {
+		return nil, err
+	}
+
+	needsFeeHistory := c.gasTipCap == nil || c.gasFeeCap == nil
 
 	var (
 		chainIDHex  string
 		nonceHex    string
 		tipHex      string
-		block       map[string]any
+		feeHistory  map[string]any
 		gasLimitHex string
-		err         error
 	)
 
 	elems := rpc.Elements{}
@@ -251,11 +271,11 @@ func (c *DynamicFeeTxConfig) Pack(ctx context.Context, client rpc.Client) (core.
 	if c.nonce == nil {
 		elems.With(rpc.ETHGetTransactionCount("nonce", c.from.String(), nonceBlockTag, &nonceHex))
 	}
+	if needsFeeHistory {
+		elems.With(rpc.ETHFeeHistory("feeHistory", "0x"+strconv.FormatUint(blocks, 16), rpc.BlockTagLatest, []float64{percentile}, &feeHistory))
+	}
 	if c.gasTipCap == nil {
 		elems.With(rpc.ETHMaxPriorityFeePerGas("gasTipCap", &tipHex))
-	}
-	if needsBaseFee {
-		elems.With(rpc.ETHGetBlockByNumber("block", rpc.BlockTagLatest, false, &block))
 	}
 	if c.gasLimit == nil {
 		callParams := map[string]any{
@@ -296,30 +316,30 @@ func (c *DynamicFeeTxConfig) Pack(ctx context.Context, client rpc.Client) (core.
 		nonce = &v
 	}
 
-	gasTipCap := c.gasTipCap
-	if gasTipCap == nil {
-		gasTipCap, err = parseQuantity(tipHex)
+	gasTipCap, gasFeeCap := c.gasTipCap, c.gasFeeCap
+	if needsFeeHistory {
+		historyTip, nextBaseFee, err := parseFeeHistory(feeHistory)
 		if err != nil {
-			return nil, fmt.Errorf("tx: gasTipCap: %w", err)
-		}
-	}
-
-	gasFeeCap := c.gasFeeCap
-	if gasFeeCap == nil {
-		baseFeeHex, ok := block["baseFeePerGas"].(string)
-		if !ok {
-			return nil, fmt.Errorf("tx: gasFeeCap: chain does not report baseFeePerGas")
-		}
-		baseFee, err := parseQuantity(baseFeeHex)
-		if err != nil {
-			return nil, fmt.Errorf("tx: gasFeeCap: %w", err)
+			return nil, err
 		}
 
-		mult := c.baseFeeMultiplierPct
-		if mult == 0 {
-			mult = defaultBaseFeeMultiplierPct
+		if gasTipCap == nil {
+			gasTipCap, err = parseQuantity(tipHex)
+			if err != nil {
+				return nil, fmt.Errorf("tx: gasTipCap: %w", err)
+			}
+			if historyTip != nil && historyTip.Cmp(gasTipCap) > 0 {
+				gasTipCap = historyTip
+			}
 		}
-		gasFeeCap = new(big.Int).Add(bufferBigInt(baseFee, mult), gasTipCap)
+
+		if gasFeeCap == nil {
+			mult := c.baseFeeMultiplierPct
+			if mult == 0 {
+				mult = defaultBaseFeeMultiplierPct
+			}
+			gasFeeCap = new(big.Int).Add(bufferBigInt(nextBaseFee, mult), gasTipCap)
+		}
 	}
 
 	gasLimit := c.gasLimit

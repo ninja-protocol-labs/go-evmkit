@@ -713,7 +713,7 @@ func TestPoolWritesReturnSignedTxOnBroadcastFailure(t *testing.T) {
 	builder.Price(big.NewInt(30_000_000_000), big.NewInt(1_000_000_000))
 
 	c := mocks.NewClient(t)
-	c.EXPECT().Call(mock.Anything, mock.Anything).Return(errors.New("dial tcp: connection refused")).Once()
+	c.EXPECT().Call(mock.Anything, mock.Anything).Return(errors.New("dial tcp: connection refused")).Twice()
 
 	signed, hash, err := NewPool(c).Collect(t.Context(), bind.NewTransactOptions(key, builder), NewPoolCollectRequest(pool, b, big.NewInt(-60), big.NewInt(60), big.NewInt(1), big.NewInt(1)))
 	require.ErrorContains(t, err, "uniswapv3: collect: ")

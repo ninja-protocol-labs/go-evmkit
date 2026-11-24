@@ -665,7 +665,7 @@ func TestRouterWritesReturnSignedTxOnBroadcastFailure(t *testing.T) {
 	builder.Price(big.NewInt(30_000_000_000), big.NewInt(1_000_000_000))
 
 	cli := mocks.NewClient(t)
-	cli.EXPECT().Call(mock.Anything, mock.Anything).Return(errors.New("dial tcp: connection refused")).Once()
+	cli.EXPECT().Call(mock.Anything, mock.Anything).Return(errors.New("dial tcp: connection refused")).Twice()
 
 	signed, hash, err := NewRouter(cli).ExactInputSingle(t.Context(), bind.NewTransactOptions(key, builder), NewExactInputSingleRequest(router, NewExactInputSingleParams(a, b, big.NewInt(3000), c, big.NewInt(1), big.NewInt(0), big.NewInt(0)), big.NewInt(777)))
 	require.ErrorContains(t, err, "uniswapv3: exactInputSingle: ")
