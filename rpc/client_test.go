@@ -1,6 +1,7 @@
 package rpc
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -102,4 +103,64 @@ func TestClientKeepsRawBodyWhenNon2xxIsNotResponseError(t *testing.T) {
 		require.False(t, ok, i)
 		srv.Close()
 	}
+}
+
+func TestClientRetriesWithoutWaitingWhenBackoffIsNilOrNonPositive(t *testing.T) {
+	cases := []struct {
+		backoff   func(int) time.Duration
+		retries   int
+		failures  int32
+		wantHits  int32
+		wantError string
+	}{
+		{nil, 2, 2, 3, ""},
+		{nil, 1, 2, 2, "rpc: http status 503: upstream down"},
+		{nil, 0, 1, 1, "rpc: http status 503: upstream down"},
+		{func(int) time.Duration { return 0 }, 3, 3, 4, ""},
+		{func(int) time.Duration { return -time.Second }, 2, 2, 3, ""},
+	}
+	for i, c := range cases {
+		var hits atomic.Int32
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if hits.Add(1) <= c.failures {
+				w.WriteHeader(http.StatusServiceUnavailable)
+				_, _ = w.Write([]byte("upstream down"))
+				return
+			}
+			_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":"x","result":"0x1"}`))
+		}))
+		cli := NewClient(srv.URL, WithRetry(c.retries, c.backoff))
+
+		var result string
+		var err error
+		require.NotPanics(t, func() { err = cli.Call(t.Context(), ETHChainID("x", &result)) }, i)
+		require.Equal(t, c.wantHits, hits.Load(), i)
+		if c.wantError == "" {
+			require.NoError(t, err, i)
+			require.Equal(t, "0x1", result, i)
+		} else {
+			require.EqualError(t, err, c.wantError, i)
+		}
+		srv.Close()
+	}
+}
+
+func TestClientStopsImmediateRetriesOnceContextIsDone(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	var hits atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		cancel()
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer srv.Close()
+
+	cli := NewClient(srv.URL, WithRetry(1_000, nil))
+
+	var result string
+	err := cli.Call(ctx, ETHChainID("x", &result))
+	require.ErrorIs(t, err, context.Canceled)
+	require.Equal(t, int32(1), hits.Load())
 }
