@@ -278,16 +278,15 @@ func (s *QuoterSuite) SetupSuite() {
 		s.Require().NoError(err)
 		s.Require().True(initReceipt.Status, "initializePool transaction reverted")
 
-		mintData, err := EncodeActionMintPosition(NewMintPositionParams(key, pool.tickLower, pool.tickUpper, s.MintLiquidity, s.MintAmountMax, s.MintAmountMax, s.from, nil))
-		s.Require().NoError(err)
-		settleData, err := EncodeActionSettlePair(key.Currency0, key.Currency1)
-		s.Require().NoError(err)
+		planner := NewPlanner()
+		s.Require().NoError(planner.AppendMintPosition(NewMintPositionParams(key, pool.tickLower, pool.tickUpper, s.MintLiquidity, s.MintAmountMax, s.MintAmountMax, s.from, nil)))
+		s.Require().NoError(planner.AppendSettlePair(key.Currency0, key.Currency1))
 		deadline := big.NewInt(time.Now().Add(time.Hour).Unix())
 
 		var mintTx core.Transaction
 		var mintHash *types.Hash
 		s.Require().Eventually(func() bool {
-			mintTx, mintHash, err = s.positionManager.ModifyLiquidities(s.T().Context(), bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewModifyLiquiditiesRequest(s.positionManagerContract, []byte{ActionMintPosition, ActionSettlePair}, [][]byte{mintData, settleData}, deadline, nil))
+			mintTx, mintHash, err = s.positionManager.ModifyLiquidities(s.T().Context(), bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewModifyLiquiditiesRequest(s.positionManagerContract, planner.Actions(), planner.Params(), deadline, nil))
 			return !errors.Is(err, ErrPoolNotInitialized)
 		}, 20*time.Second, s.ReceiptPollInterval, "pool still not initialized on the estimating node")
 		s.Require().NoError(err)
@@ -324,13 +323,12 @@ func (s *QuoterSuite) TearDownSuite() {
 	for i, tokenID := range s.positionTokenIDs {
 		key := s.positionKeys[i]
 
-		burnData, err := EncodeActionBurnPosition(tokenID, big.NewInt(0), big.NewInt(0), nil)
-		s.Require().NoError(err)
-		takeData, err := EncodeActionTakePair(key.Currency0, key.Currency1, s.from)
-		s.Require().NoError(err)
+		planner := NewPlanner()
+		s.Require().NoError(planner.AppendBurnPosition(tokenID, big.NewInt(0), big.NewInt(0), nil))
+		s.Require().NoError(planner.AppendTakePair(key.Currency0, key.Currency1, s.from))
 		deadline := big.NewInt(time.Now().Add(time.Hour).Unix())
 
-		burnTx, burnHash, err := s.positionManager.ModifyLiquidities(ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewModifyLiquiditiesRequest(s.positionManagerContract, []byte{ActionBurnPosition, ActionTakePair}, [][]byte{burnData, takeData}, deadline, nil))
+		burnTx, burnHash, err := s.positionManager.ModifyLiquidities(ctx, bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewModifyLiquiditiesRequest(s.positionManagerContract, planner.Actions(), planner.Params(), deadline, nil))
 		s.Require().NoError(err)
 		s.mu.Lock()
 		s.totalFee.Add(s.totalFee, burnTx.MaxFee())

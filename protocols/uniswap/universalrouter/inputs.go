@@ -1014,6 +1014,11 @@ func NewV4SwapInput(actions []byte, params [][]byte) *V4SwapInput {
 	}
 }
 
+// NewV4SwapInputFromPlanner builds V4_SWAP's input from the actions and params appended to planner.
+func NewV4SwapInputFromPlanner(planner *v4.Planner) *V4SwapInput {
+	return NewV4SwapInput(planner.Actions(), planner.Params())
+}
+
 func (*V4SwapInput) Command() Command {
 	return CommandV4Swap
 }
@@ -1257,10 +1262,10 @@ func (in *V4PositionManagerCallInput) Encode() ([]byte, error) {
 
 // ExecuteSubPlanInput is EXECUTE_SUB_PLAN's input: a nested plan the router executes as a self-call.
 type ExecuteSubPlanInput struct {
-	Plan *Plan
+	Plan *Planner
 }
 
-func NewExecuteSubPlanInput(plan *Plan) *ExecuteSubPlanInput {
+func NewExecuteSubPlanInput(plan *Planner) *ExecuteSubPlanInput {
 	return &ExecuteSubPlanInput{
 		Plan: plan,
 	}

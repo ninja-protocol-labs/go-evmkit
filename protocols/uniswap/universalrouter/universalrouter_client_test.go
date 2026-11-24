@@ -32,7 +32,7 @@ var (
 )
 
 func TestCallExecuteSendsCalldataValueAndBlock(t *testing.T) {
-	plan := NewPlan().Add(NewWrapETHInput(AddressThis(), ContractBalance())).AddAllowRevert(NewSweepInput(testTokenA, MsgSender(), big.NewInt(1)))
+	plan := NewPlanner().Append(NewWrapETHInput(AddressThis(), ContractBalance())).AppendAllowRevert(NewSweepInput(testTokenA, MsgSender(), big.NewInt(1)))
 	commands, inputs, err := plan.Encode()
 	require.NoError(t, err)
 	withoutDeadline, err := EncodeExecute(commands, inputs)
@@ -87,7 +87,7 @@ func TestCallExecuteSendsCalldataValueAndBlock(t *testing.T) {
 }
 
 func TestCallExecuteSignedSendsCalldataAndValue(t *testing.T) {
-	plan := NewPlan().Add(NewUnwrapWETHInput(MsgSender(), big.NewInt(0)))
+	plan := NewPlanner().Append(NewUnwrapWETHInput(MsgSender(), big.NewInt(0)))
 	commands, inputs, err := plan.Encode()
 	require.NoError(t, err)
 	intent := [32]byte{0x01}
@@ -188,14 +188,14 @@ func TestReadsRejectMalformedResult(t *testing.T) {
 func TestMethodsRejectInvalidRequestAndOptionsWithoutRPC(t *testing.T) {
 	u := New(mocks.NewClient(t))
 	ctx := t.Context()
-	plan := NewPlan().Add(NewWrapETHInput(AddressThis(), big.NewInt(1)))
+	plan := NewPlanner().Append(NewWrapETHInput(AddressThis(), big.NewInt(1)))
 	txOpts := bind.NewTransactOptions(nil, tx.NewDynamicFeeBuilder())
 
 	err := u.CallExecute(ctx, nil, &ExecuteRequest{Plan: plan})
 	require.EqualError(t, err, "universalrouter: callExecute: invalid request: contract is nil")
 	err = u.CallExecute(ctx, nil, NewExecuteRequest(testRouter, nil, nil, nil))
 	require.EqualError(t, err, "universalrouter: callExecute: plan: invalid request: plan is nil")
-	err = u.CallExecute(ctx, nil, NewExecuteRequest(testRouter, NewPlan().Add(&SweepInput{}), nil, nil))
+	err = u.CallExecute(ctx, nil, NewExecuteRequest(testRouter, NewPlanner().Append(&SweepInput{}), nil, nil))
 	require.EqualError(t, err, "universalrouter: callExecute: plan: steps[0] SWEEP: invalid request: token is nil")
 	err = u.CallExecute(ctx, nil, NewExecuteRequest(testRouter, plan, nil, big.NewInt(-1)))
 	require.EqualError(t, err, "universalrouter: callExecute: invalid request: nativeAmount is negative")
@@ -217,7 +217,7 @@ func TestMethodsRejectInvalidRequestAndOptionsWithoutRPC(t *testing.T) {
 	_, err = u.SignedRouteContext(ctx, nil, &SignedRouteContextRequest{})
 	require.EqualError(t, err, "universalrouter: signedRouteContext: invalid request: contract is nil")
 
-	_, _, err = u.Execute(ctx, txOpts, NewExecuteRequest(testRouter, NewPlan(), nil, nil))
+	_, _, err = u.Execute(ctx, txOpts, NewExecuteRequest(testRouter, NewPlanner(), nil, nil))
 	require.EqualError(t, err, "universalrouter: execute: plan: invalid request: plan has no steps")
 	_, _, err = u.Execute(ctx, bind.NewTransactOptions(nil, tx.NewDynamicFeeBuilder()).WithValue(big.NewInt(1)), NewExecuteRequest(testRouter, plan, nil, big.NewInt(1)))
 	require.EqualError(t, err, "universalrouter: execute: invalid options: value must be nil")
@@ -234,7 +234,7 @@ func TestWritesSignAndSend(t *testing.T) {
 	key, err := types.NewPrivateKeyFromBig(big.NewInt(0xb1d))
 	require.NoError(t, err)
 	sender := core.PubkeyToAddress(key.PublicKey())
-	plan := NewPlan().Add(NewWrapETHInput(AddressThis(), ContractBalance())).Add(NewSweepInput(types.ZeroAddress(), MsgSender(), big.NewInt(0)))
+	plan := NewPlanner().Append(NewWrapETHInput(AddressThis(), ContractBalance())).Append(NewSweepInput(types.ZeroAddress(), MsgSender(), big.NewInt(0)))
 	commands, inputs, err := plan.Encode()
 	require.NoError(t, err)
 	withoutDeadline, err := EncodeExecute(commands, inputs)
@@ -315,7 +315,7 @@ func TestWritesSignAndSend(t *testing.T) {
 }
 
 func TestCallExecuteMapsRevertToSentinel(t *testing.T) {
-	plan := NewPlan().Add(NewWrapETHInput(AddressThis(), big.NewInt(1)))
+	plan := NewPlanner().Append(NewWrapETHInput(AddressThis(), big.NewInt(1)))
 
 	for _, tc := range []struct {
 		name string
@@ -398,7 +398,7 @@ func TestCallExecuteMapsRevertToSentinel(t *testing.T) {
 
 func TestExecutionFailedUnwrapsInnerRevert(t *testing.T) {
 	failedSel := errExecutionFailed.Selector()
-	plan := NewPlan().Add(NewWrapETHInput(AddressThis(), big.NewInt(1)))
+	plan := NewPlanner().Append(NewWrapETHInput(AddressThis(), big.NewInt(1)))
 
 	invalidNonce := abi.NewError("InvalidNonce", abi.NewTypes()).Selector()
 	poolAlreadyInitialized := abi.NewError("PoolAlreadyInitialized", abi.NewTypes()).Selector()
@@ -457,7 +457,7 @@ func TestExecutionFailedUnwrapsInnerRevert(t *testing.T) {
 	outer, ok := errors.AsType[*ExecutionFailedError](wrapped)
 	require.True(t, ok)
 	require.Zero(t, big.NewInt(2).Cmp(outer.CommandIndex))
-	require.Contains(t, wrapped.Error(), "execution failed: command 2: execution failed: command 0: insufficient token")
+	require.ErrorContains(t, wrapped, "execution failed: command 2: execution failed: command 0: insufficient token")
 
 	for _, data := range [][]byte{append(failedSel[:], 0x01), failedSel[:]} {
 		bad := MapRevertError(&rpc.ResponseError{Code: 3, Message: "execution reverted", Data: jsontext.Value(`"` + encoding.Hex.EncodePrefixed(data) + `"`)})
@@ -469,7 +469,7 @@ func TestExecutionFailedUnwrapsInnerRevert(t *testing.T) {
 
 func TestWrapRevertErrorMapsV3AndV2Reasons(t *testing.T) {
 	failedSel := errExecutionFailed.Selector()
-	plan := NewPlan().Add(NewWrapETHInput(AddressThis(), big.NewInt(1)))
+	plan := NewPlanner().Append(NewWrapETHInput(AddressThis(), big.NewInt(1)))
 
 	for _, tc := range []struct {
 		reason string
@@ -627,7 +627,7 @@ func TestRevertSelectorsAreUniqueAndMatchSolidity(t *testing.T) {
 func TestWritesMapEstimateRevertToSentinel(t *testing.T) {
 	key, err := types.NewPrivateKeyFromBig(big.NewInt(0xb1d))
 	require.NoError(t, err)
-	plan := NewPlan().Add(NewWrapETHInput(AddressThis(), big.NewInt(1)))
+	plan := NewPlanner().Append(NewWrapETHInput(AddressThis(), big.NewInt(1)))
 	failedSel := errExecutionFailed.Selector()
 	balanceTooLow := errBalanceTooLow.Selector()
 	failedArgs, err := abi.Pack(errExecutionFailed.Inputs, big.NewInt(1), balanceTooLow[:])
@@ -686,7 +686,7 @@ func TestWritesReturnSignedTxOnBroadcastFailure(t *testing.T) {
 	c := mocks.NewClient(t)
 	c.EXPECT().Call(mock.Anything, mock.Anything).Return(errors.New("dial tcp: connection refused")).Once()
 
-	signed, hash, err := New(c).Execute(t.Context(), bind.NewTransactOptions(key, builder), NewExecuteRequest(testRouter, NewPlan().Add(NewWrapETHInput(AddressThis(), ContractBalance())), big.NewInt(1), big.NewInt(5)))
+	signed, hash, err := New(c).Execute(t.Context(), bind.NewTransactOptions(key, builder), NewExecuteRequest(testRouter, NewPlanner().Append(NewWrapETHInput(AddressThis(), ContractBalance())), big.NewInt(1), big.NewInt(5)))
 	require.ErrorContains(t, err, "universalrouter: execute: ")
 	require.ErrorContains(t, err, "connection refused")
 	require.NotErrorIs(t, err, ErrUnknown)
@@ -720,7 +720,7 @@ func TestCallsPropagateContext(t *testing.T) {
 	}).Twice()
 
 	var u IUniversalRouter = New(c)
-	plan := NewPlan().Add(NewWrapETHInput(AddressThis(), big.NewInt(1)))
+	plan := NewPlanner().Append(NewWrapETHInput(AddressThis(), big.NewInt(1)))
 	require.NoError(t, u.CallExecute(ctx, nil, NewExecuteRequest(testRouter, plan, nil, nil)))
 
 	builder := tx.NewDynamicFeeBuilder()

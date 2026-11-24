@@ -271,7 +271,7 @@ func (s *UniversalRouterSuite) SetupSuite() {
 
 	initBuilder := tx.NewDynamicFeeBuilder()
 	initBuilder.LimitBuffer(s.LimitBuffer)
-	initTx, initHash, err := s.universalRouter.Execute(s.T().Context(), bind.NewTransactOptions(s.signer, initBuilder), NewExecuteRequest(s.router, NewPlan().Add(NewV4InitializePoolInput(s.key, sqrtPriceX96)), big.NewInt(time.Now().Add(10*time.Minute).Unix()), nil))
+	initTx, initHash, err := s.universalRouter.Execute(s.T().Context(), bind.NewTransactOptions(s.signer, initBuilder), NewExecuteRequest(s.router, NewPlanner().Append(NewV4InitializePoolInput(s.key, sqrtPriceX96)), big.NewInt(time.Now().Add(10*time.Minute).Unix()), nil))
 	s.Require().NoError(err)
 	s.mu.Lock()
 	s.totalFee.Add(s.totalFee, initTx.MaxFee())
@@ -322,7 +322,7 @@ func (s *UniversalRouterSuite) SetupSuite() {
 
 	nativeInitBuilder := tx.NewDynamicFeeBuilder()
 	nativeInitBuilder.LimitBuffer(s.LimitBuffer)
-	nativeInitTx, nativeInitHash, err := s.universalRouter.Execute(s.T().Context(), bind.NewTransactOptions(s.signer, nativeInitBuilder), NewExecuteRequest(s.router, NewPlan().Add(NewV4InitializePoolInput(s.nativeKey, sqrtPriceX96)), big.NewInt(time.Now().Add(10*time.Minute).Unix()), nil))
+	nativeInitTx, nativeInitHash, err := s.universalRouter.Execute(s.T().Context(), bind.NewTransactOptions(s.signer, nativeInitBuilder), NewExecuteRequest(s.router, NewPlanner().Append(NewV4InitializePoolInput(s.nativeKey, sqrtPriceX96)), big.NewInt(time.Now().Add(10*time.Minute).Unix()), nil))
 	s.Require().NoError(err)
 	s.mu.Lock()
 	s.totalFee.Add(s.totalFee, nativeInitTx.MaxFee())
@@ -546,7 +546,7 @@ func (s *UniversalRouterSuite) TearDownSuite() {
 func (s *UniversalRouterSuite) Test01InitializePoolAgainMapsExecutionFailed() {
 	sqrtPriceX96 := new(big.Int).Lsh(big.NewInt(1), 96)
 
-	err := s.universalRouter.CallExecute(s.T().Context(), bind.NewCallOptions().WithFrom(s.from), NewExecuteRequest(s.router, NewPlan().Add(NewV4InitializePoolInput(s.key, sqrtPriceX96)), nil, nil))
+	err := s.universalRouter.CallExecute(s.T().Context(), bind.NewCallOptions().WithFrom(s.from), NewExecuteRequest(s.router, NewPlanner().Append(NewV4InitializePoolInput(s.key, sqrtPriceX96)), nil, nil))
 	s.Require().Error(err)
 	s.Require().ErrorIs(err, ErrExecutionFailed)
 	s.Require().ErrorIs(err, v4.ErrPoolAlreadyInitialized)
@@ -560,7 +560,7 @@ func (s *UniversalRouterSuite) Test01InitializePoolAgainMapsExecutionFailed() {
 	s.Require().True(ok)
 	s.Require().NotEmpty(rpcErr.Data)
 
-	allowRevertErr := s.universalRouter.CallExecute(s.T().Context(), bind.NewCallOptions().WithFrom(s.from), NewExecuteRequest(s.router, NewPlan().AddAllowRevert(NewV4InitializePoolInput(s.key, sqrtPriceX96)), nil, nil))
+	allowRevertErr := s.universalRouter.CallExecute(s.T().Context(), bind.NewCallOptions().WithFrom(s.from), NewExecuteRequest(s.router, NewPlanner().AppendAllowRevert(NewV4InitializePoolInput(s.key, sqrtPriceX96)), nil, nil))
 	s.Require().NoError(allowRevertErr)
 
 	s.T().Logf("UniversalRouter Test01InitializePoolAgainMapsExecutionFailed Result")
@@ -569,7 +569,7 @@ func (s *UniversalRouterSuite) Test01InitializePoolAgainMapsExecutionFailed() {
 }
 
 func (s *UniversalRouterSuite) Test02WrapUnwrapRoundTrip() {
-	plan := NewPlan().Add(NewWrapETHInput(AddressThis(), s.WrapAmount)).Add(NewUnwrapWETHInput(MsgSender(), s.WrapAmount))
+	plan := NewPlanner().Append(NewWrapETHInput(AddressThis(), s.WrapAmount)).Append(NewUnwrapWETHInput(MsgSender(), s.WrapAmount))
 
 	s.Require().NoError(s.universalRouter.CallExecute(s.T().Context(), bind.NewCallOptions().WithFrom(s.from), NewExecuteRequest(s.router, plan, nil, s.WrapAmount)))
 
@@ -622,16 +622,14 @@ func (s *UniversalRouterSuite) Test03Permit2PermitAndV4SwapExactInSingle() {
 	sig, err := permitSingle.Sign(permit2.NewDomain(s.ChainID, s.permit2Contract), s.signer)
 	s.Require().NoError(err)
 
-	swapParams, err := v4.EncodeActionSwapExactInSingle(v4.NewExactInputSingleParams(s.key, true, s.SwapAmountIn, big.NewInt(1), big.NewInt(0), []byte{}))
-	s.Require().NoError(err)
-	settleParams, err := v4.EncodeActionSettleAll(s.currency0, s.SwapAmountIn)
-	s.Require().NoError(err)
-	takeParams, err := v4.EncodeActionTakeAll(s.currency1, big.NewInt(1))
-	s.Require().NoError(err)
+	actions := v4.NewPlanner()
+	s.Require().NoError(actions.AppendSwapExactInSingle(v4.NewExactInputSingleParams(s.key, true, s.SwapAmountIn, big.NewInt(1), big.NewInt(0), []byte{})))
+	s.Require().NoError(actions.AppendSettleAll(s.currency0, s.SwapAmountIn))
+	s.Require().NoError(actions.AppendTakeAll(s.currency1, big.NewInt(1)))
 
-	plan := NewPlan().
-		Add(NewPermit2PermitInput(permitSingle, sig.LegacyBytes())).
-		Add(NewV4SwapInput([]byte{v4.ActionSwapExactInSingle, v4.ActionSettleAll, v4.ActionTakeAll}, [][]byte{swapParams, settleParams, takeParams}))
+	plan := NewPlanner().
+		Append(NewPermit2PermitInput(permitSingle, sig.LegacyBytes())).
+		Append(NewV4SwapInputFromPlanner(actions))
 
 	builder := tx.NewDynamicFeeBuilder()
 	builder.LimitBuffer(s.LimitBuffer)
@@ -717,16 +715,14 @@ func (s *UniversalRouterSuite) Test04Permit2PermitBatchAndV4SwapExactOutSingle()
 	sig, err := permitBatch.Sign(permit2.NewDomain(s.ChainID, s.permit2Contract), s.signer)
 	s.Require().NoError(err)
 
-	swapParams, err := v4.EncodeActionSwapExactOutSingle(v4.NewExactOutputSingleParams(s.key, false, s.SwapAmountOut, s.SwapAmountIn, big.NewInt(0), []byte{}))
-	s.Require().NoError(err)
-	settleParams, err := v4.EncodeActionSettleAll(s.currency1, s.SwapAmountIn)
-	s.Require().NoError(err)
-	takeParams, err := v4.EncodeActionTakeAll(s.currency0, s.SwapAmountOut)
-	s.Require().NoError(err)
+	actions := v4.NewPlanner()
+	s.Require().NoError(actions.AppendSwapExactOutSingle(v4.NewExactOutputSingleParams(s.key, false, s.SwapAmountOut, s.SwapAmountIn, big.NewInt(0), []byte{})))
+	s.Require().NoError(actions.AppendSettleAll(s.currency1, s.SwapAmountIn))
+	s.Require().NoError(actions.AppendTakeAll(s.currency0, s.SwapAmountOut))
 
-	plan := NewPlan().
-		Add(NewPermit2PermitBatchInput(permitBatch, sig.LegacyBytes())).
-		Add(NewV4SwapInput([]byte{v4.ActionSwapExactOutSingle, v4.ActionSettleAll, v4.ActionTakeAll}, [][]byte{swapParams, settleParams, takeParams}))
+	plan := NewPlanner().
+		Append(NewPermit2PermitBatchInput(permitBatch, sig.LegacyBytes())).
+		Append(NewV4SwapInputFromPlanner(actions))
 
 	builder := tx.NewDynamicFeeBuilder()
 	builder.LimitBuffer(s.LimitBuffer)
@@ -770,17 +766,15 @@ func (s *UniversalRouterSuite) Test04Permit2PermitBatchAndV4SwapExactOutSingle()
 }
 
 func (s *UniversalRouterSuite) Test05SwapToRouterPayPortionAndSweep() {
-	swapParams, err := v4.EncodeActionSwapExactInSingle(v4.NewExactInputSingleParams(s.key, true, s.SwapAmountIn, big.NewInt(1), big.NewInt(0), []byte{}))
-	s.Require().NoError(err)
-	settleParams, err := v4.EncodeActionSettleAll(s.currency0, s.SwapAmountIn)
-	s.Require().NoError(err)
-	takeParams, err := v4.EncodeActionTake(s.currency1, v4.AddressThis(), v4.OpenDelta())
-	s.Require().NoError(err)
+	actions := v4.NewPlanner()
+	s.Require().NoError(actions.AppendSwapExactInSingle(v4.NewExactInputSingleParams(s.key, true, s.SwapAmountIn, big.NewInt(1), big.NewInt(0), []byte{})))
+	s.Require().NoError(actions.AppendSettleAll(s.currency0, s.SwapAmountIn))
+	s.Require().NoError(actions.AppendTake(s.currency1, v4.AddressThis(), v4.OpenDelta()))
 
-	plan := NewPlan().
-		Add(NewV4SwapInput([]byte{v4.ActionSwapExactInSingle, v4.ActionSettleAll, v4.ActionTake}, [][]byte{swapParams, settleParams, takeParams})).
-		Add(NewPayPortionInput(s.currency1, s.feeRecipient, s.PortionBips)).
-		Add(NewSweepInput(s.currency1, MsgSender(), big.NewInt(0)))
+	plan := NewPlanner().
+		Append(NewV4SwapInputFromPlanner(actions)).
+		Append(NewPayPortionInput(s.currency1, s.feeRecipient, s.PortionBips)).
+		Append(NewSweepInput(s.currency1, MsgSender(), big.NewInt(0)))
 
 	builder := tx.NewDynamicFeeBuilder()
 	builder.LimitBuffer(s.LimitBuffer)
@@ -831,12 +825,12 @@ func (s *UniversalRouterSuite) Test05SwapToRouterPayPortionAndSweep() {
 
 func (s *UniversalRouterSuite) Test06SubPlanFailureNestsExecutionFailed() {
 	huge := new(big.Int).Lsh(big.NewInt(1), 255)
-	subPlan := NewPlan().
-		Add(NewBalanceCheckERC20Input(s.from, s.currency0, big.NewInt(0))).
-		Add(NewBalanceCheckERC20Input(s.from, s.currency1, huge))
-	plan := NewPlan().
-		Add(NewBalanceCheckERC20Input(s.from, s.currency0, big.NewInt(0))).
-		Add(NewExecuteSubPlanInput(subPlan))
+	subPlan := NewPlanner().
+		Append(NewBalanceCheckERC20Input(s.from, s.currency0, big.NewInt(0))).
+		Append(NewBalanceCheckERC20Input(s.from, s.currency1, huge))
+	plan := NewPlanner().
+		Append(NewBalanceCheckERC20Input(s.from, s.currency0, big.NewInt(0))).
+		Append(NewExecuteSubPlanInput(subPlan))
 
 	err := s.universalRouter.CallExecute(s.T().Context(), bind.NewCallOptions().WithFrom(s.from), NewExecuteRequest(s.router, plan, nil, nil))
 	s.Require().Error(err)
@@ -849,9 +843,9 @@ func (s *UniversalRouterSuite) Test06SubPlanFailureNestsExecutionFailed() {
 	s.Require().True(ok)
 	s.Require().Zero(big.NewInt(1).Cmp(outer.CommandIndex))
 
-	allowRevertPlan := NewPlan().
-		Add(NewBalanceCheckERC20Input(s.from, s.currency0, big.NewInt(0))).
-		AddAllowRevert(NewExecuteSubPlanInput(subPlan))
+	allowRevertPlan := NewPlanner().
+		Append(NewBalanceCheckERC20Input(s.from, s.currency0, big.NewInt(0))).
+		AppendAllowRevert(NewExecuteSubPlanInput(subPlan))
 	s.Require().NoError(s.universalRouter.CallExecute(s.T().Context(), bind.NewCallOptions().WithFrom(s.from), NewExecuteRequest(s.router, allowRevertPlan, nil, nil)))
 
 	s.T().Logf("UniversalRouter Test06SubPlanFailureNestsExecutionFailed Result")
@@ -859,15 +853,13 @@ func (s *UniversalRouterSuite) Test06SubPlanFailureNestsExecutionFailed() {
 }
 
 func (s *UniversalRouterSuite) Test07V4SlippageMapsThroughRouter() {
-	swapParams, err := v4.EncodeActionSwapExactInSingle(v4.NewExactInputSingleParams(s.key, true, s.SwapAmountIn, s.SwapAmountIn, big.NewInt(0), []byte{}))
-	s.Require().NoError(err)
-	settleParams, err := v4.EncodeActionSettleAll(s.currency0, s.SwapAmountIn)
-	s.Require().NoError(err)
-	takeParams, err := v4.EncodeActionTakeAll(s.currency1, big.NewInt(0))
-	s.Require().NoError(err)
-	plan := NewPlan().Add(NewV4SwapInput([]byte{v4.ActionSwapExactInSingle, v4.ActionSettleAll, v4.ActionTakeAll}, [][]byte{swapParams, settleParams, takeParams}))
+	actions := v4.NewPlanner()
+	s.Require().NoError(actions.AppendSwapExactInSingle(v4.NewExactInputSingleParams(s.key, true, s.SwapAmountIn, s.SwapAmountIn, big.NewInt(0), []byte{})))
+	s.Require().NoError(actions.AppendSettleAll(s.currency0, s.SwapAmountIn))
+	s.Require().NoError(actions.AppendTakeAll(s.currency1, big.NewInt(0)))
+	plan := NewPlanner().Append(NewV4SwapInputFromPlanner(actions))
 
-	err = s.universalRouter.CallExecute(s.T().Context(), bind.NewCallOptions().WithFrom(s.from), NewExecuteRequest(s.router, plan, nil, nil))
+	err := s.universalRouter.CallExecute(s.T().Context(), bind.NewCallOptions().WithFrom(s.from), NewExecuteRequest(s.router, plan, nil, nil))
 	s.Require().Error(err)
 	s.Require().ErrorIs(err, v4.ErrV4TooLittleReceived)
 	s.Require().NotErrorIs(err, ErrExecutionFailed)
@@ -885,7 +877,7 @@ func (s *UniversalRouterSuite) Test07V4SlippageMapsThroughRouter() {
 }
 
 func (s *UniversalRouterSuite) Test08DeadlinePassedMaps() {
-	plan := NewPlan().Add(NewBalanceCheckERC20Input(s.from, s.currency0, big.NewInt(0)))
+	plan := NewPlanner().Append(NewBalanceCheckERC20Input(s.from, s.currency0, big.NewInt(0)))
 
 	err := s.universalRouter.CallExecute(s.T().Context(), bind.NewCallOptions().WithFrom(s.from), NewExecuteRequest(s.router, plan, big.NewInt(1), nil))
 	s.Require().ErrorIs(err, ErrTransactionDeadlinePassed)
@@ -910,7 +902,7 @@ func (s *UniversalRouterSuite) Test09ExecuteSignedConsumesNonce() {
 	copy(intent[:], core.Keccak256([]byte("go-evmkit-universal-router-intent")).Bytes())
 	copy(data[:], core.Keccak256([]byte("go-evmkit-universal-router-data")).Bytes())
 	deadline := big.NewInt(time.Now().Add(10 * time.Minute).Unix())
-	plan := NewPlan().Add(NewWrapETHInput(AddressThis(), s.WrapAmount)).Add(NewUnwrapWETHInput(MsgSender(), s.WrapAmount))
+	plan := NewPlanner().Append(NewWrapETHInput(AddressThis(), s.WrapAmount)).Append(NewUnwrapWETHInput(MsgSender(), s.WrapAmount))
 
 	sig, err := NewExecuteSignedMessage(plan, intent, data, s.from, nonce, deadline).Sign(NewUniversalRouterDomain(s.ChainID, s.router), s.signer)
 	s.Require().NoError(err)
@@ -993,7 +985,7 @@ func (s *UniversalRouterSuite) Test09ExecuteSignedConsumesNonce() {
 
 func (s *UniversalRouterSuite) Test10ExecuteSignedUncheckedNonceReplays() {
 	deadline := big.NewInt(time.Now().Add(10 * time.Minute).Unix())
-	plan := NewPlan().Add(NewBalanceCheckERC20Input(s.from, s.currency0, big.NewInt(0)))
+	plan := NewPlanner().Append(NewBalanceCheckERC20Input(s.from, s.currency0, big.NewInt(0)))
 
 	sig, err := NewExecuteSignedMessage(plan, [32]byte{}, [32]byte{}, types.ZeroAddress(), UncheckedNonce(), deadline).Sign(NewUniversalRouterDomain(s.ChainID, s.router), s.signer)
 	s.Require().NoError(err)
@@ -1032,7 +1024,7 @@ func (s *UniversalRouterSuite) Test10ExecuteSignedUncheckedNonceReplays() {
 
 func (s *UniversalRouterSuite) Test11ExecuteSignedRejectsShortSignature() {
 	deadline := big.NewInt(time.Now().Add(10 * time.Minute).Unix())
-	plan := NewPlan().Add(NewBalanceCheckERC20Input(s.from, s.currency0, big.NewInt(0)))
+	plan := NewPlanner().Append(NewBalanceCheckERC20Input(s.from, s.currency0, big.NewInt(0)))
 
 	err := s.universalRouter.CallExecuteSigned(s.T().Context(), bind.NewCallOptions().WithFrom(s.from), NewExecuteSignedRequest(s.router, plan, [32]byte{}, [32]byte{}, false, UncheckedNonce(), make([]byte, 64), deadline, nil))
 	s.Require().ErrorIs(err, ErrECDSAInvalidSignatureLength)
@@ -1044,7 +1036,7 @@ func (s *UniversalRouterSuite) Test11ExecuteSignedRejectsShortSignature() {
 
 func (s *UniversalRouterSuite) Test12ExecuteSignedRejectsZeroSignature() {
 	deadline := big.NewInt(time.Now().Add(10 * time.Minute).Unix())
-	plan := NewPlan().Add(NewBalanceCheckERC20Input(s.from, s.currency0, big.NewInt(0)))
+	plan := NewPlanner().Append(NewBalanceCheckERC20Input(s.from, s.currency0, big.NewInt(0)))
 
 	err := s.universalRouter.CallExecuteSigned(s.T().Context(), bind.NewCallOptions().WithFrom(s.from), NewExecuteSignedRequest(s.router, plan, [32]byte{}, [32]byte{}, false, UncheckedNonce(), make([]byte, 65), deadline, nil))
 	s.Require().ErrorIs(err, ErrECDSAInvalidSignature)
@@ -1056,7 +1048,7 @@ func (s *UniversalRouterSuite) Test12ExecuteSignedRejectsZeroSignature() {
 
 func (s *UniversalRouterSuite) Test13ExecuteSignedRejectsExpiredDeadline() {
 	deadline := big.NewInt(time.Now().Add(10 * time.Minute).Unix())
-	plan := NewPlan().Add(NewBalanceCheckERC20Input(s.from, s.currency0, big.NewInt(0)))
+	plan := NewPlanner().Append(NewBalanceCheckERC20Input(s.from, s.currency0, big.NewInt(0)))
 
 	sig, err := NewExecuteSignedMessage(plan, [32]byte{}, [32]byte{}, types.ZeroAddress(), UncheckedNonce(), deadline).Sign(NewUniversalRouterDomain(s.ChainID, s.router), s.signer)
 	s.Require().NoError(err)
@@ -1076,7 +1068,7 @@ func (s *UniversalRouterSuite) Test14Permit2PermitReplayMapsInvalidNonce() {
 	permitSingle := permit2.NewPermitSingle(permit2.NewPermitDetails(s.currency1, s.PermitAmount, big.NewInt(time.Now().Add(time.Hour).Unix()), allowance.Nonce), s.router, big.NewInt(time.Now().Add(10*time.Minute).Unix()))
 	sig, err := permitSingle.Sign(permit2.NewDomain(s.ChainID, s.permit2Contract), s.signer)
 	s.Require().NoError(err)
-	plan := NewPlan().Add(NewPermit2PermitInput(permitSingle, sig.LegacyBytes()))
+	plan := NewPlanner().Append(NewPermit2PermitInput(permitSingle, sig.LegacyBytes()))
 
 	builder := tx.NewDynamicFeeBuilder()
 	builder.LimitBuffer(s.LimitBuffer)
@@ -1103,7 +1095,7 @@ func (s *UniversalRouterSuite) Test14Permit2PermitReplayMapsInvalidNonce() {
 	s.Require().True(ok)
 	s.Require().Zero(failed.CommandIndex.Sign())
 
-	s.Require().NoError(s.universalRouter.CallExecute(s.T().Context(), atBlock, NewExecuteRequest(s.router, NewPlan().AddAllowRevert(NewPermit2PermitInput(permitSingle, sig.LegacyBytes())), nil, nil)))
+	s.Require().NoError(s.universalRouter.CallExecute(s.T().Context(), atBlock, NewExecuteRequest(s.router, NewPlanner().AppendAllowRevert(NewPermit2PermitInput(permitSingle, sig.LegacyBytes())), nil, nil)))
 
 	s.T().Logf("UniversalRouter Test14Permit2PermitReplayMapsInvalidNonce Result")
 	s.T().Logf("\tReplay error: %s", replayErr)
@@ -1113,16 +1105,16 @@ func (s *UniversalRouterSuite) Test14Permit2PermitReplayMapsInvalidNonce() {
 func (s *UniversalRouterSuite) Test15SweepTokenMinimumMapsInsufficientToken() {
 	huge := new(big.Int).Lsh(big.NewInt(1), 159)
 
-	err := s.universalRouter.CallExecute(s.T().Context(), bind.NewCallOptions().WithFrom(s.from), NewExecuteRequest(s.router, NewPlan().Add(NewSweepInput(s.currency1, MsgSender(), huge)), nil, nil))
+	err := s.universalRouter.CallExecute(s.T().Context(), bind.NewCallOptions().WithFrom(s.from), NewExecuteRequest(s.router, NewPlanner().Append(NewSweepInput(s.currency1, MsgSender(), huge)), nil, nil))
 	s.Require().ErrorIs(err, ErrInsufficientToken)
 	s.Require().NotErrorIs(err, ErrExecutionFailed)
 	s.Require().NotErrorIs(err, ErrUnknown)
 
-	allowRevertErr := s.universalRouter.CallExecute(s.T().Context(), bind.NewCallOptions().WithFrom(s.from), NewExecuteRequest(s.router, NewPlan().AddAllowRevert(NewSweepInput(s.currency1, MsgSender(), huge)), nil, nil))
+	allowRevertErr := s.universalRouter.CallExecute(s.T().Context(), bind.NewCallOptions().WithFrom(s.from), NewExecuteRequest(s.router, NewPlanner().AppendAllowRevert(NewSweepInput(s.currency1, MsgSender(), huge)), nil, nil))
 	s.Require().ErrorIs(allowRevertErr, ErrInsufficientToken, "SWEEP reverts inside dispatch, so the allow-revert flag cannot absorb it")
 	s.Require().NotErrorIs(allowRevertErr, ErrExecutionFailed)
 
-	overflowErr := s.universalRouter.CallExecute(s.T().Context(), bind.NewCallOptions().WithFrom(s.from), NewExecuteRequest(s.router, NewPlan().Add(NewSweepInput(s.currency1, MsgSender(), new(big.Int).Lsh(big.NewInt(1), 200))), nil, nil))
+	overflowErr := s.universalRouter.CallExecute(s.T().Context(), bind.NewCallOptions().WithFrom(s.from), NewExecuteRequest(s.router, NewPlanner().Append(NewSweepInput(s.currency1, MsgSender(), new(big.Int).Lsh(big.NewInt(1), 200))), nil, nil))
 	s.Require().ErrorIs(overflowErr, bind.ErrInvalidRequest)
 	s.Require().ErrorContains(overflowErr, "exceeds uint160")
 
@@ -1135,7 +1127,7 @@ func (s *UniversalRouterSuite) Test15SweepTokenMinimumMapsInsufficientToken() {
 func (s *UniversalRouterSuite) Test16SweepNativeMinimumMapsInsufficientETH() {
 	huge := new(big.Int).Lsh(big.NewInt(1), 159)
 
-	err := s.universalRouter.CallExecute(s.T().Context(), bind.NewCallOptions().WithFrom(s.from), NewExecuteRequest(s.router, NewPlan().Add(NewSweepInput(types.ZeroAddress(), MsgSender(), huge)), nil, nil))
+	err := s.universalRouter.CallExecute(s.T().Context(), bind.NewCallOptions().WithFrom(s.from), NewExecuteRequest(s.router, NewPlanner().Append(NewSweepInput(types.ZeroAddress(), MsgSender(), huge)), nil, nil))
 	s.Require().ErrorIs(err, ErrInsufficientETH)
 	s.Require().NotErrorIs(err, ErrExecutionFailed)
 	s.Require().NotErrorIs(err, ErrUnknown)
@@ -1152,16 +1144,14 @@ func (s *UniversalRouterSuite) Test17ExpiredPermit2AllowanceMapsThroughV4() {
 	sig, err := permitSingle.Sign(permit2.NewDomain(s.ChainID, s.permit2Contract), s.signer)
 	s.Require().NoError(err)
 
-	swapParams, err := v4.EncodeActionSwapExactInSingle(v4.NewExactInputSingleParams(s.key, false, s.SwapAmountIn, big.NewInt(1), big.NewInt(0), []byte{}))
-	s.Require().NoError(err)
-	settleParams, err := v4.EncodeActionSettleAll(s.currency1, s.SwapAmountIn)
-	s.Require().NoError(err)
-	takeParams, err := v4.EncodeActionTakeAll(s.currency0, big.NewInt(1))
-	s.Require().NoError(err)
+	actions := v4.NewPlanner()
+	s.Require().NoError(actions.AppendSwapExactInSingle(v4.NewExactInputSingleParams(s.key, false, s.SwapAmountIn, big.NewInt(1), big.NewInt(0), []byte{})))
+	s.Require().NoError(actions.AppendSettleAll(s.currency1, s.SwapAmountIn))
+	s.Require().NoError(actions.AppendTakeAll(s.currency0, big.NewInt(1)))
 
-	plan := NewPlan().
-		Add(NewPermit2PermitInput(permitSingle, sig.LegacyBytes())).
-		Add(NewV4SwapInput([]byte{v4.ActionSwapExactInSingle, v4.ActionSettleAll, v4.ActionTakeAll}, [][]byte{swapParams, settleParams, takeParams}))
+	plan := NewPlanner().
+		Append(NewPermit2PermitInput(permitSingle, sig.LegacyBytes())).
+		Append(NewV4SwapInputFromPlanner(actions))
 
 	err = s.universalRouter.CallExecute(s.T().Context(), bind.NewCallOptions().WithFrom(s.from), NewExecuteRequest(s.router, plan, nil, nil))
 	s.Require().ErrorIs(err, permit2.ErrAllowanceExpired)
@@ -1196,17 +1186,17 @@ func (s *UniversalRouterSuite) Test18Permit2TransfersAndPayments() {
 	pulled1ToRecipient := big.NewInt(70_000)
 	portion0 := new(big.Int).Div(new(big.Int).Mul(new(big.Int).Sub(pulled0, transferred0), s.PortionFullPrecision), new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil))
 
-	plan := NewPlan().
-		Add(NewPermit2PermitBatchInput(permitBatch, sig.LegacyBytes())).
-		Add(NewPermit2TransferFromInput(s.currency0, AddressThis(), pulled0)).
-		Add(NewPermit2TransferFromBatchInput([]permit2.AllowanceTransferDetails{
+	plan := NewPlanner().
+		Append(NewPermit2PermitBatchInput(permitBatch, sig.LegacyBytes())).
+		Append(NewPermit2TransferFromInput(s.currency0, AddressThis(), pulled0)).
+		Append(NewPermit2TransferFromBatchInput([]permit2.AllowanceTransferDetails{
 			*permit2.NewAllowanceTransferDetails(s.from, s.router, pulled1ToRouter, s.currency1),
 			*permit2.NewAllowanceTransferDetails(s.from, s.feeRecipient, pulled1ToRecipient, s.currency1),
 		})).
-		Add(NewTransferInput(s.currency0, s.feeRecipient, transferred0)).
-		Add(NewPayPortionFullPrecisionInput(s.currency0, s.feeRecipient, s.PortionFullPrecision)).
-		Add(NewSweepInput(s.currency0, MsgSender(), big.NewInt(0))).
-		Add(NewSweepInput(s.currency1, MsgSender(), pulled1ToRouter))
+		Append(NewTransferInput(s.currency0, s.feeRecipient, transferred0)).
+		Append(NewPayPortionFullPrecisionInput(s.currency0, s.feeRecipient, s.PortionFullPrecision)).
+		Append(NewSweepInput(s.currency0, MsgSender(), big.NewInt(0))).
+		Append(NewSweepInput(s.currency1, MsgSender(), pulled1ToRouter))
 
 	builder := tx.NewDynamicFeeBuilder()
 	builder.LimitBuffer(s.LimitBuffer)
@@ -1263,16 +1253,14 @@ func (s *UniversalRouterSuite) Test18Permit2TransfersAndPayments() {
 func (s *UniversalRouterSuite) Test19NativeETHForTokenSwap() {
 	sent := new(big.Int).Mul(s.NativeSwapAmount, big.NewInt(3))
 
-	swapParams, err := v4.EncodeActionSwapExactInSingle(v4.NewExactInputSingleParams(s.nativeKey, true, s.NativeSwapAmount, big.NewInt(1), big.NewInt(0), []byte{}))
-	s.Require().NoError(err)
-	settleParams, err := v4.EncodeActionSettleAll(types.ZeroAddress(), s.NativeSwapAmount)
-	s.Require().NoError(err)
-	takeParams, err := v4.EncodeActionTakeAll(s.currency0, big.NewInt(1))
-	s.Require().NoError(err)
+	actions := v4.NewPlanner()
+	s.Require().NoError(actions.AppendSwapExactInSingle(v4.NewExactInputSingleParams(s.nativeKey, true, s.NativeSwapAmount, big.NewInt(1), big.NewInt(0), []byte{})))
+	s.Require().NoError(actions.AppendSettleAll(types.ZeroAddress(), s.NativeSwapAmount))
+	s.Require().NoError(actions.AppendTakeAll(s.currency0, big.NewInt(1)))
 
-	plan := NewPlan().
-		Add(NewV4SwapInput([]byte{v4.ActionSwapExactInSingle, v4.ActionSettleAll, v4.ActionTakeAll}, [][]byte{swapParams, settleParams, takeParams})).
-		Add(NewSweepInput(types.ZeroAddress(), MsgSender(), big.NewInt(0)))
+	plan := NewPlanner().
+		Append(NewV4SwapInputFromPlanner(actions)).
+		Append(NewSweepInput(types.ZeroAddress(), MsgSender(), big.NewInt(0)))
 
 	s.Require().NoError(s.universalRouter.CallExecute(s.T().Context(), bind.NewCallOptions().WithFrom(s.from), NewExecuteRequest(s.router, plan, nil, sent)))
 
@@ -1325,16 +1313,14 @@ func (s *UniversalRouterSuite) Test20TokenForNativeETHSwap() {
 	sig, err := permitSingle.Sign(permit2.NewDomain(s.ChainID, s.permit2Contract), s.signer)
 	s.Require().NoError(err)
 
-	swapParams, err := v4.EncodeActionSwapExactInSingle(v4.NewExactInputSingleParams(s.nativeKey, false, s.NativeSwapAmount, big.NewInt(1), big.NewInt(0), []byte{}))
-	s.Require().NoError(err)
-	settleParams, err := v4.EncodeActionSettleAll(s.currency0, s.NativeSwapAmount)
-	s.Require().NoError(err)
-	takeParams, err := v4.EncodeActionTakeAll(types.ZeroAddress(), big.NewInt(1))
-	s.Require().NoError(err)
+	actions := v4.NewPlanner()
+	s.Require().NoError(actions.AppendSwapExactInSingle(v4.NewExactInputSingleParams(s.nativeKey, false, s.NativeSwapAmount, big.NewInt(1), big.NewInt(0), []byte{})))
+	s.Require().NoError(actions.AppendSettleAll(s.currency0, s.NativeSwapAmount))
+	s.Require().NoError(actions.AppendTakeAll(types.ZeroAddress(), big.NewInt(1)))
 
-	plan := NewPlan().
-		Add(NewPermit2PermitInput(permitSingle, sig.LegacyBytes())).
-		Add(NewV4SwapInput([]byte{v4.ActionSwapExactInSingle, v4.ActionSettleAll, v4.ActionTakeAll}, [][]byte{swapParams, settleParams, takeParams}))
+	plan := NewPlanner().
+		Append(NewPermit2PermitInput(permitSingle, sig.LegacyBytes())).
+		Append(NewV4SwapInputFromPlanner(actions))
 
 	builder := tx.NewDynamicFeeBuilder()
 	builder.LimitBuffer(s.LimitBuffer)
@@ -1393,9 +1379,9 @@ func (s *UniversalRouterSuite) Test21V3SwapExactIn() {
 
 	path, err := v3.EncodePath([]*types.Address{s.currency0, s.currency1}, []*big.Int{big.NewInt(3000)})
 	s.Require().NoError(err)
-	plan := NewPlan().
-		Add(NewPermit2PermitInput(permitSingle, sig.LegacyBytes())).
-		Add(NewV3SwapExactInInput(MsgSender(), s.SwapAmountIn, big.NewInt(1), path, true, nil))
+	plan := NewPlanner().
+		Append(NewPermit2PermitInput(permitSingle, sig.LegacyBytes())).
+		Append(NewV3SwapExactInInput(MsgSender(), s.SwapAmountIn, big.NewInt(1), path, true, nil))
 
 	builder := tx.NewDynamicFeeBuilder()
 	builder.LimitBuffer(s.LimitBuffer)
@@ -1451,9 +1437,9 @@ func (s *UniversalRouterSuite) Test22V3SwapExactInMultiHop() {
 	path, err := v3.EncodePath([]*types.Address{s.currency0, s.currency1, s.currency0}, []*big.Int{big.NewInt(3000), big.NewInt(3000)})
 	s.Require().NoError(err)
 	s.Require().Len(path, 20+23*2)
-	plan := NewPlan().
-		Add(NewPermit2PermitInput(permitSingle, sig.LegacyBytes())).
-		Add(NewV3SwapExactInInput(MsgSender(), s.SwapAmountIn, big.NewInt(1), path, true, []*big.Int{big.NewInt(0), big.NewInt(0)}))
+	plan := NewPlanner().
+		Append(NewPermit2PermitInput(permitSingle, sig.LegacyBytes())).
+		Append(NewV3SwapExactInInput(MsgSender(), s.SwapAmountIn, big.NewInt(1), path, true, []*big.Int{big.NewInt(0), big.NewInt(0)}))
 
 	builder := tx.NewDynamicFeeBuilder()
 	builder.LimitBuffer(s.LimitBuffer)
@@ -1512,9 +1498,9 @@ func (s *UniversalRouterSuite) Test23V3SwapExactOut() {
 
 	path, err := v3.EncodePath([]*types.Address{s.currency1, s.currency0}, []*big.Int{big.NewInt(3000)})
 	s.Require().NoError(err)
-	plan := NewPlan().
-		Add(NewPermit2PermitInput(permitSingle, sig.LegacyBytes())).
-		Add(NewV3SwapExactOutInput(MsgSender(), s.SwapAmountOut, s.SwapAmountIn, path, true, nil))
+	plan := NewPlanner().
+		Append(NewPermit2PermitInput(permitSingle, sig.LegacyBytes())).
+		Append(NewV3SwapExactOutInput(MsgSender(), s.SwapAmountOut, s.SwapAmountIn, path, true, nil))
 
 	builder := tx.NewDynamicFeeBuilder()
 	builder.LimitBuffer(s.LimitBuffer)
@@ -1568,9 +1554,9 @@ func (s *UniversalRouterSuite) Test24V3ExactInSlippageMapsDirectly() {
 
 	path, err := v3.EncodePath([]*types.Address{s.currency0, s.currency1}, []*big.Int{big.NewInt(3000)})
 	s.Require().NoError(err)
-	plan := NewPlan().
-		Add(NewPermit2PermitInput(permitSingle, sig.LegacyBytes())).
-		Add(NewV3SwapExactInInput(MsgSender(), s.SwapAmountIn, s.SwapAmountIn, path, true, nil))
+	plan := NewPlanner().
+		Append(NewPermit2PermitInput(permitSingle, sig.LegacyBytes())).
+		Append(NewV3SwapExactInInput(MsgSender(), s.SwapAmountIn, s.SwapAmountIn, path, true, nil))
 
 	err = s.universalRouter.CallExecute(s.T().Context(), bind.NewCallOptions().WithFrom(s.from), NewExecuteRequest(s.router, plan, nil, nil))
 	s.Require().ErrorIs(err, ErrV3TooLittleReceived)
@@ -1594,9 +1580,9 @@ func (s *UniversalRouterSuite) Test25V3ExactOutSlippageMapsDirectly() {
 
 	path, err := v3.EncodePath([]*types.Address{s.currency1, s.currency0}, []*big.Int{big.NewInt(3000)})
 	s.Require().NoError(err)
-	plan := NewPlan().
-		Add(NewPermit2PermitInput(permitSingle, sig.LegacyBytes())).
-		Add(NewV3SwapExactOutInput(MsgSender(), s.SwapAmountOut, big.NewInt(1), path, true, nil))
+	plan := NewPlanner().
+		Append(NewPermit2PermitInput(permitSingle, sig.LegacyBytes())).
+		Append(NewV3SwapExactOutInput(MsgSender(), s.SwapAmountOut, big.NewInt(1), path, true, nil))
 
 	err = s.universalRouter.CallExecute(s.T().Context(), bind.NewCallOptions().WithFrom(s.from), NewExecuteRequest(s.router, plan, nil, nil))
 	s.Require().ErrorIs(err, ErrV3TooMuchRequested)
@@ -1618,9 +1604,9 @@ func (s *UniversalRouterSuite) Test26V2SwapExactIn() {
 	sig, err := permitSingle.Sign(permit2.NewDomain(s.ChainID, s.permit2Contract), s.signer)
 	s.Require().NoError(err)
 
-	plan := NewPlan().
-		Add(NewPermit2PermitInput(permitSingle, sig.LegacyBytes())).
-		Add(NewV2SwapExactInInput(MsgSender(), s.SwapAmountIn, big.NewInt(1), []*types.Address{s.currency0, s.currency1}, true, nil))
+	plan := NewPlanner().
+		Append(NewPermit2PermitInput(permitSingle, sig.LegacyBytes())).
+		Append(NewV2SwapExactInInput(MsgSender(), s.SwapAmountIn, big.NewInt(1), []*types.Address{s.currency0, s.currency1}, true, nil))
 
 	builder := tx.NewDynamicFeeBuilder()
 	builder.LimitBuffer(s.LimitBuffer)
@@ -1680,9 +1666,9 @@ func (s *UniversalRouterSuite) Test27V2SwapExactOut() {
 	sig, err := permitSingle.Sign(permit2.NewDomain(s.ChainID, s.permit2Contract), s.signer)
 	s.Require().NoError(err)
 
-	plan := NewPlan().
-		Add(NewPermit2PermitInput(permitSingle, sig.LegacyBytes())).
-		Add(NewV2SwapExactOutInput(MsgSender(), s.SwapAmountOut, s.SwapAmountIn, []*types.Address{s.currency0, s.currency1}, true, nil))
+	plan := NewPlanner().
+		Append(NewPermit2PermitInput(permitSingle, sig.LegacyBytes())).
+		Append(NewV2SwapExactOutInput(MsgSender(), s.SwapAmountOut, s.SwapAmountIn, []*types.Address{s.currency0, s.currency1}, true, nil))
 
 	builder := tx.NewDynamicFeeBuilder()
 	builder.LimitBuffer(s.LimitBuffer)
@@ -1739,9 +1725,9 @@ func (s *UniversalRouterSuite) Test28V2ExactInSlippageMapsDirectly() {
 	sig, err := permitSingle.Sign(permit2.NewDomain(s.ChainID, s.permit2Contract), s.signer)
 	s.Require().NoError(err)
 
-	plan := NewPlan().
-		Add(NewPermit2PermitInput(permitSingle, sig.LegacyBytes())).
-		Add(NewV2SwapExactInInput(MsgSender(), s.SwapAmountIn, s.SwapAmountIn, []*types.Address{s.currency0, s.currency1}, true, nil))
+	plan := NewPlanner().
+		Append(NewPermit2PermitInput(permitSingle, sig.LegacyBytes())).
+		Append(NewV2SwapExactInInput(MsgSender(), s.SwapAmountIn, s.SwapAmountIn, []*types.Address{s.currency0, s.currency1}, true, nil))
 
 	err = s.universalRouter.CallExecute(s.T().Context(), bind.NewCallOptions().WithFrom(s.from), NewExecuteRequest(s.router, plan, nil, nil))
 	s.Require().ErrorIs(err, ErrV2TooLittleReceived)
@@ -1763,9 +1749,9 @@ func (s *UniversalRouterSuite) Test29V2ExactOutSlippageMapsDirectly() {
 	sig, err := permitSingle.Sign(permit2.NewDomain(s.ChainID, s.permit2Contract), s.signer)
 	s.Require().NoError(err)
 
-	plan := NewPlan().
-		Add(NewPermit2PermitInput(permitSingle, sig.LegacyBytes())).
-		Add(NewV2SwapExactOutInput(MsgSender(), s.SwapAmountOut, big.NewInt(1), []*types.Address{s.currency0, s.currency1}, true, nil))
+	plan := NewPlanner().
+		Append(NewPermit2PermitInput(permitSingle, sig.LegacyBytes())).
+		Append(NewV2SwapExactOutInput(MsgSender(), s.SwapAmountOut, big.NewInt(1), []*types.Address{s.currency0, s.currency1}, true, nil))
 
 	err = s.universalRouter.CallExecute(s.T().Context(), bind.NewCallOptions().WithFrom(s.from), NewExecuteRequest(s.router, plan, nil, nil))
 	s.Require().ErrorIs(err, ErrV2TooMuchRequested)
@@ -1789,9 +1775,9 @@ func (s *UniversalRouterSuite) Test30V3ExactOutMultiHopSamePoolRevertsLOK() {
 
 	path, err := v3.EncodePath([]*types.Address{s.currency0, s.currency1, s.currency0}, []*big.Int{big.NewInt(3000), big.NewInt(3000)})
 	s.Require().NoError(err)
-	plan := NewPlan().
-		Add(NewPermit2PermitInput(permitSingle, sig.LegacyBytes())).
-		Add(NewV3SwapExactOutInput(MsgSender(), s.SwapAmountOut, s.SwapAmountIn, path, true, nil))
+	plan := NewPlanner().
+		Append(NewPermit2PermitInput(permitSingle, sig.LegacyBytes())).
+		Append(NewV3SwapExactOutInput(MsgSender(), s.SwapAmountOut, s.SwapAmountIn, path, true, nil))
 
 	err = s.universalRouter.CallExecute(s.T().Context(), bind.NewCallOptions().WithFrom(s.from), NewExecuteRequest(s.router, plan, nil, nil))
 	s.Require().Error(err)
@@ -1809,7 +1795,7 @@ func (s *UniversalRouterSuite) Test30V3ExactOutMultiHopSamePoolRevertsLOK() {
 
 	singleHopPath, err := v3.EncodePath([]*types.Address{s.currency1, s.currency0}, []*big.Int{big.NewInt(3000)})
 	s.Require().NoError(err)
-	s.Require().NoError(s.universalRouter.CallExecute(s.T().Context(), bind.NewCallOptions().WithFrom(s.from), NewExecuteRequest(s.router, NewPlan().Add(NewPermit2PermitInput(permitSingle, sig.LegacyBytes())).Add(NewV3SwapExactOutInput(MsgSender(), s.SwapAmountOut, s.SwapAmountIn, singleHopPath, true, nil)), nil, nil)))
+	s.Require().NoError(s.universalRouter.CallExecute(s.T().Context(), bind.NewCallOptions().WithFrom(s.from), NewExecuteRequest(s.router, NewPlanner().Append(NewPermit2PermitInput(permitSingle, sig.LegacyBytes())).Append(NewV3SwapExactOutInput(MsgSender(), s.SwapAmountOut, s.SwapAmountIn, singleHopPath, true, nil)), nil, nil)))
 
 	s.T().Logf("UniversalRouter Test30V3ExactOutMultiHopSamePoolRevertsLOK Result")
 	s.T().Logf("\tError: %s", err)
@@ -1857,16 +1843,11 @@ func (s *UniversalRouterSuite) Test31CallExecuteWithoutApprovalsNeedsOverrides()
 	new(big.Int).Or(new(big.Int).Lsh(expiration, 160), s.SwapAmountIn).FillBytes(permitWord[:])
 
 	swapInput := v4.NewExactInputSingleParams(s.key, true, s.SwapAmountIn, big.NewInt(1), big.NewInt(0), []byte{})
-	swapParams, err := v4.EncodeActionSwapExactInSingle(swapInput)
-	s.Require().NoError(err)
-	settleParams, err := v4.EncodeActionSettleAll(s.currency0, s.SwapAmountIn)
-	s.Require().NoError(err)
-	takeParams, err := v4.EncodeActionTakeAll(s.currency1, big.NewInt(1))
-	s.Require().NoError(err)
-	plan := NewPlan().Add(NewV4SwapInput(
-		[]byte{v4.ActionSwapExactInSingle, v4.ActionSettleAll, v4.ActionTakeAll},
-		[][]byte{swapParams, settleParams, takeParams},
-	))
+	actions := v4.NewPlanner()
+	s.Require().NoError(actions.AppendSwapExactInSingle(swapInput))
+	s.Require().NoError(actions.AppendSettleAll(s.currency0, s.SwapAmountIn))
+	s.Require().NoError(actions.AppendTakeAll(s.currency1, big.NewInt(1)))
+	plan := NewPlanner().Append(NewV4SwapInputFromPlanner(actions))
 	req := NewExecuteRequest(s.router, plan, big.NewInt(time.Now().Add(10*time.Minute).Unix()), nil)
 
 	plainErr := s.universalRouter.CallExecute(s.T().Context(), bind.NewCallOptions().WithFrom(ghost), req)
@@ -1987,16 +1968,11 @@ func (s *UniversalRouterSuite) Test32Permit2ApproveThenSwapBackToBack() {
 	override := rpc.NewStateOverride().WithStateDiff(s.permit2Contract, permitAllowanceSlot, permitWord)
 
 	swapInput := v4.NewExactInputSingleParams(s.key, true, s.SwapAmountIn, big.NewInt(1), big.NewInt(0), []byte{})
-	swapParams, err := v4.EncodeActionSwapExactInSingle(swapInput)
-	s.Require().NoError(err)
-	settleParams, err := v4.EncodeActionSettleAll(s.currency0, s.SwapAmountIn)
-	s.Require().NoError(err)
-	takeParams, err := v4.EncodeActionTakeAll(s.currency1, big.NewInt(1))
-	s.Require().NoError(err)
-	plan := NewPlan().Add(NewV4SwapInput(
-		[]byte{v4.ActionSwapExactInSingle, v4.ActionSettleAll, v4.ActionTakeAll},
-		[][]byte{swapParams, settleParams, takeParams},
-	))
+	actions := v4.NewPlanner()
+	s.Require().NoError(actions.AppendSwapExactInSingle(swapInput))
+	s.Require().NoError(actions.AppendSettleAll(s.currency0, s.SwapAmountIn))
+	s.Require().NoError(actions.AppendTakeAll(s.currency1, big.NewInt(1)))
+	plan := NewPlanner().Append(NewV4SwapInputFromPlanner(actions))
 	req := NewExecuteRequest(s.router, plan, big.NewInt(time.Now().Add(10*time.Minute).Unix()), nil)
 
 	unapprovedErr := s.universalRouter.CallExecute(s.T().Context(), bind.NewCallOptions().WithFrom(s.from), req)
@@ -2111,18 +2087,14 @@ func (s *UniversalRouterSuite) Test33SimulateApproveAndPermitSwapThenSend() {
 	sig, err := permitSingle.Sign(permit2.NewDomain(s.ChainID, s.permit2Contract), s.signer)
 	s.Require().NoError(err)
 
-	swapParams, err := v4.EncodeActionSwapExactInSingle(v4.NewExactInputSingleParams(s.key, true, s.SwapAmountIn, big.NewInt(1), big.NewInt(0), []byte{}))
-	s.Require().NoError(err)
-	settleParams, err := v4.EncodeActionSettleAll(s.currency0, s.SwapAmountIn)
-	s.Require().NoError(err)
-	takeParams, err := v4.EncodeActionTakeAll(s.currency1, big.NewInt(1))
-	s.Require().NoError(err)
-	plan := NewPlan().
-		Add(NewPermit2PermitInput(permitSingle, sig.LegacyBytes())).
-		Add(NewV4SwapInput([]byte{v4.ActionSwapExactInSingle, v4.ActionSettleAll, v4.ActionTakeAll}, [][]byte{swapParams, settleParams, takeParams}))
-	commands, inputs, err := plan.Encode()
-	s.Require().NoError(err)
-	executeData, err := EncodeExecuteWithDeadline(commands, inputs, deadline)
+	actions := v4.NewPlanner()
+	s.Require().NoError(actions.AppendSwapExactInSingle(v4.NewExactInputSingleParams(s.key, true, s.SwapAmountIn, big.NewInt(1), big.NewInt(0), []byte{})))
+	s.Require().NoError(actions.AppendSettleAll(s.currency0, s.SwapAmountIn))
+	s.Require().NoError(actions.AppendTakeAll(s.currency1, big.NewInt(1)))
+	plan := NewPlanner().
+		Append(NewPermit2PermitInput(permitSingle, sig.LegacyBytes())).
+		Append(NewV4SwapInputFromPlanner(actions))
+	executeData, err := plan.Calldata(deadline)
 	s.Require().NoError(err)
 	approveData, err := erc20.EncodeApprove(s.permit2Contract, s.MintValue)
 	s.Require().NoError(err)
@@ -2168,7 +2140,7 @@ func (s *UniversalRouterSuite) Test33SimulateApproveAndPermitSwapThenSend() {
 	executeTx, executeHash, err := s.universalRouter.Execute(
 		s.T().Context(),
 		bind.NewTransactOptions(s.signer, executeBuilder),
-		NewExecuteRequest(s.router, plan, deadline, nil),
+		plan.ExecuteRequest(s.router, deadline, nil),
 	)
 	s.Require().NoError(err)
 	s.mu.Lock()
@@ -2251,19 +2223,11 @@ func (s *UniversalRouterSuite) Test34SimulateKeylessSwapNeedsOverrides() {
 	s.SwapAmountIn.FillBytes(amountWord[:])
 	new(big.Int).Or(new(big.Int).Lsh(expiration, 160), s.SwapAmountIn).FillBytes(permitWord[:])
 
-	swapParams, err := v4.EncodeActionSwapExactInSingle(v4.NewExactInputSingleParams(s.key, true, s.SwapAmountIn, big.NewInt(1), big.NewInt(0), []byte{}))
-	s.Require().NoError(err)
-	settleParams, err := v4.EncodeActionSettleAll(s.currency0, s.SwapAmountIn)
-	s.Require().NoError(err)
-	takeParams, err := v4.EncodeActionTakeAll(s.currency1, big.NewInt(1))
-	s.Require().NoError(err)
-	plan := NewPlan().Add(NewV4SwapInput(
-		[]byte{v4.ActionSwapExactInSingle, v4.ActionSettleAll, v4.ActionTakeAll},
-		[][]byte{swapParams, settleParams, takeParams},
-	))
-	commands, inputs, err := plan.Encode()
-	s.Require().NoError(err)
-	executeData, err := EncodeExecuteWithDeadline(commands, inputs, big.NewInt(time.Now().Add(10*time.Minute).Unix()))
+	actions := v4.NewPlanner()
+	s.Require().NoError(actions.AppendSwapExactInSingle(v4.NewExactInputSingleParams(s.key, true, s.SwapAmountIn, big.NewInt(1), big.NewInt(0), []byte{})))
+	s.Require().NoError(actions.AppendSettleAll(s.currency0, s.SwapAmountIn))
+	s.Require().NoError(actions.AppendTakeAll(s.currency1, big.NewInt(1)))
+	executeData, err := NewPlanner().Append(NewV4SwapInputFromPlanner(actions)).Calldata(big.NewInt(time.Now().Add(10 * time.Minute).Unix()))
 	s.Require().NoError(err)
 	balanceOfData, err := erc20.EncodeBalanceOf(ghost)
 	s.Require().NoError(err)

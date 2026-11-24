@@ -14,7 +14,7 @@ import (
 )
 
 func TestExecuteSignedMessageHashMatchesCastGolden(t *testing.T) {
-	plan := NewPlan().Add(NewWrapETHInput(AddressThis(), ContractBalance()))
+	plan := NewPlanner().Append(NewWrapETHInput(AddressThis(), ContractBalance()))
 	domain := NewUniversalRouterDomain(big.NewInt(1), testTokenC)
 
 	var intent, data, nonce [32]byte
@@ -35,8 +35,8 @@ func TestExecuteSignedMessageHashMatchesCastGolden(t *testing.T) {
 }
 
 func TestExecuteSignedMessageHashSensitiveToEveryField(t *testing.T) {
-	plan := NewPlan().Add(NewWrapETHInput(AddressThis(), big.NewInt(1)))
-	other := NewPlan().Add(NewWrapETHInput(AddressThis(), big.NewInt(2)))
+	plan := NewPlanner().Append(NewWrapETHInput(AddressThis(), big.NewInt(1)))
+	other := NewPlanner().Append(NewWrapETHInput(AddressThis(), big.NewInt(2)))
 	domain := NewUniversalRouterDomain(big.NewInt(1), testRouter)
 
 	base, err := NewExecuteSignedMessage(plan, [32]byte{0x01}, [32]byte{0x02}, testSender, [32]byte{0x03}, big.NewInt(10)).Hash(domain)
@@ -77,7 +77,7 @@ func TestExecuteSignedMessageSignRecoversSigner(t *testing.T) {
 	require.NoError(t, err)
 	signer := core.PubkeyToAddress(key.PublicKey())
 	domain := NewUniversalRouterDomain(big.NewInt(11_155_111), testRouter)
-	msg := NewExecuteSignedMessage(NewPlan().Add(NewSweepInput(testTokenA, MsgSender(), big.NewInt(0))), [32]byte{0x0a}, [32]byte{}, types.ZeroAddress(), UncheckedNonce(), big.NewInt(1_800_000_000))
+	msg := NewExecuteSignedMessage(NewPlanner().Append(NewSweepInput(testTokenA, MsgSender(), big.NewInt(0))), [32]byte{0x0a}, [32]byte{}, types.ZeroAddress(), UncheckedNonce(), big.NewInt(1_800_000_000))
 
 	sig, err := msg.Sign(domain, key)
 	require.NoError(t, err)
@@ -92,7 +92,7 @@ func TestExecuteSignedMessageSignRecoversSigner(t *testing.T) {
 
 func TestExecuteSignedMessageHashRejectsInvalid(t *testing.T) {
 	domain := NewUniversalRouterDomain(big.NewInt(1), testRouter)
-	plan := NewPlan().Add(NewWrapETHInput(AddressThis(), big.NewInt(1)))
+	plan := NewPlanner().Append(NewWrapETHInput(AddressThis(), big.NewInt(1)))
 
 	_, err := (*ExecuteSignedMessage)(nil).Hash(domain)
 	require.EqualError(t, err, "universalrouter: executeSignedMessage: hash: invalid request: message is nil")
@@ -153,7 +153,7 @@ func TestExecutionFailedErrorBehaviour(t *testing.T) {
 }
 
 func TestClientRequestsValidate(t *testing.T) {
-	plan := NewPlan().Add(NewWrapETHInput(AddressThis(), big.NewInt(1)))
+	plan := NewPlanner().Append(NewWrapETHInput(AddressThis(), big.NewInt(1)))
 	overflow := new(big.Int).Lsh(big.NewInt(1), 256)
 
 	for _, tc := range []struct {
@@ -164,8 +164,8 @@ func TestClientRequestsValidate(t *testing.T) {
 		{"execute nil", (*ExecuteRequest)(nil).Validate(), "invalid request: request is nil"},
 		{"execute contract", (&ExecuteRequest{Plan: plan}).Validate(), "invalid request: contract is nil"},
 		{"execute nil plan", (&ExecuteRequest{Contract: testRouter}).Validate(), "plan: invalid request: plan is nil"},
-		{"execute empty plan", (&ExecuteRequest{Contract: testRouter, Plan: NewPlan()}).Validate(), "plan: invalid request: plan has no steps"},
-		{"execute bad step", (&ExecuteRequest{Contract: testRouter, Plan: NewPlan().Add(&WrapETHInput{})}).Validate(), "plan: steps[0] WRAP_ETH: invalid request: recipient is nil"},
+		{"execute empty plan", (&ExecuteRequest{Contract: testRouter, Plan: NewPlanner()}).Validate(), "plan: invalid request: plan has no steps"},
+		{"execute bad step", (&ExecuteRequest{Contract: testRouter, Plan: NewPlanner().Append(&WrapETHInput{})}).Validate(), "plan: steps[0] WRAP_ETH: invalid request: recipient is nil"},
 		{"execute negative native", (&ExecuteRequest{Contract: testRouter, Plan: plan, NativeAmount: big.NewInt(-1)}).Validate(), "invalid request: nativeAmount is negative"},
 		{"execute overflow native", (&ExecuteRequest{Contract: testRouter, Plan: plan, NativeAmount: overflow}).Validate(), "invalid request: nativeAmount exceeds uint256"},
 		{"execute valid no deadline", (&ExecuteRequest{Contract: testRouter, Plan: plan}).Validate(), ""},
@@ -197,7 +197,7 @@ func TestClientRequestsValidate(t *testing.T) {
 }
 
 func TestNewClientTypesSetFields(t *testing.T) {
-	plan := NewPlan().Add(NewWrapETHInput(AddressThis(), big.NewInt(1)))
+	plan := NewPlanner().Append(NewWrapETHInput(AddressThis(), big.NewInt(1)))
 
 	require.Equal(t, &ExecuteRequest{Contract: testRouter, Plan: plan, Deadline: big.NewInt(1), NativeAmount: big.NewInt(2)}, NewExecuteRequest(testRouter, plan, big.NewInt(1), big.NewInt(2)))
 	require.Equal(t, &ExecuteSignedRequest{Contract: testRouter, Plan: plan, Intent: [32]byte{0x01}, Data: [32]byte{0x02}, VerifySender: true, Nonce: [32]byte{0x03}, Signature: []byte{0x04}, Deadline: big.NewInt(5), NativeAmount: big.NewInt(6)}, NewExecuteSignedRequest(testRouter, plan, [32]byte{0x01}, [32]byte{0x02}, true, [32]byte{0x03}, []byte{0x04}, big.NewInt(5), big.NewInt(6)))
