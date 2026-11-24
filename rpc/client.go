@@ -11,9 +11,7 @@ import (
 	"time"
 )
 
-// Client is a JSON-RPC client. *DefaultClient satisfies it directly; other
-// implementations (a retrying/load-balancing wrapper, a test double) can
-// stand in for it without depending on this package's HTTP transport.
+// Client is a JSON-RPC client; wrappers and test doubles can stand in for *DefaultClient.
 type Client interface {
 	Call(ctx context.Context, e Element) error
 	Batch(ctx context.Context, elems Elements) error
@@ -21,9 +19,7 @@ type Client interface {
 
 var _ Client = (*DefaultClient)(nil)
 
-// DefaultClient is a stateless JSON-RPC client over HTTP. The caller
-// supplies the request ID on each Element, so a DefaultClient holds no
-// per-request state and is safe for concurrent use.
+// DefaultClient is a stateless JSON-RPC client over HTTP, safe for concurrent use.
 type DefaultClient struct {
 	url        string
 	cli        *http.Client
@@ -42,28 +38,21 @@ func WithHTTPClient(hc *http.Client) Option {
 	}
 }
 
-// WithTimeout sets the default http.Client's timeout. It has no effect if
-// combined with WithHTTPClient, which replaces the client wholesale.
+// WithTimeout sets the default http.Client's timeout; WithHTTPClient overrides it.
 func WithTimeout(d time.Duration) Option {
 	return func(c *DefaultClient) {
 		c.cli.Timeout = d
 	}
 }
 
-// WithHeader sets a header sent with every request, such as an API key or
-// Authorization token. Calling it again with the same key replaces the value.
+// WithHeader sets a header sent with every request, replacing any earlier value for key.
 func WithHeader(key, value string) Option {
 	return func(c *DefaultClient) {
 		c.headers.Set(key, value)
 	}
 }
 
-// WithRetry retries a failed request up to maxRetries times on transient
-// failures — network errors and HTTP 429/5xx responses — waiting
-// backoff(attempt) between attempts (attempt starts at 0 for the first
-// retry). It never retries a well-formed JSON-RPC error response or a
-// non-429 4xx: the request already reached the server and failed on its
-// own terms, so retrying would just fail the same way again.
+// WithRetry retries network errors and HTTP 429/5xx up to maxRetries times, waiting backoff(attempt); a nil or non-positive backoff retries immediately.
 func WithRetry(maxRetries int, backoff func(attempt int) time.Duration) Option {
 	return func(c *DefaultClient) {
 		c.maxRetries = maxRetries
@@ -71,7 +60,7 @@ func WithRetry(maxRetries int, backoff func(attempt int) time.Duration) Option {
 	}
 }
 
-// ExponentialBackoff returns a backoff function for WithRetry
+// ExponentialBackoff returns a WithRetry backoff doubling from base, capped at max.
 func ExponentialBackoff(base, max time.Duration) func(attempt int) time.Duration {
 	return func(attempt int) time.Duration {
 		d := base
@@ -136,17 +125,20 @@ func (c *DefaultClient) do(ctx context.Context, body []byte) ([]byte, error) {
 			return nil, lastErr
 		}
 
+		var delay time.Duration
+		if c.backoff != nil {
+			delay = c.backoff(attempt)
+		}
+
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
-		case <-time.After(c.backoff(attempt)):
+		case <-time.After(delay):
 		}
 	}
 }
 
-// doOnce sends body once. retryable reports whether the failure is worth
-// retrying: network errors and HTTP 429/5xx are, a malformed request or
-// any other 4xx is not.
+// doOnce sends body once and reports whether a failure is retryable (network errors, HTTP 429/5xx).
 func (c *DefaultClient) doOnce(ctx context.Context, body []byte) ([]byte, bool, error) {
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.url, bytes.NewReader(body))
 	if err != nil {
@@ -206,8 +198,7 @@ func (c *DefaultClient) Call(ctx context.Context, e Element) error {
 	return nil
 }
 
-// Batch sends elems as a single JSON-RPC batch request and decodes each
-// result into its own Element.Result, matched by ID.
+// Batch sends elems as one JSON-RPC batch and decodes each result into its Element by ID.
 func (c *DefaultClient) Batch(ctx context.Context, elems Elements) error {
 	n := elems.Len()
 	if n == 0 {
