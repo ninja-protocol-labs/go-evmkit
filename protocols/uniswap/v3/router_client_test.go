@@ -708,3 +708,38 @@ func TestRouterCallsPropagateContext(t *testing.T) {
 	_, _, err = NewRouter(cli).RefundETH(ctx, bind.NewTransactOptions(key, builder), NewRouterRefundETHRequest(router))
 	require.NoError(t, err)
 }
+
+func TestMapRevertErrorCoversRouterPoolAndNFPM(t *testing.T) {
+	for _, tc := range []struct {
+		reason string
+		want   error
+	}{
+		{"Too little received", ErrTooLittleReceived},
+		{"Transaction too old", ErrTransactionTooOld},
+		{"LOK", ErrLocked},
+		{"SPL", ErrInvalidSqrtPriceLimit},
+		{"Invalid token ID", ErrInvalidTokenID},
+		{"Not approved", ErrNotApproved},
+	} {
+		t.Run(tc.reason, func(t *testing.T) {
+			packed, err := abi.Pack(abi.NewTypes(abi.String), tc.reason)
+			require.NoError(t, err)
+			rpcErr := &rpc.ResponseError{Code: 3, Message: "execution reverted", Data: jsontext.Value(`"0x08c379a0` + encoding.Hex.Encode(packed) + `"`)}
+
+			mapped := MapRevertError(rpcErr)
+			require.ErrorIs(t, mapped, tc.want)
+			require.NotErrorIs(t, mapped, ErrReverted)
+			got, ok := errors.AsType[*rpc.ResponseError](mapped)
+			require.True(t, ok)
+			require.Same(t, rpcErr, got)
+		})
+	}
+
+	packed, err := abi.Pack(abi.NewTypes(abi.String), "UniswapV2: K")
+	require.NoError(t, err)
+	require.ErrorIs(t, MapRevertError(&rpc.ResponseError{Code: 3, Message: "execution reverted", Data: jsontext.Value(`"0x08c379a0` + encoding.Hex.Encode(packed) + `"`)}), ErrReverted)
+	require.ErrorIs(t, MapRevertError(&rpc.ResponseError{Code: 3, Message: "execution reverted", Data: jsontext.Value(`"0xdeadbeef"`)}), ErrReverted)
+
+	plain := errors.New("dial tcp: connection refused")
+	require.Same(t, plain, MapRevertError(plain))
+}

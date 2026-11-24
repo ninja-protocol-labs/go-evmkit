@@ -705,3 +705,13 @@ func (_ *Router) wrapRevertError(err error) error {
 		return (*Pool)(nil).wrapRevertError(err)
 	}
 }
+
+// MapRevertError maps a v3 Router, Pool or NFPM revert reason in err to its sentinel, else ErrReverted.
+func MapRevertError(err error) error {
+	wrapped := (*Router)(nil).wrapRevertError(err)
+	if !errors.Is(wrapped, ErrReverted) {
+		return wrapped
+	}
+
+	return (*NFPM)(nil).wrapRevertError(err)
+}

@@ -964,9 +964,7 @@ func (r *Router) SwapExactTokensForETHSupportingFeeOnTransferTokens(ctx context.
 	return signed, hash, nil
 }
 
-// wrapRevertError maps a known UniswapV2Router/UniswapV2Library revert reason in err to its
-// sentinel. Some reasons are shared in meaning with an existing Factory/Pair sentinel -- see the
-// comment above ErrExpired in router_abi.go.
+// wrapRevertError maps a known UniswapV2Router/UniswapV2Library revert reason in err to its sentinel.
 func (_ *Router) wrapRevertError(err error) error {
 	var rpcErr *rpc.ResponseError
 	if !errors.As(err, &rpcErr) || len(rpcErr.Data) == 0 {
@@ -1014,4 +1012,14 @@ func (_ *Router) wrapRevertError(err error) error {
 	default:
 		return fmt.Errorf("%w: %w", ErrUnknown, err)
 	}
+}
+
+// MapRevertError maps a v2 Router, Library or Pair revert reason in err to its sentinel, else ErrUnknown.
+func MapRevertError(err error) error {
+	wrapped := (*Router)(nil).wrapRevertError(err)
+	if !errors.Is(wrapped, ErrUnknown) {
+		return wrapped
+	}
+
+	return (*Pair)(nil).wrapRevertError(err)
 }

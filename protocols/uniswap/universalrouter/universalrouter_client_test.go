@@ -17,6 +17,8 @@ import (
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 	"github.com/ninja-protocol-labs/go-evmkit/protocols/permit2"
+	v2 "github.com/ninja-protocol-labs/go-evmkit/protocols/uniswap/v2"
+	v3 "github.com/ninja-protocol-labs/go-evmkit/protocols/uniswap/v3"
 	v4 "github.com/ninja-protocol-labs/go-evmkit/protocols/uniswap/v4"
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
 	"github.com/ninja-protocol-labs/go-evmkit/rpc/mocks"
@@ -462,6 +464,58 @@ func TestExecutionFailedUnwrapsInnerRevert(t *testing.T) {
 		require.ErrorIs(t, bad, ErrExecutionFailed)
 		_, ok := errors.AsType[*ExecutionFailedError](bad)
 		require.False(t, ok)
+	}
+}
+
+func TestWrapRevertErrorMapsV3AndV2Reasons(t *testing.T) {
+	failedSel := errExecutionFailed.Selector()
+	plan := NewPlan().Add(NewWrapETHInput(AddressThis(), big.NewInt(1)))
+
+	for _, tc := range []struct {
+		reason string
+		want   error
+	}{
+		{"LOK", v3.ErrLocked},
+		{"SPL", v3.ErrInvalidSqrtPriceLimit},
+		{"UniswapV2: K", v2.ErrK},
+		{"UniswapV2: LOCKED", v2.ErrLocked},
+	} {
+		t.Run(tc.reason, func(t *testing.T) {
+			packed, err := abi.Pack(abi.NewTypes(abi.String), tc.reason)
+			require.NoError(t, err)
+			reason := append([]byte{0x08, 0xc3, 0x79, 0xa0}, packed...)
+
+			direct := &rpc.ResponseError{Code: 3, Message: "execution reverted", Data: jsontext.Value(`"` + encoding.Hex.EncodePrefixed(reason) + `"`)}
+			c := mocks.NewClient(t)
+			c.EXPECT().Call(mock.Anything, mock.Anything).Return(direct).Once()
+			err = New(c).CallExecute(t.Context(), nil, NewExecuteRequest(testRouter, plan, nil, nil))
+			require.ErrorIs(t, err, tc.want)
+			require.NotErrorIs(t, err, ErrUnknown)
+			require.NotErrorIs(t, err, ErrExecutionFailed)
+			got, ok := errors.AsType[*rpc.ResponseError](err)
+			require.True(t, ok)
+			require.Same(t, direct, got)
+
+			failed, err := abi.Pack(errExecutionFailed.Inputs, big.NewInt(1), reason)
+			require.NoError(t, err)
+			wrapped := (&UniversalRouter{}).wrapRevertError(&rpc.ResponseError{Code: 3, Message: "execution reverted", Data: jsontext.Value(`"` + encoding.Hex.EncodePrefixed(append(failedSel[:], failed...)) + `"`)})
+			require.ErrorIs(t, wrapped, ErrExecutionFailed)
+			require.ErrorIs(t, wrapped, tc.want)
+			require.NotErrorIs(t, wrapped, ErrUnknown)
+			execFailed, ok := errors.AsType[*ExecutionFailedError](wrapped)
+			require.True(t, ok)
+			require.Equal(t, reason, execFailed.Message)
+		})
+	}
+
+	for _, data := range []string{
+		"0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000046e6f706500000000000000000000000000000000000000000000000000000000",
+		"0x4e487b710000000000000000000000000000000000000000000000000000000000000011",
+	} {
+		mapped := (&UniversalRouter{}).wrapRevertError(&rpc.ResponseError{Code: 3, Message: "execution reverted", Data: jsontext.Value(`"` + data + `"`)})
+		require.ErrorIs(t, mapped, ErrUnknown)
+		require.NotErrorIs(t, mapped, v3.ErrReverted)
+		require.NotErrorIs(t, mapped, v2.ErrUnknown)
 	}
 }
 

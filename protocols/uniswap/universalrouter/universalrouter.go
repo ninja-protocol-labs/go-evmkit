@@ -14,6 +14,8 @@ import (
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 	"github.com/ninja-protocol-labs/go-evmkit/protocols/permit2"
+	v2 "github.com/ninja-protocol-labs/go-evmkit/protocols/uniswap/v2"
+	v3 "github.com/ninja-protocol-labs/go-evmkit/protocols/uniswap/v3"
 	v4 "github.com/ninja-protocol-labs/go-evmkit/protocols/uniswap/v4"
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
 	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
@@ -238,7 +240,7 @@ func (u *UniversalRouter) ExecuteSigned(ctx context.Context, opts *bind.Transact
 	return signed, hash, nil
 }
 
-// wrapRevertError maps a Universal Router custom error in err to its sentinel, unwrapping ExecutionFailed's message into an *ExecutionFailedError; other reverts fall through to Permit2's and then v4's mappers, and anything unrecognised maps to ErrUnknown.
+// wrapRevertError maps a revert in err to its UR, Permit2, v4, v3 or v2 sentinel, else ErrUnknown.
 func (u *UniversalRouter) wrapRevertError(err error) error {
 	rpcErr, ok := errors.AsType[*rpc.ResponseError](err)
 	if !ok || len(rpcErr.Data) == 0 {
@@ -366,6 +368,16 @@ func (u *UniversalRouter) wrapRevertError(err error) error {
 
 	if wrapped := v4.MapRevertError(err); !errors.Is(wrapped, v4.ErrUnknown) {
 		return wrapped
+	}
+
+	if _, reasonErr := abi.DecodeRevert(data); reasonErr == nil {
+		if wrapped := v3.MapRevertError(err); !errors.Is(wrapped, v3.ErrReverted) {
+			return wrapped
+		}
+
+		if wrapped := v2.MapRevertError(err); !errors.Is(wrapped, v2.ErrUnknown) {
+			return wrapped
+		}
 	}
 
 	return fmt.Errorf("%w: %w", ErrUnknown, err)
