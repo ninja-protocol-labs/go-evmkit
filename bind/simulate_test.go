@@ -330,3 +330,151 @@ func TestSimulateRejectsMalformedResults(t *testing.T) {
 		})
 	}
 }
+
+func TestSimulateElementBuildsRequest(t *testing.T) {
+	from, err := types.NewAddressFromHex("0x1111111111111111111111111111111111111111")
+	require.NoError(t, err)
+	to, err := types.NewAddressFromHex("0x2222222222222222222222222222222222222222")
+	require.NoError(t, err)
+
+	results := SimulateResults{Calls: []SimulateResult{{Success: true}}}
+	e, err := SimulateElement("sim", NewSimulateOptions().WithBlock("0x10").WithTraceTransfers(), []SimulateCall{
+		NewSimulateCall(from, to, big.NewInt(1), []byte{0xa9, 0x05, 0x9c, 0xbb}),
+	}, &results)
+	require.NoError(t, err)
+	require.Nil(t, results.Calls)
+
+	require.Equal(t, "sim", e.ID)
+	require.Equal(t, rpc.MethodETHSimulateV1, e.Method)
+	require.Same(t, &results, e.Result)
+	params, err := json.Marshal(e.Params)
+	require.NoError(t, err)
+	require.JSONEq(t, `[{"blockStateCalls":[{"calls":[
+		{"from":"0x1111111111111111111111111111111111111111","to":"0x2222222222222222222222222222222222222222","value":"0x1","data":"0xa9059cbb"}
+	]}],"traceTransfers":true,"validation":false},"0x10"]`, string(params))
+}
+
+func TestSimulateElementRejectsInvalidInput(t *testing.T) {
+	from, err := types.NewAddressFromHex("0x1111111111111111111111111111111111111111")
+	require.NoError(t, err)
+	to, err := types.NewAddressFromHex("0x2222222222222222222222222222222222222222")
+	require.NoError(t, err)
+	var slot, value [32]byte
+
+	cases := []struct {
+		name     string
+		opts     *SimulateOptions
+		calls    []SimulateCall
+		result   *SimulateResults
+		sentinel error
+		wantErr  string
+	}{
+		{"nil result", nil, []SimulateCall{NewSimulateCall(from, to, nil, nil)}, nil, ErrInvalidRequest, "bind: simulate: invalid request: result is nil"},
+		{"empty calls", nil, nil, &SimulateResults{}, ErrInvalidRequest, "bind: simulate: invalid request: calls is empty"},
+		{"nil from", nil, []SimulateCall{NewSimulateCall(nil, to, nil, nil)}, &SimulateResults{}, ErrInvalidRequest, "bind: simulate: calls[0]: invalid request: from is nil"},
+		{
+			"invalid override",
+			NewSimulateOptions().WithStateOverride(rpc.NewStateOverride().WithState(to, slot, value).WithStateDiff(to, slot, value)),
+			[]SimulateCall{NewSimulateCall(from, to, nil, nil)},
+			&SimulateResults{},
+			ErrInvalidOptions,
+			"state and stateDiff are both set",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			e, err := SimulateElement("sim", tc.opts, tc.calls, tc.result)
+			require.ErrorIs(t, err, tc.sentinel)
+			require.ErrorContains(t, err, tc.wantErr)
+			require.Equal(t, rpc.Element{}, e)
+		})
+	}
+}
+
+func TestSimulateElementInBatchWithFeeHistoryAndNonce(t *testing.T) {
+	from, err := types.NewAddressFromHex("0x1111111111111111111111111111111111111111")
+	require.NoError(t, err)
+	to, err := types.NewAddressFromHex("0x2222222222222222222222222222222222222222")
+	require.NoError(t, err)
+
+	var methods []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var reqs []struct {
+			ID     string `json:"id"`
+			Method string `json:"method"`
+		}
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&reqs))
+		methods = nil
+		resps := make([]string, len(reqs))
+		for i, req := range reqs {
+			methods = append(methods, req.Method)
+			switch req.Method {
+			case rpc.MethodETHSimulateV1:
+				resps[i] = `{"jsonrpc":"2.0","id":"` + req.ID + `","result":[{"calls":[` +
+					`{"status":"0x1","gasUsed":"0xb4a8","returnData":"0x","logs":[]},` +
+					`{"status":"0x1","gasUsed":"0x1d4c0","returnData":"0x","logs":[]}]}]}`
+			case rpc.MethodETHFeeHistory:
+				resps[i] = `{"jsonrpc":"2.0","id":"` + req.ID + `","result":{"oldestBlock":"0x10","baseFeePerGas":["0x3b9aca00","0x3b9aca07"],"reward":[["0x5f5e100"]]}}`
+			case rpc.MethodETHGetTransactionCount:
+				resps[i] = `{"jsonrpc":"2.0","id":"` + req.ID + `","result":"0x7"}`
+			}
+		}
+		_, _ = w.Write([]byte("[" + resps[0] + "," + resps[1] + "," + resps[2] + "]"))
+	}))
+	defer srv.Close()
+
+	var results SimulateResults
+	sim, err := SimulateElement("sim", nil, []SimulateCall{
+		NewSimulateCall(from, to, nil, []byte{0x09, 0x5e, 0xa7, 0xb3}),
+		NewSimulateCall(from, to, nil, []byte{0x35, 0x93, 0x56, 0x4c}),
+	}, &results)
+	require.NoError(t, err)
+	var fee map[string]any
+	var nonce string
+	require.NoError(t, rpc.NewClient(srv.URL).Batch(t.Context(), rpc.Elements{
+		sim,
+		rpc.ETHFeeHistory("fee", "0x1", rpc.BlockTagLatest, []float64{50}, &fee),
+		rpc.ETHGetTransactionCount("nonce", from.String(), rpc.BlockTagPending, &nonce),
+	}))
+
+	require.Equal(t, []string{rpc.MethodETHSimulateV1, rpc.MethodETHFeeHistory, rpc.MethodETHGetTransactionCount}, methods)
+	require.Len(t, results.Calls, 2)
+	require.Equal(t, uint64(0xb4a8), results.Calls[0].GasUsed)
+	require.Equal(t, uint64(0x1d4c0), results.Calls[1].GasUsed)
+	require.True(t, results.Calls[1].Success)
+	require.Equal(t, []any{"0x3b9aca00", "0x3b9aca07"}, fee["baseFeePerGas"])
+	require.Equal(t, "0x7", nonce)
+}
+
+func TestSimulateElementInBatchRejectsCallCountMismatch(t *testing.T) {
+	from, err := types.NewAddressFromHex("0x1111111111111111111111111111111111111111")
+	require.NoError(t, err)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var reqs []struct {
+			ID string `json:"id"`
+		}
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&reqs))
+		_, _ = w.Write([]byte(`[{"jsonrpc":"2.0","id":"` + reqs[0].ID + `","result":[{"calls":[{"status":"0x1","gasUsed":"0x1","returnData":"0x"}]}]}]`))
+	}))
+	defer srv.Close()
+
+	var results SimulateResults
+	sim, err := SimulateElement("sim", nil, []SimulateCall{NewSimulateCall(from, nil, nil, nil), NewSimulateCall(from, nil, nil, nil)}, &results)
+	require.NoError(t, err)
+	err = rpc.NewClient(srv.URL).Batch(t.Context(), rpc.Elements{sim})
+	require.ErrorContains(t, err, "bind: simulate: expected 2 call results, got 1")
+	require.Nil(t, results.Calls)
+}
+
+func TestSimulateResultsDecodesWithoutExpectedCount(t *testing.T) {
+	var results SimulateResults
+	require.NoError(t, json.Unmarshal([]byte(`[{"calls":[`+
+		`{"status":"0x1","gasUsed":"0x1","returnData":"0x"},`+
+		`{"status":"0x1","gasUsed":"0x2","returnData":"0x"},`+
+		`{"status":"0x0","gasUsed":"0x3","returnData":"0x","error":{"code":3,"message":"execution reverted"}}]}]`), &results))
+	require.Len(t, results.Calls, 3)
+	require.Equal(t, uint64(3), results.Calls[2].GasUsed)
+	require.Error(t, results.Calls[2].Error)
+	require.Error(t, json.Unmarshal([]byte(`null`), &results))
+}
