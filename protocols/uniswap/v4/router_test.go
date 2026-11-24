@@ -224,7 +224,7 @@ func (s *RouterSuite) SetupSuite() {
 }
 
 func (s *RouterSuite) TearDownSuite() {
-	ctx, cancel := context.WithTimeout(s.T().Context(), s.Timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), s.Timeout)
 	defer cancel()
 
 	if s.currency0 != nil && s.currency1 != nil {

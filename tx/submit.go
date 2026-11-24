@@ -38,6 +38,8 @@ type Builder interface {
 	// compute GasFeeCap (DynamicFee/SetCode). It has no effect on an
 	// explicit Price.
 	PriceBuffer(percent uint64)
+	// StateOverride sets the state override Pack passes to eth_estimateGas; it has no effect on an explicit Limit.
+	StateOverride(override *rpc.StateOverride)
 
 	// Build returns a Packer for a call to "to" with data.
 	Build(from, to *types.Address, value *big.Int, data []byte) Packer

@@ -318,7 +318,7 @@ func (s *QuoterSuite) SetupSuite() {
 }
 
 func (s *QuoterSuite) TearDownSuite() {
-	ctx, cancel := context.WithTimeout(s.T().Context(), s.Timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), s.Timeout)
 	defer cancel()
 
 	for i, tokenID := range s.positionTokenIDs {

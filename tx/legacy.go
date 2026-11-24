@@ -42,6 +42,7 @@ type LegacyBuilder struct {
 	gasLimit          *uint64
 	gasPrice          *big.Int
 	gasLimitBufferPct uint64
+	stateOverride     *rpc.StateOverride
 	gasPriceBufferPct uint64
 }
 
@@ -82,6 +83,11 @@ func (b *LegacyBuilder) LimitBuffer(percent uint64) {
 	b.gasLimitBufferPct = percent
 }
 
+// StateOverride carries override onto every LegacyTxConfig produced by Build as the eth_estimateGas state override.
+func (b *LegacyBuilder) StateOverride(override *rpc.StateOverride) {
+	b.stateOverride = override
+}
+
 // PriceBuffer carries percent onto every LegacyTxConfig produced by Build
 // as its gas price buffer (see LegacyTxConfig.WithGasPriceBuffer).
 func (b *LegacyBuilder) PriceBuffer(percent uint64) {
@@ -92,6 +98,7 @@ func (b *LegacyBuilder) Build(from, to *types.Address, value *big.Int, data []by
 	c := NewLegacyTxConfig(from, to, value, data).
 		WithChainID(b.chainid).
 		WithGasLimitBuffer(b.gasLimitBufferPct).
+		WithStateOverride(b.stateOverride).
 		WithGasPriceBuffer(b.gasPriceBufferPct)
 
 	if b.nonce != nil {
@@ -130,6 +137,7 @@ type LegacyTxConfig struct {
 	nonceBlockTag     string
 	gasPriceBufferPct uint64
 	gasLimitBufferPct uint64
+	stateOverride     *rpc.StateOverride
 }
 
 // NewLegacyTxConfig returns a LegacyTxConfig sending value and data from
@@ -191,9 +199,21 @@ func (c *LegacyTxConfig) WithGasLimitBuffer(percent uint64) *LegacyTxConfig {
 	return c
 }
 
+// WithStateOverride passes override to eth_estimateGas when GasLimit isn't set explicitly.
+func (c *LegacyTxConfig) WithStateOverride(override *rpc.StateOverride) *LegacyTxConfig {
+	c.stateOverride = override
+	return c
+}
+
 // Pack resolves every field not already set via a With* method against
 // client, in a single batch, and returns the unsigned transaction.
 func (c *LegacyTxConfig) Pack(ctx context.Context, client rpc.Client) (core.Transaction, error) {
+	if c.gasLimit == nil {
+		if err := c.stateOverride.Validate(); err != nil {
+			return nil, fmt.Errorf("tx: gasLimit: %w", err)
+		}
+	}
+
 	nonceBlockTag := c.nonceBlockTag
 	if nonceBlockTag == "" {
 		nonceBlockTag = rpc.BlockTagPending
@@ -225,7 +245,7 @@ func (c *LegacyTxConfig) Pack(ctx context.Context, client rpc.Client) (core.Tran
 		if c.to != nil {
 			callParams["to"] = c.to.String()
 		}
-		elems.With(rpc.ETHEstimateGas("gasLimit", callParams, rpc.BlockTagLatest, nil, &gasLimitHex))
+		elems.With(rpc.ETHEstimateGas("gasLimit", callParams, rpc.BlockTagLatest, c.stateOverride, &gasLimitHex))
 	}
 
 	if elems.Len() > 0 {
