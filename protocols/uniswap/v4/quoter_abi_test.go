@@ -545,19 +545,16 @@ func TestDecodeQuoterMsgSender(t *testing.T) {
 }
 
 func TestQuoterWrapRevertErrorNonRPCErrorPassesThrough(t *testing.T) {
-	q := &Quoter{}
 	plain := errors.New("boom")
-	require.Same(t, plain, q.wrapRevertError(plain))
+	require.Same(t, plain, mapQuoterRevertError(plain))
 }
 
 func TestQuoterWrapRevertErrorZeroLengthDataPassesThrough(t *testing.T) {
-	q := &Quoter{}
 	rpcErr := &rpc.ResponseError{Code: 3, Message: "execution reverted"}
-	require.Same(t, rpcErr, q.wrapRevertError(rpcErr))
+	require.Same(t, rpcErr, mapQuoterRevertError(rpcErr))
 }
 
 func TestQuoterWrapRevertErrorMalformedDataPassesThrough(t *testing.T) {
-	q := &Quoter{}
 	cases := []struct {
 		name string
 		data string
@@ -570,15 +567,14 @@ func TestQuoterWrapRevertErrorMalformedDataPassesThrough(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			rpcErr := &rpc.ResponseError{Code: 3, Message: "execution reverted", Data: jsontext.Value(c.data)}
-			require.Same(t, rpcErr, q.wrapRevertError(rpcErr))
+			require.Same(t, rpcErr, mapQuoterRevertError(rpcErr))
 		})
 	}
 }
 
 func TestQuoterWrapRevertErrorUnknownSelectorMapsToErrUnknown(t *testing.T) {
-	q := &Quoter{}
 	rpcErr := &rpc.ResponseError{Code: 3, Message: "execution reverted", Data: jsontext.Value(`"0xdeadbeef"`)}
-	err := q.wrapRevertError(rpcErr)
+	err := mapQuoterRevertError(rpcErr)
 	require.ErrorIs(t, err, ErrUnknown)
 	require.NotErrorIs(t, err, ErrUnexpectedRevertBytes)
 	var got *rpc.ResponseError
@@ -601,7 +597,6 @@ func TestQuoterWrapRevertErrorDirectSelectorsMapToSentinel(t *testing.T) {
 		{"UnexpectedCallSuccess", errUnexpectedCallSuccess, nil, ErrUnexpectedCallSuccess},
 	}
 
-	q := &Quoter{}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			sel := c.err.Selector()
@@ -610,7 +605,7 @@ func TestQuoterWrapRevertErrorDirectSelectorsMapToSentinel(t *testing.T) {
 			revertData := append(sel[:], argsData...)
 			rpcErr := &rpc.ResponseError{Code: 3, Message: "execution reverted", Data: jsontext.Value(`"` + encoding.Hex.EncodePrefixed(revertData) + `"`)}
 
-			wrapped := q.wrapRevertError(rpcErr)
+			wrapped := mapQuoterRevertError(rpcErr)
 			require.ErrorIs(t, wrapped, c.want)
 			require.NotErrorIs(t, wrapped, ErrUnknown)
 			require.NotErrorIs(t, wrapped, ErrUnexpectedRevertBytes)
@@ -658,7 +653,6 @@ func TestQuoterWrapRevertErrorUnexpectedRevertBytesMapsInnerSelector(t *testing.
 		{"WrappedErrorOtherContext", errWrappedError, []any{testHooks, []byte{0x57, 0x5e, 0x24, 0xb4}, []byte{0xde, 0xad}, []byte{0x01, 0x02, 0x03, 0x04}}, ErrWrappedError},
 	}
 
-	q := &Quoter{}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			innerSel := c.err.Selector()
@@ -672,7 +666,7 @@ func TestQuoterWrapRevertErrorUnexpectedRevertBytesMapsInnerSelector(t *testing.
 			revertData := append(outerSel[:], outerArgs...)
 			rpcErr := &rpc.ResponseError{Code: 3, Message: "execution reverted", Data: jsontext.Value(`"` + encoding.Hex.EncodePrefixed(revertData) + `"`)}
 
-			wrapped := q.wrapRevertError(rpcErr)
+			wrapped := mapQuoterRevertError(rpcErr)
 			require.ErrorIs(t, wrapped, ErrUnexpectedRevertBytes)
 			require.ErrorIs(t, wrapped, c.want)
 			require.NotErrorIs(t, wrapped, ErrUnknown)
@@ -691,7 +685,7 @@ func TestQuoterWrapRevertErrorUnexpectedRevertBytesInnerMapsOnlyItsOwnSentinel(t
 	revertData := append(outerSel[:], outerArgs...)
 	rpcErr := &rpc.ResponseError{Code: 3, Message: "execution reverted", Data: jsontext.Value(`"` + encoding.Hex.EncodePrefixed(revertData) + `"`)}
 
-	wrapped := (&Quoter{}).wrapRevertError(rpcErr)
+	wrapped := mapQuoterRevertError(rpcErr)
 	require.ErrorIs(t, wrapped, ErrPoolNotInitialized)
 	for _, other := range []error{
 		ErrNotEnoughLiquidity, ErrNotSelf, ErrUnexpectedCallSuccess, ErrCurrencyNotSettled,
@@ -723,7 +717,6 @@ func TestQuoterWrapRevertErrorUnexpectedRevertBytesWithoutKnownInner(t *testing.
 		{"innerQuoteSwap", quoteSwap},
 	}
 
-	q := &Quoter{}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			outerSel := errUnexpectedRevertBytes.Selector()
@@ -732,7 +725,7 @@ func TestQuoterWrapRevertErrorUnexpectedRevertBytesWithoutKnownInner(t *testing.
 			revertData := append(outerSel[:], outerArgs...)
 			rpcErr := &rpc.ResponseError{Code: 3, Message: "execution reverted", Data: jsontext.Value(`"` + encoding.Hex.EncodePrefixed(revertData) + `"`)}
 
-			wrapped := q.wrapRevertError(rpcErr)
+			wrapped := mapQuoterRevertError(rpcErr)
 			require.ErrorIs(t, wrapped, ErrUnexpectedRevertBytes)
 			require.NotErrorIs(t, wrapped, ErrUnknown)
 			require.NotErrorIs(t, wrapped, ErrPoolNotInitialized)
@@ -754,11 +747,10 @@ func TestQuoterWrapRevertErrorUnexpectedRevertBytesMalformedPayload(t *testing.T
 			"00000000000000000000000000000000000000000000000000000000000000ff"},
 	}
 
-	q := &Quoter{}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			rpcErr := &rpc.ResponseError{Code: 3, Message: "execution reverted", Data: jsontext.Value(`"` + c.data + `"`)}
-			wrapped := q.wrapRevertError(rpcErr)
+			wrapped := mapQuoterRevertError(rpcErr)
 			require.ErrorIs(t, wrapped, ErrUnexpectedRevertBytes)
 			require.NotErrorIs(t, wrapped, ErrUnknown)
 			var got *rpc.ResponseError
@@ -779,7 +771,7 @@ func TestQuoterWrapRevertErrorDoesNotUnwrapNestedUnexpectedRevertBytesTwice(t *t
 	revertData := append(outerSel[:], outerArgs...)
 	rpcErr := &rpc.ResponseError{Code: 3, Message: "execution reverted", Data: jsontext.Value(`"` + encoding.Hex.EncodePrefixed(revertData) + `"`)}
 
-	wrapped := (&Quoter{}).wrapRevertError(rpcErr)
+	wrapped := mapQuoterRevertError(rpcErr)
 	require.ErrorIs(t, wrapped, ErrUnexpectedRevertBytes)
 	require.NotErrorIs(t, wrapped, ErrPoolNotInitialized)
 }
@@ -808,7 +800,7 @@ func TestQuoterWrapRevertErrorWrappedHookCallFailedGolden(t *testing.T) {
 	revertData := append(outerSel[:], outerArgs...)
 	rpcErr := &rpc.ResponseError{Code: 3, Message: "execution reverted", Data: jsontext.Value(`"` + encoding.Hex.EncodePrefixed(revertData) + `"`)}
 
-	wrapped := (&Quoter{}).wrapRevertError(rpcErr)
+	wrapped := mapQuoterRevertError(rpcErr)
 	require.ErrorIs(t, wrapped, ErrUnexpectedRevertBytes)
 	require.ErrorIs(t, wrapped, ErrWrappedError)
 	require.ErrorIs(t, wrapped, ErrHookCallFailed)
@@ -831,7 +823,6 @@ func TestQuoterWrapRevertErrorWrappedErrorWithoutHookCallFailed(t *testing.T) {
 		{"hookCallFailedNotAtStart", []byte{0x00, 0xa9, 0xe3, 0x5b, 0x2f}},
 	}
 
-	q := &Quoter{}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			innerSel := errWrappedError.Selector()
@@ -845,7 +836,7 @@ func TestQuoterWrapRevertErrorWrappedErrorWithoutHookCallFailed(t *testing.T) {
 			revertData := append(outerSel[:], outerArgs...)
 			rpcErr := &rpc.ResponseError{Code: 3, Message: "execution reverted", Data: jsontext.Value(`"` + encoding.Hex.EncodePrefixed(revertData) + `"`)}
 
-			wrapped := q.wrapRevertError(rpcErr)
+			wrapped := mapQuoterRevertError(rpcErr)
 			require.ErrorIs(t, wrapped, ErrUnexpectedRevertBytes)
 			require.ErrorIs(t, wrapped, ErrWrappedError)
 			require.NotErrorIs(t, wrapped, ErrHookCallFailed)
@@ -868,7 +859,6 @@ func TestQuoterWrapRevertErrorMalformedWrappedError(t *testing.T) {
 			"0000000000000000000000000000000000000000000000000000000000000fff"},
 	}
 
-	q := &Quoter{}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			inner, err := encoding.Hex.Decode(c.inner)
@@ -879,7 +869,7 @@ func TestQuoterWrapRevertErrorMalformedWrappedError(t *testing.T) {
 			revertData := append(outerSel[:], outerArgs...)
 			rpcErr := &rpc.ResponseError{Code: 3, Message: "execution reverted", Data: jsontext.Value(`"` + encoding.Hex.EncodePrefixed(revertData) + `"`)}
 
-			wrapped := q.wrapRevertError(rpcErr)
+			wrapped := mapQuoterRevertError(rpcErr)
 			require.ErrorIs(t, wrapped, ErrUnexpectedRevertBytes)
 			require.ErrorIs(t, wrapped, ErrWrappedError)
 			require.NotErrorIs(t, wrapped, ErrHookCallFailed)

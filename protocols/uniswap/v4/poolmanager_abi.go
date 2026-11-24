@@ -1,12 +1,15 @@
 package v4
 
 import (
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"math/big"
 
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
+	"github.com/ninja-protocol-labs/go-evmkit/rpc"
+	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
 // poolKeyTuple mirrors PoolKey: (currency0, currency1, fee, tickSpacing, hooks).
@@ -659,4 +662,127 @@ func DecodeExttloadSlots(data []byte) ([][32]byte, error) {
 		copy(values[i][:], raw)
 	}
 	return values, nil
+}
+
+// mapPoolManagerRevertError maps a known PoolManager or v4-core custom error to its sentinel, an unknown selector to ErrUnknown, and passes data-less errors through.
+func mapPoolManagerRevertError(err error) error {
+	if rpcErr, ok := errors.AsType[*rpc.ResponseError](err); ok && rpcErr == nil {
+		return nil
+	}
+
+	rpcErr, ok := errors.AsType[*rpc.ResponseError](err)
+	if !ok || len(rpcErr.Data) == 0 {
+		return err
+	}
+
+	var hexData string
+	if jsonErr := json.Unmarshal(rpcErr.Data, &hexData); jsonErr != nil {
+		return err
+	}
+
+	data, decErr := encoding.Hex.Decode(hexData)
+	if decErr != nil || len(data) < 4 {
+		return err
+	}
+
+	var sel abi.Selector
+	copy(sel[:], data[:4])
+
+	switch sel {
+	case errCurrencyNotSettled.Selector():
+		return fmt.Errorf("%w: %w", ErrCurrencyNotSettled, err)
+	case errPoolNotInitialized.Selector():
+		return fmt.Errorf("%w: %w", ErrPoolNotInitialized, err)
+	case errAlreadyUnlocked.Selector():
+		return fmt.Errorf("%w: %w", ErrAlreadyUnlocked, err)
+	case errManagerLocked.Selector():
+		return fmt.Errorf("%w: %w", ErrManagerLocked, err)
+	case errTickSpacingTooLarge.Selector():
+		return fmt.Errorf("%w: %w", ErrTickSpacingTooLarge, err)
+	case errTickSpacingTooSmall.Selector():
+		return fmt.Errorf("%w: %w", ErrTickSpacingTooSmall, err)
+	case errCurrenciesOutOfOrderOrEqual.Selector():
+		return fmt.Errorf("%w: %w", ErrCurrenciesOutOfOrderOrEqual, err)
+	case errUnauthorizedDynamicLPFeeUpdate.Selector():
+		return fmt.Errorf("%w: %w", ErrUnauthorizedDynamicLPFeeUpdate, err)
+	case errSwapAmountCannotBeZero.Selector():
+		return fmt.Errorf("%w: %w", ErrSwapAmountCannotBeZero, err)
+	case errNonzeroNativeValue.Selector():
+		return fmt.Errorf("%w: %w", ErrNonzeroNativeValue, err)
+	case errMustClearExactPositiveDelta.Selector():
+		return fmt.Errorf("%w: %w", ErrMustClearExactPositiveDelta, err)
+	case errProtocolFeeTooLarge.Selector():
+		return fmt.Errorf("%w: %w", ErrProtocolFeeTooLarge, err)
+	case errInvalidCaller.Selector():
+		return fmt.Errorf("%w: %w", ErrInvalidCaller, err)
+	case errProtocolFeeCurrencySynced.Selector():
+		return fmt.Errorf("%w: %w", ErrProtocolFeeCurrencySynced, err)
+	case errPoolAlreadyInitialized.Selector():
+		return fmt.Errorf("%w: %w", ErrPoolAlreadyInitialized, err)
+	case errTicksMisordered.Selector():
+		return fmt.Errorf("%w: %w", ErrTicksMisordered, err)
+	case errTickLowerOutOfBounds.Selector():
+		return fmt.Errorf("%w: %w", ErrTickLowerOutOfBounds, err)
+	case errTickUpperOutOfBounds.Selector():
+		return fmt.Errorf("%w: %w", ErrTickUpperOutOfBounds, err)
+	case errTickLiquidityOverflow.Selector():
+		return fmt.Errorf("%w: %w", ErrTickLiquidityOverflow, err)
+	case errNoLiquidityToReceiveFees.Selector():
+		return fmt.Errorf("%w: %w", ErrNoLiquidityToReceiveFees, err)
+	case errTickMisaligned.Selector():
+		return fmt.Errorf("%w: %w", ErrTickMisaligned, err)
+	case errInvalidTick.Selector():
+		return fmt.Errorf("%w: %w", ErrInvalidTick, err)
+	case errInvalidSqrtPrice.Selector():
+		return fmt.Errorf("%w: %w", ErrInvalidSqrtPrice, err)
+	case errHookAddressNotValid.Selector():
+		return fmt.Errorf("%w: %w", ErrHookAddressNotValid, err)
+	case errCannotUpdateEmptyPosition.Selector():
+		return fmt.Errorf("%w: %w", ErrCannotUpdateEmptyPosition, err)
+	case errDelegateCallNotAllowed.Selector():
+		return fmt.Errorf("%w: %w", ErrDelegateCallNotAllowed, err)
+	case errNativeTransferFailed.Selector():
+		return fmt.Errorf("%w: %w", ErrNativeTransferFailed, err)
+	case errERC20TransferFailed.Selector():
+		return fmt.Errorf("%w: %w", ErrERC20TransferFailed, err)
+	case errSafeCastOverflow.Selector():
+		return fmt.Errorf("%w: %w", ErrSafeCastOverflow, err)
+	case errPriceLimitAlreadyExceeded.Selector():
+		return fmt.Errorf("%w: %w", ErrPriceLimitAlreadyExceeded, err)
+	case errPriceLimitOutOfBounds.Selector():
+		return fmt.Errorf("%w: %w", ErrPriceLimitOutOfBounds, err)
+	case errInvalidFeeForExactOut.Selector():
+		return fmt.Errorf("%w: %w", ErrInvalidFeeForExactOut, err)
+	case errInvalidHookResponse.Selector():
+		return fmt.Errorf("%w: %w", ErrInvalidHookResponse, err)
+	case errHookDeltaExceedsSwapAmount.Selector():
+		return fmt.Errorf("%w: %w", ErrHookDeltaExceedsSwapAmount, err)
+	case errLPFeeTooLarge.Selector():
+		return fmt.Errorf("%w: %w", ErrLPFeeTooLarge, err)
+	case errInvalidPriceOrLiquidity.Selector():
+		return fmt.Errorf("%w: %w", ErrInvalidPriceOrLiquidity, err)
+	case errInvalidPrice.Selector():
+		return fmt.Errorf("%w: %w", ErrInvalidPrice, err)
+	case errPriceOverflow.Selector():
+		return fmt.Errorf("%w: %w", ErrPriceOverflow, err)
+	case errSqrtPriceMathNotEnoughLiquidity.Selector():
+		return fmt.Errorf("%w: %w", ErrNotEnoughLiquidity, err)
+	case errWrappedError.Selector():
+		vals, wrappedErr := errWrappedError.Decode(data)
+		if wrappedErr != nil || len(vals) != 4 {
+			return fmt.Errorf("%w: %w", ErrWrappedError, err)
+		}
+		details, ok := vals[3].([]byte)
+		if !ok || len(details) < 4 {
+			return fmt.Errorf("%w: %w", ErrWrappedError, err)
+		}
+		var detailsSel abi.Selector
+		copy(detailsSel[:], details[:4])
+		if detailsSel == errHookCallFailed.Selector() {
+			return fmt.Errorf("%w: %w: %w", ErrWrappedError, ErrHookCallFailed, err)
+		}
+		return fmt.Errorf("%w: %w", ErrWrappedError, err)
+	default:
+		return fmt.Errorf("%w: %w", ErrUnknown, err)
+	}
 }

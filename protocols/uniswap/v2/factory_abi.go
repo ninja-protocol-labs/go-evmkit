@@ -1,12 +1,15 @@
 package v2
 
 import (
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"math/big"
 
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
+	"github.com/ninja-protocol-labs/go-evmkit/rpc"
+	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
 // Function signatures from IUniswapV2Factory, for encoding calls and decoding results.
@@ -161,4 +164,44 @@ func EncodeSetFeeToSetter(feeToSetter *types.Address) ([]byte, error) {
 		return nil, fmt.Errorf("uniswapv2: encodeSetFeeToSetter: %w", err)
 	}
 	return data, nil
+}
+
+// mapFactoryRevertError maps a known UniswapV2Factory require(cond, reason) string in err to its sentinel.
+func mapFactoryRevertError(err error) error {
+	if rpcErr, ok := errors.AsType[*rpc.ResponseError](err); ok && rpcErr == nil {
+		return nil
+	}
+
+	var rpcErr *rpc.ResponseError
+	if !errors.As(err, &rpcErr) || len(rpcErr.Data) == 0 {
+		return err
+	}
+
+	var hexData string
+	if jsonErr := json.Unmarshal(rpcErr.Data, &hexData); jsonErr != nil {
+		return err
+	}
+
+	data, decErr := encoding.Hex.Decode(hexData)
+	if decErr != nil {
+		return err
+	}
+
+	reason, decErr := abi.DecodeRevert(data)
+	if decErr != nil {
+		return err
+	}
+
+	switch reason {
+	case reasonIdenticalAddresses:
+		return fmt.Errorf("%w: %w", ErrIdenticalAddresses, err)
+	case reasonZeroAddress:
+		return fmt.Errorf("%w: %w", ErrZeroAddress, err)
+	case reasonPairExists:
+		return fmt.Errorf("%w: %w", ErrPairExists, err)
+	case reasonForbidden:
+		return fmt.Errorf("%w: %w", ErrForbidden, err)
+	default:
+		return fmt.Errorf("%w: %w", ErrUnknown, err)
+	}
 }

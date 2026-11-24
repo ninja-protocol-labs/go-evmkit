@@ -258,3 +258,8 @@ func DecodeQuoteExactOutput(data []byte) (*QuoteExactOutputResult, error) {
 	}
 	return NewQuoteExactOutputResult(amountIn, sqrtPriceX96AfterList, initializedTicksCrossedList, gasEstimate), nil
 }
+
+// mapQuoterRevertError maps a revert in err the same way Pool does, since QuoterV2 bubbles up the pool's own revert reasons.
+func mapQuoterRevertError(err error) error {
+	return mapPoolRevertError(err)
+}

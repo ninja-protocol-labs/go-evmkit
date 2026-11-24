@@ -136,18 +136,17 @@ func TestRouterCallExecuteActionsMapsRevertToSentinel(t *testing.T) {
 }
 
 func TestRouterWrapRevertErrorPassesThroughUndecodable(t *testing.T) {
-	r := &Router{}
 	plain := errors.New("dial tcp: connection refused")
-	require.Same(t, plain, r.wrapRevertError(plain))
-	require.Nil(t, r.wrapRevertError(nil))
+	require.Same(t, plain, mapRouterRevertError(plain))
+	require.Nil(t, mapRouterRevertError(nil))
 
 	for _, data := range []jsontext.Value{nil, jsontext.Value(`"0x"`), jsontext.Value(`"0x123456"`), jsontext.Value(`"0xzz"`), jsontext.Value(`{"x":1}`), jsontext.Value(`42`)} {
 		t.Run(string(data), func(t *testing.T) {
 			rpcErr := &rpc.ResponseError{Code: 3, Message: "execution reverted", Data: data}
-			require.Same(t, rpcErr, r.wrapRevertError(rpcErr))
+			require.Same(t, rpcErr, mapRouterRevertError(rpcErr))
 
 			wrapped := fmt.Errorf("rpc: %s: %w", rpc.MethodETHEstimateGas, rpcErr)
-			require.Same(t, wrapped, r.wrapRevertError(wrapped))
+			require.Same(t, wrapped, mapRouterRevertError(wrapped))
 		})
 	}
 }
@@ -424,4 +423,7 @@ func TestMapRevertErrorCoversRouterPositionManagerAndPoolManager(t *testing.T) {
 	require.Same(t, plain, MapRevertError(plain))
 	empty := &rpc.ResponseError{Code: 3, Message: "execution reverted"}
 	require.Same(t, empty, MapRevertError(empty))
+	require.NoError(t, MapRevertError(nil))
+	var success *rpc.ResponseError
+	require.NoError(t, MapRevertError(success))
 }

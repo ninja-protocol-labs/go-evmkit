@@ -1,12 +1,15 @@
 package erc2612
 
 import (
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"math/big"
 
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
+	"github.com/ninja-protocol-labs/go-evmkit/rpc"
+	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
 // Function signatures from IERC20Permit, for encoding calls and decoding results.
@@ -76,4 +79,38 @@ func DecodeDomainSeparator(data []byte) ([]byte, error) {
 		return nil, fmt.Errorf("erc2612: decodeDomainSeparator: %w", err)
 	}
 	return b, nil
+}
+
+// MapRevertError maps a known ERC20Permit custom error in err to its sentinel.
+func MapRevertError(err error) error {
+	if rpcErr, ok := errors.AsType[*rpc.ResponseError](err); ok && rpcErr == nil {
+		return nil
+	}
+
+	var rpcErr *rpc.ResponseError
+	if !errors.As(err, &rpcErr) || len(rpcErr.Data) == 0 {
+		return err
+	}
+
+	var hexData string
+	if jsonErr := json.Unmarshal(rpcErr.Data, &hexData); jsonErr != nil {
+		return err
+	}
+
+	data, decErr := encoding.Hex.Decode(hexData)
+	if decErr != nil || len(data) < 4 {
+		return err
+	}
+
+	var sel abi.Selector
+	copy(sel[:], data[:4])
+
+	switch sel {
+	case errExpiredSignature.Selector():
+		return fmt.Errorf("%w: %w", ErrExpiredSignature, err)
+	case errInvalidSigner.Selector():
+		return fmt.Errorf("%w: %w", ErrInvalidSigner, err)
+	default:
+		return fmt.Errorf("%w: %w", ErrUnknown, err)
+	}
 }

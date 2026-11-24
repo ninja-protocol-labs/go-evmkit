@@ -1297,7 +1297,7 @@ func (s *Permit2Suite) Test17InvalidSignatureLength() {
 	s.Require().Nil(revertTx)
 	s.Require().Nil(revertHash)
 
-	wrapped := s.p.wrapRevertError(err)
+	wrapped := MapRevertError(err)
 	s.Require().ErrorIs(wrapped, ErrInvalidSignatureLength)
 	s.T().Logf("Test17InvalidSignatureLength: short signature correctly rejected: %v", wrapped)
 }
@@ -1329,7 +1329,7 @@ func (s *Permit2Suite) Test18InvalidSignature() {
 	s.Require().Nil(revertTx)
 	s.Require().Nil(revertHash)
 
-	wrapped := s.p.wrapRevertError(err)
+	wrapped := MapRevertError(err)
 	s.Require().ErrorIs(wrapped, ErrInvalidSignature)
 	s.T().Logf("Test18InvalidSignature: malformed-v signature correctly rejected: %v", wrapped)
 }
@@ -1413,8 +1413,8 @@ func (s *Permit2Suite) Test21LengthMismatch() {
 	s.Require().Error(err)
 	s.Require().Nil(revertTx)
 	s.Require().Nil(revertHash)
-	s.Require().ErrorIs(s.p.wrapRevertError(err), ErrLengthMismatch)
-	s.T().Logf("Test21LengthMismatch: mismatched transferDetails length correctly rejected: %v", s.p.wrapRevertError(err))
+	s.Require().ErrorIs(MapRevertError(err), ErrLengthMismatch)
+	s.T().Logf("Test21LengthMismatch: mismatched transferDetails length correctly rejected: %v", MapRevertError(err))
 }
 
 func (s *Permit2Suite) Test22InsufficientAllowance() {

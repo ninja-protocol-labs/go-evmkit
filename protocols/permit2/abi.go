@@ -1,12 +1,15 @@
 package permit2
 
 import (
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"math/big"
 
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
+	"github.com/ninja-protocol-labs/go-evmkit/rpc"
+	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
 // Tuple types for IAllowanceTransfer's structs.
@@ -163,7 +166,7 @@ var (
 	errLengthMismatch           = abi.NewError("LengthMismatch", nil)
 )
 
-// ErrAllowanceExpired, etc. are sentinel errors wrapRevertError maps known Permit2 custom
+// ErrAllowanceExpired, etc. are sentinel errors MapRevertError maps known Permit2 custom
 // errors to, for errors.Is.
 var (
 	ErrAllowanceExpired         = errors.New("allowance expired")
@@ -370,4 +373,58 @@ func EncodeInvalidateUnorderedNonces(wordPos, mask *big.Int) ([]byte, error) {
 		return nil, fmt.Errorf("permit2: encodeInvalidateUnorderedNonces: %w", err)
 	}
 	return data, nil
+}
+
+// MapRevertError maps a known Permit2 custom error in err to its sentinel.
+func MapRevertError(err error) error {
+	if rpcErr, ok := errors.AsType[*rpc.ResponseError](err); ok && rpcErr == nil {
+		return nil
+	}
+
+	var rpcErr *rpc.ResponseError
+	if !errors.As(err, &rpcErr) || len(rpcErr.Data) == 0 {
+		return err
+	}
+
+	var hexData string
+	if jsonErr := json.Unmarshal(rpcErr.Data, &hexData); jsonErr != nil {
+		return err
+	}
+
+	data, decErr := encoding.Hex.Decode(hexData)
+	if decErr != nil || len(data) < 4 {
+		return err
+	}
+
+	var sel abi.Selector
+	copy(sel[:], data[:4])
+
+	switch sel {
+	case errAllowanceExpired.Selector():
+		return fmt.Errorf("%w: %w", ErrAllowanceExpired, err)
+	case errInsufficientAllowance.Selector():
+		return fmt.Errorf("%w: %w", ErrInsufficientAllowance, err)
+	case errExcessiveInvalidation.Selector():
+		return fmt.Errorf("%w: %w", ErrExcessiveInvalidation, err)
+	case errSignatureExpired.Selector():
+		return fmt.Errorf("%w: %w", ErrSignatureExpired, err)
+	case errInvalidNonce.Selector():
+		return fmt.Errorf("%w: %w", ErrInvalidNonce, err)
+	case errInvalidSignatureLength.Selector():
+		return fmt.Errorf("%w: %w", ErrInvalidSignatureLength, err)
+	case errInvalidSignature.Selector():
+		return fmt.Errorf("%w: %w", ErrInvalidSignature, err)
+	case errInvalidSigner.Selector():
+		return fmt.Errorf("%w: %w", ErrInvalidSigner, err)
+	case errInvalidContractSignature.Selector():
+		return fmt.Errorf("%w: %w", ErrInvalidContractSignature, err)
+	case errUnsafeCast.Selector():
+		return fmt.Errorf("%w: %w", ErrUnsafeCast, err)
+	case errInvalidAmount.Selector():
+		return fmt.Errorf("%w: %w", ErrInvalidAmount, err)
+	case errLengthMismatch.Selector():
+		return fmt.Errorf("%w: %w", ErrLengthMismatch, err)
+	default:
+		return fmt.Errorf("%w: %w", ErrUnknown, err)
+	}
 }

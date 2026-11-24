@@ -4,17 +4,14 @@ package multicall3
 
 import (
 	"context"
-	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"math/big"
 
 	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core"
-	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
-	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
 // DefaultMulticall3Address is the address Multicall3 is conventionally
@@ -76,7 +73,7 @@ func (m *Multicall3) CallAggregate(ctx context.Context, opts *bind.CallOptions, 
 
 	data, err := bind.Call(ctx, m.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("multicall3: callAggregate: %w", m.wrapRevertError(err))
+		return nil, fmt.Errorf("multicall3: callAggregate: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeAggregate(data)
@@ -100,7 +97,7 @@ func (m *Multicall3) CallTryAggregate(ctx context.Context, opts *bind.CallOption
 
 	data, err := bind.Call(ctx, m.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("multicall3: callTryAggregate: %w", m.wrapRevertError(err))
+		return nil, fmt.Errorf("multicall3: callTryAggregate: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeResults(data)
@@ -124,7 +121,7 @@ func (m *Multicall3) CallBlockAndAggregate(ctx context.Context, opts *bind.CallO
 
 	data, err := bind.Call(ctx, m.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("multicall3: callBlockAndAggregate: %w", m.wrapRevertError(err))
+		return nil, fmt.Errorf("multicall3: callBlockAndAggregate: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeBlockAndAggregate(data)
@@ -148,7 +145,7 @@ func (m *Multicall3) CallTryBlockAndAggregate(ctx context.Context, opts *bind.Ca
 
 	data, err := bind.Call(ctx, m.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("multicall3: callTryBlockAndAggregate: %w", m.wrapRevertError(err))
+		return nil, fmt.Errorf("multicall3: callTryBlockAndAggregate: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeBlockAndAggregate(data)
@@ -172,7 +169,7 @@ func (m *Multicall3) CallAggregate3(ctx context.Context, opts *bind.CallOptions,
 
 	data, err := bind.Call(ctx, m.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("multicall3: callAggregate3: %w", m.wrapRevertError(err))
+		return nil, fmt.Errorf("multicall3: callAggregate3: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeResults(data)
@@ -207,7 +204,7 @@ func (m *Multicall3) CallAggregate3Value(ctx context.Context, opts *bind.CallOpt
 
 	data, err := bind.Call(ctx, m.c, callOpts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("multicall3: callAggregate3Value: %w", m.wrapRevertError(err))
+		return nil, fmt.Errorf("multicall3: callAggregate3Value: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeResults(data)
@@ -231,7 +228,7 @@ func (m *Multicall3) Aggregate(ctx context.Context, opts *bind.TransactOptions, 
 
 	signed, hash, err := bind.Transact(ctx, m.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("multicall3: aggregate: %w", m.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("multicall3: aggregate: %w", MapRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -250,7 +247,7 @@ func (m *Multicall3) TryAggregate(ctx context.Context, opts *bind.TransactOption
 
 	signed, hash, err := bind.Transact(ctx, m.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("multicall3: tryAggregate: %w", m.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("multicall3: tryAggregate: %w", MapRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -269,7 +266,7 @@ func (m *Multicall3) BlockAndAggregate(ctx context.Context, opts *bind.TransactO
 
 	signed, hash, err := bind.Transact(ctx, m.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("multicall3: blockAndAggregate: %w", m.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("multicall3: blockAndAggregate: %w", MapRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -288,7 +285,7 @@ func (m *Multicall3) TryBlockAndAggregate(ctx context.Context, opts *bind.Transa
 
 	signed, hash, err := bind.Transact(ctx, m.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("multicall3: tryBlockAndAggregate: %w", m.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("multicall3: tryBlockAndAggregate: %w", MapRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -307,7 +304,7 @@ func (m *Multicall3) Aggregate3(ctx context.Context, opts *bind.TransactOptions,
 
 	signed, hash, err := bind.Transact(ctx, m.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("multicall3: aggregate3: %w", m.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("multicall3: aggregate3: %w", MapRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -338,7 +335,7 @@ func (m *Multicall3) Aggregate3Value(ctx context.Context, opts *bind.TransactOpt
 
 	signed, hash, err := bind.Transact(ctx, m.c, txOpts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("multicall3: aggregate3Value: %w", m.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("multicall3: aggregate3Value: %w", MapRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -379,7 +376,7 @@ func (m *Multicall3) GetBlockHash(ctx context.Context, opts *bind.CallOptions, r
 
 	data, err := bind.Call(ctx, m.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("multicall3: getBlockHash: %w", m.wrapRevertError(err))
+		return nil, fmt.Errorf("multicall3: getBlockHash: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeGetBlockHash(data)
@@ -398,7 +395,7 @@ func (m *Multicall3) GetBlockNumber(ctx context.Context, opts *bind.CallOptions,
 
 	data, err := bind.Call(ctx, m.c, opts, req.Contract, EncodeGetBlockNumber())
 	if err != nil {
-		return nil, fmt.Errorf("multicall3: getBlockNumber: %w", m.wrapRevertError(err))
+		return nil, fmt.Errorf("multicall3: getBlockNumber: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeGetBlockNumber(data)
@@ -417,7 +414,7 @@ func (m *Multicall3) GetChainID(ctx context.Context, opts *bind.CallOptions, req
 
 	data, err := bind.Call(ctx, m.c, opts, req.Contract, EncodeGetChainID())
 	if err != nil {
-		return nil, fmt.Errorf("multicall3: getChainId: %w", m.wrapRevertError(err))
+		return nil, fmt.Errorf("multicall3: getChainId: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeGetChainID(data)
@@ -436,7 +433,7 @@ func (m *Multicall3) GetCurrentBlockCoinbase(ctx context.Context, opts *bind.Cal
 
 	data, err := bind.Call(ctx, m.c, opts, req.Contract, EncodeGetCurrentBlockCoinbase())
 	if err != nil {
-		return nil, fmt.Errorf("multicall3: getCurrentBlockCoinbase: %w", m.wrapRevertError(err))
+		return nil, fmt.Errorf("multicall3: getCurrentBlockCoinbase: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeGetCurrentBlockCoinbase(data)
@@ -455,7 +452,7 @@ func (m *Multicall3) GetCurrentBlockDifficulty(ctx context.Context, opts *bind.C
 
 	data, err := bind.Call(ctx, m.c, opts, req.Contract, EncodeGetCurrentBlockDifficulty())
 	if err != nil {
-		return nil, fmt.Errorf("multicall3: getCurrentBlockDifficulty: %w", m.wrapRevertError(err))
+		return nil, fmt.Errorf("multicall3: getCurrentBlockDifficulty: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeGetCurrentBlockDifficulty(data)
@@ -474,7 +471,7 @@ func (m *Multicall3) GetCurrentBlockGasLimit(ctx context.Context, opts *bind.Cal
 
 	data, err := bind.Call(ctx, m.c, opts, req.Contract, EncodeGetCurrentBlockGasLimit())
 	if err != nil {
-		return nil, fmt.Errorf("multicall3: getCurrentBlockGasLimit: %w", m.wrapRevertError(err))
+		return nil, fmt.Errorf("multicall3: getCurrentBlockGasLimit: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeGetCurrentBlockGasLimit(data)
@@ -493,7 +490,7 @@ func (m *Multicall3) GetCurrentBlockTimestamp(ctx context.Context, opts *bind.Ca
 
 	data, err := bind.Call(ctx, m.c, opts, req.Contract, EncodeGetCurrentBlockTimestamp())
 	if err != nil {
-		return nil, fmt.Errorf("multicall3: getCurrentBlockTimestamp: %w", m.wrapRevertError(err))
+		return nil, fmt.Errorf("multicall3: getCurrentBlockTimestamp: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeGetCurrentBlockTimestamp(data)
@@ -517,7 +514,7 @@ func (m *Multicall3) GetEthBalance(ctx context.Context, opts *bind.CallOptions, 
 
 	data, err := bind.Call(ctx, m.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("multicall3: getEthBalance: %w", m.wrapRevertError(err))
+		return nil, fmt.Errorf("multicall3: getEthBalance: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeGetEthBalance(data)
@@ -536,7 +533,7 @@ func (m *Multicall3) GetLastBlockHash(ctx context.Context, opts *bind.CallOption
 
 	data, err := bind.Call(ctx, m.c, opts, req.Contract, EncodeGetLastBlockHash())
 	if err != nil {
-		return nil, fmt.Errorf("multicall3: getLastBlockHash: %w", m.wrapRevertError(err))
+		return nil, fmt.Errorf("multicall3: getLastBlockHash: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeGetLastBlockHash(data)
@@ -545,36 +542,4 @@ func (m *Multicall3) GetLastBlockHash(ctx context.Context, opts *bind.CallOption
 	}
 
 	return out, nil
-}
-
-// wrapRevertError maps a known Multicall3 revert reason in err to its sentinel.
-func (_ *Multicall3) wrapRevertError(err error) error {
-	var rpcErr *rpc.ResponseError
-	if !errors.As(err, &rpcErr) || len(rpcErr.Data) == 0 {
-		return err
-	}
-
-	var hexData string
-	if jsonErr := json.Unmarshal(rpcErr.Data, &hexData); jsonErr != nil {
-		return err
-	}
-
-	data, decErr := encoding.Hex.Decode(hexData)
-	if decErr != nil || len(data) == 0 {
-		return err
-	}
-
-	reason, revertErr := abi.DecodeRevert(data)
-	if revertErr != nil {
-		return fmt.Errorf("%w: %w", ErrUnknown, err)
-	}
-
-	switch reason {
-	case ErrCallFailedString:
-		return fmt.Errorf("%w: %w", ErrCallFailed, err)
-	case ErrValueMismatchString:
-		return fmt.Errorf("%w: %w", ErrValueMismatch, err)
-	default:
-		return fmt.Errorf("%w: %w", ErrUnknown, err)
-	}
 }

@@ -285,3 +285,14 @@ func TestCallsPropagateContext(t *testing.T) {
 	_, err = New(c).Nonces(ctx, nil, NewNoncesRequest(contract, owner))
 	require.NoError(t, err)
 }
+
+func TestMapRevertErrorPassesThroughNilAndUndecodable(t *testing.T) {
+	require.NoError(t, MapRevertError(nil))
+	var success *rpc.ResponseError
+	require.NoError(t, MapRevertError(success))
+
+	plain := fmt.Errorf("dial tcp: connection refused")
+	require.Same(t, plain, MapRevertError(plain))
+	empty := &rpc.ResponseError{Code: 3, Message: "execution reverted"}
+	require.Same(t, empty, MapRevertError(empty))
+}

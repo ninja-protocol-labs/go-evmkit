@@ -2,17 +2,13 @@ package v3
 
 import (
 	"context"
-	"encoding/json/v2"
-	"errors"
 	"fmt"
 	"math/big"
 
 	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core"
-	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
-	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
 // IRouterImmutables mirrors PeripheryImmutableState, the only state SwapRouter02 itself holds.
@@ -89,7 +85,7 @@ func (r *Router) Factory(ctx context.Context, opts *bind.CallOptions, req *Facto
 
 	data, err := bind.Call(ctx, r.c, opts, req.Contract, EncodeRouterFactory())
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: factory: %w", r.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv3: factory: %w", mapRouterRevertError(err))
 	}
 
 	out, err := DecodeRouterFactory(data)
@@ -108,7 +104,7 @@ func (r *Router) WETH9(ctx context.Context, opts *bind.CallOptions, req *WETH9Re
 
 	data, err := bind.Call(ctx, r.c, opts, req.Contract, EncodeRouterWETH9())
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: weth9: %w", r.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv3: weth9: %w", mapRouterRevertError(err))
 	}
 
 	out, err := DecodeRouterWETH9(data)
@@ -142,7 +138,7 @@ func (r *Router) CallExactInputSingle(ctx context.Context, opts *bind.CallOption
 
 	data, err := bind.Call(ctx, r.c, callOpts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: callExactInputSingle: %w", r.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv3: callExactInputSingle: %w", mapRouterRevertError(err))
 	}
 
 	amountOut, err := DecodeExactInputSingle(data)
@@ -176,7 +172,7 @@ func (r *Router) CallExactInput(ctx context.Context, opts *bind.CallOptions, req
 
 	data, err := bind.Call(ctx, r.c, callOpts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: callExactInput: %w", r.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv3: callExactInput: %w", mapRouterRevertError(err))
 	}
 
 	amountOut, err := DecodeExactInput(data)
@@ -210,7 +206,7 @@ func (r *Router) CallExactOutputSingle(ctx context.Context, opts *bind.CallOptio
 
 	data, err := bind.Call(ctx, r.c, callOpts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: callExactOutputSingle: %w", r.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv3: callExactOutputSingle: %w", mapRouterRevertError(err))
 	}
 
 	amountIn, err := DecodeExactOutputSingle(data)
@@ -244,7 +240,7 @@ func (r *Router) CallExactOutput(ctx context.Context, opts *bind.CallOptions, re
 
 	data, err := bind.Call(ctx, r.c, callOpts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: callExactOutput: %w", r.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv3: callExactOutput: %w", mapRouterRevertError(err))
 	}
 
 	amountIn, err := DecodeExactOutput(data)
@@ -284,7 +280,7 @@ func (r *Router) CallMulticall(ctx context.Context, opts *bind.CallOptions, req 
 
 	data, err := bind.Call(ctx, r.c, callOpts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: callMulticall: %w", r.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv3: callMulticall: %w", mapRouterRevertError(err))
 	}
 
 	results, err := DecodeRouterMulticall(data)
@@ -319,7 +315,7 @@ func (r *Router) ExactInputSingle(ctx context.Context, opts *bind.TransactOption
 
 	signed, hash, err := bind.Transact(ctx, r.c, txOpts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv3: exactInputSingle: %w", r.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv3: exactInputSingle: %w", mapRouterRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -349,7 +345,7 @@ func (r *Router) ExactInput(ctx context.Context, opts *bind.TransactOptions, req
 
 	signed, hash, err := bind.Transact(ctx, r.c, txOpts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv3: exactInput: %w", r.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv3: exactInput: %w", mapRouterRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -379,7 +375,7 @@ func (r *Router) ExactOutputSingle(ctx context.Context, opts *bind.TransactOptio
 
 	signed, hash, err := bind.Transact(ctx, r.c, txOpts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv3: exactOutputSingle: %w", r.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv3: exactOutputSingle: %w", mapRouterRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -409,7 +405,7 @@ func (r *Router) ExactOutput(ctx context.Context, opts *bind.TransactOptions, re
 
 	signed, hash, err := bind.Transact(ctx, r.c, txOpts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv3: exactOutput: %w", r.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv3: exactOutput: %w", mapRouterRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -432,7 +428,7 @@ func (r *Router) UnwrapWETH9(ctx context.Context, opts *bind.TransactOptions, re
 
 	signed, hash, err := bind.Transact(ctx, r.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv3: unwrapWETH9: %w", r.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv3: unwrapWETH9: %w", mapRouterRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -455,7 +451,7 @@ func (r *Router) UnwrapWETH9WithFee(ctx context.Context, opts *bind.TransactOpti
 
 	signed, hash, err := bind.Transact(ctx, r.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv3: unwrapWETH9WithFee: %w", r.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv3: unwrapWETH9WithFee: %w", mapRouterRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -478,7 +474,7 @@ func (r *Router) SweepToken(ctx context.Context, opts *bind.TransactOptions, req
 
 	signed, hash, err := bind.Transact(ctx, r.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv3: sweepToken: %w", r.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv3: sweepToken: %w", mapRouterRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -501,7 +497,7 @@ func (r *Router) SweepTokenWithFee(ctx context.Context, opts *bind.TransactOptio
 
 	signed, hash, err := bind.Transact(ctx, r.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv3: sweepTokenWithFee: %w", r.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv3: sweepTokenWithFee: %w", mapRouterRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -521,7 +517,7 @@ func (r *Router) RefundETH(ctx context.Context, opts *bind.TransactOptions, req 
 
 	signed, hash, err := bind.Transact(ctx, r.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv3: refundETH: %w", r.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv3: refundETH: %w", mapRouterRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -557,7 +553,7 @@ func (r *Router) Multicall(ctx context.Context, opts *bind.TransactOptions, req 
 
 	signed, hash, err := bind.Transact(ctx, r.c, txOpts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv3: multicall: %w", r.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv3: multicall: %w", mapRouterRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -580,7 +576,7 @@ func (r *Router) SelfPermit(ctx context.Context, opts *bind.TransactOptions, req
 
 	signed, hash, err := bind.Transact(ctx, r.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv3: selfPermit: %w", r.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv3: selfPermit: %w", mapRouterRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -603,7 +599,7 @@ func (r *Router) SelfPermitIfNecessary(ctx context.Context, opts *bind.TransactO
 
 	signed, hash, err := bind.Transact(ctx, r.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv3: selfPermitIfNecessary: %w", r.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv3: selfPermitIfNecessary: %w", mapRouterRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -626,7 +622,7 @@ func (r *Router) SelfPermitAllowed(ctx context.Context, opts *bind.TransactOptio
 
 	signed, hash, err := bind.Transact(ctx, r.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv3: selfPermitAllowed: %w", r.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv3: selfPermitAllowed: %w", mapRouterRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -649,69 +645,8 @@ func (r *Router) SelfPermitAllowedIfNecessary(ctx context.Context, opts *bind.Tr
 
 	signed, hash, err := bind.Transact(ctx, r.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv3: selfPermitAllowedIfNecessary: %w", r.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv3: selfPermitAllowedIfNecessary: %w", mapRouterRevertError(err))
 	}
 
 	return signed, hash, nil
-}
-
-// wrapRevertError maps a known SwapRouter revert reason in err to its sentinel.
-func (_ *Router) wrapRevertError(err error) error {
-	var rpcErr *rpc.ResponseError
-	if !errors.As(err, &rpcErr) {
-		return err
-	}
-	if len(rpcErr.Data) == 0 {
-		return fmt.Errorf("%w: %w", ErrReverted, err)
-	}
-
-	var hexData string
-	if jsonErr := json.Unmarshal(rpcErr.Data, &hexData); jsonErr != nil {
-		return fmt.Errorf("%w: %w", ErrReverted, err)
-	}
-
-	data, decErr := encoding.Hex.Decode(hexData)
-	if decErr != nil {
-		return fmt.Errorf("%w: %w", ErrReverted, err)
-	}
-
-	reason, decErr := abi.DecodeRevert(data)
-	if decErr != nil {
-		return fmt.Errorf("%w: %w", ErrReverted, err)
-	}
-
-	switch reason {
-	case reasonTransactionTooOld:
-		return fmt.Errorf("%w: %w", ErrTransactionTooOld, err)
-	case reasonTooLittleReceived:
-		return fmt.Errorf("%w: %w", ErrTooLittleReceived, err)
-	case reasonTooMuchRequested:
-		return fmt.Errorf("%w: %w", ErrTooMuchRequested, err)
-	case reasonInsufficientWETH9:
-		return fmt.Errorf("%w: %w", ErrInsufficientWETH9, err)
-	case reasonInsufficientToken:
-		return fmt.Errorf("%w: %w", ErrInsufficientToken, err)
-	case reasonNotWETH9:
-		return fmt.Errorf("%w: %w", ErrNotWETH9, err)
-	case reasonTransferFromFailed:
-		return fmt.Errorf("%w: %w", ErrTransferFromFailed, err)
-	case reasonTokenTransferFailed:
-		return fmt.Errorf("%w: %w", ErrTokenTransferFailed, err)
-	case reasonApproveFailed:
-		return fmt.Errorf("%w: %w", ErrApproveFailed, err)
-	case reasonTransferETHFailed:
-		return fmt.Errorf("%w: %w", ErrTransferETHFailed, err)
-	default:
-		return (*Pool)(nil).wrapRevertError(err)
-	}
-}
-
-// MapRevertError maps a v3 Router, Pool or NFPM revert reason in err to its sentinel, else ErrReverted.
-func MapRevertError(err error) error {
-	wrapped := (*Router)(nil).wrapRevertError(err)
-	if !errors.Is(wrapped, ErrReverted) {
-		return wrapped
-	}
-
-	return (*NFPM)(nil).wrapRevertError(err)
 }

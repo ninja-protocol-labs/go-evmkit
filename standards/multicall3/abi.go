@@ -1,12 +1,15 @@
 package multicall3
 
 import (
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"math/big"
 
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
+	"github.com/ninja-protocol-labs/go-evmkit/rpc"
+	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
 var (
@@ -358,4 +361,40 @@ func toResults(v any) ([]Result, error) {
 		results[i] = NewResult(success, returnData)
 	}
 	return results, nil
+}
+
+// MapRevertError maps a known Multicall3 revert reason in err to its sentinel.
+func MapRevertError(err error) error {
+	if rpcErr, ok := errors.AsType[*rpc.ResponseError](err); ok && rpcErr == nil {
+		return nil
+	}
+
+	var rpcErr *rpc.ResponseError
+	if !errors.As(err, &rpcErr) || len(rpcErr.Data) == 0 {
+		return err
+	}
+
+	var hexData string
+	if jsonErr := json.Unmarshal(rpcErr.Data, &hexData); jsonErr != nil {
+		return err
+	}
+
+	data, decErr := encoding.Hex.Decode(hexData)
+	if decErr != nil || len(data) == 0 {
+		return err
+	}
+
+	reason, revertErr := abi.DecodeRevert(data)
+	if revertErr != nil {
+		return fmt.Errorf("%w: %w", ErrUnknown, err)
+	}
+
+	switch reason {
+	case ErrCallFailedString:
+		return fmt.Errorf("%w: %w", ErrCallFailed, err)
+	case ErrValueMismatchString:
+		return fmt.Errorf("%w: %w", ErrValueMismatch, err)
+	default:
+		return fmt.Errorf("%w: %w", ErrUnknown, err)
+	}
 }

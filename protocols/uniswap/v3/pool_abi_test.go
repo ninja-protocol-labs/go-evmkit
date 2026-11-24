@@ -712,33 +712,29 @@ func TestPoolRevertReasons(t *testing.T) {
 }
 
 func TestWrapRevertErrorZeroLengthDataFallsBackToErrReverted(t *testing.T) {
-	p := &Pool{}
 	rpcErr := &rpc.ResponseError{Code: 3, Message: "execution reverted"}
-	err := p.wrapRevertError(rpcErr)
+	err := mapPoolRevertError(rpcErr)
 	require.ErrorIs(t, err, ErrReverted)
 }
 
 func TestWrapRevertErrorEmptyHexDataFallsBackToErrReverted(t *testing.T) {
-	p := &Pool{}
 	rpcErr := &rpc.ResponseError{Code: 3, Message: "execution reverted", Data: jsontext.Value(`"0x"`)}
-	err := p.wrapRevertError(rpcErr)
+	err := mapPoolRevertError(rpcErr)
 	require.ErrorIs(t, err, ErrReverted)
 }
 
 func TestWrapRevertErrorKnownReasonMapsToSentinel(t *testing.T) {
-	p := &Pool{}
 	revertData, err := abi.NewFunction("Error", abi.Types{abi.String}, nil).EncodeCall(reasonNoPosition)
 	require.NoError(t, err)
 	hexData := `"` + encoding.Hex.EncodePrefixed(revertData) + `"`
 	rpcErr := &rpc.ResponseError{Code: 3, Message: "execution reverted", Data: jsontext.Value(hexData)}
 
-	wrapped := p.wrapRevertError(rpcErr)
+	wrapped := mapPoolRevertError(rpcErr)
 	require.ErrorIs(t, wrapped, ErrNoPosition)
 }
 
 func TestWrapRevertErrorNonRPCErrorPassesThrough(t *testing.T) {
-	p := &Pool{}
 	plain := errors.New("boom")
-	err := p.wrapRevertError(plain)
+	err := mapPoolRevertError(plain)
 	require.Same(t, plain, err)
 }

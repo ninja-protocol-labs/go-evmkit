@@ -311,18 +311,17 @@ func TestPositionManagerReadsMapRevertToSentinel(t *testing.T) {
 }
 
 func TestPositionManagerWrapRevertErrorPassesThroughUndecodable(t *testing.T) {
-	p := &PositionManager{}
 	plain := errors.New("dial tcp: connection refused")
-	require.Same(t, plain, p.wrapRevertError(plain))
-	require.Nil(t, p.wrapRevertError(nil))
+	require.Same(t, plain, mapPositionManagerRevertError(plain))
+	require.Nil(t, mapPositionManagerRevertError(nil))
 
 	for _, data := range []jsontext.Value{nil, jsontext.Value(`"0x"`), jsontext.Value(`"0x123456"`), jsontext.Value(`"0xzz"`), jsontext.Value(`{"x":1}`), jsontext.Value(`42`)} {
 		t.Run(string(data), func(t *testing.T) {
 			rpcErr := &rpc.ResponseError{Code: 3, Message: "execution reverted", Data: data}
-			require.Same(t, rpcErr, p.wrapRevertError(rpcErr))
+			require.Same(t, rpcErr, mapPositionManagerRevertError(rpcErr))
 
 			wrapped := fmt.Errorf("rpc: %s: %w", rpc.MethodETHEstimateGas, rpcErr)
-			require.Same(t, wrapped, p.wrapRevertError(wrapped))
+			require.Same(t, wrapped, mapPositionManagerRevertError(wrapped))
 		})
 	}
 }

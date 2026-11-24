@@ -4,18 +4,14 @@ package erc6909
 
 import (
 	"context"
-	"encoding/json/v2"
-	"errors"
 	"fmt"
 	"math/big"
 
 	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core"
-	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
 	"github.com/ninja-protocol-labs/go-evmkit/standards/erc165"
-	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
 // IERC6909 mirrors IERC6909.sol, including its IERC165 embedding.
@@ -79,7 +75,7 @@ func (e *ERC6909) BalanceOf(ctx context.Context, opts *bind.CallOptions, req *Ba
 
 	data, err := bind.Call(ctx, e.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("erc6909: balanceOf: %w", e.wrapRevertError(err))
+		return nil, fmt.Errorf("erc6909: balanceOf: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeBalanceOf(data)
@@ -103,7 +99,7 @@ func (e *ERC6909) Allowance(ctx context.Context, opts *bind.CallOptions, req *Al
 
 	data, err := bind.Call(ctx, e.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("erc6909: allowance: %w", e.wrapRevertError(err))
+		return nil, fmt.Errorf("erc6909: allowance: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeAllowance(data)
@@ -127,7 +123,7 @@ func (e *ERC6909) IsOperator(ctx context.Context, opts *bind.CallOptions, req *I
 
 	data, err := bind.Call(ctx, e.c, opts, req.Contract, calldata)
 	if err != nil {
-		return false, fmt.Errorf("erc6909: isOperator: %w", e.wrapRevertError(err))
+		return false, fmt.Errorf("erc6909: isOperator: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeIsOperator(data)
@@ -151,7 +147,7 @@ func (e *ERC6909) CallApprove(ctx context.Context, opts *bind.CallOptions, req *
 
 	data, err := bind.Call(ctx, e.c, opts, req.Contract, calldata)
 	if err != nil {
-		return false, fmt.Errorf("erc6909: callApprove: %w", e.wrapRevertError(err))
+		return false, fmt.Errorf("erc6909: callApprove: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeApprove(data)
@@ -175,7 +171,7 @@ func (e *ERC6909) CallSetOperator(ctx context.Context, opts *bind.CallOptions, r
 
 	data, err := bind.Call(ctx, e.c, opts, req.Contract, calldata)
 	if err != nil {
-		return false, fmt.Errorf("erc6909: callSetOperator: %w", e.wrapRevertError(err))
+		return false, fmt.Errorf("erc6909: callSetOperator: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeSetOperator(data)
@@ -199,7 +195,7 @@ func (e *ERC6909) CallTransfer(ctx context.Context, opts *bind.CallOptions, req 
 
 	data, err := bind.Call(ctx, e.c, opts, req.Contract, calldata)
 	if err != nil {
-		return false, fmt.Errorf("erc6909: callTransfer: %w", e.wrapRevertError(err))
+		return false, fmt.Errorf("erc6909: callTransfer: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeTransfer(data)
@@ -223,7 +219,7 @@ func (e *ERC6909) CallTransferFrom(ctx context.Context, opts *bind.CallOptions, 
 
 	data, err := bind.Call(ctx, e.c, opts, req.Contract, calldata)
 	if err != nil {
-		return false, fmt.Errorf("erc6909: callTransferFrom: %w", e.wrapRevertError(err))
+		return false, fmt.Errorf("erc6909: callTransferFrom: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeTransferFrom(data)
@@ -247,7 +243,7 @@ func (e *ERC6909) Approve(ctx context.Context, opts *bind.TransactOptions, req *
 
 	signed, hash, err := bind.Transact(ctx, e.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("erc6909: approve: %w", e.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("erc6909: approve: %w", MapRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -266,7 +262,7 @@ func (e *ERC6909) SetOperator(ctx context.Context, opts *bind.TransactOptions, r
 
 	signed, hash, err := bind.Transact(ctx, e.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("erc6909: setOperator: %w", e.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("erc6909: setOperator: %w", MapRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -285,7 +281,7 @@ func (e *ERC6909) Transfer(ctx context.Context, opts *bind.TransactOptions, req 
 
 	signed, hash, err := bind.Transact(ctx, e.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("erc6909: transfer: %w", e.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("erc6909: transfer: %w", MapRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -304,7 +300,7 @@ func (e *ERC6909) TransferFrom(ctx context.Context, opts *bind.TransactOptions, 
 
 	signed, hash, err := bind.Transact(ctx, e.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("erc6909: transferFrom: %w", e.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("erc6909: transferFrom: %w", MapRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -323,7 +319,7 @@ func (e *ERC6909) Name(ctx context.Context, opts *bind.CallOptions, req *NameReq
 
 	data, err := bind.Call(ctx, e.c, opts, req.Contract, calldata)
 	if err != nil {
-		return "", fmt.Errorf("erc6909: name: %w", e.wrapRevertError(err))
+		return "", fmt.Errorf("erc6909: name: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeName(data)
@@ -347,7 +343,7 @@ func (e *ERC6909) Symbol(ctx context.Context, opts *bind.CallOptions, req *Symbo
 
 	data, err := bind.Call(ctx, e.c, opts, req.Contract, calldata)
 	if err != nil {
-		return "", fmt.Errorf("erc6909: symbol: %w", e.wrapRevertError(err))
+		return "", fmt.Errorf("erc6909: symbol: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeSymbol(data)
@@ -371,7 +367,7 @@ func (e *ERC6909) Decimals(ctx context.Context, opts *bind.CallOptions, req *Dec
 
 	data, err := bind.Call(ctx, e.c, opts, req.Contract, calldata)
 	if err != nil {
-		return 0, fmt.Errorf("erc6909: decimals: %w", e.wrapRevertError(err))
+		return 0, fmt.Errorf("erc6909: decimals: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeDecimals(data)
@@ -380,42 +376,4 @@ func (e *ERC6909) Decimals(ctx context.Context, opts *bind.CallOptions, req *Dec
 	}
 
 	return out, nil
-}
-
-// wrapRevertError maps a known OpenZeppelin ERC6909 custom error in err to its sentinel.
-func (_ *ERC6909) wrapRevertError(err error) error {
-	var rpcErr *rpc.ResponseError
-	if !errors.As(err, &rpcErr) || len(rpcErr.Data) == 0 {
-		return err
-	}
-
-	var hexData string
-	if jsonErr := json.Unmarshal(rpcErr.Data, &hexData); jsonErr != nil {
-		return err
-	}
-
-	data, decErr := encoding.Hex.Decode(hexData)
-	if decErr != nil || len(data) < 4 {
-		return err
-	}
-
-	var sel abi.Selector
-	copy(sel[:], data[:4])
-
-	switch sel {
-	case errInsufficientBalance.Selector():
-		return fmt.Errorf("%w: %w", ErrInsufficientBalance, err)
-	case errInsufficientAllowance.Selector():
-		return fmt.Errorf("%w: %w", ErrInsufficientAllowance, err)
-	case errInvalidApprover.Selector():
-		return fmt.Errorf("%w: %w", ErrInvalidApprover, err)
-	case errInvalidReceiver.Selector():
-		return fmt.Errorf("%w: %w", ErrInvalidReceiver, err)
-	case errInvalidSender.Selector():
-		return fmt.Errorf("%w: %w", ErrInvalidSender, err)
-	case errInvalidSpender.Selector():
-		return fmt.Errorf("%w: %w", ErrInvalidSpender, err)
-	default:
-		return fmt.Errorf("%w: %w", ErrUnknown, err)
-	}
 }

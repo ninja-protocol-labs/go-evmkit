@@ -3,22 +3,12 @@ package universalrouter
 
 import (
 	"context"
-	"encoding/json/jsontext"
-	"encoding/json/v2"
-	"errors"
 	"fmt"
-	"math/big"
 
 	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core"
-	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
-	"github.com/ninja-protocol-labs/go-evmkit/protocols/permit2"
-	v2 "github.com/ninja-protocol-labs/go-evmkit/protocols/uniswap/v2"
-	v3 "github.com/ninja-protocol-labs/go-evmkit/protocols/uniswap/v3"
-	v4 "github.com/ninja-protocol-labs/go-evmkit/protocols/uniswap/v4"
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
-	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
 // IUniversalRouter mirrors IUniversalRouter plus RouteSigner's public noncesUsed getter.
@@ -78,7 +68,7 @@ func (u *UniversalRouter) CallExecute(ctx context.Context, opts *bind.CallOption
 	callOpts.Value = req.NativeAmount
 
 	if _, err := bind.Call(ctx, u.c, callOpts, req.Contract, calldata); err != nil {
-		return fmt.Errorf("universalrouter: callExecute: %w", u.wrapRevertError(err))
+		return fmt.Errorf("universalrouter: callExecute: %w", MapRevertError(err))
 	}
 
 	return nil
@@ -111,7 +101,7 @@ func (u *UniversalRouter) CallExecuteSigned(ctx context.Context, opts *bind.Call
 	callOpts.Value = req.NativeAmount
 
 	if _, err := bind.Call(ctx, u.c, callOpts, req.Contract, calldata); err != nil {
-		return fmt.Errorf("universalrouter: callExecuteSigned: %w", u.wrapRevertError(err))
+		return fmt.Errorf("universalrouter: callExecuteSigned: %w", MapRevertError(err))
 	}
 
 	return nil
@@ -130,7 +120,7 @@ func (u *UniversalRouter) NoncesUsed(ctx context.Context, opts *bind.CallOptions
 
 	data, err := bind.Call(ctx, u.c, opts, req.Contract, calldata)
 	if err != nil {
-		return false, fmt.Errorf("universalrouter: noncesUsed: %w", u.wrapRevertError(err))
+		return false, fmt.Errorf("universalrouter: noncesUsed: %w", MapRevertError(err))
 	}
 
 	used, err := DecodeNoncesUsed(data)
@@ -154,7 +144,7 @@ func (u *UniversalRouter) SignedRouteContext(ctx context.Context, opts *bind.Cal
 
 	data, err := bind.Call(ctx, u.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("universalrouter: signedRouteContext: %w", u.wrapRevertError(err))
+		return nil, fmt.Errorf("universalrouter: signedRouteContext: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeSignedRouteContext(data)
@@ -199,7 +189,7 @@ func (u *UniversalRouter) Execute(ctx context.Context, opts *bind.TransactOption
 
 	signed, hash, err := bind.Transact(ctx, u.c, txOpts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("universalrouter: execute: %w", u.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("universalrouter: execute: %w", MapRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -234,159 +224,8 @@ func (u *UniversalRouter) ExecuteSigned(ctx context.Context, opts *bind.Transact
 
 	signed, hash, err := bind.Transact(ctx, u.c, txOpts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("universalrouter: executeSigned: %w", u.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("universalrouter: executeSigned: %w", MapRevertError(err))
 	}
 
 	return signed, hash, nil
-}
-
-// wrapRevertError maps a revert in err to its UR, Permit2, v4, v3 or v2 sentinel, else ErrUnknown.
-func (u *UniversalRouter) wrapRevertError(err error) error {
-	rpcErr, ok := errors.AsType[*rpc.ResponseError](err)
-	if ok && rpcErr == nil {
-		return nil
-	}
-	if !ok || len(rpcErr.Data) == 0 {
-		return err
-	}
-
-	var hexData string
-	if jsonErr := json.Unmarshal(rpcErr.Data, &hexData); jsonErr != nil {
-		return err
-	}
-
-	data, decErr := encoding.Hex.Decode(hexData)
-	if decErr != nil || len(data) < 4 {
-		return err
-	}
-
-	var sel abi.Selector
-	copy(sel[:], data[:4])
-
-	switch sel {
-	case errExecutionFailed.Selector():
-		vals, decodeErr := errExecutionFailed.Decode(data)
-		if decodeErr != nil || len(vals) != 2 {
-			return fmt.Errorf("%w: %w", ErrExecutionFailed, err)
-		}
-
-		commandIndex, ok := vals[0].(*big.Int)
-		if !ok {
-			return fmt.Errorf("%w: %w", ErrExecutionFailed, err)
-		}
-
-		message, ok := vals[1].([]byte)
-		if !ok {
-			return fmt.Errorf("%w: %w", ErrExecutionFailed, err)
-		}
-
-		var cause error
-		if len(message) >= 4 {
-			inner := &rpc.ResponseError{Code: rpcErr.Code, Message: rpcErr.Message, Data: jsontext.Value(`"` + encoding.Hex.EncodePrefixed(message) + `"`)}
-			cause = u.wrapRevertError(inner)
-		}
-
-		return fmt.Errorf("%w: %w", NewExecutionFailedError(commandIndex, message, cause), err)
-	case errETHNotAccepted.Selector():
-		return fmt.Errorf("%w: %w", ErrETHNotAccepted, err)
-	case errTransactionDeadlinePassed.Selector():
-		return fmt.Errorf("%w: %w", ErrTransactionDeadlinePassed, err)
-	case errLengthMismatch.Selector():
-		return fmt.Errorf("%w: %w", ErrLengthMismatch, err)
-	case errInvalidEthSender.Selector():
-		return fmt.Errorf("%w: %w", ErrInvalidEthSender, err)
-	case errContractLocked.Selector():
-		return fmt.Errorf("%w: %w", ErrContractLocked, err)
-	case errNonceAlreadyUsed.Selector():
-		return fmt.Errorf("%w: %w", ErrNonceAlreadyUsed, err)
-	case errInvalidCommandType.Selector():
-		return fmt.Errorf("%w: %w", ErrInvalidCommandType, err)
-	case errBalanceTooLow.Selector():
-		return fmt.Errorf("%w: %w", ErrBalanceTooLow, err)
-	case errInsufficientToken.Selector():
-		return fmt.Errorf("%w: %w", ErrInsufficientToken, err)
-	case errInsufficientETH.Selector():
-		return fmt.Errorf("%w: %w", ErrInsufficientETH, err)
-	case errInvalidPortion.Selector():
-		return fmt.Errorf("%w: %w", ErrInvalidPortion, err)
-	case errInvalidBips.Selector():
-		return fmt.Errorf("%w: %w", ErrInvalidBips, err)
-	case errFromAddressIsNotOwner.Selector():
-		return fmt.Errorf("%w: %w", ErrFromAddressIsNotOwner, err)
-	case errInvalidAction.Selector():
-		return fmt.Errorf("%w: %w", ErrInvalidAction, err)
-	case errOnlyMintAllowed.Selector():
-		return fmt.Errorf("%w: %w", ErrOnlyMintAllowed, err)
-	case errNotAuthorizedForToken.Selector():
-		return fmt.Errorf("%w: %w", ErrNotAuthorizedForToken, err)
-	case errSafeERC20FailedOperation.Selector():
-		return fmt.Errorf("%w: %w", ErrSafeERC20FailedOperation, err)
-	case errAddressEmptyCode.Selector():
-		return fmt.Errorf("%w: %w", ErrAddressEmptyCode, err)
-	case errFailedInnerCall.Selector():
-		return fmt.Errorf("%w: %w", ErrFailedInnerCall, err)
-	case errInvalidReserves.Selector():
-		return fmt.Errorf("%w: %w", ErrInvalidReserves, err)
-	case errInvalidPath.Selector():
-		return fmt.Errorf("%w: %w", ErrInvalidPath, err)
-	case errSliceOutOfBounds.Selector():
-		return fmt.Errorf("%w: %w", ErrSliceOutOfBounds, err)
-	case errV2TooLittleReceived.Selector():
-		return fmt.Errorf("%w: %w", ErrV2TooLittleReceived, err)
-	case errV2TooMuchRequested.Selector():
-		return fmt.Errorf("%w: %w", ErrV2TooMuchRequested, err)
-	case errV2InvalidPath.Selector():
-		return fmt.Errorf("%w: %w", ErrV2InvalidPath, err)
-	case errV2TooLittleReceivedPerHop.Selector():
-		return fmt.Errorf("%w: %w", ErrV2TooLittleReceivedPerHop, err)
-	case errV2InvalidHopPriceLength.Selector():
-		return fmt.Errorf("%w: %w", ErrV2InvalidHopPriceLength, err)
-	case errV3InvalidSwap.Selector():
-		return fmt.Errorf("%w: %w", ErrV3InvalidSwap, err)
-	case errV3TooLittleReceived.Selector():
-		return fmt.Errorf("%w: %w", ErrV3TooLittleReceived, err)
-	case errV3TooMuchRequested.Selector():
-		return fmt.Errorf("%w: %w", ErrV3TooMuchRequested, err)
-	case errV3InvalidAmountOut.Selector():
-		return fmt.Errorf("%w: %w", ErrV3InvalidAmountOut, err)
-	case errV3InvalidCaller.Selector():
-		return fmt.Errorf("%w: %w", ErrV3InvalidCaller, err)
-	case errV3TooLittleReceivedPerHop.Selector():
-		return fmt.Errorf("%w: %w", ErrV3TooLittleReceivedPerHop, err)
-	case errV3TooMuchRequestedPerHop.Selector():
-		return fmt.Errorf("%w: %w", ErrV3TooMuchRequestedPerHop, err)
-	case errV3HopPriceAndPathLengthMismatch.Selector():
-		return fmt.Errorf("%w: %w", ErrV3HopPriceAndPathLengthMismatch, err)
-	case errECDSAInvalidSignature.Selector():
-		return fmt.Errorf("%w: %w", ErrECDSAInvalidSignature, err)
-	case errECDSAInvalidSignatureLength.Selector():
-		return fmt.Errorf("%w: %w", ErrECDSAInvalidSignatureLength, err)
-	case errECDSAInvalidSignatureS.Selector():
-		return fmt.Errorf("%w: %w", ErrECDSAInvalidSignatureS, err)
-	}
-
-	if wrapped := permit2.MapRevertError(err); !errors.Is(wrapped, permit2.ErrUnknown) {
-		return wrapped
-	}
-
-	if wrapped := v4.MapRevertError(err); !errors.Is(wrapped, v4.ErrUnknown) {
-		return wrapped
-	}
-
-	if _, reasonErr := abi.DecodeRevert(data); reasonErr == nil {
-		if wrapped := v3.MapRevertError(err); !errors.Is(wrapped, v3.ErrReverted) {
-			return wrapped
-		}
-
-		if wrapped := v2.MapRevertError(err); !errors.Is(wrapped, v2.ErrUnknown) {
-			return wrapped
-		}
-	}
-
-	return fmt.Errorf("%w: %w", ErrUnknown, err)
-}
-
-// MapRevertError maps a revert in err to its UR, Permit2, v4, v3 or v2 sentinel, else ErrUnknown; for callers such as bind.Simulate results.
-func MapRevertError(err error) error {
-	return (*UniversalRouter)(nil).wrapRevertError(err)
 }

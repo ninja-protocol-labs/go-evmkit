@@ -471,7 +471,7 @@ func (s *RouterSuite) Test06SwapAmountCannotBeZeroMapsThroughRouter() {
 	s.Require().Nil(sentTx)
 	s.Require().Nil(hash)
 
-	wrapped := (&Router{}).wrapRevertError(err)
+	wrapped := mapRouterRevertError(err)
 	s.Require().ErrorIs(wrapped, ErrSwapAmountCannotBeZero)
 	s.Require().NotErrorIs(wrapped, ErrUnknown)
 
@@ -496,7 +496,7 @@ func (s *RouterSuite) Test07PoolNotInitializedMapsThroughRouter() {
 	s.Require().Nil(sentTx)
 	s.Require().Nil(hash)
 
-	wrapped := (&Router{}).wrapRevertError(err)
+	wrapped := mapRouterRevertError(err)
 	s.Require().ErrorIs(wrapped, ErrPoolNotInitialized)
 	s.Require().NotErrorIs(wrapped, ErrUnknown)
 

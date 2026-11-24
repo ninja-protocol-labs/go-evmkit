@@ -3,18 +3,14 @@ package v4
 
 import (
 	"context"
-	"encoding/json/v2"
-	"errors"
 	"fmt"
 	"math/big"
 
 	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core"
-	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
 	"github.com/ninja-protocol-labs/go-evmkit/standards/erc6909"
-	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
 // IERC6909Claims mirrors IERC6909Claims.sol; same method set as erc6909.IERC6909, so reused directly.
@@ -104,7 +100,7 @@ func (m *PoolManager) ProtocolFeesAccrued(ctx context.Context, opts *bind.CallOp
 
 	data, err := bind.Call(ctx, m.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: protocolFeesAccrued: %w", m.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv4: protocolFeesAccrued: %w", mapPoolManagerRevertError(err))
 	}
 
 	out, err := DecodeProtocolFeesAccrued(data)
@@ -128,7 +124,7 @@ func (m *PoolManager) ProtocolFeeController(ctx context.Context, opts *bind.Call
 
 	data, err := bind.Call(ctx, m.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: protocolFeeController: %w", m.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv4: protocolFeeController: %w", mapPoolManagerRevertError(err))
 	}
 
 	out, err := DecodeProtocolFeeController(data)
@@ -152,7 +148,7 @@ func (m *PoolManager) Extsload(ctx context.Context, opts *bind.CallOptions, req 
 
 	data, err := bind.Call(ctx, m.c, opts, req.Contract, calldata)
 	if err != nil {
-		return [32]byte{}, fmt.Errorf("uniswapv4: extsload: %w", m.wrapRevertError(err))
+		return [32]byte{}, fmt.Errorf("uniswapv4: extsload: %w", mapPoolManagerRevertError(err))
 	}
 
 	out, err := DecodeExtsload(data)
@@ -176,7 +172,7 @@ func (m *PoolManager) ExtsloadRange(ctx context.Context, opts *bind.CallOptions,
 
 	data, err := bind.Call(ctx, m.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: extsloadRange: %w", m.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv4: extsloadRange: %w", mapPoolManagerRevertError(err))
 	}
 
 	out, err := DecodeExtsloadRange(data)
@@ -200,7 +196,7 @@ func (m *PoolManager) ExtsloadSlots(ctx context.Context, opts *bind.CallOptions,
 
 	data, err := bind.Call(ctx, m.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: extsloadSlots: %w", m.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv4: extsloadSlots: %w", mapPoolManagerRevertError(err))
 	}
 
 	out, err := DecodeExtsloadSlots(data)
@@ -224,7 +220,7 @@ func (m *PoolManager) Exttload(ctx context.Context, opts *bind.CallOptions, req 
 
 	data, err := bind.Call(ctx, m.c, opts, req.Contract, calldata)
 	if err != nil {
-		return [32]byte{}, fmt.Errorf("uniswapv4: exttload: %w", m.wrapRevertError(err))
+		return [32]byte{}, fmt.Errorf("uniswapv4: exttload: %w", mapPoolManagerRevertError(err))
 	}
 
 	out, err := DecodeExttload(data)
@@ -248,7 +244,7 @@ func (m *PoolManager) ExttloadSlots(ctx context.Context, opts *bind.CallOptions,
 
 	data, err := bind.Call(ctx, m.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: exttloadSlots: %w", m.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv4: exttloadSlots: %w", mapPoolManagerRevertError(err))
 	}
 
 	out, err := DecodeExttloadSlots(data)
@@ -272,7 +268,7 @@ func (m *PoolManager) CallInitialize(ctx context.Context, opts *bind.CallOptions
 
 	data, err := bind.Call(ctx, m.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: callInitialize: %w", m.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv4: callInitialize: %w", mapPoolManagerRevertError(err))
 	}
 
 	out, err := DecodeInitialize(data)
@@ -296,7 +292,7 @@ func (m *PoolManager) CallModifyLiquidity(ctx context.Context, opts *bind.CallOp
 
 	data, err := bind.Call(ctx, m.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, nil, fmt.Errorf("uniswapv4: callModifyLiquidity: %w", m.wrapRevertError(err))
+		return nil, nil, fmt.Errorf("uniswapv4: callModifyLiquidity: %w", mapPoolManagerRevertError(err))
 	}
 
 	callerDelta, feesAccrued, err := DecodeModifyLiquidity(data)
@@ -320,7 +316,7 @@ func (m *PoolManager) CallSwap(ctx context.Context, opts *bind.CallOptions, req 
 
 	data, err := bind.Call(ctx, m.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: callSwap: %w", m.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv4: callSwap: %w", mapPoolManagerRevertError(err))
 	}
 
 	out, err := DecodeSwap(data)
@@ -344,7 +340,7 @@ func (m *PoolManager) CallDonate(ctx context.Context, opts *bind.CallOptions, re
 
 	data, err := bind.Call(ctx, m.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: callDonate: %w", m.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv4: callDonate: %w", mapPoolManagerRevertError(err))
 	}
 
 	out, err := DecodeDonate(data)
@@ -368,7 +364,7 @@ func (m *PoolManager) CallUnlock(ctx context.Context, opts *bind.CallOptions, re
 
 	data, err := bind.Call(ctx, m.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: callUnlock: %w", m.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv4: callUnlock: %w", mapPoolManagerRevertError(err))
 	}
 
 	out, err := DecodeUnlock(data)
@@ -402,7 +398,7 @@ func (m *PoolManager) CallSettle(ctx context.Context, opts *bind.CallOptions, re
 
 	data, err := bind.Call(ctx, m.c, callOpts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: callSettle: %w", m.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv4: callSettle: %w", mapPoolManagerRevertError(err))
 	}
 
 	out, err := DecodeSettle(data)
@@ -436,7 +432,7 @@ func (m *PoolManager) CallSettleFor(ctx context.Context, opts *bind.CallOptions,
 
 	data, err := bind.Call(ctx, m.c, callOpts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: callSettleFor: %w", m.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv4: callSettleFor: %w", mapPoolManagerRevertError(err))
 	}
 
 	out, err := DecodeSettleFor(data)
@@ -460,7 +456,7 @@ func (m *PoolManager) CallCollectProtocolFees(ctx context.Context, opts *bind.Ca
 
 	data, err := bind.Call(ctx, m.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv4: callCollectProtocolFees: %w", m.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv4: callCollectProtocolFees: %w", mapPoolManagerRevertError(err))
 	}
 
 	out, err := DecodeCollectProtocolFees(data)
@@ -484,7 +480,7 @@ func (m *PoolManager) Initialize(ctx context.Context, opts *bind.TransactOptions
 
 	signed, hash, err := bind.Transact(ctx, m.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv4: initialize: %w", m.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv4: initialize: %w", mapPoolManagerRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -503,7 +499,7 @@ func (m *PoolManager) ModifyLiquidity(ctx context.Context, opts *bind.TransactOp
 
 	signed, hash, err := bind.Transact(ctx, m.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv4: modifyLiquidity: %w", m.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv4: modifyLiquidity: %w", mapPoolManagerRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -522,7 +518,7 @@ func (m *PoolManager) Swap(ctx context.Context, opts *bind.TransactOptions, req 
 
 	signed, hash, err := bind.Transact(ctx, m.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv4: swap: %w", m.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv4: swap: %w", mapPoolManagerRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -541,7 +537,7 @@ func (m *PoolManager) Donate(ctx context.Context, opts *bind.TransactOptions, re
 
 	signed, hash, err := bind.Transact(ctx, m.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv4: donate: %w", m.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv4: donate: %w", mapPoolManagerRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -560,7 +556,7 @@ func (m *PoolManager) Unlock(ctx context.Context, opts *bind.TransactOptions, re
 
 	signed, hash, err := bind.Transact(ctx, m.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv4: unlock: %w", m.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv4: unlock: %w", mapPoolManagerRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -579,7 +575,7 @@ func (m *PoolManager) Sync(ctx context.Context, opts *bind.TransactOptions, req 
 
 	signed, hash, err := bind.Transact(ctx, m.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv4: sync: %w", m.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv4: sync: %w", mapPoolManagerRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -598,7 +594,7 @@ func (m *PoolManager) Take(ctx context.Context, opts *bind.TransactOptions, req 
 
 	signed, hash, err := bind.Transact(ctx, m.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv4: take: %w", m.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv4: take: %w", mapPoolManagerRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -628,7 +624,7 @@ func (m *PoolManager) Settle(ctx context.Context, opts *bind.TransactOptions, re
 
 	signed, hash, err := bind.Transact(ctx, m.c, txOpts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv4: settle: %w", m.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv4: settle: %w", mapPoolManagerRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -658,7 +654,7 @@ func (m *PoolManager) SettleFor(ctx context.Context, opts *bind.TransactOptions,
 
 	signed, hash, err := bind.Transact(ctx, m.c, txOpts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv4: settleFor: %w", m.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv4: settleFor: %w", mapPoolManagerRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -677,7 +673,7 @@ func (m *PoolManager) Clear(ctx context.Context, opts *bind.TransactOptions, req
 
 	signed, hash, err := bind.Transact(ctx, m.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv4: clear: %w", m.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv4: clear: %w", mapPoolManagerRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -696,7 +692,7 @@ func (m *PoolManager) Mint(ctx context.Context, opts *bind.TransactOptions, req 
 
 	signed, hash, err := bind.Transact(ctx, m.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv4: mint: %w", m.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv4: mint: %w", mapPoolManagerRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -715,7 +711,7 @@ func (m *PoolManager) Burn(ctx context.Context, opts *bind.TransactOptions, req 
 
 	signed, hash, err := bind.Transact(ctx, m.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv4: burn: %w", m.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv4: burn: %w", mapPoolManagerRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -734,7 +730,7 @@ func (m *PoolManager) UpdateDynamicLPFee(ctx context.Context, opts *bind.Transac
 
 	signed, hash, err := bind.Transact(ctx, m.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv4: updateDynamicLPFee: %w", m.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv4: updateDynamicLPFee: %w", mapPoolManagerRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -753,7 +749,7 @@ func (m *PoolManager) SetProtocolFee(ctx context.Context, opts *bind.TransactOpt
 
 	signed, hash, err := bind.Transact(ctx, m.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv4: setProtocolFee: %w", m.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv4: setProtocolFee: %w", mapPoolManagerRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -772,7 +768,7 @@ func (m *PoolManager) SetProtocolFeeController(ctx context.Context, opts *bind.T
 
 	signed, hash, err := bind.Transact(ctx, m.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv4: setProtocolFeeController: %w", m.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv4: setProtocolFeeController: %w", mapPoolManagerRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -791,127 +787,8 @@ func (m *PoolManager) CollectProtocolFees(ctx context.Context, opts *bind.Transa
 
 	signed, hash, err := bind.Transact(ctx, m.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv4: collectProtocolFees: %w", m.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv4: collectProtocolFees: %w", mapPoolManagerRevertError(err))
 	}
 
 	return signed, hash, nil
-}
-
-// wrapRevertError maps a known PoolManager or v4-core custom error to its sentinel, an unknown selector to ErrUnknown, and passes data-less errors through.
-func (_ *PoolManager) wrapRevertError(err error) error {
-	rpcErr, ok := errors.AsType[*rpc.ResponseError](err)
-	if !ok || len(rpcErr.Data) == 0 {
-		return err
-	}
-
-	var hexData string
-	if jsonErr := json.Unmarshal(rpcErr.Data, &hexData); jsonErr != nil {
-		return err
-	}
-
-	data, decErr := encoding.Hex.Decode(hexData)
-	if decErr != nil || len(data) < 4 {
-		return err
-	}
-
-	var sel abi.Selector
-	copy(sel[:], data[:4])
-
-	switch sel {
-	case errCurrencyNotSettled.Selector():
-		return fmt.Errorf("%w: %w", ErrCurrencyNotSettled, err)
-	case errPoolNotInitialized.Selector():
-		return fmt.Errorf("%w: %w", ErrPoolNotInitialized, err)
-	case errAlreadyUnlocked.Selector():
-		return fmt.Errorf("%w: %w", ErrAlreadyUnlocked, err)
-	case errManagerLocked.Selector():
-		return fmt.Errorf("%w: %w", ErrManagerLocked, err)
-	case errTickSpacingTooLarge.Selector():
-		return fmt.Errorf("%w: %w", ErrTickSpacingTooLarge, err)
-	case errTickSpacingTooSmall.Selector():
-		return fmt.Errorf("%w: %w", ErrTickSpacingTooSmall, err)
-	case errCurrenciesOutOfOrderOrEqual.Selector():
-		return fmt.Errorf("%w: %w", ErrCurrenciesOutOfOrderOrEqual, err)
-	case errUnauthorizedDynamicLPFeeUpdate.Selector():
-		return fmt.Errorf("%w: %w", ErrUnauthorizedDynamicLPFeeUpdate, err)
-	case errSwapAmountCannotBeZero.Selector():
-		return fmt.Errorf("%w: %w", ErrSwapAmountCannotBeZero, err)
-	case errNonzeroNativeValue.Selector():
-		return fmt.Errorf("%w: %w", ErrNonzeroNativeValue, err)
-	case errMustClearExactPositiveDelta.Selector():
-		return fmt.Errorf("%w: %w", ErrMustClearExactPositiveDelta, err)
-	case errProtocolFeeTooLarge.Selector():
-		return fmt.Errorf("%w: %w", ErrProtocolFeeTooLarge, err)
-	case errInvalidCaller.Selector():
-		return fmt.Errorf("%w: %w", ErrInvalidCaller, err)
-	case errProtocolFeeCurrencySynced.Selector():
-		return fmt.Errorf("%w: %w", ErrProtocolFeeCurrencySynced, err)
-	case errPoolAlreadyInitialized.Selector():
-		return fmt.Errorf("%w: %w", ErrPoolAlreadyInitialized, err)
-	case errTicksMisordered.Selector():
-		return fmt.Errorf("%w: %w", ErrTicksMisordered, err)
-	case errTickLowerOutOfBounds.Selector():
-		return fmt.Errorf("%w: %w", ErrTickLowerOutOfBounds, err)
-	case errTickUpperOutOfBounds.Selector():
-		return fmt.Errorf("%w: %w", ErrTickUpperOutOfBounds, err)
-	case errTickLiquidityOverflow.Selector():
-		return fmt.Errorf("%w: %w", ErrTickLiquidityOverflow, err)
-	case errNoLiquidityToReceiveFees.Selector():
-		return fmt.Errorf("%w: %w", ErrNoLiquidityToReceiveFees, err)
-	case errTickMisaligned.Selector():
-		return fmt.Errorf("%w: %w", ErrTickMisaligned, err)
-	case errInvalidTick.Selector():
-		return fmt.Errorf("%w: %w", ErrInvalidTick, err)
-	case errInvalidSqrtPrice.Selector():
-		return fmt.Errorf("%w: %w", ErrInvalidSqrtPrice, err)
-	case errHookAddressNotValid.Selector():
-		return fmt.Errorf("%w: %w", ErrHookAddressNotValid, err)
-	case errCannotUpdateEmptyPosition.Selector():
-		return fmt.Errorf("%w: %w", ErrCannotUpdateEmptyPosition, err)
-	case errDelegateCallNotAllowed.Selector():
-		return fmt.Errorf("%w: %w", ErrDelegateCallNotAllowed, err)
-	case errNativeTransferFailed.Selector():
-		return fmt.Errorf("%w: %w", ErrNativeTransferFailed, err)
-	case errERC20TransferFailed.Selector():
-		return fmt.Errorf("%w: %w", ErrERC20TransferFailed, err)
-	case errSafeCastOverflow.Selector():
-		return fmt.Errorf("%w: %w", ErrSafeCastOverflow, err)
-	case errPriceLimitAlreadyExceeded.Selector():
-		return fmt.Errorf("%w: %w", ErrPriceLimitAlreadyExceeded, err)
-	case errPriceLimitOutOfBounds.Selector():
-		return fmt.Errorf("%w: %w", ErrPriceLimitOutOfBounds, err)
-	case errInvalidFeeForExactOut.Selector():
-		return fmt.Errorf("%w: %w", ErrInvalidFeeForExactOut, err)
-	case errInvalidHookResponse.Selector():
-		return fmt.Errorf("%w: %w", ErrInvalidHookResponse, err)
-	case errHookDeltaExceedsSwapAmount.Selector():
-		return fmt.Errorf("%w: %w", ErrHookDeltaExceedsSwapAmount, err)
-	case errLPFeeTooLarge.Selector():
-		return fmt.Errorf("%w: %w", ErrLPFeeTooLarge, err)
-	case errInvalidPriceOrLiquidity.Selector():
-		return fmt.Errorf("%w: %w", ErrInvalidPriceOrLiquidity, err)
-	case errInvalidPrice.Selector():
-		return fmt.Errorf("%w: %w", ErrInvalidPrice, err)
-	case errPriceOverflow.Selector():
-		return fmt.Errorf("%w: %w", ErrPriceOverflow, err)
-	case errSqrtPriceMathNotEnoughLiquidity.Selector():
-		return fmt.Errorf("%w: %w", ErrNotEnoughLiquidity, err)
-	case errWrappedError.Selector():
-		vals, wrappedErr := errWrappedError.Decode(data)
-		if wrappedErr != nil || len(vals) != 4 {
-			return fmt.Errorf("%w: %w", ErrWrappedError, err)
-		}
-		details, ok := vals[3].([]byte)
-		if !ok || len(details) < 4 {
-			return fmt.Errorf("%w: %w", ErrWrappedError, err)
-		}
-		var detailsSel abi.Selector
-		copy(detailsSel[:], details[:4])
-		if detailsSel == errHookCallFailed.Selector() {
-			return fmt.Errorf("%w: %w: %w", ErrWrappedError, ErrHookCallFailed, err)
-		}
-		return fmt.Errorf("%w: %w", ErrWrappedError, err)
-	default:
-		return fmt.Errorf("%w: %w", ErrUnknown, err)
-	}
 }

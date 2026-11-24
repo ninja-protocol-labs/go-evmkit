@@ -1836,7 +1836,7 @@ func FuzzPoolManagerWrapRevertErrorKeepsCause(f *testing.F) {
 		rpcErr := &rpc.ResponseError{Code: 3, Message: "execution reverted", Data: jsontext.Value(`"` + encoding.Hex.EncodePrefixed(data) + `"`)}
 
 		var wrapped error
-		require.NotPanics(t, func() { wrapped = (&PoolManager{}).wrapRevertError(rpcErr) })
+		require.NotPanics(t, func() { wrapped = mapPoolManagerRevertError(rpcErr) })
 		got, ok := errors.AsType[*rpc.ResponseError](wrapped)
 		require.True(t, ok)
 		require.Same(t, rpcErr, got)

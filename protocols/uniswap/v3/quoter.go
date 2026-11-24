@@ -51,7 +51,7 @@ func (q *Quoter) Factory(ctx context.Context, opts *bind.CallOptions, req *Facto
 
 	data, err := bind.Call(ctx, q.c, opts, req.Contract, EncodeQuoterFactory())
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: factory: %w", q.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv3: factory: %w", mapQuoterRevertError(err))
 	}
 
 	out, err := DecodeQuoterFactory(data)
@@ -70,7 +70,7 @@ func (q *Quoter) WETH9(ctx context.Context, opts *bind.CallOptions, req *WETH9Re
 
 	data, err := bind.Call(ctx, q.c, opts, req.Contract, EncodeQuoterWETH9())
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: weth9: %w", q.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv3: weth9: %w", mapQuoterRevertError(err))
 	}
 
 	out, err := DecodeQuoterWETH9(data)
@@ -94,7 +94,7 @@ func (q *Quoter) CallQuoteExactInputSingle(ctx context.Context, opts *bind.CallO
 
 	data, err := bind.Call(ctx, q.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: callQuoteExactInputSingle: %w", q.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv3: callQuoteExactInputSingle: %w", mapQuoterRevertError(err))
 	}
 
 	out, err := DecodeQuoteExactInputSingle(data)
@@ -118,7 +118,7 @@ func (q *Quoter) CallQuoteExactInput(ctx context.Context, opts *bind.CallOptions
 
 	data, err := bind.Call(ctx, q.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: callQuoteExactInput: %w", q.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv3: callQuoteExactInput: %w", mapQuoterRevertError(err))
 	}
 
 	out, err := DecodeQuoteExactInput(data)
@@ -142,7 +142,7 @@ func (q *Quoter) CallQuoteExactOutputSingle(ctx context.Context, opts *bind.Call
 
 	data, err := bind.Call(ctx, q.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: callQuoteExactOutputSingle: %w", q.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv3: callQuoteExactOutputSingle: %w", mapQuoterRevertError(err))
 	}
 
 	out, err := DecodeQuoteExactOutputSingle(data)
@@ -166,7 +166,7 @@ func (q *Quoter) CallQuoteExactOutput(ctx context.Context, opts *bind.CallOption
 
 	data, err := bind.Call(ctx, q.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: callQuoteExactOutput: %w", q.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv3: callQuoteExactOutput: %w", mapQuoterRevertError(err))
 	}
 
 	out, err := DecodeQuoteExactOutput(data)
@@ -175,9 +175,4 @@ func (q *Quoter) CallQuoteExactOutput(ctx context.Context, opts *bind.CallOption
 	}
 
 	return out, nil
-}
-
-// wrapRevertError maps a revert in err the same way Pool does, since QuoterV2 bubbles up the pool's own revert reasons.
-func (_ *Quoter) wrapRevertError(err error) error {
-	return (*Pool)(nil).wrapRevertError(err)
 }

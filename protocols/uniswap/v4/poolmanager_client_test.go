@@ -411,7 +411,7 @@ func TestPoolManagerWrapRevertErrorHookCallFailed(t *testing.T) {
 	require.NoError(t, err)
 	rpcErr := &rpc.ResponseError{Code: 3, Message: "execution reverted", Data: jsontext.Value(`"` + encoding.Hex.EncodePrefixed(append(wrappedSel[:], failedArgs...)) + `"`)}
 
-	wrapped := (&PoolManager{}).wrapRevertError(rpcErr)
+	wrapped := mapPoolManagerRevertError(rpcErr)
 	require.ErrorIs(t, wrapped, ErrWrappedError)
 	require.ErrorIs(t, wrapped, ErrHookCallFailed)
 	require.NotErrorIs(t, wrapped, ErrUnknown)
@@ -423,25 +423,24 @@ func TestPoolManagerWrapRevertErrorHookCallFailed(t *testing.T) {
 		append(wrappedSel[:], shortDetailsArgs...),
 		append(wrappedSel[:], 0x00),
 	} {
-		wrapped := (&PoolManager{}).wrapRevertError(&rpc.ResponseError{Code: 3, Message: "execution reverted", Data: jsontext.Value(`"` + encoding.Hex.EncodePrefixed(data) + `"`)})
+		wrapped := mapPoolManagerRevertError(&rpc.ResponseError{Code: 3, Message: "execution reverted", Data: jsontext.Value(`"` + encoding.Hex.EncodePrefixed(data) + `"`)})
 		require.ErrorIs(t, wrapped, ErrWrappedError)
 		require.NotErrorIs(t, wrapped, ErrHookCallFailed)
 	}
 }
 
 func TestPoolManagerWrapRevertErrorPassesThroughUndecodable(t *testing.T) {
-	m := &PoolManager{}
 	plain := errors.New("dial tcp: connection refused")
-	require.Same(t, plain, m.wrapRevertError(plain))
-	require.Nil(t, m.wrapRevertError(nil))
+	require.Same(t, plain, mapPoolManagerRevertError(plain))
+	require.Nil(t, mapPoolManagerRevertError(nil))
 
 	for _, data := range []jsontext.Value{nil, jsontext.Value(`"0x"`), jsontext.Value(`"0x123456"`), jsontext.Value(`"0xzz"`), jsontext.Value(`{"x":1}`), jsontext.Value(`42`)} {
 		t.Run(string(data), func(t *testing.T) {
 			rpcErr := &rpc.ResponseError{Code: 3, Message: "execution reverted", Data: data}
-			require.Same(t, rpcErr, m.wrapRevertError(rpcErr))
+			require.Same(t, rpcErr, mapPoolManagerRevertError(rpcErr))
 
 			wrapped := fmt.Errorf("rpc: %s: %w", rpc.MethodETHEstimateGas, rpcErr)
-			require.Same(t, wrapped, m.wrapRevertError(wrapped))
+			require.Same(t, wrapped, mapPoolManagerRevertError(wrapped))
 		})
 	}
 }

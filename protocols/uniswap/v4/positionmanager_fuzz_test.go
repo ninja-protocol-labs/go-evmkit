@@ -1451,7 +1451,7 @@ func FuzzPositionManagerWrapRevertErrorKeepsCause(f *testing.F) {
 		rpcErr := &rpc.ResponseError{Code: 3, Message: "execution reverted", Data: jsontext.Value(`"` + encoding.Hex.EncodePrefixed(data) + `"`)}
 
 		var wrapped error
-		require.NotPanics(t, func() { wrapped = (&PositionManager{}).wrapRevertError(rpcErr) })
+		require.NotPanics(t, func() { wrapped = mapPositionManagerRevertError(rpcErr) })
 		got, ok := errors.AsType[*rpc.ResponseError](wrapped)
 		require.True(t, ok)
 		require.Same(t, rpcErr, got)

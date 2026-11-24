@@ -4,18 +4,14 @@ package erc721
 
 import (
 	"context"
-	"encoding/json/v2"
-	"errors"
 	"fmt"
 	"math/big"
 
 	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core"
-	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
 	"github.com/ninja-protocol-labs/go-evmkit/standards/erc165"
-	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
 // IERC721 mirrors IERC721.sol, including its IERC165 embedding.
@@ -87,7 +83,7 @@ func (e *ERC721) Name(ctx context.Context, opts *bind.CallOptions, req *NameRequ
 
 	data, err := bind.Call(ctx, e.c, opts, req.Contract, EncodeName())
 	if err != nil {
-		return "", fmt.Errorf("erc721: name: %w", e.wrapRevertError(err))
+		return "", fmt.Errorf("erc721: name: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeName(data)
@@ -106,7 +102,7 @@ func (e *ERC721) Symbol(ctx context.Context, opts *bind.CallOptions, req *Symbol
 
 	data, err := bind.Call(ctx, e.c, opts, req.Contract, EncodeSymbol())
 	if err != nil {
-		return "", fmt.Errorf("erc721: symbol: %w", e.wrapRevertError(err))
+		return "", fmt.Errorf("erc721: symbol: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeSymbol(data)
@@ -130,7 +126,7 @@ func (e *ERC721) TokenURI(ctx context.Context, opts *bind.CallOptions, req *Toke
 
 	data, err := bind.Call(ctx, e.c, opts, req.Contract, calldata)
 	if err != nil {
-		return "", fmt.Errorf("erc721: tokenURI: %w", e.wrapRevertError(err))
+		return "", fmt.Errorf("erc721: tokenURI: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeTokenURI(data)
@@ -154,7 +150,7 @@ func (e *ERC721) BalanceOf(ctx context.Context, opts *bind.CallOptions, req *Bal
 
 	data, err := bind.Call(ctx, e.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("erc721: balanceOf: %w", e.wrapRevertError(err))
+		return nil, fmt.Errorf("erc721: balanceOf: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeBalanceOf(data)
@@ -178,7 +174,7 @@ func (e *ERC721) OwnerOf(ctx context.Context, opts *bind.CallOptions, req *Owner
 
 	data, err := bind.Call(ctx, e.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("erc721: ownerOf: %w", e.wrapRevertError(err))
+		return nil, fmt.Errorf("erc721: ownerOf: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeOwnerOf(data)
@@ -202,7 +198,7 @@ func (e *ERC721) GetApproved(ctx context.Context, opts *bind.CallOptions, req *G
 
 	data, err := bind.Call(ctx, e.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("erc721: getApproved: %w", e.wrapRevertError(err))
+		return nil, fmt.Errorf("erc721: getApproved: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeGetApproved(data)
@@ -226,7 +222,7 @@ func (e *ERC721) IsApprovedForAll(ctx context.Context, opts *bind.CallOptions, r
 
 	data, err := bind.Call(ctx, e.c, opts, req.Contract, calldata)
 	if err != nil {
-		return false, fmt.Errorf("erc721: isApprovedForAll: %w", e.wrapRevertError(err))
+		return false, fmt.Errorf("erc721: isApprovedForAll: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeIsApprovedForAll(data)
@@ -250,7 +246,7 @@ func (e *ERC721) Approve(ctx context.Context, opts *bind.TransactOptions, req *A
 
 	signed, hash, err := bind.Transact(ctx, e.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("erc721: approve: %w", e.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("erc721: approve: %w", MapRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -269,7 +265,7 @@ func (e *ERC721) SetApprovalForAll(ctx context.Context, opts *bind.TransactOptio
 
 	signed, hash, err := bind.Transact(ctx, e.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("erc721: setApprovalForAll: %w", e.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("erc721: setApprovalForAll: %w", MapRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -288,7 +284,7 @@ func (e *ERC721) TransferFrom(ctx context.Context, opts *bind.TransactOptions, r
 
 	signed, hash, err := bind.Transact(ctx, e.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("erc721: transferFrom: %w", e.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("erc721: transferFrom: %w", MapRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -307,7 +303,7 @@ func (e *ERC721) SafeTransferFrom(ctx context.Context, opts *bind.TransactOption
 
 	signed, hash, err := bind.Transact(ctx, e.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("erc721: safeTransferFrom: %w", e.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("erc721: safeTransferFrom: %w", MapRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -326,7 +322,7 @@ func (e *ERC721) SafeTransferFromWithData(ctx context.Context, opts *bind.Transa
 
 	signed, hash, err := bind.Transact(ctx, e.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("erc721: safeTransferFromWithData: %w", e.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("erc721: safeTransferFromWithData: %w", MapRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -345,7 +341,7 @@ func (e *ERC721) Metadata(ctx context.Context, opts *bind.CallOptions, req *Meta
 
 	data, err := bind.Call(ctx, e.c, opts, req.Multicall, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("erc721: metadata: %w", e.wrapRevertError(err))
+		return nil, fmt.Errorf("erc721: metadata: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeMetadata(data)
@@ -369,7 +365,7 @@ func (e *ERC721) MetadataWithTokenID(ctx context.Context, opts *bind.CallOptions
 
 	data, err := bind.Call(ctx, e.c, opts, req.Multicall, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("erc721: metadataWithTokenID: %w", e.wrapRevertError(err))
+		return nil, fmt.Errorf("erc721: metadataWithTokenID: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeMetadataWithTokenID(req.TokenID, data)
@@ -393,7 +389,7 @@ func (e *ERC721) AllowanceWithTokenID(ctx context.Context, opts *bind.CallOption
 
 	data, err := bind.Call(ctx, e.c, opts, req.Multicall, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("erc721: allowanceWithTokenID: %w", e.wrapRevertError(err))
+		return nil, fmt.Errorf("erc721: allowanceWithTokenID: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeAllowanceWithTokenID(req.TokenID, data)
@@ -417,7 +413,7 @@ func (e *ERC721) ApprovalForAllWithBalance(ctx context.Context, opts *bind.CallO
 
 	data, err := bind.Call(ctx, e.c, opts, req.Multicall, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("erc721: approvalForAllWithBalance: %w", e.wrapRevertError(err))
+		return nil, fmt.Errorf("erc721: approvalForAllWithBalance: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeApprovalForAllWithBalance(req.Owner, req.Operator, data)
@@ -441,7 +437,7 @@ func (e *ERC721) TokenOwners(ctx context.Context, opts *bind.CallOptions, req *T
 
 	data, err := bind.Call(ctx, e.c, opts, req.Multicall, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("erc721: tokenOwners: %w", e.wrapRevertError(err))
+		return nil, fmt.Errorf("erc721: tokenOwners: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeTokenOwners(req.Contract, req.TokenIDs, data)
@@ -465,7 +461,7 @@ func (e *ERC721) TokenOperators(ctx context.Context, opts *bind.CallOptions, req
 
 	data, err := bind.Call(ctx, e.c, opts, req.Multicall, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("erc721: tokenOperators: %w", e.wrapRevertError(err))
+		return nil, fmt.Errorf("erc721: tokenOperators: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeTokenOperators(req.Contract, req.TokenIDs, data)
@@ -489,7 +485,7 @@ func (e *ERC721) AddressBalances(ctx context.Context, opts *bind.CallOptions, re
 
 	data, err := bind.Call(ctx, e.c, opts, req.Multicall, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("erc721: addressBalances: %w", e.wrapRevertError(err))
+		return nil, fmt.Errorf("erc721: addressBalances: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeAddressBalances(req.Account, req.Contracts, data)
@@ -513,7 +509,7 @@ func (e *ERC721) TokenBalances(ctx context.Context, opts *bind.CallOptions, req 
 
 	data, err := bind.Call(ctx, e.c, opts, req.Multicall, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("erc721: tokenBalances: %w", e.wrapRevertError(err))
+		return nil, fmt.Errorf("erc721: tokenBalances: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeTokenBalances(req.Contract, req.Accounts, data)
@@ -537,7 +533,7 @@ func (e *ERC721) OwnerPairs(ctx context.Context, opts *bind.CallOptions, req *Ow
 
 	data, err := bind.Call(ctx, e.c, opts, req.Multicall, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("erc721: ownerPairs: %w", e.wrapRevertError(err))
+		return nil, fmt.Errorf("erc721: ownerPairs: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeOwnerPairs(req.Contracts, req.TokenIDs, data)
@@ -546,46 +542,4 @@ func (e *ERC721) OwnerPairs(ctx context.Context, opts *bind.CallOptions, req *Ow
 	}
 
 	return out, nil
-}
-
-// wrapRevertError maps a known IERC721Errors custom error in err to its sentinel.
-func (_ *ERC721) wrapRevertError(err error) error {
-	var rpcErr *rpc.ResponseError
-	if !errors.As(err, &rpcErr) || len(rpcErr.Data) == 0 {
-		return err
-	}
-
-	var hexData string
-	if jsonErr := json.Unmarshal(rpcErr.Data, &hexData); jsonErr != nil {
-		return err
-	}
-
-	data, decErr := encoding.Hex.Decode(hexData)
-	if decErr != nil || len(data) < 4 {
-		return err
-	}
-
-	var sel abi.Selector
-	copy(sel[:], data[:4])
-
-	switch sel {
-	case errInvalidOwner.Selector():
-		return fmt.Errorf("%w: %w", ErrInvalidOwner, err)
-	case errNonexistentToken.Selector():
-		return fmt.Errorf("%w: %w", ErrNonexistentToken, err)
-	case errIncorrectOwner.Selector():
-		return fmt.Errorf("%w: %w", ErrIncorrectOwner, err)
-	case errInvalidSender.Selector():
-		return fmt.Errorf("%w: %w", ErrInvalidSender, err)
-	case errInvalidReceiver.Selector():
-		return fmt.Errorf("%w: %w", ErrInvalidReceiver, err)
-	case errInsufficientApproval.Selector():
-		return fmt.Errorf("%w: %w", ErrInsufficientApproval, err)
-	case errInvalidApprover.Selector():
-		return fmt.Errorf("%w: %w", ErrInvalidApprover, err)
-	case errInvalidOperator.Selector():
-		return fmt.Errorf("%w: %w", ErrInvalidOperator, err)
-	default:
-		return fmt.Errorf("%w: %w", ErrUnknown, err)
-	}
 }

@@ -1,13 +1,16 @@
 package erc1155
 
 import (
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"math/big"
 
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
+	"github.com/ninja-protocol-labs/go-evmkit/rpc"
 	"github.com/ninja-protocol-labs/go-evmkit/standards/multicall3"
+	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
 // Function signatures from IERC1155/IERC1155MetadataURI, for encoding calls and decoding results.
@@ -336,4 +339,48 @@ func DecodeAccountIdBalances(account *types.Address, id *big.Int, contracts []*t
 	}
 
 	return NewAccountIdBalances(account, id, balances), nil
+}
+
+// MapRevertError maps a known IERC1155Errors custom error in err to its sentinel.
+func MapRevertError(err error) error {
+	if rpcErr, ok := errors.AsType[*rpc.ResponseError](err); ok && rpcErr == nil {
+		return nil
+	}
+
+	var rpcErr *rpc.ResponseError
+	if !errors.As(err, &rpcErr) || len(rpcErr.Data) == 0 {
+		return err
+	}
+
+	var hexData string
+	if jsonErr := json.Unmarshal(rpcErr.Data, &hexData); jsonErr != nil {
+		return err
+	}
+
+	data, decErr := encoding.Hex.Decode(hexData)
+	if decErr != nil || len(data) < 4 {
+		return err
+	}
+
+	var sel abi.Selector
+	copy(sel[:], data[:4])
+
+	switch sel {
+	case errInsufficientBalance.Selector():
+		return fmt.Errorf("%w: %w", ErrInsufficientBalance, err)
+	case errInvalidSender.Selector():
+		return fmt.Errorf("%w: %w", ErrInvalidSender, err)
+	case errInvalidReceiver.Selector():
+		return fmt.Errorf("%w: %w", ErrInvalidReceiver, err)
+	case errMissingApprovalForAll.Selector():
+		return fmt.Errorf("%w: %w", ErrMissingApprovalForAll, err)
+	case errInvalidApprover.Selector():
+		return fmt.Errorf("%w: %w", ErrInvalidApprover, err)
+	case errInvalidOperator.Selector():
+		return fmt.Errorf("%w: %w", ErrInvalidOperator, err)
+	case errInvalidArrayLength.Selector():
+		return fmt.Errorf("%w: %w", ErrInvalidArrayLength, err)
+	default:
+		return fmt.Errorf("%w: %w", ErrUnknown, err)
+	}
 }

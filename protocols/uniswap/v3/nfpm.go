@@ -2,18 +2,14 @@ package v3
 
 import (
 	"context"
-	"encoding/json/v2"
-	"errors"
 	"fmt"
 	"math/big"
 
 	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core"
-	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
 	"github.com/ninja-protocol-labs/go-evmkit/standards/erc721"
-	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
 // INFPMImmutables mirrors PeripheryImmutableState.
@@ -110,7 +106,7 @@ func (n *NFPM) Factory(ctx context.Context, opts *bind.CallOptions, req *Factory
 
 	data, err := bind.Call(ctx, n.c, opts, req.Contract, EncodeNfpmFactory())
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: factory: %w", n.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv3: factory: %w", mapNFPMRevertError(err))
 	}
 
 	out, err := DecodeNfpmFactory(data)
@@ -129,7 +125,7 @@ func (n *NFPM) WETH9(ctx context.Context, opts *bind.CallOptions, req *WETH9Requ
 
 	data, err := bind.Call(ctx, n.c, opts, req.Contract, EncodeWETH9())
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: weth9: %w", n.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv3: weth9: %w", mapNFPMRevertError(err))
 	}
 
 	out, err := DecodeWETH9(data)
@@ -148,7 +144,7 @@ func (n *NFPM) TotalSupply(ctx context.Context, opts *bind.CallOptions, req *Tot
 
 	data, err := bind.Call(ctx, n.c, opts, req.Contract, EncodeTotalSupply())
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: totalSupply: %w", n.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv3: totalSupply: %w", mapNFPMRevertError(err))
 	}
 
 	out, err := DecodeTotalSupply(data)
@@ -172,7 +168,7 @@ func (n *NFPM) TokenOfOwnerByIndex(ctx context.Context, opts *bind.CallOptions, 
 
 	data, err := bind.Call(ctx, n.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: tokenOfOwnerByIndex: %w", n.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv3: tokenOfOwnerByIndex: %w", mapNFPMRevertError(err))
 	}
 
 	out, err := DecodeTokenOfOwnerByIndex(data)
@@ -196,7 +192,7 @@ func (n *NFPM) TokenByIndex(ctx context.Context, opts *bind.CallOptions, req *To
 
 	data, err := bind.Call(ctx, n.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: tokenByIndex: %w", n.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv3: tokenByIndex: %w", mapNFPMRevertError(err))
 	}
 
 	out, err := DecodeTokenByIndex(data)
@@ -215,7 +211,7 @@ func (n *NFPM) PermitTypehash(ctx context.Context, opts *bind.CallOptions, req *
 
 	data, err := bind.Call(ctx, n.c, opts, req.Contract, EncodePermitTypehash())
 	if err != nil {
-		return [32]byte{}, fmt.Errorf("uniswapv3: permitTypehash: %w", n.wrapRevertError(err))
+		return [32]byte{}, fmt.Errorf("uniswapv3: permitTypehash: %w", mapNFPMRevertError(err))
 	}
 
 	out, err := DecodePermitTypehash(data)
@@ -234,7 +230,7 @@ func (n *NFPM) DomainSeparator(ctx context.Context, opts *bind.CallOptions, req 
 
 	data, err := bind.Call(ctx, n.c, opts, req.Contract, EncodeDomainSeparator())
 	if err != nil {
-		return [32]byte{}, fmt.Errorf("uniswapv3: domainSeparator: %w", n.wrapRevertError(err))
+		return [32]byte{}, fmt.Errorf("uniswapv3: domainSeparator: %w", mapNFPMRevertError(err))
 	}
 
 	out, err := DecodeDomainSeparator(data)
@@ -258,7 +254,7 @@ func (n *NFPM) Positions(ctx context.Context, opts *bind.CallOptions, req *NFPMP
 
 	data, err := bind.Call(ctx, n.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: positions: %w", n.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv3: positions: %w", mapNFPMRevertError(err))
 	}
 
 	out, err := DecodeNfpmPositions(data)
@@ -286,7 +282,7 @@ func (n *NFPM) CallCreateAndInitializePoolIfNecessary(ctx context.Context, opts 
 
 	data, err := bind.Call(ctx, n.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: callCreateAndInitializePoolIfNecessary: %w", n.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv3: callCreateAndInitializePoolIfNecessary: %w", mapNFPMRevertError(err))
 	}
 
 	pool, err := DecodeCreateAndInitializePoolIfNecessary(data)
@@ -320,7 +316,7 @@ func (n *NFPM) CallMulticall(ctx context.Context, opts *bind.CallOptions, req *N
 
 	data, err := bind.Call(ctx, n.c, callOpts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("uniswapv3: callMulticall: %w", n.wrapRevertError(err))
+		return nil, fmt.Errorf("uniswapv3: callMulticall: %w", mapNFPMRevertError(err))
 	}
 
 	results, err := DecodeMulticall(data)
@@ -354,7 +350,7 @@ func (n *NFPM) CallMint(ctx context.Context, opts *bind.CallOptions, req *NFPMMi
 
 	data, err := bind.Call(ctx, n.c, callOpts, req.Contract, calldata)
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("uniswapv3: callMint: %w", n.wrapRevertError(err))
+		return nil, nil, nil, nil, fmt.Errorf("uniswapv3: callMint: %w", mapNFPMRevertError(err))
 	}
 
 	tokenID, liquidity, amount0, amount1, err := DecodeNfpmMint(data)
@@ -388,7 +384,7 @@ func (n *NFPM) CallIncreaseLiquidity(ctx context.Context, opts *bind.CallOptions
 
 	data, err := bind.Call(ctx, n.c, callOpts, req.Contract, calldata)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("uniswapv3: callIncreaseLiquidity: %w", n.wrapRevertError(err))
+		return nil, nil, nil, fmt.Errorf("uniswapv3: callIncreaseLiquidity: %w", mapNFPMRevertError(err))
 	}
 
 	liquidity, amount0, amount1, err := DecodeIncreaseLiquidity(data)
@@ -412,7 +408,7 @@ func (n *NFPM) CallDecreaseLiquidity(ctx context.Context, opts *bind.CallOptions
 
 	data, err := bind.Call(ctx, n.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, nil, fmt.Errorf("uniswapv3: callDecreaseLiquidity: %w", n.wrapRevertError(err))
+		return nil, nil, fmt.Errorf("uniswapv3: callDecreaseLiquidity: %w", mapNFPMRevertError(err))
 	}
 
 	amount0, amount1, err := DecodeDecreaseLiquidity(data)
@@ -436,7 +432,7 @@ func (n *NFPM) CallCollect(ctx context.Context, opts *bind.CallOptions, req *NFP
 
 	data, err := bind.Call(ctx, n.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, nil, fmt.Errorf("uniswapv3: callCollect: %w", n.wrapRevertError(err))
+		return nil, nil, fmt.Errorf("uniswapv3: callCollect: %w", mapNFPMRevertError(err))
 	}
 
 	amount0, amount1, err := DecodeNfpmCollect(data)
@@ -460,7 +456,7 @@ func (n *NFPM) Permit(ctx context.Context, opts *bind.TransactOptions, req *Perm
 
 	signed, hash, err := bind.Transact(ctx, n.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv3: permit: %w", n.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv3: permit: %w", mapNFPMRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -483,7 +479,7 @@ func (n *NFPM) CreateAndInitializePoolIfNecessary(ctx context.Context, opts *bin
 
 	signed, hash, err := bind.Transact(ctx, n.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv3: createAndInitializePoolIfNecessary: %w", n.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv3: createAndInitializePoolIfNecessary: %w", mapNFPMRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -506,7 +502,7 @@ func (n *NFPM) UnwrapWETH9(ctx context.Context, opts *bind.TransactOptions, req 
 
 	signed, hash, err := bind.Transact(ctx, n.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv3: unwrapWETH9: %w", n.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv3: unwrapWETH9: %w", mapNFPMRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -529,7 +525,7 @@ func (n *NFPM) SweepToken(ctx context.Context, opts *bind.TransactOptions, req *
 
 	signed, hash, err := bind.Transact(ctx, n.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv3: sweepToken: %w", n.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv3: sweepToken: %w", mapNFPMRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -549,7 +545,7 @@ func (n *NFPM) RefundETH(ctx context.Context, opts *bind.TransactOptions, req *N
 
 	signed, hash, err := bind.Transact(ctx, n.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv3: refundETH: %w", n.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv3: refundETH: %w", mapNFPMRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -579,7 +575,7 @@ func (n *NFPM) Multicall(ctx context.Context, opts *bind.TransactOptions, req *N
 
 	signed, hash, err := bind.Transact(ctx, n.c, txOpts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv3: multicall: %w", n.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv3: multicall: %w", mapNFPMRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -609,7 +605,7 @@ func (n *NFPM) Mint(ctx context.Context, opts *bind.TransactOptions, req *NFPMMi
 
 	signed, hash, err := bind.Transact(ctx, n.c, txOpts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv3: mint: %w", n.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv3: mint: %w", mapNFPMRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -639,7 +635,7 @@ func (n *NFPM) IncreaseLiquidity(ctx context.Context, opts *bind.TransactOptions
 
 	signed, hash, err := bind.Transact(ctx, n.c, txOpts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv3: increaseLiquidity: %w", n.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv3: increaseLiquidity: %w", mapNFPMRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -658,7 +654,7 @@ func (n *NFPM) DecreaseLiquidity(ctx context.Context, opts *bind.TransactOptions
 
 	signed, hash, err := bind.Transact(ctx, n.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv3: decreaseLiquidity: %w", n.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv3: decreaseLiquidity: %w", mapNFPMRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -677,7 +673,7 @@ func (n *NFPM) Collect(ctx context.Context, opts *bind.TransactOptions, req *NFP
 
 	signed, hash, err := bind.Transact(ctx, n.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv3: collect: %w", n.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv3: collect: %w", mapNFPMRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -696,71 +692,8 @@ func (n *NFPM) Burn(ctx context.Context, opts *bind.TransactOptions, req *NFPMBu
 
 	signed, hash, err := bind.Transact(ctx, n.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("uniswapv3: burn: %w", n.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("uniswapv3: burn: %w", mapNFPMRevertError(err))
 	}
 
 	return signed, hash, nil
-}
-
-// wrapRevertError maps a known NonfungiblePositionManager revert reason in err to its sentinel.
-func (_ *NFPM) wrapRevertError(err error) error {
-	var rpcErr *rpc.ResponseError
-	if !errors.As(err, &rpcErr) {
-		return err
-	}
-	if len(rpcErr.Data) == 0 {
-		return fmt.Errorf("%w: %w", ErrReverted, err)
-	}
-
-	var hexData string
-	if jsonErr := json.Unmarshal(rpcErr.Data, &hexData); jsonErr != nil {
-		return fmt.Errorf("%w: %w", ErrReverted, err)
-	}
-
-	data, decErr := encoding.Hex.Decode(hexData)
-	if decErr != nil {
-		return fmt.Errorf("%w: %w", ErrReverted, err)
-	}
-
-	reason, decErr := abi.DecodeRevert(data)
-	if decErr != nil {
-		return fmt.Errorf("%w: %w", ErrReverted, err)
-	}
-
-	switch reason {
-	case reasonTransactionTooOld:
-		return fmt.Errorf("%w: %w", ErrTransactionTooOld, err)
-	case reasonInsufficientWETH9:
-		return fmt.Errorf("%w: %w", ErrInsufficientWETH9, err)
-	case reasonInsufficientToken:
-		return fmt.Errorf("%w: %w", ErrInsufficientToken, err)
-	case reasonNotWETH9:
-		return fmt.Errorf("%w: %w", ErrNotWETH9, err)
-	case reasonTransferFromFailed:
-		return fmt.Errorf("%w: %w", ErrTransferFromFailed, err)
-	case reasonTokenTransferFailed:
-		return fmt.Errorf("%w: %w", ErrTokenTransferFailed, err)
-	case reasonApproveFailed:
-		return fmt.Errorf("%w: %w", ErrApproveFailed, err)
-	case reasonTransferETHFailed:
-		return fmt.Errorf("%w: %w", ErrTransferETHFailed, err)
-	case reasonInvalidTokenID:
-		return fmt.Errorf("%w: %w", ErrInvalidTokenID, err)
-	case reasonNotApproved:
-		return fmt.Errorf("%w: %w", ErrNotApproved, err)
-	case reasonPriceSlippageCheck:
-		return fmt.Errorf("%w: %w", ErrPriceSlippageCheck, err)
-	case reasonNotCleared:
-		return fmt.Errorf("%w: %w", ErrNotCleared, err)
-	case reasonPermitExpired:
-		return fmt.Errorf("%w: %w", ErrPermitExpired, err)
-	case reasonApprovalToCurrentOwner:
-		return fmt.Errorf("%w: %w", ErrApprovalToCurrentOwner, err)
-	case reasonUnauthorized:
-		return fmt.Errorf("%w: %w", ErrUnauthorized, err)
-	case reasonInvalidSignature:
-		return fmt.Errorf("%w: %w", ErrInvalidSignature, err)
-	default:
-		return fmt.Errorf("%w: %w", ErrReverted, err)
-	}
 }

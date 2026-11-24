@@ -1,6 +1,7 @@
 package v4
 
 import (
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"math/big"
@@ -8,6 +9,8 @@ import (
 	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 	"github.com/ninja-protocol-labs/go-evmkit/protocols/permit2"
+	"github.com/ninja-protocol-labs/go-evmkit/rpc"
+	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
 var (
@@ -1134,4 +1137,84 @@ func DecodeActionUnwrap(data []byte) (*big.Int, error) {
 		return nil, fmt.Errorf("uniswapv4: decodeActionUnwrap: unexpected decoded type for amount: %T", vals[0])
 	}
 	return amount, nil
+}
+
+// mapPositionManagerRevertError maps a PositionManager custom error in err to its sentinel; anything else (PoolManager reverts bubbling out of unlock) falls through to PoolManager's mapper.
+func mapPositionManagerRevertError(err error) error {
+	if rpcErr, ok := errors.AsType[*rpc.ResponseError](err); ok && rpcErr == nil {
+		return nil
+	}
+
+	rpcErr, ok := errors.AsType[*rpc.ResponseError](err)
+	if !ok || len(rpcErr.Data) == 0 {
+		return err
+	}
+
+	var hexData string
+	if jsonErr := json.Unmarshal(rpcErr.Data, &hexData); jsonErr != nil {
+		return err
+	}
+
+	data, decErr := encoding.Hex.Decode(hexData)
+	if decErr != nil || len(data) < 4 {
+		return err
+	}
+
+	var sel abi.Selector
+	copy(sel[:], data[:4])
+
+	switch sel {
+	case errNotApproved.Selector():
+		return fmt.Errorf("%w: %w", ErrNotApproved, err)
+	case errDeadlinePassed.Selector():
+		return fmt.Errorf("%w: %w", ErrDeadlinePassed, err)
+	case errPoolManagerMustBeLocked.Selector():
+		return fmt.Errorf("%w: %w", ErrPoolManagerMustBeLocked, err)
+	case errSignatureDeadlineExpired.Selector():
+		return fmt.Errorf("%w: %w", ErrSignatureDeadlineExpired, err)
+	case errNoSelfPermit.Selector():
+		return fmt.Errorf("%w: %w", ErrNoSelfPermit, err)
+	case errUnauthorized.Selector():
+		return fmt.Errorf("%w: %w", ErrUnauthorized, err)
+	case errNotSubscribed.Selector():
+		return fmt.Errorf("%w: %w", ErrNotSubscribed, err)
+	case errNoCodeSubscriber.Selector():
+		return fmt.Errorf("%w: %w", ErrNoCodeSubscriber, err)
+	case errGasLimitTooLow.Selector():
+		return fmt.Errorf("%w: %w", ErrGasLimitTooLow, err)
+	case errSubscriptionReverted.Selector():
+		return fmt.Errorf("%w: %w", ErrSubscriptionReverted, err)
+	case errModifyLiquidityNotificationReverted.Selector():
+		return fmt.Errorf("%w: %w", ErrModifyLiquidityNotificationReverted, err)
+	case errBurnNotificationReverted.Selector():
+		return fmt.Errorf("%w: %w", ErrBurnNotificationReverted, err)
+	case errAlreadySubscribed.Selector():
+		return fmt.Errorf("%w: %w", ErrAlreadySubscribed, err)
+	case errNonceAlreadyUsed.Selector():
+		return fmt.Errorf("%w: %w", ErrNonceAlreadyUsed, err)
+	case errContractLocked.Selector():
+		return fmt.Errorf("%w: %w", ErrContractLocked, err)
+	case errInvalidEthSender.Selector():
+		return fmt.Errorf("%w: %w", ErrInvalidEthSender, err)
+	case errDeltaNotPositive.Selector():
+		return fmt.Errorf("%w: %w", ErrDeltaNotPositive, err)
+	case errDeltaNotNegative.Selector():
+		return fmt.Errorf("%w: %w", ErrDeltaNotNegative, err)
+	case errInsufficientBalance.Selector():
+		return fmt.Errorf("%w: %w", ErrInsufficientBalance, err)
+	case errMaximumAmountExceeded.Selector():
+		return fmt.Errorf("%w: %w", ErrMaximumAmountExceeded, err)
+	case errMinimumAmountInsufficient.Selector():
+		return fmt.Errorf("%w: %w", ErrMinimumAmountInsufficient, err)
+	case errInvalidSignatureLength.Selector():
+		return fmt.Errorf("%w: %w", permit2.ErrInvalidSignatureLength, err)
+	case errInvalidSignature.Selector():
+		return fmt.Errorf("%w: %w", permit2.ErrInvalidSignature, err)
+	case errInvalidSigner.Selector():
+		return fmt.Errorf("%w: %w", permit2.ErrInvalidSigner, err)
+	case errInvalidContractSignature.Selector():
+		return fmt.Errorf("%w: %w", permit2.ErrInvalidContractSignature, err)
+	default:
+		return mapPoolManagerRevertError(err)
+	}
 }

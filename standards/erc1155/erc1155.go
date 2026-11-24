@@ -4,18 +4,14 @@ package erc1155
 
 import (
 	"context"
-	"encoding/json/v2"
-	"errors"
 	"fmt"
 	"math/big"
 
 	"github.com/ninja-protocol-labs/go-evmkit/bind"
 	"github.com/ninja-protocol-labs/go-evmkit/core"
-	"github.com/ninja-protocol-labs/go-evmkit/core/abi"
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
 	"github.com/ninja-protocol-labs/go-evmkit/standards/erc165"
-	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
 )
 
 // IERC1155 mirrors IERC1155.sol, including its IERC165 embedding.
@@ -82,7 +78,7 @@ func (e *ERC1155) URI(ctx context.Context, opts *bind.CallOptions, req *URIReque
 
 	data, err := bind.Call(ctx, e.c, opts, req.Contract, calldata)
 	if err != nil {
-		return "", fmt.Errorf("erc1155: uri: %w", e.wrapRevertError(err))
+		return "", fmt.Errorf("erc1155: uri: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeURI(data)
@@ -106,7 +102,7 @@ func (e *ERC1155) BalanceOf(ctx context.Context, opts *bind.CallOptions, req *Ba
 
 	data, err := bind.Call(ctx, e.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("erc1155: balanceOf: %w", e.wrapRevertError(err))
+		return nil, fmt.Errorf("erc1155: balanceOf: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeBalanceOf(data)
@@ -130,7 +126,7 @@ func (e *ERC1155) BalanceOfBatch(ctx context.Context, opts *bind.CallOptions, re
 
 	data, err := bind.Call(ctx, e.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("erc1155: balanceOfBatch: %w", e.wrapRevertError(err))
+		return nil, fmt.Errorf("erc1155: balanceOfBatch: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeBalanceOfBatch(data)
@@ -154,7 +150,7 @@ func (e *ERC1155) IsApprovedForAll(ctx context.Context, opts *bind.CallOptions, 
 
 	data, err := bind.Call(ctx, e.c, opts, req.Contract, calldata)
 	if err != nil {
-		return false, fmt.Errorf("erc1155: isApprovedForAll: %w", e.wrapRevertError(err))
+		return false, fmt.Errorf("erc1155: isApprovedForAll: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeIsApprovedForAll(data)
@@ -178,7 +174,7 @@ func (e *ERC1155) SetApprovalForAll(ctx context.Context, opts *bind.TransactOpti
 
 	signed, hash, err := bind.Transact(ctx, e.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("erc1155: setApprovalForAll: %w", e.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("erc1155: setApprovalForAll: %w", MapRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -197,7 +193,7 @@ func (e *ERC1155) SafeTransferFrom(ctx context.Context, opts *bind.TransactOptio
 
 	signed, hash, err := bind.Transact(ctx, e.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("erc1155: safeTransferFrom: %w", e.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("erc1155: safeTransferFrom: %w", MapRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -216,7 +212,7 @@ func (e *ERC1155) SafeBatchTransferFrom(ctx context.Context, opts *bind.Transact
 
 	signed, hash, err := bind.Transact(ctx, e.c, opts, req.Contract, calldata)
 	if err != nil {
-		return signed, nil, fmt.Errorf("erc1155: safeBatchTransferFrom: %w", e.wrapRevertError(err))
+		return signed, nil, fmt.Errorf("erc1155: safeBatchTransferFrom: %w", MapRevertError(err))
 	}
 
 	return signed, hash, nil
@@ -240,7 +236,7 @@ func (e *ERC1155) IdBalances(ctx context.Context, opts *bind.CallOptions, req *I
 
 	data, err := bind.Call(ctx, e.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("erc1155: idBalances: %w", e.wrapRevertError(err))
+		return nil, fmt.Errorf("erc1155: idBalances: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeIdBalances(req.IDs, data)
@@ -264,7 +260,7 @@ func (e *ERC1155) IdBalancePairs(ctx context.Context, opts *bind.CallOptions, re
 
 	data, err := bind.Call(ctx, e.c, opts, req.Contract, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("erc1155: idBalancePairs: %w", e.wrapRevertError(err))
+		return nil, fmt.Errorf("erc1155: idBalancePairs: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeIdBalancePairs(req.Accounts, req.IDs, data)
@@ -288,7 +284,7 @@ func (e *ERC1155) AccountIdBalances(ctx context.Context, opts *bind.CallOptions,
 
 	data, err := bind.Call(ctx, e.c, opts, req.Multicall, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("erc1155: accountIdBalances: %w", e.wrapRevertError(err))
+		return nil, fmt.Errorf("erc1155: accountIdBalances: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeAccountIdBalances(req.Account, req.ID, req.Contracts, data)
@@ -312,7 +308,7 @@ func (e *ERC1155) ApprovalForAllWithBalance(ctx context.Context, opts *bind.Call
 
 	data, err := bind.Call(ctx, e.c, opts, req.Multicall, calldata)
 	if err != nil {
-		return nil, fmt.Errorf("erc1155: approvalForAllWithBalance: %w", e.wrapRevertError(err))
+		return nil, fmt.Errorf("erc1155: approvalForAllWithBalance: %w", MapRevertError(err))
 	}
 
 	out, err := DecodeApprovalForAllWithBalance(req.Account, req.Operator, req.ID, data)
@@ -321,44 +317,4 @@ func (e *ERC1155) ApprovalForAllWithBalance(ctx context.Context, opts *bind.Call
 	}
 
 	return out, nil
-}
-
-// wrapRevertError maps a known IERC1155Errors custom error in err to its sentinel.
-func (_ *ERC1155) wrapRevertError(err error) error {
-	var rpcErr *rpc.ResponseError
-	if !errors.As(err, &rpcErr) || len(rpcErr.Data) == 0 {
-		return err
-	}
-
-	var hexData string
-	if jsonErr := json.Unmarshal(rpcErr.Data, &hexData); jsonErr != nil {
-		return err
-	}
-
-	data, decErr := encoding.Hex.Decode(hexData)
-	if decErr != nil || len(data) < 4 {
-		return err
-	}
-
-	var sel abi.Selector
-	copy(sel[:], data[:4])
-
-	switch sel {
-	case errInsufficientBalance.Selector():
-		return fmt.Errorf("%w: %w", ErrInsufficientBalance, err)
-	case errInvalidSender.Selector():
-		return fmt.Errorf("%w: %w", ErrInvalidSender, err)
-	case errInvalidReceiver.Selector():
-		return fmt.Errorf("%w: %w", ErrInvalidReceiver, err)
-	case errMissingApprovalForAll.Selector():
-		return fmt.Errorf("%w: %w", ErrMissingApprovalForAll, err)
-	case errInvalidApprover.Selector():
-		return fmt.Errorf("%w: %w", ErrInvalidApprover, err)
-	case errInvalidOperator.Selector():
-		return fmt.Errorf("%w: %w", ErrInvalidOperator, err)
-	case errInvalidArrayLength.Selector():
-		return fmt.Errorf("%w: %w", ErrInvalidArrayLength, err)
-	default:
-		return fmt.Errorf("%w: %w", ErrUnknown, err)
-	}
 }

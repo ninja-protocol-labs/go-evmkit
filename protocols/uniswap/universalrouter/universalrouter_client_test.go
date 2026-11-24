@@ -453,14 +453,14 @@ func TestExecutionFailedUnwrapsInnerRevert(t *testing.T) {
 	require.NoError(t, err)
 	outerPacked, err := abi.Pack(errExecutionFailed.Inputs, big.NewInt(2), append(failedSel[:], nestedPacked...))
 	require.NoError(t, err)
-	wrapped := (&UniversalRouter{}).wrapRevertError(&rpc.ResponseError{Code: 3, Message: "execution reverted", Data: jsontext.Value(`"` + encoding.Hex.EncodePrefixed(append(failedSel[:], outerPacked...)) + `"`)})
+	wrapped := MapRevertError(&rpc.ResponseError{Code: 3, Message: "execution reverted", Data: jsontext.Value(`"` + encoding.Hex.EncodePrefixed(append(failedSel[:], outerPacked...)) + `"`)})
 	outer, ok := errors.AsType[*ExecutionFailedError](wrapped)
 	require.True(t, ok)
 	require.Zero(t, big.NewInt(2).Cmp(outer.CommandIndex))
 	require.Contains(t, wrapped.Error(), "execution failed: command 2: execution failed: command 0: insufficient token")
 
 	for _, data := range [][]byte{append(failedSel[:], 0x01), failedSel[:]} {
-		bad := (&UniversalRouter{}).wrapRevertError(&rpc.ResponseError{Code: 3, Message: "execution reverted", Data: jsontext.Value(`"` + encoding.Hex.EncodePrefixed(data) + `"`)})
+		bad := MapRevertError(&rpc.ResponseError{Code: 3, Message: "execution reverted", Data: jsontext.Value(`"` + encoding.Hex.EncodePrefixed(data) + `"`)})
 		require.ErrorIs(t, bad, ErrExecutionFailed)
 		_, ok := errors.AsType[*ExecutionFailedError](bad)
 		require.False(t, ok)
@@ -498,7 +498,7 @@ func TestWrapRevertErrorMapsV3AndV2Reasons(t *testing.T) {
 
 			failed, err := abi.Pack(errExecutionFailed.Inputs, big.NewInt(1), reason)
 			require.NoError(t, err)
-			wrapped := (&UniversalRouter{}).wrapRevertError(&rpc.ResponseError{Code: 3, Message: "execution reverted", Data: jsontext.Value(`"` + encoding.Hex.EncodePrefixed(append(failedSel[:], failed...)) + `"`)})
+			wrapped := MapRevertError(&rpc.ResponseError{Code: 3, Message: "execution reverted", Data: jsontext.Value(`"` + encoding.Hex.EncodePrefixed(append(failedSel[:], failed...)) + `"`)})
 			require.ErrorIs(t, wrapped, ErrExecutionFailed)
 			require.ErrorIs(t, wrapped, tc.want)
 			require.NotErrorIs(t, wrapped, ErrUnknown)
@@ -512,14 +512,14 @@ func TestWrapRevertErrorMapsV3AndV2Reasons(t *testing.T) {
 		"0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000046e6f706500000000000000000000000000000000000000000000000000000000",
 		"0x4e487b710000000000000000000000000000000000000000000000000000000000000011",
 	} {
-		mapped := (&UniversalRouter{}).wrapRevertError(&rpc.ResponseError{Code: 3, Message: "execution reverted", Data: jsontext.Value(`"` + data + `"`)})
+		mapped := MapRevertError(&rpc.ResponseError{Code: 3, Message: "execution reverted", Data: jsontext.Value(`"` + data + `"`)})
 		require.ErrorIs(t, mapped, ErrUnknown)
 		require.NotErrorIs(t, mapped, v3.ErrReverted)
 		require.NotErrorIs(t, mapped, v2.ErrUnknown)
 	}
 }
 
-func TestMapRevertErrorMatchesRouterMapping(t *testing.T) {
+func TestMapRevertErrorCoversRouterPermit2V4V3AndV2(t *testing.T) {
 	failedSel := errExecutionFailed.Selector()
 	invalidNonce := abi.NewError("InvalidNonce", abi.NewTypes()).Selector()
 	poolAlreadyInitialized := abi.NewError("PoolAlreadyInitialized", abi.NewTypes()).Selector()
@@ -554,7 +554,6 @@ func TestMapRevertErrorMatchesRouterMapping(t *testing.T) {
 			got, ok := errors.AsType[*rpc.ResponseError](mapped)
 			require.True(t, ok)
 			require.Same(t, rpcErr, got)
-			require.Equal(t, (&UniversalRouter{}).wrapRevertError(rpcErr).Error(), mapped.Error())
 		})
 	}
 
@@ -568,18 +567,17 @@ func TestMapRevertErrorMatchesRouterMapping(t *testing.T) {
 }
 
 func TestWrapRevertErrorPassesThroughUndecodable(t *testing.T) {
-	u := &UniversalRouter{}
 	plain := errors.New("dial tcp: connection refused")
-	require.Same(t, plain, u.wrapRevertError(plain))
-	require.Nil(t, u.wrapRevertError(nil))
+	require.Same(t, plain, MapRevertError(plain))
+	require.Nil(t, MapRevertError(nil))
 
 	for _, data := range []jsontext.Value{nil, jsontext.Value(`"0x"`), jsontext.Value(`"0x123456"`), jsontext.Value(`"0xzz"`), jsontext.Value(`{"x":1}`), jsontext.Value(`42`)} {
 		t.Run(string(data), func(t *testing.T) {
 			rpcErr := &rpc.ResponseError{Code: 3, Message: "execution reverted", Data: data}
-			require.Same(t, rpcErr, u.wrapRevertError(rpcErr))
+			require.Same(t, rpcErr, MapRevertError(rpcErr))
 
 			wrapped := fmt.Errorf("rpc: %s: %w", rpc.MethodETHEstimateGas, rpcErr)
-			require.Same(t, wrapped, u.wrapRevertError(wrapped))
+			require.Same(t, wrapped, MapRevertError(wrapped))
 		})
 	}
 }
