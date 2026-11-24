@@ -341,7 +341,7 @@ func FuzzAcrossInputRoundTrip(f *testing.F) {
 func FuzzDecodeInputDoesNotPanic(f *testing.F) {
 	wrap, err := NewWrapETHInput(testTokenA, big.NewInt(1)).Encode()
 	require.NoError(f, err)
-	sub, err := NewExecuteSubPlanInput(NewPlan().Add(NewWrapETHInput(testTokenA, big.NewInt(1)))).Encode()
+	sub, err := NewExecuteSubPlanInput(NewPlanner().Append(NewWrapETHInput(testTokenA, big.NewInt(1)))).Encode()
 	require.NoError(f, err)
 	f.Add(byte(0x0b), wrap)
 	f.Add(byte(0x21), sub)
@@ -387,7 +387,7 @@ func FuzzDecodeInputDoesNotPanic(f *testing.F) {
 
 // go test -run '^$' -fuzz '^FuzzDecodeExecuteCallDoesNotPanic$' -fuzztime=10s ./protocols/uniswap/universalrouter
 func FuzzDecodeExecuteCallDoesNotPanic(f *testing.F) {
-	commands, inputs, err := NewPlan().Add(NewWrapETHInput(AddressThis(), ContractBalance())).AddAllowRevert(NewSweepInput(testTokenA, MsgSender(), big.NewInt(0))).Encode()
+	commands, inputs, err := NewPlanner().Append(NewWrapETHInput(AddressThis(), ContractBalance())).AppendAllowRevert(NewSweepInput(testTokenA, MsgSender(), big.NewInt(0))).Encode()
 	require.NoError(f, err)
 	plain, err := EncodeExecute(commands, inputs)
 	require.NoError(f, err)
@@ -432,7 +432,7 @@ func FuzzPlanRoundTripThroughExecute(f *testing.F) {
 			return
 		}
 
-		root := NewPlan()
+		root := NewPlanner()
 		current := root
 		for i, op := range script {
 			amount := big.NewInt(int64(op) * int64(i+1))
@@ -453,18 +453,18 @@ func FuzzPlanRoundTripThroughExecute(f *testing.F) {
 			case 6:
 				input = NewV4SwapInput([]byte{op, byte(i)}, [][]byte{{op}, {}})
 			default:
-				nested := NewPlan().Add(NewSweepInput(types.ZeroAddress(), MsgSender(), amount))
+				nested := NewPlanner().Append(NewSweepInput(types.ZeroAddress(), MsgSender(), amount))
 				input = NewExecuteSubPlanInput(nested)
 				if op&0x08 != 0 {
-					current.AddAllowRevert(input)
+					current.AppendAllowRevert(input)
 					current = nested
 					continue
 				}
 			}
 			if op&0x80 != 0 {
-				current.AddAllowRevert(input)
+				current.AppendAllowRevert(input)
 			} else {
-				current.Add(input)
+				current.Append(input)
 			}
 		}
 
@@ -631,7 +631,7 @@ func FuzzExecuteSignedMessageSignRecovers(f *testing.F) {
 			sender = testSender
 		}
 
-		msg := NewExecuteSignedMessage(NewPlan().Add(NewWrapETHInput(AddressThis(), big.NewInt(int64(amount)))), intent, data, sender, nonce, new(big.Int).SetUint64(deadline))
+		msg := NewExecuteSignedMessage(NewPlanner().Append(NewWrapETHInput(AddressThis(), big.NewInt(int64(amount)))), intent, data, sender, nonce, new(big.Int).SetUint64(deadline))
 		domain := NewUniversalRouterDomain(new(big.Int).SetUint64(chainID), testRouter)
 
 		digest, err := msg.Hash(domain)
@@ -659,7 +659,7 @@ func FuzzClientRequestsValidateNativeAmount(f *testing.F) {
 	f.Add(bytes.Repeat([]byte{0xff}, 32), false)
 	f.Add(append([]byte{0x01}, make([]byte, 32)...), false)
 
-	plan := NewPlan().Add(NewWrapETHInput(AddressThis(), big.NewInt(1)))
+	plan := NewPlanner().Append(NewWrapETHInput(AddressThis(), big.NewInt(1)))
 
 	f.Fuzz(func(t *testing.T, magnitude []byte, negative bool) {
 		native := new(big.Int).SetBytes(magnitude)

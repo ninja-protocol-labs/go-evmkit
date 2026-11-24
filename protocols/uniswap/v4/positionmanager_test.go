@@ -399,16 +399,16 @@ func (s *PositionManagerSuite) Test03InitializePool() {
 }
 
 func (s *PositionManagerSuite) Test04MintPosition() {
-	mintData, err := EncodeActionMintPosition(NewMintPositionParams(s.key, s.tickLower, s.tickUpper, s.MintLiquidity, s.MintAmount0Max, s.MintAmount1Max, s.from, nil))
-	s.Require().NoError(err)
-	settleData, err := EncodeActionSettlePair(s.key.Currency0, s.key.Currency1)
-	s.Require().NoError(err)
+	planner := NewPlanner()
+	s.Require().NoError(planner.AppendMintPosition(NewMintPositionParams(s.key, s.tickLower, s.tickUpper, s.MintLiquidity, s.MintAmount0Max, s.MintAmount1Max, s.from, nil)))
+	s.Require().NoError(planner.AppendSettlePair(s.key.Currency0, s.key.Currency1))
+	var err error
 	deadline := big.NewInt(time.Now().Add(time.Hour).Unix())
 
 	var sentTx core.Transaction
 	var hash *types.Hash
 	s.Require().Eventually(func() bool {
-		sentTx, hash, err = s.positionManager.ModifyLiquidities(s.T().Context(), bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewModifyLiquiditiesRequest(s.contract, []byte{ActionMintPosition, ActionSettlePair}, [][]byte{mintData, settleData}, deadline, nil))
+		sentTx, hash, err = s.positionManager.ModifyLiquidities(s.T().Context(), bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewModifyLiquiditiesRequest(s.contract, planner.Actions(), planner.Params(), deadline, nil))
 		return !errors.Is(err, ErrPoolNotInitialized)
 	}, 20*time.Second, s.ReceiptPollInterval, "pool still not initialized on the estimating node")
 	s.Require().NoError(err)
@@ -474,13 +474,12 @@ func (s *PositionManagerSuite) Test04MintPosition() {
 }
 
 func (s *PositionManagerSuite) Test05IncreaseLiquidity() {
-	increaseData, err := EncodeActionIncreaseLiquidity(s.tokenID, s.IncreaseLiquidity, s.IncreaseAmount0Max, s.IncreaseAmount1Max, nil)
-	s.Require().NoError(err)
-	settleData, err := EncodeActionSettlePair(s.key.Currency0, s.key.Currency1)
-	s.Require().NoError(err)
+	planner := NewPlanner()
+	s.Require().NoError(planner.AppendIncreaseLiquidity(s.tokenID, s.IncreaseLiquidity, s.IncreaseAmount0Max, s.IncreaseAmount1Max, nil))
+	s.Require().NoError(planner.AppendSettlePair(s.key.Currency0, s.key.Currency1))
 	deadline := big.NewInt(time.Now().Add(time.Hour).Unix())
 
-	sentTx, hash, err := s.positionManager.ModifyLiquidities(s.T().Context(), bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewModifyLiquiditiesRequest(s.contract, []byte{ActionIncreaseLiquidity, ActionSettlePair}, [][]byte{increaseData, settleData}, deadline, nil))
+	sentTx, hash, err := s.positionManager.ModifyLiquidities(s.T().Context(), bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewModifyLiquiditiesRequest(s.contract, planner.Actions(), planner.Params(), deadline, nil))
 	s.Require().NoError(err)
 	s.mu.Lock()
 	s.totalFee.Add(s.totalFee, sentTx.MaxFee())
@@ -520,16 +519,15 @@ func (s *PositionManagerSuite) Test05IncreaseLiquidity() {
 }
 
 func (s *PositionManagerSuite) Test06DecreaseLiquidity() {
-	decreaseData, err := EncodeActionDecreaseLiquidity(s.tokenID, s.DecreaseLiquidity, big.NewInt(0), big.NewInt(0), nil)
-	s.Require().NoError(err)
-	takeData, err := EncodeActionTakePair(s.key.Currency0, s.key.Currency1, s.from)
-	s.Require().NoError(err)
+	planner := NewPlanner()
+	s.Require().NoError(planner.AppendDecreaseLiquidity(s.tokenID, s.DecreaseLiquidity, big.NewInt(0), big.NewInt(0), nil))
+	s.Require().NoError(planner.AppendTakePair(s.key.Currency0, s.key.Currency1, s.from))
 	deadline := big.NewInt(time.Now().Add(time.Hour).Unix())
 
 	before, err := s.erc20.AddressBalances(s.T().Context(), nil, erc20.NewAddressBalancesRequest(s.multicall, s.from, []*types.Address{s.currency0, s.currency1}, false))
 	s.Require().NoError(err)
 
-	sentTx, hash, err := s.positionManager.ModifyLiquidities(s.T().Context(), bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewModifyLiquiditiesRequest(s.contract, []byte{ActionDecreaseLiquidity, ActionTakePair}, [][]byte{decreaseData, takeData}, deadline, nil))
+	sentTx, hash, err := s.positionManager.ModifyLiquidities(s.T().Context(), bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewModifyLiquiditiesRequest(s.contract, planner.Actions(), planner.Params(), deadline, nil))
 	s.Require().NoError(err)
 	s.mu.Lock()
 	s.totalFee.Add(s.totalFee, sentTx.MaxFee())
@@ -622,13 +620,12 @@ func (s *PositionManagerSuite) Test07ViewFunctions() {
 }
 
 func (s *PositionManagerSuite) Test08ModifyLiquiditiesRejectsPastDeadline() {
-	mintData, err := EncodeActionMintPosition(NewMintPositionParams(s.key, s.tickLower, s.tickUpper, s.MintLiquidity, s.MintAmount0Max, s.MintAmount1Max, s.from, nil))
-	s.Require().NoError(err)
-	settleData, err := EncodeActionSettlePair(s.key.Currency0, s.key.Currency1)
-	s.Require().NoError(err)
+	planner := NewPlanner()
+	s.Require().NoError(planner.AppendMintPosition(NewMintPositionParams(s.key, s.tickLower, s.tickUpper, s.MintLiquidity, s.MintAmount0Max, s.MintAmount1Max, s.from, nil)))
+	s.Require().NoError(planner.AppendSettlePair(s.key.Currency0, s.key.Currency1))
 	pastDeadline := big.NewInt(time.Now().Add(-time.Hour).Unix())
 
-	sentTx, hash, err := s.positionManager.ModifyLiquidities(s.T().Context(), bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewModifyLiquiditiesRequest(s.contract, []byte{ActionMintPosition, ActionSettlePair}, [][]byte{mintData, settleData}, pastDeadline, nil))
+	sentTx, hash, err := s.positionManager.ModifyLiquidities(s.T().Context(), bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewModifyLiquiditiesRequest(s.contract, planner.Actions(), planner.Params(), pastDeadline, nil))
 	s.Require().ErrorIs(err, ErrDeadlinePassed)
 	s.Require().ErrorContains(err, "uniswapv4: modifyLiquidities: ")
 	s.Require().Nil(sentTx)
@@ -640,11 +637,11 @@ func (s *PositionManagerSuite) Test08ModifyLiquiditiesRejectsPastDeadline() {
 }
 
 func (s *PositionManagerSuite) Test09UnsettledMintMapsPoolManagerRevert() {
-	mintData, err := EncodeActionMintPosition(NewMintPositionParams(s.key, s.tickLower, s.tickUpper, s.MintLiquidity, s.MintAmount0Max, s.MintAmount1Max, s.from, nil))
-	s.Require().NoError(err)
+	planner := NewPlanner()
+	s.Require().NoError(planner.AppendMintPosition(NewMintPositionParams(s.key, s.tickLower, s.tickUpper, s.MintLiquidity, s.MintAmount0Max, s.MintAmount1Max, s.from, nil)))
 	deadline := big.NewInt(time.Now().Add(time.Hour).Unix())
 
-	sentTx, hash, err := s.positionManager.ModifyLiquidities(s.T().Context(), bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewModifyLiquiditiesRequest(s.contract, []byte{ActionMintPosition}, [][]byte{mintData}, deadline, nil))
+	sentTx, hash, err := s.positionManager.ModifyLiquidities(s.T().Context(), bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewModifyLiquiditiesRequest(s.contract, planner.Actions(), planner.Params(), deadline, nil))
 	s.Require().ErrorIs(err, ErrCurrencyNotSettled)
 	s.Require().NotErrorIs(err, ErrUnknown)
 	s.Require().Nil(sentTx)
@@ -959,13 +956,12 @@ func (s *PositionManagerSuite) Test16Permit2PermitBatch() {
 }
 
 func (s *PositionManagerSuite) Test17BurnPosition() {
-	burnData, err := EncodeActionBurnPosition(s.tokenID, big.NewInt(0), big.NewInt(0), nil)
-	s.Require().NoError(err)
-	takeData, err := EncodeActionTakePair(s.key.Currency0, s.key.Currency1, s.from)
-	s.Require().NoError(err)
+	planner := NewPlanner()
+	s.Require().NoError(planner.AppendBurnPosition(s.tokenID, big.NewInt(0), big.NewInt(0), nil))
+	s.Require().NoError(planner.AppendTakePair(s.key.Currency0, s.key.Currency1, s.from))
 	deadline := big.NewInt(time.Now().Add(time.Hour).Unix())
 
-	sentTx, hash, err := s.positionManager.ModifyLiquidities(s.T().Context(), bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewModifyLiquiditiesRequest(s.contract, []byte{ActionBurnPosition, ActionTakePair}, [][]byte{burnData, takeData}, deadline, nil))
+	sentTx, hash, err := s.positionManager.ModifyLiquidities(s.T().Context(), bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewModifyLiquiditiesRequest(s.contract, planner.Actions(), planner.Params(), deadline, nil))
 	s.Require().NoError(err)
 	s.mu.Lock()
 	s.totalFee.Add(s.totalFee, sentTx.MaxFee())
@@ -1031,15 +1027,13 @@ func (s *PositionManagerSuite) Test18NativePosition() {
 	s.Require().True(initReceipt.Status, "initializePool (native) transaction reverted")
 	s.T().Logf("Test18NativePosition: initialized native pool (tx %s, block %d)", initHash, initReceipt.BlockNumber)
 
-	mintData, err := EncodeActionMintPosition(NewMintPositionParams(s.nativeKey, s.tickLower, s.tickUpper, s.NativeMintLiquidity, s.NativeAmount, s.MintAmount1Max, s.from, nil))
-	s.Require().NoError(err)
-	settleData, err := EncodeActionSettlePair(s.nativeKey.Currency0, s.nativeKey.Currency1)
-	s.Require().NoError(err)
-	sweepData, err := EncodeActionSweep(s.nativeKey.Currency0, s.from)
-	s.Require().NoError(err)
+	planner := NewPlanner()
+	s.Require().NoError(planner.AppendMintPosition(NewMintPositionParams(s.nativeKey, s.tickLower, s.tickUpper, s.NativeMintLiquidity, s.NativeAmount, s.MintAmount1Max, s.from, nil)))
+	s.Require().NoError(planner.AppendSettlePair(s.nativeKey.Currency0, s.nativeKey.Currency1))
+	s.Require().NoError(planner.AppendSweep(s.nativeKey.Currency0, s.from))
 	deadline := big.NewInt(time.Now().Add(time.Hour).Unix())
 
-	rejectedTx, rejectedHash, rejectedErr := s.positionManager.ModifyLiquidities(s.T().Context(), bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()).WithValue(s.NativeAmount), NewModifyLiquiditiesRequest(s.contract, []byte{ActionMintPosition, ActionSettlePair, ActionSweep}, [][]byte{mintData, settleData, sweepData}, deadline, s.NativeAmount))
+	rejectedTx, rejectedHash, rejectedErr := s.positionManager.ModifyLiquidities(s.T().Context(), bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()).WithValue(s.NativeAmount), NewModifyLiquiditiesRequest(s.contract, planner.Actions(), planner.Params(), deadline, s.NativeAmount))
 	s.Require().ErrorIs(rejectedErr, bind.ErrInvalidOptions)
 	s.Require().Nil(rejectedTx)
 	s.Require().Nil(rejectedHash)
@@ -1047,7 +1041,7 @@ func (s *PositionManagerSuite) Test18NativePosition() {
 	var sentTx core.Transaction
 	var hash *types.Hash
 	s.Require().Eventually(func() bool {
-		sentTx, hash, err = s.positionManager.ModifyLiquidities(s.T().Context(), bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewModifyLiquiditiesRequest(s.contract, []byte{ActionMintPosition, ActionSettlePair, ActionSweep}, [][]byte{mintData, settleData, sweepData}, deadline, s.NativeAmount))
+		sentTx, hash, err = s.positionManager.ModifyLiquidities(s.T().Context(), bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewModifyLiquiditiesRequest(s.contract, planner.Actions(), planner.Params(), deadline, s.NativeAmount))
 		return !errors.Is(err, ErrPoolNotInitialized)
 	}, 20*time.Second, s.ReceiptPollInterval, "native pool still not initialized on the estimating node")
 	s.Require().NoError(err)
@@ -1091,15 +1085,14 @@ func (s *PositionManagerSuite) Test18NativePosition() {
 	s.Require().True(ok)
 	s.Require().Zero(balance.Sign(), "SWEEP must refund every unused wei")
 
-	burnData, err := EncodeActionBurnPosition(nativeTokenID, big.NewInt(0), big.NewInt(0), nil)
-	s.Require().NoError(err)
-	takeData, err := EncodeActionTakePair(s.nativeKey.Currency0, s.nativeKey.Currency1, s.from)
-	s.Require().NoError(err)
+	burnPlanner := NewPlanner()
+	s.Require().NoError(burnPlanner.AppendBurnPosition(nativeTokenID, big.NewInt(0), big.NewInt(0), nil))
+	s.Require().NoError(burnPlanner.AppendTakePair(s.nativeKey.Currency0, s.nativeKey.Currency1, s.from))
 
 	var burnTx core.Transaction
 	var burnHash *types.Hash
 	s.Require().Eventually(func() bool {
-		burnTx, burnHash, err = s.positionManager.ModifyLiquidities(s.T().Context(), bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewModifyLiquiditiesRequest(s.contract, []byte{ActionBurnPosition, ActionTakePair}, [][]byte{burnData, takeData}, deadline, nil))
+		burnTx, burnHash, err = s.positionManager.ModifyLiquidities(s.T().Context(), bind.NewTransactOptions(s.signer, tx.NewDynamicFeeBuilder()), NewModifyLiquiditiesRequest(s.contract, burnPlanner.Actions(), burnPlanner.Params(), deadline, nil))
 		return err == nil || burnTx != nil
 	}, 20*time.Second, s.ReceiptPollInterval, "native position still not visible on the estimating node")
 	s.Require().NoError(err)

@@ -80,7 +80,7 @@ func TestEncodeExecuteHandlesEmptyAndNilInputs(t *testing.T) {
 }
 
 func TestDecodeExecuteCallRoundTripsEverySelector(t *testing.T) {
-	plan := NewPlan().Add(NewWrapETHInput(AddressThis(), ContractBalance())).AddAllowRevert(NewSweepInput(testTokenA, MsgSender(), big.NewInt(1)))
+	plan := NewPlanner().Append(NewWrapETHInput(AddressThis(), ContractBalance())).AppendAllowRevert(NewSweepInput(testTokenA, MsgSender(), big.NewInt(1)))
 	commands, inputs, err := plan.Encode()
 	require.NoError(t, err)
 

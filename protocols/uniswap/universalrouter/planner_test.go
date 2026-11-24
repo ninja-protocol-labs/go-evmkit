@@ -22,7 +22,7 @@ func TestPlanEncodeBuildsCommandsAndInputs(t *testing.T) {
 	check := NewBalanceCheckERC20Input(testTokenC, testTokenB, big.NewInt(1))
 	sweep := NewSweepInput(types.ZeroAddress(), MsgSender(), big.NewInt(0))
 
-	plan := NewPlan().Add(wrap).Add(swap).AddAllowRevert(check).Add(sweep)
+	plan := NewPlanner().Append(wrap).Append(swap).AppendAllowRevert(check).Append(sweep)
 	require.Len(t, plan.Steps, 4)
 
 	commands, inputs, err := plan.Encode()
@@ -36,7 +36,7 @@ func TestPlanEncodeBuildsCommandsAndInputs(t *testing.T) {
 		require.Equal(t, want, inputs[i])
 	}
 
-	decoded, err := DecodePlan(commands, inputs)
+	decoded, err := DecodePlanner(commands, inputs)
 	require.NoError(t, err)
 	require.Len(t, decoded.Steps, 4)
 	for i, s := range decoded.Steps {
@@ -51,15 +51,15 @@ func TestPlanEncodeBuildsCommandsAndInputs(t *testing.T) {
 }
 
 func TestPlanNestedSubPlansRoundTrip(t *testing.T) {
-	inner := NewPlan().Add(NewUnwrapWETHInput(MsgSender(), big.NewInt(0))).AddAllowRevert(NewTransferInput(testTokenA, testTokenB, big.NewInt(3)))
-	middle := NewPlan().AddAllowRevert(NewExecuteSubPlanInput(inner)).Add(NewPayPortionInput(testTokenA, testTokenC, big.NewInt(25)))
-	outer := NewPlan().Add(NewWrapETHInput(AddressThis(), big.NewInt(1))).AddAllowRevert(NewExecuteSubPlanInput(middle))
+	inner := NewPlanner().Append(NewUnwrapWETHInput(MsgSender(), big.NewInt(0))).AppendAllowRevert(NewTransferInput(testTokenA, testTokenB, big.NewInt(3)))
+	middle := NewPlanner().AppendAllowRevert(NewExecuteSubPlanInput(inner)).Append(NewPayPortionInput(testTokenA, testTokenC, big.NewInt(25)))
+	outer := NewPlanner().Append(NewWrapETHInput(AddressThis(), big.NewInt(1))).AppendAllowRevert(NewExecuteSubPlanInput(middle))
 
 	commands, inputs, err := outer.Encode()
 	require.NoError(t, err)
 	require.Equal(t, []byte{0x0b, 0xa1}, commands)
 
-	decoded, err := DecodePlan(commands, inputs)
+	decoded, err := DecodePlanner(commands, inputs)
 	require.NoError(t, err)
 	require.Len(t, decoded.Steps, 2)
 	require.True(t, decoded.Steps[1].AllowRevert)
@@ -90,15 +90,15 @@ func TestPlanNestedSubPlansRoundTrip(t *testing.T) {
 func TestPlanValidateReportsStepIndexAndCommand(t *testing.T) {
 	for _, tc := range []struct {
 		name string
-		plan *Plan
+		plan *Planner
 		want string
 	}{
 		{"nil", nil, "invalid request: plan is nil"},
-		{"empty", NewPlan(), "invalid request: plan has no steps"},
-		{"zero step", &Plan{Steps: []Step{{}}}, "invalid request: steps[0] input is nil"},
-		{"nil input", &Plan{Steps: []Step{*NewStep(NewSweepInput(testTokenA, testTokenB, big.NewInt(1)), false), *NewStep(nil, true)}}, "invalid request: steps[1] input is nil"},
-		{"invalid input", NewPlan().Add(NewWrapETHInput(testTokenA, big.NewInt(1))).Add(NewTransferInput(testTokenA, nil, big.NewInt(1))), "steps[1] TRANSFER: invalid request: recipient is nil"},
-		{"invalid nested", NewPlan().Add(NewExecuteSubPlanInput(NewPlan().Add(&PayPortionInput{Token: testTokenA, Recipient: testTokenB, Bips: big.NewInt(10_001)}))), "steps[0] EXECUTE_SUB_PLAN: plan: steps[0] PAY_PORTION: invalid request: bips 10001 exceeds 10000"},
+		{"empty", NewPlanner(), "invalid request: plan has no steps"},
+		{"zero step", &Planner{Steps: []Step{{}}}, "invalid request: steps[0] input is nil"},
+		{"nil input", &Planner{Steps: []Step{*NewStep(NewSweepInput(testTokenA, testTokenB, big.NewInt(1)), false), *NewStep(nil, true)}}, "invalid request: steps[1] input is nil"},
+		{"invalid input", NewPlanner().Append(NewWrapETHInput(testTokenA, big.NewInt(1))).Append(NewTransferInput(testTokenA, nil, big.NewInt(1))), "steps[1] TRANSFER: invalid request: recipient is nil"},
+		{"invalid nested", NewPlanner().Append(NewExecuteSubPlanInput(NewPlanner().Append(&PayPortionInput{Token: testTokenA, Recipient: testTokenB, Bips: big.NewInt(10_001)}))), "steps[0] EXECUTE_SUB_PLAN: plan: steps[0] PAY_PORTION: invalid request: bips 10001 exceeds 10000"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			err := tc.plan.Validate()
@@ -118,32 +118,32 @@ func TestDecodePlanRejectsBadShapes(t *testing.T) {
 	wrap, err := NewWrapETHInput(testTokenA, big.NewInt(1)).Encode()
 	require.NoError(t, err)
 
-	_, err = DecodePlan([]byte{0x0b, 0x0b}, [][]byte{wrap})
+	_, err = DecodePlanner([]byte{0x0b, 0x0b}, [][]byte{wrap})
 	require.EqualError(t, err, "universalrouter: decodePlan: 2 commands but 1 inputs")
 
-	_, err = DecodePlan([]byte{0x0b}, [][]byte{wrap, wrap})
+	_, err = DecodePlanner([]byte{0x0b}, [][]byte{wrap, wrap})
 	require.EqualError(t, err, "universalrouter: decodePlan: 1 commands but 2 inputs")
 
-	_, err = DecodePlan([]byte{0x0b, 0x8f}, [][]byte{wrap, wrap})
+	_, err = DecodePlanner([]byte{0x0b, 0x8f}, [][]byte{wrap, wrap})
 	require.ErrorIs(t, err, ErrUnknownCommand)
 	require.ErrorContains(t, err, "universalrouter: decodePlan: steps[1]: universalrouter: decode 0x0f: ")
 
-	_, err = DecodePlan([]byte{0x04}, [][]byte{wrap})
+	_, err = DecodePlanner([]byte{0x04}, [][]byte{wrap})
 	require.ErrorContains(t, err, "universalrouter: decodePlan: steps[0]: universalrouter: decode SWEEP: ")
 
-	empty, err := DecodePlan(nil, nil)
+	empty, err := DecodePlanner(nil, nil)
 	require.NoError(t, err)
 	require.Empty(t, empty.Steps)
 	require.Error(t, empty.Validate())
 
 	badSub, err := abi.Pack(subPlanTypes, []byte{0x0b}, []any{[]byte{0x01}})
 	require.NoError(t, err)
-	_, err = DecodePlan([]byte{byte(CommandExecuteSubPlan)}, [][]byte{badSub})
+	_, err = DecodePlanner([]byte{byte(CommandExecuteSubPlan)}, [][]byte{badSub})
 	require.ErrorContains(t, err, "universalrouter: decode EXECUTE_SUB_PLAN: universalrouter: decodePlan: steps[0]: universalrouter: decode WRAP_ETH: ")
 
 	mismatchedSub, err := abi.Pack(subPlanTypes, []byte{0x0b, 0x0b}, []any{wrap})
 	require.NoError(t, err)
-	_, err = DecodePlan([]byte{byte(CommandExecuteSubPlan)}, [][]byte{mismatchedSub})
+	_, err = DecodePlanner([]byte{byte(CommandExecuteSubPlan)}, [][]byte{mismatchedSub})
 	require.ErrorContains(t, err, "2 commands but 1 inputs")
 }
 
@@ -159,7 +159,7 @@ func TestPlanV4SwapUsesV4ActionEncoders(t *testing.T) {
 	actions := []byte{v4.ActionSwapExactInSingle, v4.ActionSettleAll, v4.ActionTakeAll}
 	params := [][]byte{swapData, settleData, takeData}
 
-	commands, inputs, err := NewPlan().Add(NewV4SwapInput(actions, params)).Encode()
+	commands, inputs, err := NewPlanner().Append(NewV4SwapInput(actions, params)).Encode()
 	require.NoError(t, err)
 	require.Equal(t, []byte{0x10}, commands)
 
@@ -167,7 +167,7 @@ func TestPlanV4SwapUsesV4ActionEncoders(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, unlockData, inputs[0])
 
-	decoded, err := DecodePlan(commands, inputs)
+	decoded, err := DecodePlanner(commands, inputs)
 	require.NoError(t, err)
 	swap, ok := decoded.Steps[0].Input.(*V4SwapInput)
 	require.True(t, ok)
@@ -186,9 +186,9 @@ func TestNewStepAndConstructorsSetFields(t *testing.T) {
 	require.Same(t, sweep, step.Input)
 	require.True(t, step.AllowRevert)
 
-	plan := NewPlan()
-	require.Same(t, plan, plan.Add(sweep))
-	require.Same(t, plan, plan.AddAllowRevert(sweep))
+	plan := NewPlanner()
+	require.Same(t, plan, plan.Append(sweep))
+	require.Same(t, plan, plan.AppendAllowRevert(sweep))
 	require.Len(t, plan.Steps, 2)
 	require.False(t, plan.Steps[0].AllowRevert)
 	require.True(t, plan.Steps[1].AllowRevert)
@@ -222,4 +222,104 @@ func TestRawCalldataInputsAreCopiedNotAliased(t *testing.T) {
 	require.NoError(t, err)
 	calldata[5] = 0xee
 	require.Equal(t, byte(0x00), decoded.Calldata[5])
+}
+
+func TestPlanCalldataMatchesExecuteEncoders(t *testing.T) {
+	plan := NewPlanner().
+		Append(NewWrapETHInput(AddressThis(), big.NewInt(1))).
+		Append(NewSweepInput(testTokenA, MsgSender(), big.NewInt(0)))
+	commands, inputs, err := plan.Encode()
+	require.NoError(t, err)
+
+	withoutDeadline, err := plan.Calldata(nil)
+	require.NoError(t, err)
+	want, err := EncodeExecute(commands, inputs)
+	require.NoError(t, err)
+	require.Equal(t, want, withoutDeadline)
+	decoded, err := DecodeExecuteCall(withoutDeadline)
+	require.NoError(t, err)
+	require.Nil(t, decoded.Deadline)
+	require.Nil(t, decoded.Signed)
+	gotCommands, gotInputs, err := decoded.Plan.Encode()
+	require.NoError(t, err)
+	require.Equal(t, commands, gotCommands)
+	require.Equal(t, inputs, gotInputs)
+
+	deadline := big.NewInt(1_900_000_000)
+	withDeadline, err := plan.Calldata(deadline)
+	require.NoError(t, err)
+	want, err = EncodeExecuteWithDeadline(commands, inputs, deadline)
+	require.NoError(t, err)
+	require.Equal(t, want, withDeadline)
+	decoded, err = DecodeExecuteCall(withDeadline)
+	require.NoError(t, err)
+	require.Zero(t, deadline.Cmp(decoded.Deadline))
+
+	empty, err := NewPlanner().Calldata(deadline)
+	require.Nil(t, empty)
+	require.ErrorIs(t, err, bind.ErrInvalidRequest)
+	require.ErrorContains(t, err, "plan has no steps")
+
+	var nilPlan *Planner
+	nilCalldata, err := nilPlan.Calldata(nil)
+	require.Nil(t, nilCalldata)
+	require.ErrorContains(t, err, "plan is nil")
+}
+
+func TestPlanExecuteRequest(t *testing.T) {
+	router := types.MustNewAddressFromHex("0x66a9893cC07D91D95644AEDD05D03f95e1dBA8Af")
+	plan := NewPlanner().Append(NewWrapETHInput(AddressThis(), big.NewInt(1)))
+	deadline := big.NewInt(1_900_000_000)
+	native := big.NewInt(1)
+
+	req := plan.ExecuteRequest(router, deadline, native)
+	require.Same(t, router, req.Contract)
+	require.Same(t, plan, req.Plan)
+	require.Same(t, deadline, req.Deadline)
+	require.Same(t, native, req.NativeAmount)
+	require.NoError(t, req.Validate())
+
+	req = plan.ExecuteRequest(router, nil, nil)
+	require.Nil(t, req.Deadline)
+	require.Nil(t, req.NativeAmount)
+	require.NoError(t, req.Validate())
+}
+
+func TestNewV4SwapInputFromPlanner(t *testing.T) {
+	key := v4.NewPoolKey(testTokenA, testTokenB, big.NewInt(3000), big.NewInt(60), types.ZeroAddress())
+	swap := v4.NewExactInputSingleParams(key, true, big.NewInt(1000), big.NewInt(900), big.NewInt(0), []byte{})
+	planner := v4.NewPlanner()
+	require.NoError(t, planner.AppendSwapExactInSingle(swap))
+	require.NoError(t, planner.AppendSettleAll(testTokenA, big.NewInt(1000)))
+	require.NoError(t, planner.AppendTakeAll(testTokenB, big.NewInt(900)))
+
+	input := NewV4SwapInputFromPlanner(planner)
+	require.NoError(t, input.Validate())
+	require.Equal(t, []byte{v4.ActionSwapExactInSingle, v4.ActionSettleAll, v4.ActionTakeAll}, input.Actions)
+
+	swapParams, err := v4.EncodeActionSwapExactInSingle(swap)
+	require.NoError(t, err)
+	settleParams, err := v4.EncodeActionSettleAll(testTokenA, big.NewInt(1000))
+	require.NoError(t, err)
+	takeParams, err := v4.EncodeActionTakeAll(testTokenB, big.NewInt(900))
+	require.NoError(t, err)
+	manual := NewV4SwapInput(
+		[]byte{v4.ActionSwapExactInSingle, v4.ActionSettleAll, v4.ActionTakeAll},
+		[][]byte{swapParams, settleParams, takeParams},
+	)
+	got, err := input.Encode()
+	require.NoError(t, err)
+	want, err := manual.Encode()
+	require.NoError(t, err)
+	require.Equal(t, want, got)
+
+	input.Actions[0] = v4.ActionSweep
+	require.Equal(t, []byte{v4.ActionSwapExactInSingle, v4.ActionSettleAll, v4.ActionTakeAll}, planner.Actions())
+
+	empty := NewV4SwapInputFromPlanner(v4.NewPlanner())
+	err = empty.Validate()
+	require.ErrorIs(t, err, bind.ErrInvalidRequest)
+	require.ErrorContains(t, err, "actions is empty")
+	_, _, err = NewPlanner().Append(NewWrapETHInput(AddressThis(), big.NewInt(1))).Append(empty).Encode()
+	require.ErrorContains(t, err, "steps[1] V4_SWAP")
 }

@@ -209,7 +209,7 @@ func DecodeExecuteCall(calldata []byte) (*ExecuteCall, error) {
 		inputs[i] = b
 	}
 
-	plan, err := DecodePlan(commands, inputs)
+	plan, err := DecodePlanner(commands, inputs)
 	if err != nil {
 		return nil, fmt.Errorf("universalrouter: decodeExecuteCall: %w", err)
 	}

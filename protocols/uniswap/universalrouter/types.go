@@ -47,7 +47,7 @@ func UncheckedNonce() [32]byte {
 
 // ExecuteSignedMessage is the EIP-712 message an executeSigned route is signed over; Sender is the zero address unless the route is sent with verifySender.
 type ExecuteSignedMessage struct {
-	Plan     *Plan
+	Plan     *Planner
 	Intent   [32]byte
 	Data     [32]byte
 	Sender   *types.Address
@@ -55,7 +55,7 @@ type ExecuteSignedMessage struct {
 	Deadline *big.Int
 }
 
-func NewExecuteSignedMessage(plan *Plan, intent, data [32]byte, sender *types.Address, nonce [32]byte, deadline *big.Int) *ExecuteSignedMessage {
+func NewExecuteSignedMessage(plan *Planner, intent, data [32]byte, sender *types.Address, nonce [32]byte, deadline *big.Int) *ExecuteSignedMessage {
 	return &ExecuteSignedMessage{
 		Plan:     plan,
 		Intent:   intent,
@@ -166,12 +166,12 @@ func (e *ExecutionFailedError) Is(target error) bool {
 // ExecuteRequest is execute(commands, inputs[, deadline])'s input on Contract; a nil Deadline selects the deadline-less overload, and NativeAmount, if set, is sent as msg.value.
 type ExecuteRequest struct {
 	Contract     *types.Address
-	Plan         *Plan
+	Plan         *Planner
 	Deadline     *big.Int
 	NativeAmount *big.Int
 }
 
-func NewExecuteRequest(contract *types.Address, plan *Plan, deadline, nativeAmount *big.Int) *ExecuteRequest {
+func NewExecuteRequest(contract *types.Address, plan *Planner, deadline, nativeAmount *big.Int) *ExecuteRequest {
 	return &ExecuteRequest{
 		Contract:     contract,
 		Plan:         plan,
@@ -207,7 +207,7 @@ func (r *ExecuteRequest) Validate() error {
 // ExecuteSignedRequest is executeSigned's input on Contract; Signature is the route signer's 65-byte signature over the matching ExecuteSignedMessage.
 type ExecuteSignedRequest struct {
 	Contract     *types.Address
-	Plan         *Plan
+	Plan         *Planner
 	Intent       [32]byte
 	Data         [32]byte
 	VerifySender bool
@@ -217,7 +217,7 @@ type ExecuteSignedRequest struct {
 	NativeAmount *big.Int
 }
 
-func NewExecuteSignedRequest(contract *types.Address, plan *Plan, intent, data [32]byte, verifySender bool, nonce [32]byte, signature []byte, deadline, nativeAmount *big.Int) *ExecuteSignedRequest {
+func NewExecuteSignedRequest(contract *types.Address, plan *Planner, intent, data [32]byte, verifySender bool, nonce [32]byte, signature []byte, deadline, nativeAmount *big.Int) *ExecuteSignedRequest {
 	return &ExecuteSignedRequest{
 		Contract:     contract,
 		Plan:         plan,

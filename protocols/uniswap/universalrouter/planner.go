@@ -25,29 +25,29 @@ func NewStep(input Input, allowRevert bool) *Step {
 	}
 }
 
-// Plan is an ordered list of commands that encodes to execute's commands and inputs.
-type Plan struct {
+// Planner is an ordered list of commands that encodes to execute's commands and inputs.
+type Planner struct {
 	Steps []Step
 }
 
-func NewPlan() *Plan {
-	return new(Plan)
+func NewPlanner() *Planner {
+	return new(Planner)
 }
 
-// Add appends input as a step that reverts the whole plan when it fails.
-func (p *Plan) Add(input Input) *Plan {
+// Append appends input as a step that reverts the whole plan when it fails.
+func (p *Planner) Append(input Input) *Planner {
 	p.Steps = append(p.Steps, *NewStep(input, false))
 	return p
 }
 
-// AddAllowRevert appends input as a step whose failure is tolerated.
-func (p *Plan) AddAllowRevert(input Input) *Plan {
+// AppendAllowRevert appends input as a step whose failure is tolerated.
+func (p *Planner) AppendAllowRevert(input Input) *Planner {
 	p.Steps = append(p.Steps, *NewStep(input, true))
 	return p
 }
 
 // Validate checks every step's input, reporting the first failure with its index and command.
-func (p *Plan) Validate() error {
+func (p *Planner) Validate() error {
 	if p == nil {
 		return fmt.Errorf("%w: plan is nil", bind.ErrInvalidRequest)
 	}
@@ -70,7 +70,7 @@ func (p *Plan) Validate() error {
 }
 
 // Encode returns execute's commands byte string and inputs, one per step.
-func (p *Plan) Encode() ([]byte, [][]byte, error) {
+func (p *Planner) Encode() ([]byte, [][]byte, error) {
 	if err := p.Validate(); err != nil {
 		return nil, nil, fmt.Errorf("universalrouter: encodePlan: %w", err)
 	}
@@ -89,13 +89,31 @@ func (p *Plan) Encode() ([]byte, [][]byte, error) {
 	return commands, inputs, nil
 }
 
-// DecodePlan decodes execute's commands and inputs back into typed steps, recursing into sub-plans.
-func DecodePlan(commands []byte, inputs [][]byte) (*Plan, error) {
+// Calldata returns execute's calldata for p; a nil deadline selects execute(bytes,bytes[]).
+func (p *Planner) Calldata(deadline *big.Int) ([]byte, error) {
+	commands, inputs, err := p.Encode()
+	if err != nil {
+		return nil, err
+	}
+
+	if deadline == nil {
+		return EncodeExecute(commands, inputs)
+	}
+	return EncodeExecuteWithDeadline(commands, inputs, deadline)
+}
+
+// ExecuteRequest returns an ExecuteRequest running p on router with deadline and nativeAmount as msg.value.
+func (p *Planner) ExecuteRequest(router *types.Address, deadline, nativeAmount *big.Int) *ExecuteRequest {
+	return NewExecuteRequest(router, p, deadline, nativeAmount)
+}
+
+// DecodePlanner decodes execute's commands and inputs back into typed steps, recursing into sub-plans.
+func DecodePlanner(commands []byte, inputs [][]byte) (*Planner, error) {
 	if len(commands) != len(inputs) {
 		return nil, fmt.Errorf("universalrouter: decodePlan: %d commands but %d inputs", len(commands), len(inputs))
 	}
 
-	plan := NewPlan()
+	plan := NewPlanner()
 	for i, b := range commands {
 		cmd, allowRevert := ParseCommandByte(b)
 		input, err := DecodeInput(cmd, inputs[i])
@@ -192,12 +210,12 @@ func NewSignedRoute(intent, data [32]byte, verifySender bool, nonce [32]byte, si
 
 // ExecuteCall is decoded execute or executeSigned calldata; Deadline is nil for execute(commands, inputs) and Signed is nil unless executeSigned.
 type ExecuteCall struct {
-	Plan     *Plan
+	Plan     *Planner
 	Deadline *big.Int
 	Signed   *SignedRoute
 }
 
-func NewExecuteCall(plan *Plan, deadline *big.Int, signed *SignedRoute) *ExecuteCall {
+func NewExecuteCall(plan *Planner, deadline *big.Int, signed *SignedRoute) *ExecuteCall {
 	return &ExecuteCall{
 		Plan:     plan,
 		Deadline: deadline,
@@ -870,7 +888,7 @@ func DecodeExecuteSubPlanInput(data []byte) (*ExecuteSubPlanInput, error) {
 		inputs[i] = b
 	}
 
-	plan, err := DecodePlan(commands, inputs)
+	plan, err := DecodePlanner(commands, inputs)
 	if err != nil {
 		return nil, fmt.Errorf("universalrouter: decode EXECUTE_SUB_PLAN: %w", err)
 	}
