@@ -225,7 +225,7 @@ func (c *LegacyTxConfig) Pack(ctx context.Context, client rpc.Client) (core.Tran
 		if c.to != nil {
 			callParams["to"] = c.to.String()
 		}
-		elems.With(rpc.ETHEstimateGas("gasLimit", callParams, rpc.BlockTagLatest, &gasLimitHex))
+		elems.With(rpc.ETHEstimateGas("gasLimit", callParams, rpc.BlockTagLatest, nil, &gasLimitHex))
 	}
 
 	if elems.Len() > 0 {

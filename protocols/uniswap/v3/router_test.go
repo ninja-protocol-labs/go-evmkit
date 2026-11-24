@@ -2572,7 +2572,7 @@ func (s *RouterLifeCycleSuite) Test25SelfPermit() {
 	noncesCalldata, err := noncesFn.EncodeCall(s.from)
 	s.Require().NoError(err)
 	var rawNonce string
-	s.Require().NoError(s.client.Call(s.ctx, rpc.ETHCall("call", map[string]any{"to": s.tokenA.String(), "data": encoding.Hex.EncodePrefixed(noncesCalldata)}, rpc.BlockTagLatest, &rawNonce)))
+	s.Require().NoError(s.client.Call(s.ctx, rpc.ETHCall("call", map[string]any{"to": s.tokenA.String(), "data": encoding.Hex.EncodePrefixed(noncesCalldata)}, rpc.BlockTagLatest, nil, &rawNonce)))
 	nonceData, err := encoding.Hex.Decode(rawNonce)
 	s.Require().NoError(err)
 	nonce, err := noncesFn.DecodeSingleReturn[*big.Int](nonceData)
@@ -2654,7 +2654,7 @@ func (s *RouterLifeCycleSuite) Test26SelfPermitIfNecessary() {
 	noncesCalldata, err := noncesFn.EncodeCall(s.from)
 	s.Require().NoError(err)
 	var rawNonce string
-	s.Require().NoError(s.client.Call(s.ctx, rpc.ETHCall("call", map[string]any{"to": s.tokenB.String(), "data": encoding.Hex.EncodePrefixed(noncesCalldata)}, rpc.BlockTagLatest, &rawNonce)))
+	s.Require().NoError(s.client.Call(s.ctx, rpc.ETHCall("call", map[string]any{"to": s.tokenB.String(), "data": encoding.Hex.EncodePrefixed(noncesCalldata)}, rpc.BlockTagLatest, nil, &rawNonce)))
 	nonceData, err := encoding.Hex.Decode(rawNonce)
 	s.Require().NoError(err)
 	nonce, err := noncesFn.DecodeSingleReturn[*big.Int](nonceData)
@@ -2736,7 +2736,7 @@ func (s *RouterLifeCycleSuite) Test27SelfPermitAllowed() {
 	noncesCalldata, err := noncesFn.EncodeCall(s.from)
 	s.Require().NoError(err)
 	var rawNonce string
-	s.Require().NoError(s.client.Call(s.ctx, rpc.ETHCall("call", map[string]any{"to": s.tokenC.String(), "data": encoding.Hex.EncodePrefixed(noncesCalldata)}, rpc.BlockTagLatest, &rawNonce)))
+	s.Require().NoError(s.client.Call(s.ctx, rpc.ETHCall("call", map[string]any{"to": s.tokenC.String(), "data": encoding.Hex.EncodePrefixed(noncesCalldata)}, rpc.BlockTagLatest, nil, &rawNonce)))
 	nonceData, err := encoding.Hex.Decode(rawNonce)
 	s.Require().NoError(err)
 	nonce, err := noncesFn.DecodeSingleReturn[*big.Int](nonceData)

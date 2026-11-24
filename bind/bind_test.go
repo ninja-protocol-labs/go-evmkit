@@ -66,10 +66,10 @@ func TestCallWithOptions(t *testing.T) {
 		wantValue string
 	}{
 		{"latest explicit", rpc.BlockTagLatest, big.NewInt(1), rpc.BlockTagLatest, "0x1"},
-		{"pending", "pending", big.NewInt(1_000_000_000_000_000_000), "pending", "0xde0b6b3a7640000"},
+		{"pending", rpc.BlockTagPending, big.NewInt(1_000_000_000_000_000_000), rpc.BlockTagPending, "0xde0b6b3a7640000"},
 		{"hex number", "0x1b4", big.NewInt(255), "0x1b4", "0xff"},
 		{"zero value", "", big.NewInt(0), rpc.BlockTagLatest, "0x0"},
-		{"max uint256", "safe", new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(1)), "safe", "0x" + "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"},
+		{"max uint256", rpc.BlockTagSafe, new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(1)), rpc.BlockTagSafe, "0x" + "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"},
 	}
 
 	for _, tc := range cases {

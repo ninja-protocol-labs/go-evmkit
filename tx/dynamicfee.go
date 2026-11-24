@@ -249,7 +249,7 @@ func (c *DynamicFeeTxConfig) Pack(ctx context.Context, client rpc.Client) (core.
 		if len(c.accessList) > 0 {
 			callParams["accessList"] = accessListToRPC(c.accessList)
 		}
-		elems.With(rpc.ETHEstimateGas("gasLimit", callParams, rpc.BlockTagLatest, &gasLimitHex))
+		elems.With(rpc.ETHEstimateGas("gasLimit", callParams, rpc.BlockTagLatest, nil, &gasLimitHex))
 	}
 
 	if elems.Len() > 0 {

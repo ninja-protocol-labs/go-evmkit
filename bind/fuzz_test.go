@@ -20,9 +20,9 @@ import (
 // go test -run '^$' -fuzz '^FuzzCallParams$' -fuzztime=10s ./bind
 func FuzzCallParams(f *testing.F) {
 	f.Add([]byte{}, []byte{}, false, false, "", []byte{})
-	f.Add(make([]byte, 20), []byte{0x00}, true, true, "latest", []byte{0x70, 0xa0, 0x82, 0x31})
+	f.Add(make([]byte, 20), []byte{0x00}, true, true, rpc.BlockTagLatest, []byte{0x70, 0xa0, 0x82, 0x31})
 	f.Add([]byte{0xff, 0xee, 0xdd}, []byte{0x01, 0x00}, true, false, "0x1b4", make([]byte, 68))
-	f.Add(make([]byte, 40), make([]byte, 33), false, true, "pending", []byte{0x00})
+	f.Add(make([]byte, 40), make([]byte, 33), false, true, rpc.BlockTagPending, []byte{0x00})
 
 	var callParams map[string]string
 	var gotBlock string
