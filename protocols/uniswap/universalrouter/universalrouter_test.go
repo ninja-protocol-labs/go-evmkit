@@ -2100,3 +2100,212 @@ func (s *UniversalRouterSuite) Test32Permit2ApproveThenSwapBackToBack() {
 	s.T().Logf("\tPermit2 allowance after: amount %s", allowanceAfter.Amount)
 	s.T().Logf("\t\texpiration %s, nonce %s", allowanceAfter.Expiration, allowanceAfter.Nonce)
 }
+
+func (s *UniversalRouterSuite) Test33SimulateApproveAndPermitSwapThenSend() {
+	allowance, err := s.permit2.Allowance(s.T().Context(), nil, permit2.NewAllowanceRequest(s.permit2Contract, s.from, s.currency0, s.router))
+	s.Require().NoError(err)
+
+	expiration := big.NewInt(time.Now().Add(time.Hour).Unix())
+	deadline := big.NewInt(time.Now().Add(10 * time.Minute).Unix())
+	permitSingle := permit2.NewPermitSingle(permit2.NewPermitDetails(s.currency0, s.SwapAmountIn, expiration, allowance.Nonce), s.router, deadline)
+	sig, err := permitSingle.Sign(permit2.NewDomain(s.ChainID, s.permit2Contract), s.signer)
+	s.Require().NoError(err)
+
+	swapParams, err := v4.EncodeActionSwapExactInSingle(v4.NewExactInputSingleParams(s.key, true, s.SwapAmountIn, big.NewInt(1), big.NewInt(0), []byte{}))
+	s.Require().NoError(err)
+	settleParams, err := v4.EncodeActionSettleAll(s.currency0, s.SwapAmountIn)
+	s.Require().NoError(err)
+	takeParams, err := v4.EncodeActionTakeAll(s.currency1, big.NewInt(1))
+	s.Require().NoError(err)
+	plan := NewPlan().
+		Add(NewPermit2PermitInput(permitSingle, sig.LegacyBytes())).
+		Add(NewV4SwapInput([]byte{v4.ActionSwapExactInSingle, v4.ActionSettleAll, v4.ActionTakeAll}, [][]byte{swapParams, settleParams, takeParams}))
+	commands, inputs, err := plan.Encode()
+	s.Require().NoError(err)
+	executeData, err := EncodeExecuteWithDeadline(commands, inputs, deadline)
+	s.Require().NoError(err)
+	approveData, err := erc20.EncodeApprove(s.permit2Contract, s.MintValue)
+	s.Require().NoError(err)
+
+	results, err := bind.Simulate(s.T().Context(), s.client, bind.NewSimulateOptions(), []bind.SimulateCall{
+		bind.NewSimulateCall(s.from, s.currency0, nil, approveData),
+		bind.NewSimulateCall(s.from, s.router, nil, executeData),
+	})
+	s.Require().NoError(err)
+	s.Require().Len(results, 2)
+	s.Require().True(results[0].Success, "%v", results[0].Error)
+	s.Require().True(results[1].Success, "%v", results[1].Error)
+
+	approvals, err := erc20.ExtractApprovals(results[0].Logs)
+	s.Require().NoError(err)
+	s.Require().Len(approvals, 1)
+	s.Require().True(approvals[0].Spender.Equal(s.permit2Contract))
+	s.Require().Zero(s.MintValue.Cmp(approvals[0].Value))
+	simulatedSwaps, err := v4.ExtractSwap(results[1].Logs)
+	s.Require().NoError(err)
+	s.Require().Len(simulatedSwaps, 1)
+	s.Require().Zero(new(big.Int).Neg(s.SwapAmountIn).Cmp(simulatedSwaps[0].Amount0))
+	s.Require().Positive(simulatedSwaps[0].Amount1.Sign())
+
+	var nonceHex string
+	s.Require().NoError(s.client.Call(s.T().Context(), rpc.ETHGetTransactionCount("nonce", s.from.String(), rpc.BlockTagPending, &nonceHex)))
+	nonce, err := strconv.ParseUint(strings.TrimPrefix(nonceHex, "0x"), 16, 64)
+	s.Require().NoError(err)
+
+	approveBuilder := tx.NewDynamicFeeBuilder()
+	approveBuilder.Nonce(nonce)
+	approveBuilder.Limit(results[0].GasUsed * s.LimitBuffer / 100)
+	approveTx, approveHash, err := s.erc20.Approve(
+		s.T().Context(),
+		bind.NewTransactOptions(s.signer, approveBuilder),
+		erc20.NewApproveRequest(s.currency0, s.permit2Contract, s.MintValue),
+	)
+	s.Require().NoError(err)
+
+	executeBuilder := tx.NewDynamicFeeBuilder()
+	executeBuilder.Nonce(nonce + 1)
+	executeBuilder.Limit(results[1].GasUsed * s.LimitBuffer / 100)
+	executeTx, executeHash, err := s.universalRouter.Execute(
+		s.T().Context(),
+		bind.NewTransactOptions(s.signer, executeBuilder),
+		NewExecuteRequest(s.router, plan, deadline, nil),
+	)
+	s.Require().NoError(err)
+	s.mu.Lock()
+	s.totalFee.Add(s.totalFee, approveTx.MaxFee())
+	s.totalFee.Add(s.totalFee, executeTx.MaxFee())
+	s.mu.Unlock()
+
+	approveReceipt, err := tx.WaitForReceipt(s.T().Context(), s.client, approveHash, s.ReceiptPollInterval, s.ReceiptTimeout)
+	s.Require().NoError(err)
+	s.Require().True(approveReceipt.Status, "approve reverted with its simulated gas limit")
+	executeReceipt, err := tx.WaitForReceipt(s.T().Context(), s.client, executeHash, s.ReceiptPollInterval, s.ReceiptTimeout)
+	s.Require().NoError(err)
+	s.Require().True(executeReceipt.Status, "execute reverted with its simulated gas limit")
+	s.Require().LessOrEqual(approveReceipt.GasUsed, approveTx.Gas())
+	s.Require().LessOrEqual(executeReceipt.GasUsed, executeTx.Gas())
+
+	swaps, err := v4.ExtractSwap(executeReceipt.Logs)
+	s.Require().NoError(err)
+	s.Require().Len(swaps, 1)
+	s.Require().Zero(new(big.Int).Neg(s.SwapAmountIn).Cmp(swaps[0].Amount0))
+
+	allowanceAfter, err := s.permit2.Allowance(
+		s.T().Context(),
+		bind.NewCallOptions().WithBlock(fmt.Sprintf("0x%x", executeReceipt.BlockNumber)),
+		permit2.NewAllowanceRequest(s.permit2Contract, s.from, s.currency0, s.router),
+	)
+	s.Require().NoError(err)
+	s.Require().Zero(allowanceAfter.Amount.Sign())
+	s.Require().Zero(new(big.Int).Add(allowance.Nonce, big.NewInt(1)).Cmp(allowanceAfter.Nonce))
+
+	s.T().Logf("UniversalRouter Test33SimulateApproveAndPermitSwapThenSend Result")
+	s.T().Logf("\tsimulate step 1 approve(Permit2, %s): gasUsed %d", s.MintValue, results[0].GasUsed)
+	s.T().Logf("\tsimulate step 2 execute(PERMIT2_PERMIT %s, V4_SWAP): gasUsed %d", s.SwapAmountIn, results[1].GasUsed)
+	s.T().Logf("\t\tsimulated Amount0/Amount1: %s / %s", simulatedSwaps[0].Amount0, simulatedSwaps[0].Amount1)
+	s.T().Logf("\tsent approve: nonce %d, limit %d, gasUsed %d, tx %s", approveTx.AddressNonce(), approveTx.Gas(), approveReceipt.GasUsed, approveHash)
+	s.T().Logf("\tsent execute: nonce %d, limit %d, gasUsed %d, tx %s", executeTx.AddressNonce(), executeTx.Gas(), executeReceipt.GasUsed, executeHash)
+	s.T().Logf("\t\tmined Amount0/Amount1: %s / %s", swaps[0].Amount0, swaps[0].Amount1)
+	s.T().Logf("\tsimulated vs mined gasUsed: approve %d / %d, execute %d / %d", results[0].GasUsed, approveReceipt.GasUsed, results[1].GasUsed, executeReceipt.GasUsed)
+	s.T().Logf("\tPermit2 allowance after: amount %s, nonce %s -> %s", allowanceAfter.Amount, allowance.Nonce, allowanceAfter.Nonce)
+}
+
+func (s *UniversalRouterSuite) Test34SimulateKeylessSwapNeedsOverrides() {
+	ghost := types.NewAddressFromBytes(core.Keccak256([]byte("go-evmkit-universal-router-simulate-ghost")).Bytes())
+	expiration := big.NewInt(time.Now().Add(time.Hour).Unix())
+
+	balanceKey, err := abi.Pack(abi.NewTypes(abi.Address, abi.Uint256), ghost, big.NewInt(0))
+	s.Require().NoError(err)
+	var balanceSlot [32]byte
+	copy(balanceSlot[:], core.Keccak256(balanceKey).Bytes())
+
+	tokenOwnerKey, err := abi.Pack(abi.NewTypes(abi.Address, abi.Uint256), ghost, big.NewInt(1))
+	s.Require().NoError(err)
+	tokenAllowanceKey, err := abi.Pack(
+		abi.NewTypes(abi.Address, abi.Uint256),
+		s.permit2Contract,
+		new(big.Int).SetBytes(core.Keccak256(tokenOwnerKey).Bytes()),
+	)
+	s.Require().NoError(err)
+	var tokenAllowanceSlot [32]byte
+	copy(tokenAllowanceSlot[:], core.Keccak256(tokenAllowanceKey).Bytes())
+
+	permitOwnerKey, err := abi.Pack(abi.NewTypes(abi.Address, abi.Uint256), ghost, big.NewInt(1))
+	s.Require().NoError(err)
+	permitTokenKey, err := abi.Pack(
+		abi.NewTypes(abi.Address, abi.Uint256),
+		s.currency0,
+		new(big.Int).SetBytes(core.Keccak256(permitOwnerKey).Bytes()),
+	)
+	s.Require().NoError(err)
+	permitSpenderKey, err := abi.Pack(
+		abi.NewTypes(abi.Address, abi.Uint256),
+		s.router,
+		new(big.Int).SetBytes(core.Keccak256(permitTokenKey).Bytes()),
+	)
+	s.Require().NoError(err)
+	var permitAllowanceSlot [32]byte
+	copy(permitAllowanceSlot[:], core.Keccak256(permitSpenderKey).Bytes())
+
+	var amountWord, permitWord [32]byte
+	s.SwapAmountIn.FillBytes(amountWord[:])
+	new(big.Int).Or(new(big.Int).Lsh(expiration, 160), s.SwapAmountIn).FillBytes(permitWord[:])
+
+	swapParams, err := v4.EncodeActionSwapExactInSingle(v4.NewExactInputSingleParams(s.key, true, s.SwapAmountIn, big.NewInt(1), big.NewInt(0), []byte{}))
+	s.Require().NoError(err)
+	settleParams, err := v4.EncodeActionSettleAll(s.currency0, s.SwapAmountIn)
+	s.Require().NoError(err)
+	takeParams, err := v4.EncodeActionTakeAll(s.currency1, big.NewInt(1))
+	s.Require().NoError(err)
+	plan := NewPlan().Add(NewV4SwapInput(
+		[]byte{v4.ActionSwapExactInSingle, v4.ActionSettleAll, v4.ActionTakeAll},
+		[][]byte{swapParams, settleParams, takeParams},
+	))
+	commands, inputs, err := plan.Encode()
+	s.Require().NoError(err)
+	executeData, err := EncodeExecuteWithDeadline(commands, inputs, big.NewInt(time.Now().Add(10*time.Minute).Unix()))
+	s.Require().NoError(err)
+	balanceOfData, err := erc20.EncodeBalanceOf(ghost)
+	s.Require().NoError(err)
+	calls := []bind.SimulateCall{
+		bind.NewSimulateCall(ghost, s.router, nil, executeData),
+		bind.NewSimulateCall(ghost, s.currency1, nil, balanceOfData),
+	}
+
+	plain, err := bind.Simulate(s.T().Context(), s.client, nil, calls)
+	s.Require().NoError(err)
+	s.Require().Len(plain, 2)
+	s.Require().False(plain[0].Success)
+	s.Require().NotNil(plain[0].Error)
+	plainErr := s.universalRouter.wrapRevertError(plain[0].Error)
+	s.Require().ErrorIs(plainErr, permit2.ErrAllowanceExpired)
+	s.Require().True(plain[1].Success)
+	s.Require().Equal(make([]byte, 32), plain[1].ReturnData)
+
+	override := rpc.NewStateOverride().
+		WithStateDiff(s.permit2Contract, permitAllowanceSlot, permitWord).
+		WithStateDiff(s.currency0, tokenAllowanceSlot, amountWord).
+		WithStateDiff(s.currency0, balanceSlot, amountWord)
+	results, err := bind.Simulate(s.T().Context(), s.client, bind.NewSimulateOptions().WithStateOverride(override), calls)
+	s.Require().NoError(err)
+	s.Require().Len(results, 2)
+	s.Require().True(results[0].Success, "%v", results[0].Error)
+	s.Require().Positive(results[0].GasUsed)
+
+	swaps, err := v4.ExtractSwap(results[0].Logs)
+	s.Require().NoError(err)
+	s.Require().Len(swaps, 1)
+	s.Require().Zero(new(big.Int).Neg(s.SwapAmountIn).Cmp(swaps[0].Amount0))
+	s.Require().True(results[1].Success)
+	s.Require().Zero(swaps[0].Amount1.Cmp(new(big.Int).SetBytes(results[1].ReturnData)))
+
+	overrideJSON, err := override.MarshalJSON()
+	s.Require().NoError(err)
+	s.T().Logf("UniversalRouter Test34SimulateKeylessSwapNeedsOverrides Result")
+	s.T().Logf("\tghost %s swaps %s of %s with no balance, approval or permit", ghost, s.SwapAmountIn, s.currency0)
+	s.T().Logf("\twithout override: success %t, gasUsed %d, mapped %v", plain[0].Success, plain[0].GasUsed, plainErr)
+	s.T().Logf("\toverride: %s", overrideJSON)
+	s.T().Logf("\twith override: success %t, gasUsed %d", results[0].Success, results[0].GasUsed)
+	s.T().Logf("\t\tAmount0/Amount1: %s / %s", swaps[0].Amount0, swaps[0].Amount1)
+	s.T().Logf("\t\tbalanceOf(ghost) of %s right after: %s", s.currency1, new(big.Int).SetBytes(results[1].ReturnData))
+}
