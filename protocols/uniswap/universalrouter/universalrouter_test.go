@@ -1795,7 +1795,8 @@ func (s *UniversalRouterSuite) Test30V3ExactOutMultiHopSamePoolRevertsLOK() {
 
 	err = s.universalRouter.CallExecute(s.T().Context(), bind.NewCallOptions().WithFrom(s.from), NewExecuteRequest(s.router, plan, nil, nil))
 	s.Require().Error(err)
-	s.Require().ErrorIs(err, ErrUnknown)
+	s.Require().ErrorIs(err, v3.ErrLocked)
+	s.Require().NotErrorIs(err, ErrUnknown)
 	s.Require().NotErrorIs(err, ErrExecutionFailed)
 
 	rpcErr, ok := errors.AsType[*rpc.ResponseError](err)

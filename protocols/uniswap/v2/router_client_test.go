@@ -3,6 +3,7 @@ package v2
 import (
 	"context"
 	"encoding/json/jsontext"
+	"errors"
 	"fmt"
 	"math/big"
 	"testing"
@@ -930,4 +931,40 @@ func TestRouterCallsPropagateContext(t *testing.T) {
 	builder.Price(big.NewInt(2), big.NewInt(1))
 	_, _, err = NewRouter(cli).SwapExactETHForTokens(ctx, bind.NewTransactOptions(key, builder), NewSwapExactETHForTokensRequest(router, big.NewInt(0), path, to, big.NewInt(1), big.NewInt(1)))
 	require.NoError(t, err)
+}
+
+func TestMapRevertErrorCoversRouterAndPair(t *testing.T) {
+	for _, tc := range []struct {
+		reason string
+		want   error
+	}{
+		{"UniswapV2Router: EXPIRED", ErrExpired},
+		{"UniswapV2Library: INVALID_PATH", ErrInvalidPath},
+		{"UniswapV2: INSUFFICIENT_OUTPUT_AMOUNT", ErrInsufficientOutputAmount},
+		{"UniswapV2: K", ErrK},
+		{"UniswapV2: LOCKED", ErrLocked},
+		{"ds-math-sub-underflow", ErrSubUnderflow},
+	} {
+		t.Run(tc.reason, func(t *testing.T) {
+			packed, err := abi.Pack(abi.NewTypes(abi.String), tc.reason)
+			require.NoError(t, err)
+			rpcErr := &rpc.ResponseError{Code: 3, Message: "execution reverted", Data: jsontext.Value(`"0x08c379a0` + encoding.Hex.Encode(packed) + `"`)}
+
+			mapped := MapRevertError(rpcErr)
+			require.ErrorIs(t, mapped, tc.want)
+			require.NotErrorIs(t, mapped, ErrUnknown)
+			got, ok := errors.AsType[*rpc.ResponseError](mapped)
+			require.True(t, ok)
+			require.Same(t, rpcErr, got)
+		})
+	}
+
+	packed, err := abi.Pack(abi.NewTypes(abi.String), "LOK")
+	require.NoError(t, err)
+	require.ErrorIs(t, MapRevertError(&rpc.ResponseError{Code: 3, Message: "execution reverted", Data: jsontext.Value(`"0x08c379a0` + encoding.Hex.Encode(packed) + `"`)}), ErrUnknown)
+
+	custom := &rpc.ResponseError{Code: 3, Message: "execution reverted", Data: jsontext.Value(`"0xdeadbeef"`)}
+	require.Same(t, custom, MapRevertError(custom))
+	plain := errors.New("dial tcp: connection refused")
+	require.Same(t, plain, MapRevertError(plain))
 }
