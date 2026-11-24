@@ -27,6 +27,7 @@ const (
 	MethodETHGetLogs                             = "eth_getLogs"
 	MethodETHFeeHistory                          = "eth_feeHistory"
 	MethodETHCreateAccessList                    = "eth_createAccessList"
+	MethodETHSimulateV1                          = "eth_simulateV1"
 	MethodETHSyncing                             = "eth_syncing"
 
 	MethodNetVersion = "net_version"
@@ -392,6 +393,16 @@ func ETHCreateAccessList(id string, params any, block string, result *map[string
 		ID:     id,
 		Method: MethodETHCreateAccessList,
 		Params: []any{params, block},
+		Result: result,
+	}
+}
+
+// ETHSimulateV1 builds the eth_simulateV1 element; result holds one object per simulated block.
+func ETHSimulateV1(id string, payload any, block string, result *[]map[string]any) Element {
+	return Element{
+		ID:     id,
+		Method: MethodETHSimulateV1,
+		Params: []any{payload, block},
 		Result: result,
 	}
 }
