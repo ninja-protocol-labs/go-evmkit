@@ -131,7 +131,6 @@ func (s *QuoterSuite) SetupSuite() {
 	s.positionManager = NewPositionManager(s.client)
 	s.erc20 = erc20.New(s.client)
 	s.permit2 = permit2.New(s.client)
-	s.T().Logf("SetupSuite: client ready for %s", s.RPCURL)
 
 	s.mu = &sync.Mutex{}
 	s.totalFee = big.NewInt(0)

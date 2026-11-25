@@ -106,7 +106,6 @@ func (s *RouterSuite) SetupSuite() {
 	s.deployer = deploy.NewNicksDeployer(s.client)
 	s.poolManager = New(s.client)
 	s.erc20 = erc20.New(s.client)
-	s.T().Logf("SetupSuite: client ready for %s", s.RPCURL)
 
 	s.mu = &sync.Mutex{}
 	s.totalFee = big.NewInt(0)
