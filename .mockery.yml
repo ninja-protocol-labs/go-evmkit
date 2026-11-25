@@ -70,3 +70,8 @@ packages:
       IQuoter:
       IRouter:
       IStateView:
+  github.com/ninja-protocol-labs/go-evmkit/protocols/chainlink/feeds:
+    config:
+      filename: "{{.InterfaceName | lower}}.go"
+    interfaces:
+      IAggregatorV3:

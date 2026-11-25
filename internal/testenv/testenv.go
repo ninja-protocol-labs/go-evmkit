@@ -108,7 +108,8 @@ type StandardAddressBook struct {
 }
 
 type ProtocolAddressBook struct {
-	Uniswap UniswapAddressBook
+	Uniswap   UniswapAddressBook
+	Chainlink ChainlinkAddressBook
 }
 
 type UniswapAddressBook struct {
@@ -137,6 +138,18 @@ type UniswapV4AddressBook struct {
 	Quoter                  string
 	PoolSwapTest            string
 	PoolModifyLiquidityTest string
+}
+
+type ChainlinkAddressBook struct {
+	Feeds ChainlinkFeedsAddressBook
+}
+
+type ChainlinkFeedsAddressBook struct {
+	ETHUSD  string
+	BTCUSD  string
+	USDCUSD string
+	LINKUSD string
+	LINKETH string
 }
 
 // MustLoad returns n's config on nt with the API key and actor key filled in.

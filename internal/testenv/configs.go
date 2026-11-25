@@ -48,6 +48,15 @@ var configs = map[NetworkType]map[Network]Config{
 						},
 						UniversalRouter: "0x2d01411773c8C24805306E89A41F7855C3c4Fe65",
 					},
+					Chainlink: ChainlinkAddressBook{
+						Feeds: ChainlinkFeedsAddressBook{
+							ETHUSD:  "0x639Fe6ab55C921f74e7fac1ee960C0B6293ba612",
+							BTCUSD:  "0x6ce185860a4963106506C203335A2910413708e9",
+							USDCUSD: "0x50834F3163758fcC1Df9973b6e91f0F0F0434aD3",
+							LINKUSD: "0x86E53CF1B870786351Da77A57575e79CB55812CB",
+							LINKETH: "0xb7c8Fb1dB45007F98A68Da0588e1AA524C317f27",
+						},
+					},
 				},
 			},
 		},
@@ -88,6 +97,15 @@ var configs = map[NetworkType]map[Network]Config{
 							PoolModifyLiquidityTest: "", // Not supported
 						},
 						UniversalRouter: "0x8702463e73f74d0b6765aBceb314Ef07aCb92650",
+					},
+					Chainlink: ChainlinkAddressBook{
+						Feeds: ChainlinkFeedsAddressBook{
+							ETHUSD:  "0x50FCDD99D6762D1C170DC6A9111db944AEE6D364",
+							BTCUSD:  "0xa109B535C70C8Be9995be64Bb6751AcDB27e03De",
+							USDCUSD: "0x84EA90AC252Dc437031461836DB5164219147905",
+							LINKUSD: "0xD37600AB06758356F0f5eE607299204785bF8c3a",
+							LINKETH: "", // Not supported
+						},
 					},
 				},
 			},
@@ -130,6 +148,15 @@ var configs = map[NetworkType]map[Network]Config{
 						},
 						UniversalRouter: "0x661E93cca42AfacB172121EF892830cA3b70F08d",
 					},
+					Chainlink: ChainlinkAddressBook{
+						Feeds: ChainlinkFeedsAddressBook{
+							ETHUSD:  "0x976B3D034E162d8bD72D6b9C989d545b839003b0",
+							BTCUSD:  "0x2779D32d5166BAaa2B2b658333bA7e6Ec0C65743",
+							USDCUSD: "0xF096872672F44d6EBA71458D74fe67F9a77a23B9",
+							LINKUSD: "0x49ccd9ca821EfEab2b98c60dC60F518E765EDe9a",
+							LINKETH: "", // Not supported
+						},
+					},
 				},
 			},
 		},
@@ -170,6 +197,15 @@ var configs = map[NetworkType]map[Network]Config{
 							PoolModifyLiquidityTest: "", // Not supported
 						},
 						UniversalRouter: "0xd6145b2D3F379919E8CdEda7B97e37c4b2Ca9c40",
+					},
+					Chainlink: ChainlinkAddressBook{
+						Feeds: ChainlinkFeedsAddressBook{
+							ETHUSD:  "0xa4250cE1aA15Ff4cb5E5a8655293b65694e436Ed",
+							BTCUSD:  "0x32F587986D3fb47601157c19615d568BeD0BCabc",
+							USDCUSD: "0x7e860098F58bBFC8648a4311b374B1D669a2bc6B",
+							LINKUSD: "0x17CAb8FE31E32f08326e5E27412894e49B0f9D65",
+							LINKETH: "0xc5E65227fe3385B88468F9A01600017cDC9F3A12",
+						},
 					},
 				},
 			},
@@ -212,6 +248,15 @@ var configs = map[NetworkType]map[Network]Config{
 						},
 						UniversalRouter: "0xDc264714F68d84CF29BC605589405E78bDBE7C9f",
 					},
+					Chainlink: ChainlinkAddressBook{
+						Feeds: ChainlinkFeedsAddressBook{
+							ETHUSD:  "0x9ef1B8c0E4F7dc8bF5719Ea496883DC6401d5b2e",
+							BTCUSD:  "0x264990fbd0A4796A3E3d8E37C4d5F87a3aCa5Ebf",
+							USDCUSD: "0x51597f405303C4377E36123cBc172b13269EA163",
+							LINKUSD: "0xca236E327F629f9Fc2c30A4E95775EbF0B89fac8",
+							LINKETH: "", // Not supported
+						},
+					},
 				},
 			},
 		},
@@ -252,6 +297,15 @@ var configs = map[NetworkType]map[Network]Config{
 							PoolModifyLiquidityTest: "", // Not supported
 						},
 						UniversalRouter: "0xe2023F3FA515cF070e07fD9d51c1d236e07843f4",
+					},
+					Chainlink: ChainlinkAddressBook{
+						Feeds: ChainlinkFeedsAddressBook{
+							ETHUSD:  "0x1FcD30A73D67639c1cD89ff5746E7585731c083B",
+							BTCUSD:  "0x128fE88eaa22bFFb868Bb3A584A54C96eE24014b",
+							USDCUSD: "0xc7A353BaE210aed958a1A2928b654938EC59DaB2",
+							LINKUSD: "0x6b6a4c71ec3858A024f3f0Ee44bb0AdcBEd3DcC2",
+							LINKETH: "", // Not supported
+						},
 					},
 				},
 			},
@@ -294,6 +348,15 @@ var configs = map[NetworkType]map[Network]Config{
 						},
 						UniversalRouter: "0x23617e59A5925b2A4Bf75d73ff6711cD0b29De85",
 					},
+					Chainlink: ChainlinkAddressBook{
+						Feeds: ChainlinkFeedsAddressBook{
+							ETHUSD:  "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419",
+							BTCUSD:  "0xF4030086522a5bEEa4988F8cA5B36dbC97BeE88c",
+							USDCUSD: "0x8fFfFfd4AfB6115b954Bd326cbe7B4BA576818f6",
+							LINKUSD: "0x2c1d072e956AFFC0D435Cb7AC38EF18d24d9127c",
+							LINKETH: "0xDC530D9457755926550b59e8ECcdaE7624181557",
+						},
+					},
 				},
 			},
 		},
@@ -334,6 +397,15 @@ var configs = map[NetworkType]map[Network]Config{
 							PoolModifyLiquidityTest: "", // Not supported
 						},
 						UniversalRouter: "0xeD270A1Bcdc63cf1356D695e7f40961d4819d6bF",
+					},
+					Chainlink: ChainlinkAddressBook{
+						Feeds: ChainlinkFeedsAddressBook{
+							ETHUSD:  "0x017151e74fB3a393673B5B5149F53578c0Fa55B0",
+							BTCUSD:  "0x71A2017296De30F4597B36FBD90b7e8Ec6E97A82",
+							USDCUSD: "0xA0Adc43ce7AfE3EE7d7eac3C994E178D0620223B",
+							LINKUSD: "", // Not supported
+							LINKETH: "", // Not supported
+						},
 					},
 				},
 			},
@@ -376,6 +448,15 @@ var configs = map[NetworkType]map[Network]Config{
 						},
 						UniversalRouter: "0xa6CE4F10d83dBdDAc17E68e1837ca9cE6a1b596e",
 					},
+					Chainlink: ChainlinkAddressBook{
+						Feeds: ChainlinkFeedsAddressBook{
+							ETHUSD:  "0x1B1414782B859871781bA3E4B0979b9ca57A0A04",
+							BTCUSD:  "0xc1d4C3331635184fA4C3c22fb92211B2Ac9E0546",
+							USDCUSD: "0xf5F15f188AbCB0d165D1Edb7f37F7d6fA2fCebec",
+							LINKUSD: "0x5c266b5c655664d6c99a13fF0d7F1F7eaF4Ac9ba",
+							LINKETH: "", // Not supported
+						},
+					},
 				},
 			},
 		},
@@ -416,6 +497,15 @@ var configs = map[NetworkType]map[Network]Config{
 							PoolModifyLiquidityTest: "", // Not supported
 						},
 						UniversalRouter: "0xC09255D86DB563cBc11C2fCf4a0C512e160111B4",
+					},
+					Chainlink: ChainlinkAddressBook{
+						Feeds: ChainlinkFeedsAddressBook{
+							ETHUSD:  "0x13e3Ee699D1909E989722E753853AE30b17e08c5",
+							BTCUSD:  "0xD702DD976Fb76Fffc2D3963D037dfDae5b04E593",
+							USDCUSD: "0x16a9FA2FDa030272Ce99B29CF780dFA30361E0f3",
+							LINKUSD: "0xCc232dcFAAE6354cE191Bd574108c1aD03f86450",
+							LINKETH: "0x464A1515ADc20de946f8d0DEB99cead8CEAE310d",
+						},
 					},
 				},
 			},
@@ -458,6 +548,15 @@ var configs = map[NetworkType]map[Network]Config{
 						},
 						UniversalRouter: "0xDc264714F68d84CF29BC605589405E78bDBE7C9f",
 					},
+					Chainlink: ChainlinkAddressBook{
+						Feeds: ChainlinkFeedsAddressBook{
+							ETHUSD:  "0xF9680D99D6C9589e2a93a78A04A279e509205945",
+							BTCUSD:  "0xc907E116054Ad103354f2D350FD2514433D57F6f",
+							USDCUSD: "0xfE4A8cc5b5B2366C1B58Bea3858e81843581b2F7",
+							LINKUSD: "0xd9FFdb71EbE7496cC440152d43986Aae0AB76665",
+							LINKETH: "0xb77fa460604b9C6435A235D057F7D319AC83cb53",
+						},
+					},
 				},
 			},
 		},
@@ -499,6 +598,15 @@ var configs = map[NetworkType]map[Network]Config{
 						},
 						UniversalRouter: "0x204FAca1764B154221e35c0d20aBb3c525710498",
 					},
+					Chainlink: ChainlinkAddressBook{
+						Feeds: ChainlinkFeedsAddressBook{
+							ETHUSD:  "0x78F3556b67E17Df817D51Ef5a990cDaF09E8d3A9",
+							BTCUSD:  "0xa2c5184bF03d373Dc9dE4876eb4Bce595B460251",
+							USDCUSD: "0x9e6f4605992a899eE2999999F3Ec80C41F452546",
+							LINKUSD: "0xe86e3422Aa9B5e8ee9f3E41a63975bC387A8bce9",
+							LINKETH: "", // Not supported
+						},
+					},
 				},
 			},
 		},
@@ -539,6 +647,15 @@ var configs = map[NetworkType]map[Network]Config{
 							PoolModifyLiquidityTest: "", // Not supported
 						},
 						UniversalRouter: "0xD1b797D92d87B688193A2B976eFc8D577D204343",
+					},
+					Chainlink: ChainlinkAddressBook{
+						Feeds: ChainlinkFeedsAddressBook{
+							ETHUSD:  "0xBcE70e194940a157f3A80566505a7E96f5238CCa",
+							BTCUSD:  "0xC13f3E310Dd7436FA24338174acB64254b9A8039",
+							USDCUSD: "0xbd1cD1518eFB92a92100da62D4C488c810dFd75b",
+							LINKUSD: "0x04343180ABa8543a850A87d594644D84fE38a919",
+							LINKETH: "", // Not supported
+						},
 					},
 				},
 			},
@@ -583,6 +700,15 @@ var configs = map[NetworkType]map[Network]Config{
 						},
 						UniversalRouter: "", // Not supported
 					},
+					Chainlink: ChainlinkAddressBook{
+						Feeds: ChainlinkFeedsAddressBook{
+							ETHUSD:  "0xd30e2101a97dcbAeBCBC04F14C3f624E67A35165",
+							BTCUSD:  "0x56a43EB56Da12C0dc1D972ACb089c06a5dEF8e69",
+							USDCUSD: "0x0153002d20B96532C639313c2d54c3dA09109309",
+							LINKUSD: "0x0FB99723Aee6f420beAD13e6bBB79b7E6F034298",
+							LINKETH: "0x3ec8593F930EA45ea58c968260e6e9FF53FC934f",
+						},
+					},
 				},
 			},
 		},
@@ -623,6 +749,15 @@ var configs = map[NetworkType]map[Network]Config{
 							PoolModifyLiquidityTest: "", // Not supported
 						},
 						UniversalRouter: "", // Not supported
+					},
+					Chainlink: ChainlinkAddressBook{
+						Feeds: ChainlinkFeedsAddressBook{
+							ETHUSD:  "", // Not supported
+							BTCUSD:  "", // Not supported
+							USDCUSD: "", // Not supported
+							LINKUSD: "", // Not supported
+							LINKETH: "", // Not supported
+						},
 					},
 				},
 			},
@@ -665,6 +800,15 @@ var configs = map[NetworkType]map[Network]Config{
 						},
 						UniversalRouter: "", // Not supported
 					},
+					Chainlink: ChainlinkAddressBook{
+						Feeds: ChainlinkFeedsAddressBook{
+							ETHUSD:  "0x86d67c3D38D2bCeE722E601025C25a575021c6EA",
+							BTCUSD:  "0x31CF013A08c6Ac228C94551d535d5BAfE19c602a",
+							USDCUSD: "0x97FE42a7E96640D932bbc0e1580c73E705A8EB73",
+							LINKUSD: "0x34C4c526902d88a3Aa98DB8a9b802603EB1E3470",
+							LINKETH: "0xf4060f80f295b34e0C2471461ba43745Aeb186d6",
+						},
+					},
 				},
 			},
 		},
@@ -705,6 +849,15 @@ var configs = map[NetworkType]map[Network]Config{
 							PoolModifyLiquidityTest: "0x37429cD17Cb1454C34E7F50b09725202Fd533039",
 						},
 						UniversalRouter: "0x8702463e73f74d0b6765aBceb314Ef07aCb92650",
+					},
+					Chainlink: ChainlinkAddressBook{
+						Feeds: ChainlinkFeedsAddressBook{
+							ETHUSD:  "0x4aDC67696bA383F43DD60A9e78F2C97Fbbfc7cb1",
+							BTCUSD:  "0x0FB99723Aee6f420beAD13e6bBB79b7E6F034298",
+							USDCUSD: "0xd30e2101a97dcbAeBCBC04F14C3f624E67A35165",
+							LINKUSD: "0xb113F5A928BCfF189C998ab20d753a47F9dE5A61",
+							LINKETH: "0x56a43EB56Da12C0dc1D972ACb089c06a5dEF8e69",
+						},
 					},
 				},
 			},
@@ -747,6 +900,15 @@ var configs = map[NetworkType]map[Network]Config{
 						},
 						UniversalRouter: "", // Not supported
 					},
+					Chainlink: ChainlinkAddressBook{
+						Feeds: ChainlinkFeedsAddressBook{
+							ETHUSD:  "0x143db3CEEfbdfe5631aDD3E50f7614B6ba708BA7",
+							BTCUSD:  "0x5741306c21795FdCBb9b265Ea0255F499DFe515C",
+							USDCUSD: "0x90c069C4538adAc136E051052E14c1cD799C41B7",
+							LINKUSD: "0x1B329402Cb1825C6F30A0d92aB9E2862BE47333f",
+							LINKETH: "", // Not supported
+						},
+					},
 				},
 			},
 		},
@@ -787,6 +949,15 @@ var configs = map[NetworkType]map[Network]Config{
 							PoolModifyLiquidityTest: "", // Not supported
 						},
 						UniversalRouter: "", // Not supported
+					},
+					Chainlink: ChainlinkAddressBook{
+						Feeds: ChainlinkFeedsAddressBook{
+							ETHUSD:  "", // Not supported
+							BTCUSD:  "", // Not supported
+							USDCUSD: "", // Not supported
+							LINKUSD: "", // Not supported
+							LINKETH: "", // Not supported
+						},
 					},
 				},
 			},
@@ -829,6 +1000,15 @@ var configs = map[NetworkType]map[Network]Config{
 						},
 						UniversalRouter: "0x7E4f6c5e954Da5c61B3423D81E2277431Ac043f3",
 					},
+					Chainlink: ChainlinkAddressBook{
+						Feeds: ChainlinkFeedsAddressBook{
+							ETHUSD:  "0x694AA1769357215DE4FAC081bf1f309aDC325306",
+							BTCUSD:  "0x1b44F3514812d835EB1BDB0acB33d3fA3351Ee43",
+							USDCUSD: "0xA2F78ab2355fe2f984D808B5CeE7FD0A93D5270E",
+							LINKUSD: "0xc59E3633BAAC79493d908e63626716e204A45EdF",
+							LINKETH: "0x42585eD362B3f1BCa95c640FdFf35Ef899212734",
+						},
+					},
 				},
 			},
 		},
@@ -869,6 +1049,15 @@ var configs = map[NetworkType]map[Network]Config{
 							PoolModifyLiquidityTest: "", // Not supported
 						},
 						UniversalRouter: "", // Not supported
+					},
+					Chainlink: ChainlinkAddressBook{
+						Feeds: ChainlinkFeedsAddressBook{
+							ETHUSD:  "", // Not supported
+							BTCUSD:  "", // Not supported
+							USDCUSD: "", // Not supported
+							LINKUSD: "", // Not supported
+							LINKETH: "", // Not supported
+						},
 					},
 				},
 			},
@@ -911,6 +1100,15 @@ var configs = map[NetworkType]map[Network]Config{
 						},
 						UniversalRouter: "", // Not supported
 					},
+					Chainlink: ChainlinkAddressBook{
+						Feeds: ChainlinkFeedsAddressBook{
+							ETHUSD:  "", // Not supported
+							BTCUSD:  "", // Not supported
+							USDCUSD: "", // Not supported
+							LINKUSD: "", // Not supported
+							LINKETH: "", // Not supported
+						},
+					},
 				},
 			},
 		},
@@ -951,6 +1149,15 @@ var configs = map[NetworkType]map[Network]Config{
 							PoolModifyLiquidityTest: "", // Not supported
 						},
 						UniversalRouter: "", // Not supported
+					},
+					Chainlink: ChainlinkAddressBook{
+						Feeds: ChainlinkFeedsAddressBook{
+							ETHUSD:  "0x61Ec26aA57019C486B10502285c5A3D4A4750AD7",
+							BTCUSD:  "0x3015aa11f5c2D4Bd0f891E708C8927961b38cE7D",
+							USDCUSD: "0x6e44e50E3cc14DD16e01C590DC1d7020cb36eD4C",
+							LINKUSD: "0x53f91dA33120F44893CB896b12a83551DEDb31c6",
+							LINKETH: "0x98EeB02BC20c5e7079983e8F0D0D839dFc8F74fA",
+						},
 					},
 				},
 			},
@@ -993,6 +1200,15 @@ var configs = map[NetworkType]map[Network]Config{
 						},
 						UniversalRouter: "", // Not supported
 					},
+					Chainlink: ChainlinkAddressBook{
+						Feeds: ChainlinkFeedsAddressBook{
+							ETHUSD:  "0xF0d50568e3A7e8259E16663972b11910F89BD8e7",
+							BTCUSD:  "0xe7656e23fE8077D438aEfbec2fAbDf2D8e070C4f",
+							USDCUSD: "0x1b8739bB4CdF0089d07097A9Ae5Bd274b29C6F16",
+							LINKUSD: "0xc2e2848e28B9fE430Ab44F55a8437a33802a219C",
+							LINKETH: "", // Not supported
+						},
+					},
 				},
 			},
 		},
@@ -1034,6 +1250,15 @@ var configs = map[NetworkType]map[Network]Config{
 						},
 						UniversalRouter: "", // Not supported
 					},
+					Chainlink: ChainlinkAddressBook{
+						Feeds: ChainlinkFeedsAddressBook{
+							ETHUSD:  "", // Not supported
+							BTCUSD:  "", // Not supported
+							USDCUSD: "", // Not supported
+							LINKUSD: "", // Not supported
+							LINKETH: "", // Not supported
+						},
+					},
 				},
 			},
 		},
@@ -1074,6 +1299,15 @@ var configs = map[NetworkType]map[Network]Config{
 							PoolModifyLiquidityTest: "0x5fa728C0A5cfd51BEe4B060773f50554c0C8A7AB",
 						},
 						UniversalRouter: "0xDf38F24fE153761634Be942F9d859f3DBA857E95",
+					},
+					Chainlink: ChainlinkAddressBook{
+						Feeds: ChainlinkFeedsAddressBook{
+							ETHUSD:  "0xd9c93081210dFc33326B2af4C2c11848095E6a9a",
+							BTCUSD:  "0x2AF69319fACBbc1ad77d56538B35c1f9FFe86dEF",
+							USDCUSD: "0x25DdD2fEd0d51fe79d292Da47dd9f10AbdB4b3EC",
+							LINKUSD: "0x331b7521a8985dbDdA5CF4FCDB57EC25465C55cB",
+							LINKETH: "", // Not supported
+						},
 					},
 				},
 			},
