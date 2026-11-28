@@ -114,6 +114,20 @@ type Authorization struct {
 	Signature *types.Signature
 }
 
+// NewAuthorization returns an unsigned authorization holding copies of chainID and delegate; nil inputs stay nil.
+func NewAuthorization(chainID *big.Int, delegate *types.Address, nonce uint64) *Authorization {
+	auth := &Authorization{
+		Nonce: nonce,
+	}
+	if chainID != nil {
+		auth.ChainID = new(big.Int).Set(chainID)
+	}
+	if delegate != nil {
+		auth.Address = delegate.Copy()
+	}
+	return auth
+}
+
 func (a *Authorization) validate() error {
 	if err := checkUint256(a.ChainID); err != nil {
 		return fmt.Errorf("chainId: %w", err)

@@ -75,3 +75,8 @@ packages:
       filename: "{{.InterfaceName | lower}}.go"
     interfaces:
       IAggregatorV3:
+  github.com/ninja-protocol-labs/go-evmkit/standards/eip7702:
+    config:
+      filename: "{{.InterfaceName | lower}}.go"
+    interfaces:
+      IEIP7702:

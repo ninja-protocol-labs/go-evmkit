@@ -3279,3 +3279,25 @@ func TestSenderPropagatesInvalidFieldErrors(t *testing.T) {
 	_, err = setCodeTx.Sender()
 	require.ErrorIs(t, err, ErrUnsigned)
 }
+
+func TestNewAuthorization(t *testing.T) {
+	chainID := big.NewInt(11155111)
+	delegate := types.MustNewAddressFromHex("0x63c0c19a282a1b52b07dd5a65b58948a07dae32b")
+
+	auth := NewAuthorization(chainID, delegate, 7)
+	require.Equal(t, &Authorization{ChainID: big.NewInt(11155111), Address: delegate, Nonce: 7}, auth)
+
+	chainID.SetInt64(1)
+	delegate.SetBytes([]byte{0x01})
+	require.Equal(t, int64(11155111), auth.ChainID.Int64())
+	require.True(t, auth.Address.Equal(types.MustNewAddressFromHex("0x63c0c19a282a1b52b07dd5a65b58948a07dae32b")))
+}
+
+func TestNewAuthorizationKeepsNilInputs(t *testing.T) {
+	auth := NewAuthorization(nil, nil, 0)
+	require.Nil(t, auth.ChainID)
+	require.Nil(t, auth.Address)
+
+	_, err := auth.SigningHash()
+	require.Error(t, err)
+}
