@@ -2,6 +2,7 @@ package tx
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/big"
 	"strconv"
@@ -11,6 +12,11 @@ import (
 	"github.com/ninja-protocol-labs/go-evmkit/core/types"
 	"github.com/ninja-protocol-labs/go-evmkit/rpc"
 	"github.com/ninja-protocol-labs/go-lib-cryptography/encoding"
+)
+
+var (
+	ErrAuthorizationChainID = errors.New("authorization chain id does not match the tx chain id")
+	ErrAuthorizationNonce   = errors.New("self-sponsored authorization nonce must be the tx nonce + 1")
 )
 
 type SetCodeBuilder struct {
@@ -327,6 +333,22 @@ func (c *SetCodeTxConfig) Pack(ctx context.Context, client rpc.Client) (core.Tra
 		}
 		v := n.Uint64()
 		nonce = &v
+	}
+
+	for i, auth := range c.authorization {
+		if auth.ChainID != nil && auth.ChainID.Sign() != 0 && auth.ChainID.Cmp(chainID) != 0 {
+			return nil, fmt.Errorf("tx: pack set code tx: authorization %d: %w: %s, tx %s", i, ErrAuthorizationChainID, auth.ChainID, chainID)
+		}
+		if auth.Signature.IsZero() {
+			continue
+		}
+		authority, err := auth.Authority()
+		if err != nil {
+			return nil, fmt.Errorf("tx: pack set code tx: authorization %d: %w", i, err)
+		}
+		if authority.Equal(c.from) && auth.Nonce != *nonce+1 {
+			return nil, fmt.Errorf("tx: pack set code tx: authorization %d: %w: nonce %d, tx nonce %d", i, ErrAuthorizationNonce, auth.Nonce, *nonce)
+		}
 	}
 
 	gasTipCap, gasFeeCap := c.gasTipCap, c.gasFeeCap

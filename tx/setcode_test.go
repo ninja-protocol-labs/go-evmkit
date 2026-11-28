@@ -473,7 +473,20 @@ func (s *SetCodeTxSuite) Test05AuthorizationForOtherChainIsSkipped() {
 	auth := core.Authorization{ChainID: new(big.Int).Add(s.ChainID, big.NewInt(1)), Address: s.multicall, Nonce: 0}
 	s.Require().NoError(auth.Sign(authorityKey))
 
-	hash, err := Submit(s.T().Context(), s.client, NewSetCodeTxConfig(s.from, s.recipient, big.NewInt(0), nil, []core.Authorization{auth}).WithGasLimitBuffer(s.LimitBuffer), s.key)
+	_, err = NewSetCodeTxConfig(s.from, s.recipient, big.NewInt(0), nil, []core.Authorization{auth}).WithGasLimitBuffer(s.LimitBuffer).Pack(s.T().Context(), s.client)
+	s.Require().ErrorIs(err, ErrAuthorizationChainID, "Pack must reject an authorization for another chain")
+
+	placeholder := core.Authorization{ChainID: s.ChainID, Address: s.multicall, Nonce: 0}
+	s.Require().NoError(placeholder.Sign(authorityKey))
+	packed, err := NewSetCodeTxConfig(s.from, s.recipient, big.NewInt(0), nil, []core.Authorization{placeholder}).WithGasLimitBuffer(s.LimitBuffer).Pack(s.T().Context(), s.client)
+	s.Require().NoError(err)
+	setCodeTx, ok := packed.(*core.SetCodeTx)
+	s.Require().True(ok)
+	setCodeTx.AuthList = []core.Authorization{auth}
+	s.Require().NoError(setCodeTx.Sign(s.key))
+	raw, err := setCodeTx.EncodeRLP()
+	s.Require().NoError(err)
+	hash, err := Broadcast(s.T().Context(), s.client, raw)
 	s.Require().NoError(err)
 	s.T().Logf("Test05AuthorizationForOtherChainIsSkipped: sent type-4 tx with a foreign-chain authorization, tx %s", hash)
 
